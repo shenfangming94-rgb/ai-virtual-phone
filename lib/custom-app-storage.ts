@@ -835,9 +835,20 @@ export function setCustomAppIconStyle(appId: string, style: CustomAppIconStyle):
   emitUpdated();
 }
 
+export const CUSTOM_APPS_UNINSTALLED_KEY = "ai_phone_custom_apps_uninstalled_v1";
+
 export function uninstallCustomApp(appId: string, options: { deleteData?: boolean } = {}): void {
   const id = cleanId(appId);
+  const removed = loadInstalledCustomApps().find(app => app.id === id);
   saveInstalledCustomApps(loadInstalledCustomApps().filter(app => app.id !== id));
+  // 记下用户主动卸载的 APP，站点自带的 APP 不会再自动装回来
+  if (removed?.manifest?.id) {
+    try {
+      const list = new Set<string>(JSON.parse(kvGet(CUSTOM_APPS_UNINSTALLED_KEY) || "[]"));
+      list.add(removed.manifest.id);
+      kvSet(CUSTOM_APPS_UNINSTALLED_KEY, JSON.stringify(Array.from(list)));
+    } catch { /* 记录失败不影响卸载 */ }
+  }
   const iconStyles = loadCustomAppIconStyles();
   if (iconStyles[id]) {
     delete iconStyles[id];
@@ -1170,7 +1181,16 @@ export function installCustomApp(app: InstalledCustomApp): InstalledCustomApp {
   const conflict = getCustomAppInstallConflict(normalized, apps);
   if (conflict) throw new Error(formatInstallConflict(conflict));
   saveInstalledCustomApps([normalized, ...apps.filter(item => item.id !== normalized.id)]);
+  forgetCustomAppUninstall(normalized.manifest?.id);
   return normalized;
+}
+
+function forgetCustomAppUninstall(manifestId?: string): void {
+  if (!manifestId) return;
+  try {
+    const list: string[] = JSON.parse(kvGet(CUSTOM_APPS_UNINSTALLED_KEY) || "[]");
+    if (list.includes(manifestId)) kvSet(CUSTOM_APPS_UNINSTALLED_KEY, JSON.stringify(list.filter(id => id !== manifestId)));
+  } catch { /* ignore */ }
 }
 
 export async function installCustomAppAsync(app: InstalledCustomApp): Promise<InstalledCustomApp> {

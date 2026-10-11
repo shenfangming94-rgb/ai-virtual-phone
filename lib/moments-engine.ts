@@ -6,6 +6,7 @@
 
 import { loadCharacters } from "./character-storage";
 import { loadChatContacts } from "./chat-storage";
+import { createIdentityMatcher, getCharacterIdentityId } from "./identity-scope";
 import type { Character } from "./character-types";
 import {
     addMomentPost,
@@ -343,8 +344,9 @@ async function triggerAIPost(characterId: string): Promise<void> {
             return;
         }
 
-        const contacts = loadChatContacts();
-        const visibility = contacts.map(c => c.characterId);
+        // 只给同一身份下的好友看，别的身份的角色不认识他
+        const sameIdentity = createIdentityMatcher(getCharacterIdentityId(characterId));
+        const visibility = loadChatContacts().map(c => c.characterId).filter(sameIdentity);
 
         // 先入库再生图：帖子立即可见，生图慢/超时/页面被杀都不会丢帖
         const post = addMomentPost({

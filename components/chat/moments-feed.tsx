@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useLayoutEffect, useRef } from "react
 import { getAllPosts, deleteMomentPost, getUnreadMomentsNotifications, saveMomentsLastSeen, addMomentComment } from "@/lib/moments-storage";
 import { loadChatContacts } from "@/lib/chat-storage";
 import { resolveUserIdentity, USER_IDENTITIES_UPDATED_EVENT } from "@/lib/settings-storage";
+import { createIdentityMatcher, getCurrentIdentityId, momentPostMatchesIdentity } from "@/lib/identity-scope";
 import { saveChatImageToIndexedDB, getChatImageFromIndexedDB } from "@/lib/chat-asset-storage";
 import type { MomentComment, MomentPost } from "@/lib/moments-types";
 import { MomentPostCard } from "./moment-post-card";
@@ -106,7 +107,12 @@ export function MomentsFeed({ onCloseApp }: MomentsFeedProps) {
 
     const refreshPosts = useCallback(() => {
         const contactIds = new Set(loadChatContacts().map(c => c.characterId));
-        setPosts(getAllPosts().filter(p => p.authorType === "user" || contactIds.has(p.authorId)));
+        const identityId = getCurrentIdentityId();
+        const matchesIdentity = createIdentityMatcher(identityId);
+        setPosts(getAllPosts().filter(p =>
+            (p.authorType === "user" || contactIds.has(p.authorId))
+            && momentPostMatchesIdentity(p, identityId, matchesIdentity)
+        ));
         setUnreadNotifs(getUnreadMomentsNotifications());
     }, []);
 

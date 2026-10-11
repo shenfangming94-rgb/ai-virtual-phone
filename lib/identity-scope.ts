@@ -38,6 +38,11 @@ export function createIdentityMatcher(identityId: string | undefined = getCurren
     return (characterId) => resolveChatIdentityId(config, characterId, fallbackId) === identityId;
 }
 
+/** 角色聊天时实际使用的用户身份。 */
+export function getCharacterIdentityId(characterId: string): string | undefined {
+    return resolveChatIdentityId(loadBindingConfig(), characterId, loadUserIdentities()[0]?.id);
+}
+
 /** 单聊看对方角色；群聊只要有一位成员归属当前身份就显示。 */
 export function sessionMatchesIdentity(session: ChatSession, matches: (characterId: string) => boolean): boolean {
     if (session.isGroup) return (session.participantIds || []).some(matches);
@@ -55,6 +60,17 @@ function pinIdentity(config: BindingConfig, characterId: string, identityId: str
         ...binding,
         defaults: { ...binding.defaults, userIdentityId: identityId },
     });
+}
+
+/** 朋友圈：角色帖看作者；用户帖看发帖身份，旧帖按可见角色推断。 */
+export function momentPostMatchesIdentity(
+    post: { authorType: string; authorId: string; authorIdentityId?: string; visibility: string[] },
+    identityId: string | undefined,
+    matches: (characterId: string) => boolean,
+): boolean {
+    if (post.authorType !== "user") return matches(post.authorId);
+    if (post.authorIdentityId) return !identityId || post.authorIdentityId === identityId;
+    return post.visibility.length === 0 || post.visibility.some(matches);
 }
 
 /** 加好友时调用：角色还没单独绑定身份的话，绑到当前身份。 */

@@ -15,6 +15,7 @@ export type MomentPost = {
     photoCompressedAt?: string;
     photoCleanedAt?: string;
     visibility: string[];           // characterId[] of who can see this post
+    authorIdentityId?: string;      // 用户发帖时的身份；旧帖没有，按可见角色推断
     location?: string;              // 用户添加的地点
     likes: MomentLike[];
     createdAt: string;              // ISO date string

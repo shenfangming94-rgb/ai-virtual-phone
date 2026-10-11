@@ -22,4 +22,9 @@ const version = JSON.parse(read("manifest.json")).version;
 const zip = join(root, `weibo-${version}.zip`);
 if (existsSync(zip)) rmSync(zip);
 execSync(`cd "${join(root, "dist")}" && zip -q -r "${zip}" manifest.json presets.json index.html icon.png`);
+// 随站点发布：小手机启动时会按 bundled.json 自动安装/更新
+const pub = join(root, "../../public/apps");
+mkdirSync(pub, { recursive: true });
+copyFileSync(zip, join(pub, "weibo.zip"));
+writeFileSync(join(pub, "bundled.json"), JSON.stringify([{ id: JSON.parse(read("manifest.json")).id, version, url: "/apps/weibo.zip" }], null, 2) + "\n");
 console.log("built", zip);

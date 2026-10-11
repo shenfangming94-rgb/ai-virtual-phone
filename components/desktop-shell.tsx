@@ -25,6 +25,7 @@ import { RealityBridgeApp } from "@/components/reality-bridge-app";
 import { REALITY_BRIDGE_APP_EVENT_NAME, REALITY_BRIDGE_DATA_EVENT } from "@/lib/reality-bridge/types";
 import { DiaryApp } from "@/components/diary/diary-app";
 import { XiaohongshuApp } from "@/components/xiaohongshu/xiaohongshu-app";
+import { syncBundledCustomApps } from "@/lib/bundled-custom-apps";
 import { StoryApp } from "@/components/story/story-app";
 import { VnApp } from "@/components/vn/vn-app";
 import ReadingApp from "@/components/reading/reading-app";
@@ -1566,6 +1567,9 @@ export function DesktopShell({ initialThemeProfile, initialThemeAssets }: Deskto
     window.addEventListener(CUSTOM_APP_PLACE_DESKTOP_EVENT, placeHandler);
     return () => window.removeEventListener(CUSTOM_APP_PLACE_DESKTOP_EVENT, placeHandler);
   }, []);
+
+  // 站点自带的 APP（如微博）：没装就装上，有新版就换包
+  useEffect(() => { void syncBundledCustomApps(); }, []);
 
   // 资源集市在 lib 里装完主题包后请桌面刷新。走的落地路径与外观页导入完全一致
   // （handleThemeDesktopChange + applyTheme），只是入口从 React 回调换成了事件。

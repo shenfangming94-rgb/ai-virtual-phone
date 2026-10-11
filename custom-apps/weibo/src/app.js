@@ -197,7 +197,7 @@
 
   /** 统一的作者信息：{ type, charId, name, verified, vip, avatar } */
   function authorOf(x) {
-    if (x.authorType === "user") return { type: "user", name: S.meta.nickname, verified: "无", vip: !!S.meta.vip, avatar: S.identity.avatarUrl, seed: "me" };
+    if (x.authorType === "user") return { type: "user", name: S.meta.nickname, verified: "无", vip: !!S.meta.vip, avatar: S.identity.avatarUrl, avatarRef: S.meta.avatarRef, seed: "me" };
     if (x.authorType === "char") {
       const acc = S.accounts[x.charId] || {}; const c = charById(x.charId) || {};
       return { type: "char", charId: x.charId, name: acc.nickname || x.authorName || c.name || "微博用户", verified: acc.verified || x.verified || "无",
@@ -208,7 +208,9 @@
 
   function avatarHtml(a, size) {
     const v = vClass(a.verified);
-    const face = a.avatar
+    const face = a.avatarRef
+      ? `<img class="face" data-ref="${esc(a.avatarRef)}" alt="" style="background:${gradientFor(a.seed)}">`
+      : a.avatar
       ? `<img class="face" src="${esc(a.avatar)}" alt="" onerror="this.outerHTML='<div class=&quot;face&quot; style=&quot;background:${gradientFor(a.seed)}&quot;>${esc((a.name || "?").slice(0, 1))}</div>'">`
       : `<div class="face" style="background:${gradientFor(a.seed)}">${esc((a.name || "?").slice(0, 1))}</div>`;
     return `<div class="avatar"${size ? ` style="width:${size}px;height:${size}px"` : ""}>${face}${v ? `<span class="v ${v}">V</span>` : ""}</div>`;
@@ -219,12 +221,27 @@
     return `data-act="open-npc" data-name="${esc(a.name)}"`;
   }
 
+  // ───────────────────────── 表情 ─────────────────────────
+  const EMOJI = {
+    "微笑": "🙂", "嘻嘻": "😄", "哈哈": "😆", "可爱": "🥰", "可怜": "🥺", "挖鼻": "👃", "吃惊": "😮", "害羞": "😳", "挤眼": "😜", "闭嘴": "🤐",
+    "鄙视": "😒", "爱你": "😍", "泪": "😭", "偷笑": "🤭", "亲亲": "😘", "生病": "🤒", "太开心": "😁", "白眼": "🙄", "右哼哼": "😤", "左哼哼": "😤",
+    "嘘": "🤫", "衰": "😞", "委屈": "🥹", "吐": "🤮", "哈欠": "🥱", "抱抱": "🤗", "怒": "😠", "疑问": "❓", "馋嘴": "🤤", "拜拜": "👋",
+    "思考": "🤔", "汗": "😓", "困": "😪", "睡": "😴", "钱": "🤑", "失望": "😔", "酷": "😎", "色": "😍", "哼": "😤", "鼓掌": "👏",
+    "晕": "😵", "悲伤": "😢", "抓狂": "😫", "黑线": "😑", "阴险": "😏", "怒骂": "🤬", "笑cry": "😂", "允悲": "😅", "二哈": "🐺", "doge": "🐶",
+    "喵喵": "🐱", "吃瓜": "🍉", "酸": "🍋", "裂开": "💔", "awsl": "😇", "跪了": "🧎", "摊手": "🤷", "坏笑": "😼", "舔屏": "😋", "打call": "📣",
+    "心": "❤️", "伤心": "💔", "赞": "👍", "good": "👍", "ok": "👌", "耶": "✌️", "加油": "💪", "握手": "🤝", "作揖": "🙏", "来": "👉",
+    "NO": "🙅", "蜡烛": "🕯️", "给力": "🔥", "单身狗": "🐕", "哆啦A梦花心": "🥀", "费解": "😵‍💫", "并不简单": "🧐", "憧憬": "🤩", "污": "🙈", "互粉": "🤝",
+  };
+  function emojiPanelHtml() {
+    return `<div class="emoji-panel">${Object.entries(EMOJI).map(([k, v]) => `<button class="emoji-btn" data-act="insert-emoji" data-name="${esc(k)}" title="[${esc(k)}]">${v}</button>`).join("")}</div>`;
+  }
+
   // ───────────────────────── 文本渲染 ─────────────────────────
   function richText(t) {
     return esc(t)
       .replace(/#([^#\n]{1,40})#/g, '<span class="link">#$1#</span>')
       .replace(/@([一-龥\w\-·]{1,24})/g, '<span class="link">@$1</span>')
-      .replace(/\[([一-龥a-zA-Z]{1,8})\]/g, '<span class="emo">[$1]</span>')
+      .replace(/\[([一-龥a-zA-Z]{1,8})\]/g, (m0, k) => EMOJI[k] ? `<span class="emoji" title="[${k}]">${EMOJI[k]}</span>` : `<span class="emo">[${k}]</span>`)
       .replace(/(https?:\/\/[^\s<]+)/g, '<span class="link">🔗网页链接</span>');
   }
 
@@ -235,6 +252,11 @@
     try { const r = await api.media.get({ ref }); S.mediaCache.set(ref, r.dataUrl); return r.dataUrl; } catch (e) { return ""; }
   }
   function hydrateImages(root) {
+    root.querySelectorAll("[data-bg-ref]").forEach(async el => {
+      const url = await mediaUrl(el.dataset.bgRef);
+      if (url) el.style.background = `center / cover no-repeat url("${url}")`;
+      el.removeAttribute("data-bg-ref");
+    });
     root.querySelectorAll("img[data-ref]").forEach(async img => {
       const url = await mediaUrl(img.dataset.ref);
       if (url) img.src = url;
@@ -294,24 +316,56 @@
   // ───────────────────────── AI 输出解析 ─────────────────────────
   const KEYS = ["角色", "作者", "认证", "认证说明", "会员", "来源", "时间", "配图", "转评赞", "转发自", "原文", "转发链", "正文", "编号", "回复", "赞", "内容",
     "点赞角色", "转发", "路人点赞", "新增粉丝", "昵称", "简介", "IP属地", "粉丝", "关注"];
-  const KEY_RE = new RegExp(`^\\s*(${KEYS.sort((a, b) => b.length - a.length).join("|")})\\s*[：:]\\s*(.*)$`);
+  const KEY_ALT = KEYS.slice().sort((a, b) => b.length - a.length).join("|");
+  // 支持「作者：xx」「作者: xx」「[作者]xx」「【作者】：xx」「**作者**：xx」「- 作者：xx」
+  const KEY_RE = new RegExp(`^\\s*(?:[-*•]\\s*)?(?:[\\[【]\\s*(${KEY_ALT})\\s*[\\]】]\\s*[：:]?|(${KEY_ALT})\\s*[：:])\\s*(.*)$`);
+  const KINDS = "微博|评论|互动|主页|结束";
 
-  function parseBlocks(text, kind) {
-    const out = [];
-    const re = new RegExp(`=+\\s*${kind}\\s*=+([\\s\\S]*?)(?:=+\\s*结束\\s*=+|(?==+\\s*(?:微博|评论|互动|主页)\\s*=+)|$)`, "g");
-    let m;
-    while ((m = re.exec(String(text || "")))) {
-      const fields = {}; let cur = null;
-      for (const line of m[1].split(/\r?\n/)) {
-        const km = line.match(KEY_RE);
-        if (km) { cur = km[1]; fields[cur] = km[2].trim(); }
-        else if (cur) fields[cur] = (fields[cur] ? fields[cur] + "\n" : "") + line;
-      }
+  /** 把模型常见的格式偏差统一成 ===xx=== 块 */
+  function normalizeOutput(text) {
+    return String(text || "")
+      .replace(/<think(?:ing)?>[\s\S]*?<\/think(?:ing)?>/gi, "")
+      .replace(/^[\s\S]*?<\/think(?:ing)?>/i, "")
+      .replace(/```[a-zA-Z]*\s*/g, "")
+      .replace(/\*\*/g, "")
+      .replace(new RegExp(`^[ \\t]*(?:={2,}|-{2,}|#{1,4}|[\\[【<])?[ \\t]*(${KINDS})[ \\t]*\\d*[ \\t]*(?:={2,}|-{2,}|[\\]】>])?[ \\t]*$`, "gm"), (m0, k) => `===${k}===`)
+      .replace(/^[ \t]*-{3,}[ \t]*$/gm, "");
+  }
+
+  /** 一段文字里可能挤着好几条（模型漏了分隔标记）：同一个字段名再次出现就算下一条 */
+  function recordsOf(chunk) {
+    const list = []; let fields = {}; let cur = null;
+    const push = () => {
       for (const k in fields) fields[k] = fields[k].replace(/^\n+|\s+$/g, "");
-      if (Object.keys(fields).length) out.push(fields);
-      if (m[0].length === 0) re.lastIndex++;
+      if (Object.keys(fields).length) list.push(fields);
+      fields = {}; cur = null;
+    };
+    for (const line of chunk.split(/\r?\n/)) {
+      const km = line.match(KEY_RE);
+      if (km) {
+        const key = km[1] || km[2];
+        if (key in fields) push();
+        cur = key; fields[cur] = (km[3] || "").trim();
+      } else if (cur) fields[cur] = (fields[cur] ? fields[cur] + "\n" : "") + line;
     }
-    return out;
+    push();
+    return list;
+  }
+
+  function parseBlocks(raw, kind) {
+    const text = normalizeOutput(raw);
+    const bodyKey = { 微博: "正文", 评论: "内容", 互动: "点赞角色", 主页: "昵称" }[kind];
+    // 按分隔标记切段；标记之外的散段（模型漏写标记）也一并按字段解析，最后按必需字段筛
+    const out = [];
+    let label = null;
+    for (const seg of text.split(new RegExp(`(===(?:${KINDS})===)`))) {
+      const mk = seg.match(/^===(.+)===$/);
+      if (mk) { label = mk[1]; continue; }
+      if (label === kind || label === null || label === "结束") out.push(...recordsOf(seg));
+    }
+    if (kind === "互动") return out.filter(f => "点赞角色" in f || "新增粉丝" in f || "转发" in f || "路人点赞" in f).slice(0, 1);
+    if (kind === "主页") return out.filter(f => "昵称" in f && ("粉丝" in f || "简介" in f)).slice(0, 1);
+    return out.filter(f => f[bodyKey]);
   }
   const none = v => !v || /^(无|没有|none|null|-|—)$/i.test(String(v).trim());
   const yes = v => /^(是|有|true|yes)/i.test(String(v || "").trim());
@@ -419,17 +473,38 @@
     const d = new Date(); const w = "日一二三四五六"[d.getDay()];
     return `${d.getFullYear()}年${d.getMonth() + 1}月${d.getDate()}日 星期${w} ${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
   }
+  const FORMAT_HINT = {
+    feed: "===微博===", comments: "===评论===", reaction: "===评论=== 和 ===互动===", reply: "===评论===", profile: "===主页=== 和 ===微博===",
+  };
   async function generate(payload, label) {
     const job = uid("job"); S.jobs.add(job);
+    const scene = (payload.appTags || [])[1];
+    if (FORMAT_HINT[scene]) payload = { ...payload, instruction: `${payload.instruction}\n\n【输出要求】这不是聊天回复：不要用聊天格式，不要写旁白、动作或心理描写，不要加任何解释，只输出 ${FORMAT_HINT[scene]} 格式的内容，字段名照抄。` };
     try {
       const r = await api.ai.generate(payload);
-      return (r && r.text) || "";
+      const text = (r && r.text) || "";
+      S.lastRaw = { label, text, at: nowIso() };
+      return text;
     } catch (e) {
       console.error(label, e);
       toast(`${label}失败：${(e && e.message) || e}`.slice(0, 80));
       return null;
     } finally { S.jobs.delete(job); }
   }
+  /** 解析不出内容时，让用户能看到 AI 原始返回，方便排查 */
+  async function parseFailed(label) {
+    const choice = await sheet(`${label}：没认出 AI 返回的内容`, [{ label: "查看 AI 原始返回", value: "raw" }]);
+    if (choice === "raw") openRaw();
+  }
+  function openRaw() {
+    const r = S.lastRaw;
+    openPage("raw", pg => {
+      $(".page-body", pg.el).innerHTML = r
+        ? `<div class="form-note">${esc(r.label)} · ${fmtTime(r.at)} · 共 ${r.text.length} 字。截图发给 Nox 就能修～</div><pre style="margin:0;padding:12px 16px;white-space:pre-wrap;word-break:break-all;font-size:12px;line-height:1.5;background:var(--wb-card);user-select:text;-webkit-user-select:text">${esc(r.text || "（空的，AI 什么都没返回）")}</pre>`
+        : `<div class="empty">还没有调用过 AI</div>`;
+    }, { title: "AI 原始返回" });
+  }
+
   function remember(charId, summary, eventId) {
     if (!charId || !api.memory || !api.memory.addTimeline) return;
     api.memory.addTimeline({ characterId: charId, appLabel: "微博", detail: "weibo", summary, appEventId: eventId }).catch(e => console.warn("写入记忆失败", e));
@@ -461,7 +536,7 @@
     S.feedBusy = false;
     if (text == null) { renderHome(); return; }
     const posts = parseBlocks(text, "微博").map(b => postFromBlock(b, { origin: "feed" })).filter(p => p.text || p.images.length || p.repost);
-    if (!posts.length) { toast("这次没刷出新微博，再试一次？"); console.warn("无法解析的输出", text); renderHome(); return; }
+    if (!posts.length) { renderHome(); parseFailed("刷新"); return; }
     for (const p of posts) { S.posts.push(p); savePost(p); S.allPostRows++; }
     S.lastRefreshCount = posts.filter(p => followTab ? inFollowFeed(p) : p.authorType === "npc").length || posts.length;
     pruneIfNeeded();
@@ -493,6 +568,7 @@
     post._genComments = false;
     if (text != null) {
       const list = commentsFromBlocks(parseBlocks(text, "评论"), post, {});
+      if (!list.length) parseFailed("加载评论");
       post.comments = [...list, ...post.comments];
       post.commentsGenerated = true;
       post.counts.comments = Math.max(post.counts.comments, post.comments.length);
@@ -520,6 +596,7 @@
     if (text == null) return;
     const list = commentsFromBlocks(parseBlocks(text, "评论"), post, {});
     const sum = parseBlocks(text, "互动")[0] || {};
+    if (!list.length && !Object.keys(sum).length) { parseFailed("发博后的互动"); return; }
     const likedChars = none(sum["点赞角色"]) ? [] : sum["点赞角色"].split(/[、,，\s]+/).map(charByName).filter(Boolean);
     const reposts = none(sum["转发"]) ? [] : sum["转发"].split(/\s*\|\|\s*/).map(seg => {
       const i = seg.search(/[：:]/); if (i <= 0) return null;
@@ -619,12 +696,13 @@
     ].filter(Boolean).join("\n\n");
     const job = uid("job"); S.jobs.add(job);
     let text = null;
-    try { const r = await api.ai.chat({ system: NPC_SYSTEM, prompt, timeoutMs: 90000 }); text = (r && r.text) || ""; }
+    try { const r = await api.ai.chat({ system: NPC_SYSTEM, prompt, timeoutMs: 90000 }); text = (r && r.text) || ""; S.lastRaw = { label: "路人回复", text, at: nowIso() }; }
     catch (e) { console.error(e); toast(`路人回复失败：${(e && e.message) || e}`.slice(0, 60)); }
     finally { S.jobs.delete(job); }
     if (!text) return;
     const fresh = S.posts.find(p => p.id === post.id); if (!fresh) return;
     const list = commentsFromBlocks(parseBlocks(text, "评论"), fresh, {}).map(c => ({ ...c, authorType: "npc", charId: undefined }));
+    if (!list.length) { parseFailed("路人回复"); return; }
     let delay = rand(1500, 4000);
     for (const c of list) {
       if (!c.parentId) { c.parentId = userComment.parentId || userComment.id; c.replyToName = S.meta.nickname; }
@@ -815,7 +893,7 @@
     return pin ? [pin, ...mine.filter(p => p !== pin)] : mine;
   }
   function profileHeaderHtml(a, info) {
-    return `<div class="profile-cover" style="background:${info.cover}"></div>
+    return `<div class="profile-cover" style="background:${info.cover}" ${info.coverRef ? `data-bg-ref="${esc(info.coverRef)}"` : ""}></div>
       <div class="profile-box">
         ${avatarHtml(a)}
         <div class="profile-actions">${info.actions || ""}</div>
@@ -841,7 +919,7 @@
     }
     if (meTab === "liked") body = liked.length ? liked.map(p => cardHtml(p, { noFollow: true })).join("") : `<div class="empty">还没有赞过微博</div>`;
     $("#view").innerHTML = profileHeaderHtml(a, {
-      cover: COVERS[S.meta.cover || 0], bio: S.meta.bio, ip: S.meta.ip, posts: posts.length, following, followers: S.meta.followers,
+      cover: COVERS[S.meta.cover || 0], coverRef: S.meta.coverRef, bio: S.meta.bio, ip: S.meta.ip, posts: posts.length, following, followers: S.meta.followers,
       actions: `<button class="btn-ghost" data-act="edit-me">编辑资料</button>`,
     }) + `<div class="profile-tabs">
         <button class="${meTab === "posts" ? "on" : ""}" data-act="me-tab" data-tab="posts">微博</button>
@@ -934,7 +1012,7 @@
       const commentsBody = sorted.length
         ? sorted.map(cmtHtml).join("") + (p._genComments ? spin : `<button class="load-more" data-act="more-cmts" data-post="${esc(p.id)}">加载更多评论</button>`)
         : p._genComments ? spin
-        : `<div class="empty">${p.authorType === "user" ? "还没有人评论，等等看～" : "还没有评论"}</div>`;
+        : `<div class="empty">${p.authorType === "user" ? "还没有人评论" : "还没有评论"}<div><button class="btn-primary" data-act="more-cmts" data-post="${esc(p.id)}">${p.authorType === "user" ? "看看有没有人来评论" : "加载评论"}</button></div></div>`;
       const reposts = (p.reposts || []).slice().reverse();
       const tabBody = pg.tab === "reposts"
         ? (reposts.length ? reposts.map(r => {
@@ -958,7 +1036,7 @@
       target.classList.toggle("hidden", !replyTarget);
     }, {
       title: "微博正文",
-      footer: `<div class="reply-target hidden"></div><div class="reply-bar"><textarea class="reply-input" rows="1" placeholder="写评论…" maxlength="500"></textarea><button class="reply-send" disabled>发送</button></div>`,
+      footer: `<div class="reply-target hidden"></div><div class="reply-bar"><textarea class="reply-input" rows="1" placeholder="写评论…" maxlength="500"></textarea><button class="tool" data-act="toggle-emoji" style="width:32px;height:32px">${I.emoji}</button><button class="reply-send" disabled>发送</button></div><div class="emoji-wrap hidden">${emojiPanelHtml()}</div>`,
     });
     page.tab = "comments";
     page.toggleSort = () => { sort = sort === "hot" ? "time" : "hot"; page.render(page); };
@@ -1073,9 +1151,9 @@
         ${repostOf ? "" : `<button class="tool" data-act="compose-pic">${I.image}</button>`}
         <button class="tool" data-act="compose-insert" data-text="#">${I.topic}</button>
         <button class="tool" data-act="compose-at">${I.at}</button>
-        <button class="tool" data-act="compose-insert" data-text="[doge]">${I.emoji}</button>
+        <button class="tool" data-act="toggle-emoji">${I.emoji}</button>
         <button class="tool" data-act="compose-loc">${I.loc}</button>
-        <button class="visibility" data-act="compose-vis"></button></div>`,
+        <button class="visibility" data-act="compose-vis"></button></div><div class="emoji-wrap hidden">${emojiPanelHtml()}</div>`,
     });
     page.draft = draft; page.repostOf = repostOf;
   }
@@ -1112,14 +1190,24 @@
 
   function openEditMe() {
     openPage("edit-me", pg => {
+      // 重绘时保留还没保存的输入
+      const keep = {};
+      for (const id of ["f-nick", "f-bio", "f-ip", "f-dev"]) { const el = $("#" + id, pg.el); if (el) keep[id] = el.value; }
+      const vipEl = $("#f-vip", pg.el);
       $(".page-body", pg.el).innerHTML = `<div class="form">
         <div class="form-row"><label>昵称</label><input id="f-nick" maxlength="30" value="${esc(S.meta.nickname)}"></div>
         <div class="form-row"><label>简介</label><textarea id="f-bio" maxlength="140" placeholder="介绍一下自己">${esc(S.meta.bio)}</textarea></div>
         <div class="form-row"><label>IP属地</label><input id="f-ip" maxlength="20" placeholder="如 上海" value="${esc(S.meta.ip)}"></div>
         <div class="form-row"><label>发布设备</label><input id="f-dev" maxlength="30" placeholder="如 iPhone 16 Pro" value="${esc(S.meta.device || "")}"></div>
         <div class="form-row"><label>会员</label><input type="checkbox" id="f-vip" ${S.meta.vip ? "checked" : ""} style="flex:none;width:20px;height:20px"></div>
-        <div class="form-row" style="display:block;padding-top:12px"><label>封面</label><div class="swatches">${COVERS.map((c, i) => `<button class="swatch ${S.meta.cover === i ? "on" : ""}" style="background:${c}" data-act="pick-cover" data-idx="${i}"></button>`).join("")}</div></div>
-      </div><div class="form-note">头像跟随小手机里的用户身份头像。昵称是你在微博上的名字，角色在微博里会用它称呼你。</div>`;
+        <div class="form-row"><label>头像</label>${avatarHtml(authorOf({ authorType: "user" }), 44)}<button class="btn-ghost" data-act="upload-avatar">上传图片</button>${S.meta.avatarRef ? `<button class="btn-ghost" data-act="reset-avatar">用身份头像</button>` : ""}</div>
+        <div class="form-row" style="display:block;padding-top:12px"><label>封面</label>
+          <div class="profile-cover" style="height:90px;border-radius:8px;margin-top:8px;background:${COVERS[S.meta.cover || 0]}" ${S.meta.coverRef ? `data-bg-ref="${esc(S.meta.coverRef)}"` : ""}></div>
+          <div class="swatches"><button class="btn-ghost" data-act="upload-cover">上传图片</button>${COVERS.map((c, i) => `<button class="swatch ${!S.meta.coverRef && S.meta.cover === i ? "on" : ""}" style="background:${c}" data-act="pick-cover" data-idx="${i}"></button>`).join("")}</div></div>
+      </div><div class="form-note"><button class="link" data-act="open-raw" style="font-size:12px">调试：查看最近一次 AI 原始返回</button></div><div class="form-note">头像默认用小手机里的身份头像，也可以单独上传。昵称是你在微博上的名字，角色在微博里会用它称呼你。</div>`;
+      for (const id in keep) $("#" + id, pg.el).value = keep[id];
+      if (vipEl) $("#f-vip", pg.el).checked = vipEl.checked;
+      hydrateImages(pg.el);
     }, { title: "编辑资料", action: `<button class="page-action" data-act="save-me">保存</button>` });
   }
 
@@ -1233,7 +1321,30 @@
       case "view-pic": { const p = findPost(el.dataset.post); if (p) openViewer(p, +el.dataset.idx); return; }
       case "me-tab": meTab = el.dataset.tab; renderMe(); return;
       case "edit-me": openEditMe(); return;
-      case "pick-cover": S.meta.cover = +el.dataset.idx; topPage().render(topPage()); return;
+      case "open-raw": openRaw(); return;
+      case "pick-cover": {
+        if (S.meta.coverRef) { api.media.delete({ ref: S.meta.coverRef }).catch(() => {}); S.meta.coverRef = null; }
+        S.meta.cover = +el.dataset.idx; saveMeta(); const pg = topPage(); pg.render(pg); hydrateImages(pg.el); return;
+      }
+      case "upload-avatar": case "upload-cover": {
+        const isAvatar = act === "upload-avatar";
+        try {
+          const r = await api.media.pick({ accept: "image/*" });
+          const f = r && (r.file || (r.files || [])[0]); if (!f) return;
+          const dataUrl = await compressImage(f.dataUrl, isAvatar ? 400 : 1280);
+          const stored = await api.media.put({ dataUrl });
+          S.mediaCache.set(stored.ref, dataUrl);
+          const key = isAvatar ? "avatarRef" : "coverRef";
+          if (S.meta[key]) api.media.delete({ ref: S.meta[key] }).catch(() => {});
+          S.meta[key] = stored.ref; saveMeta();
+          const pg = topPage(); pg.render(pg); hydrateImages(pg.el); toast("已更换");
+        } catch (err) { toast("上传失败"); }
+        return;
+      }
+      case "reset-avatar": {
+        if (S.meta.avatarRef) api.media.delete({ ref: S.meta.avatarRef }).catch(() => {});
+        S.meta.avatarRef = null; saveMeta(); const pg = topPage(); pg.render(pg); hydrateImages(pg.el); return;
+      }
       case "save-me": {
         const pg = topPage();
         S.meta.nickname = $("#f-nick", pg.el).value.trim() || S.meta.nickname;
@@ -1244,6 +1355,15 @@
       case "profile-tab": topPage().setTab(el.dataset.tab); return;
       case "char-more": ensureCharProfile(el.dataset.char, true); return;
       case "compose": openCompose(null); return;
+      case "toggle-emoji": { const pg = topPage(); const w = pg && $(".emoji-wrap", pg.el); if (w) w.classList.toggle("hidden"); return; }
+      case "insert-emoji": {
+        const pg = topPage(); const ta = pg && ($(".compose-text", pg.el) || $(".reply-input", pg.el)); if (!ta) return;
+        const ins = `[${el.dataset.name}]`; const pos = ta.selectionStart ?? ta.value.length;
+        ta.value = ta.value.slice(0, pos) + ins + ta.value.slice(ta.selectionEnd ?? pos);
+        ta.setSelectionRange(pos + ins.length, pos + ins.length);
+        if (pg.draft) pg.draft.text = ta.value;
+        ta.dispatchEvent(new Event("input")); return;
+      }
       case "compose-send": sendCompose(topPage()); return;
       case "compose-pic": {
         const pg = topPage();

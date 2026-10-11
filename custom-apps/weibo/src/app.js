@@ -80,6 +80,7 @@
     loc: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M12 21s-6.5-6.2-6.5-11a6.5 6.5 0 0 1 13 0c0 4.8-6.5 11-6.5 11z"/><circle cx="12" cy="10" r="2.3"/></svg>',
     edit: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M4 20h4L19 9l-4-4L4 16z"/></svg>',
     crown: '<svg class="crown" viewBox="0 0 24 24"><path fill="#ffb300" d="M3 8l4.5 3.5L12 5l4.5 6.5L21 8l-2 11H5z"/><path fill="#ff8a00" d="M5 17h14l-.4 2H5.4z"/></svg>',
+    trash: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M9 7V4.5h6V7M6.5 7l1 13h9l1-13M10 11v6M14 11v6"/></svg>',
     refresh: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 11a8 8 0 1 0-2.3 5.7"/><path d="M20 4v7h-7"/></svg>',
   };
 
@@ -540,6 +541,27 @@
     }, { title: "调试记录" });
   }
 
+  /** 清空当前身份的全部微博内容：微博、评论、角色主页、我的主页 */
+  async function wipeAll() {
+    const ok = await sheet("清空后不能恢复。会删除当前身份下所有微博和评论、角色的微博主页，你的微博主页也会恢复初始。", [{ label: "清空微博所有内容", value: "yes", danger: true }]);
+    if (ok !== "yes") return;
+    if (S.feedBusy || S.jobs.size) { toast("还有内容在生成，等一下再清空"); return; }
+    toast("正在清空…");
+    for (const p of S.posts.slice()) await deletePost(p);
+    for (const c of S.chars) {
+      if (!S.accounts[c.id]) continue;
+      delete S.accounts[c.id];
+      try { await api.db.delete(COL.accounts, `acc_${c.id}`); } catch (e) { /* ignore */ }
+    }
+    for (const key of ["avatarRef", "coverRef"]) if (S.meta[key]) api.media.delete({ ref: S.meta[key] }).catch(() => {});
+    S.meta = { id: S.meta.id, nickname: S.identity.name || "微博用户", bio: "", ip: "", cover: 0, followers: rand(18, 120), followNpc: [], unfollowChars: [], pinnedPostId: null };
+    saveMeta();
+    S.allPostRows = (await dbList(COL.posts)).length;
+    S.homeTab = "follow"; feedLimit = 30;
+    while (pages.length) closePage();
+    renderTab(); toast("已清空");
+  }
+
   function remember(charId, summary, eventId) {
     if (!charId || !api.memory || !api.memory.addTimeline) return;
     api.memory.addTimeline({ characterId: charId, appLabel: "微博", detail: "weibo", summary, appEventId: eventId }).catch(e => console.warn("写入记忆失败", e));
@@ -888,6 +910,7 @@
       <button class="top-tab ${S.homeTab === "follow" ? "active" : ""}" data-act="home-tab" data-tab="follow">关注</button>
       <button class="top-tab ${S.homeTab === "recommend" ? "active" : ""}" data-act="home-tab" data-tab="recommend">推荐</button>
       <button class="top-icon" data-act="refresh" aria-label="刷新">${I.refresh}</button>
+      <button class="top-icon" style="margin-left:0" data-act="wipe" aria-label="清空微博">${I.trash}</button>
     </div>`;
     const view = $("#view");
     const posts = feedPosts();
@@ -1304,6 +1327,7 @@
         S.tab = el.dataset.tab; feedLimit = 30; renderTab(); $("#view").scrollTop = 0; return;
       case "home-tab": S.homeTab = el.dataset.tab; feedLimit = 30; renderHome(); $("#view").scrollTop = 0; return;
       case "refresh": refreshFeed(); return;
+      case "wipe": wipeAll(); return;
       case "feed-more": feedLimit += 30; renderHome(); return;
       case "back": closePage(); return;
       case "open-detail": if (post) openDetail(post.id); return;

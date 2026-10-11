@@ -55,6 +55,8 @@
     return new Date(now - rand(1, 50) * 60000).toISOString();
   }
 
+  const DEFAULT_PLACEHOLDER = "/*__PLACEHOLDER__*/";
+  function hashNum(s) { let h = 0; for (const c of String(s)) h = (h * 31 + c.charCodeAt(0)) >>> 0; return h; }
   function hashHue(s) { let h = 0; for (const c of String(s)) h = (h * 31 + c.charCodeAt(0)) >>> 0; return h % 360; }
   function gradientFor(s) { const h = hashHue(s); return `linear-gradient(135deg, hsl(${h} 62% 66%), hsl(${(h + 40) % 360} 58% 52%))`; }
 
@@ -80,6 +82,8 @@
     loc: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M12 21s-6.5-6.2-6.5-11a6.5 6.5 0 0 1 13 0c0 4.8-6.5 11-6.5 11z"/><circle cx="12" cy="10" r="2.3"/></svg>',
     edit: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M4 20h4L19 9l-4-4L4 16z"/></svg>',
     crown: '<svg class="crown" viewBox="0 0 24 24"><path fill="#ffb300" d="M3 8l4.5 3.5L12 5l4.5 6.5L21 8l-2 11H5z"/><path fill="#ff8a00" d="M5 17h14l-.4 2H5.4z"/></svg>',
+    gear: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 2.8l1.6 2.3 2.8-.5.9 2.7 2.6 1.2-.6 2.8 1.6 2.3-2.1 1.9.2 2.8-2.8.6-1.3 2.5-2.7-.9-2.2 1.7-2.2-1.7-2.7.9-1.3-2.5-2.8-.6.2-2.8-2.1-1.9 1.6-2.3-.6-2.8 2.6-1.2.9-2.7 2.8.5z"/></svg>',
+    camera: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M4 8h3l1.5-2.5h7L17 8h3v11H4z"/><circle cx="12" cy="13.5" r="3.3"/></svg>',
     trash: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M9 7V4.5h6V7M6.5 7l1 13h9l1-13M10 11v6M14 11v6"/></svg>',
     refresh: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 11a8 8 0 1 0-2.3 5.7"/><path d="M20 4v7h-7"/></svg>',
   };
@@ -174,11 +178,25 @@
       unfollowChars: [],
       pinnedPostId: null,
     };
+    for (const k of ["excludedChars", "starredChars", "avatarPool"]) if (!Array.isArray(S.meta[k])) S.meta[k] = [];
     if (!metaRows.some(m => m.id === S.meta.id)) saveMeta();
   }
 
   // ───────────────────────── 账号 / 头像 ─────────────────────────
   const charById = id => S.chars.find(c => c.id === id);
+  const isStarred = id => (S.meta.starredChars || []).includes(id);
+  /** 参与微博的角色（设置里关掉的不发博、不来评论） */
+  const activeChars = () => S.chars.filter(c => !(S.meta.excludedChars || []).includes(c.id));
+  /** 抽角色：特别关注的一定在，其余随机补满 */
+  function pickCast(pool, n) {
+    const starred = pool.filter(c => isStarred(c.id));
+    const rest = shuffle(pool.filter(c => !isStarred(c.id)));
+    return [...starred, ...rest].slice(0, Math.max(n, starred.length));
+  }
+  function starredLine(cast) {
+    const names = cast.filter(c => isStarred(c.id)).map(c => c.name);
+    return names.length ? `用户特别关注的人：${names.join("、")}。他们和用户关系特别近，一定会刷到用户的动态。` : "";
+  }
   /** strict：只认本名或已登记的微博昵称（用来从「作者」反查，避免「沈砚的粉丝」被认成沈砚） */
   function charByName(name, strict) {
     name = String(name || "").replace(/^@/, "").trim(); if (!name || none(name)) return null;
@@ -206,7 +224,10 @@
       return { type: "char", charId: x.charId, name: acc.nickname || x.authorName || c.name || "微博用户", verified: acc.verified || x.verified || "无",
         vip: acc.vip != null ? acc.vip : x.vip, avatar: c.avatar, seed: x.charId };
     }
-    return { type: "npc", name: x.authorName || "微博用户", verified: x.verified || "无", vip: !!x.vip, avatar: null, seed: x.authorName || "npc" };
+    const pool = S.meta.avatarPool || [];
+    const npcName = x.authorName || "微博用户";
+    return { type: "npc", name: npcName, verified: x.verified || "无", vip: !!x.vip, avatar: null, seed: npcName,
+      avatarRef: pool.length ? pool[hashNum(npcName) % pool.length] : null };
   }
 
   function avatarHtml(a, size) {
@@ -268,7 +289,12 @@
   }
   function picTile(img, postId, idx) {
     if (img.ref) return `<div class="pic" data-act="view-pic" data-post="${esc(postId)}" data-idx="${idx}"><img data-ref="${esc(img.ref)}" alt=""></div>`;
-    return `<div class="pic placeholder" style="background:${gradientFor(img.desc || idx)}" data-act="view-pic" data-post="${esc(postId)}" data-idx="${idx}"><span>${esc(img.desc || "图片")}</span></div>`;
+    return `<div class="pic" data-act="view-pic" data-post="${esc(postId)}" data-idx="${idx}">${placeholderImg()}</div>`;
+  }
+  function placeholderImg() {
+    return S.meta && S.meta.placeholderRef
+      ? `<img data-ref="${esc(S.meta.placeholderRef)}" src="${DEFAULT_PLACEHOLDER}" alt="">`
+      : `<img src="${DEFAULT_PLACEHOLDER}" alt="">`;
   }
   function picsHtml(images, postId) {
     if (!images || !images.length) return "";
@@ -598,12 +624,16 @@
     toast("正在清空…");
     for (const p of S.posts.slice()) await deletePost(p);
     for (const c of S.chars) {
-      if (!S.accounts[c.id]) continue;
+      const acc = S.accounts[c.id]; if (!acc) continue;
+      // 上传的主页背景算设置，留着
+      if (acc.coverRef) { S.accounts[c.id] = { charId: c.id, coverRef: acc.coverRef }; saveAccount(c.id); continue; }
       delete S.accounts[c.id];
       try { await api.db.delete(COL.accounts, `acc_${c.id}`); } catch (e) { /* ignore */ }
     }
     for (const key of ["avatarRef", "coverRef"]) if (S.meta[key]) api.media.delete({ ref: S.meta[key] }).catch(() => {});
-    S.meta = { id: S.meta.id, nickname: S.identity.name || "微博用户", bio: "", ip: "", cover: 0, followers: rand(18, 120), followNpc: [], unfollowChars: [], pinnedPostId: null };
+    // 设置（参与角色、特别关注、头像库、默认配图）保留，只清内容
+    S.meta = { id: S.meta.id, nickname: S.identity.name || "微博用户", bio: "", ip: "", cover: 0, followers: rand(18, 120), followNpc: [], unfollowChars: [], pinnedPostId: null,
+      excludedChars: S.meta.excludedChars || [], starredChars: S.meta.starredChars || [], avatarPool: S.meta.avatarPool || [], placeholderRef: S.meta.placeholderRef || null };
     saveMeta();
     S.allPostRows = (await dbList(COL.posts)).length;
     S.homeTab = "follow"; feedLimit = 30;
@@ -619,11 +649,11 @@
   /** 首页刷新 */
   async function refreshFeed() {
     if (S.feedBusy) return;
-    if (!S.chars.length) { toast("当前身份还没有角色好友，先去微信加个好友吧"); return; }
+    if (!activeChars().length) { toast("没有参与微博的角色：先去微信加个好友，或在设置里打开角色"); return; }
     S.feedBusy = true; renderHome();
     const followTab = S.homeTab === "follow";
-    const followed = S.chars.filter(c => isFollowingChar(c.id));
-    const cast = shuffle(followed.length ? followed : S.chars).slice(0, followTab ? 4 : 2);
+    const followed = activeChars().filter(c => isFollowingChar(c.id));
+    const cast = pickCast(followed.length ? followed : activeChars(), followTab ? 4 : 2);
     const charCount = followTab ? Math.min(cast.length + 1, rand(2, 4)) : 1;
     const npcCount = followTab ? rand(2, 3) : rand(5, 7);
     const followNpc = (S.meta.followNpc || []).slice(0, 6);
@@ -658,10 +688,10 @@
   /** 打开正文页时生成评论区 */
   async function ensureComments(post) {
     if (post.commentsGenerated || post.authorType === "user" || post._genComments) return;
-    if (!S.chars.length) return;
+    if (!activeChars().length) return;
     post._genComments = true; rerenderDetail(post);
-    const others = shuffle(S.chars.filter(c => c.id !== post.charId)).slice(0, 3);
-    const cast = post.authorType === "char" ? [charById(post.charId), ...others].filter(Boolean) : others.length ? others : S.chars.slice(0, 1);
+    const others = pickCast(activeChars().filter(c => c.id !== post.charId), 3);
+    const cast = post.authorType === "char" ? [charById(post.charId), ...others].filter(Boolean) : others.length ? others : activeChars().slice(0, 1);
     const author = authorOf(post);
     const want = Math.min(Math.max(post.counts.comments, 3), rand(9, 14));
     const instruction = [
@@ -692,8 +722,8 @@
 
   /** 用户发博后：角色和路人的反应 */
   async function reactToUserPost(post) {
-    if (post.visibility === "self" || !S.chars.length) return;
-    const cast = shuffle(S.chars).slice(0, 6);
+    if (post.visibility === "self" || !activeChars().length) return;
+    const cast = pickCast(activeChars(), 6);
     const instruction = [
       `当前时间：${nowText()}`,
       `用户的微博昵称：${S.meta.nickname}，粉丝 ${S.meta.followers} 人。用户性别：${S.identity.gender || "未知（评论里用「博主」「ta」）"}，评论称呼一定要用对性别。`,
@@ -703,6 +733,7 @@
       post.location ? `定位：${post.location}` : "",
       post.visibility === "friends" ? "这条微博仅好友圈可见：只有角色能看到，不要生成路人评论。" : `路人评论 ${rand(2, 6)} 条左右。`,
       `可能来互动的角色：\n${charsForPrompt(cast)}`,
+      starredLine(cast),
       reservedLine(),
     ].filter(Boolean).join("\n\n");
     const text = await generate({ characterIds: cast.map(c => c.id), appTags: ["nox_weibo", "reaction"], instruction }, "获取互动");
@@ -837,10 +868,10 @@
 
   /** 评论区「加载更多」：继续生成新评论，可以回复已有评论 */
   async function moreComments(post) {
-    if (post._genComments || !S.chars.length) return;
+    if (post._genComments || !activeChars().length) return;
     post._genComments = true; rerenderDetail(post);
-    const others = shuffle(S.chars.filter(c => c.id !== post.charId)).slice(0, 3);
-    const cast = post.authorType === "char" ? [charById(post.charId), ...others].filter(Boolean) : others.length ? others : S.chars.slice(0, 1);
+    const others = pickCast(activeChars().filter(c => c.id !== post.charId), 3);
+    const cast = post.authorType === "char" ? [charById(post.charId), ...others].filter(Boolean) : others.length ? others : activeChars().slice(0, 1);
     const existing = post.comments.slice().sort((a, b) => b.likes - a.likes).slice(0, 18).map(c => cmtLine(post, c)).join("\n");
     const instruction = [
       `当前时间：${nowText()}`,
@@ -1015,7 +1046,7 @@
     return pin ? [pin, ...mine.filter(p => p !== pin)] : mine;
   }
   function profileHeaderHtml(a, info) {
-    return `<div class="profile-cover" style="background:${info.cover}" ${info.coverRef ? `data-bg-ref="${esc(info.coverRef)}"` : ""}></div>
+    return `<div class="profile-cover" style="background:${info.cover}" ${info.coverRef ? `data-bg-ref="${esc(info.coverRef)}"` : ""}>${info.coverAction || ""}</div>
       <div class="profile-box">
         ${avatarHtml(a)}
         <div class="profile-actions">${info.actions || ""}</div>
@@ -1043,7 +1074,7 @@
     if (meTab === "liked") body = liked.length ? liked.map(p => cardHtml(p, { noFollow: true })).join("") : `<div class="empty">还没有赞过微博</div>`;
     $("#view").innerHTML = profileHeaderHtml(a, {
       cover: COVERS[S.meta.cover || 0], coverRef: S.meta.coverRef, bio: S.meta.bio, ip: S.meta.ip, posts: posts.length, following, followers: S.meta.followers,
-      actions: `<button class="btn-ghost" data-act="edit-me">编辑资料</button>`,
+      actions: `<button class="btn-ghost icon-only" data-act="open-settings" aria-label="设置">${I.gear}</button><button class="btn-ghost" data-act="edit-me">编辑资料</button>`,
     }) + `<div class="profile-tabs">
         <button class="${meTab === "posts" ? "on" : ""}" data-act="me-tab" data-tab="posts">微博</button>
         <button class="${meTab === "album" ? "on" : ""}" data-act="me-tab" data-tab="album">相册</button>
@@ -1202,9 +1233,11 @@
       }
       body.innerHTML = profileHeaderHtml(a, {
         realName: `${acc.gender === "女" ? "她" : acc.gender === "男" ? "他" : "TA"}是${charById(charId)?.name || ""}`,
-        cover: gradientFor(charId + "cover"), bio: acc.bio, ip: acc.ip, verifiedNote: acc.verifiedNote, posts: Math.max(posts.length, acc.postCount || 0),
+        cover: gradientFor(charId + "cover"), coverRef: acc.coverRef, bio: acc.bio,
+        coverAction: `<button class="cover-btn" data-act="char-cover" data-char="${esc(charId)}">${I.camera}换背景</button>`, ip: acc.ip, verifiedNote: acc.verifiedNote, posts: Math.max(posts.length, acc.postCount || 0),
         following: acc.following || 0, followers: acc.followers || 0,
-        actions: `<button class="follow-btn ${following ? "on" : ""}" style="height:32px;padding:0 16px;font-size:14px" data-act="toggle-follow-char" data-char="${esc(charId)}">${following ? "已关注" : "+ 关注"}</button>`,
+        actions: `<button class="follow-btn ${isStarred(charId) ? "star-on" : "on"}" style="height:32px;padding:0 12px;font-size:14px" data-act="toggle-star" data-char="${esc(charId)}">${isStarred(charId) ? "★ 特别关注" : "☆ 特别关注"}</button>
+          <button class="follow-btn ${following ? "on" : ""}" style="height:32px;padding:0 16px;font-size:14px" data-act="toggle-follow-char" data-char="${esc(charId)}">${following ? "已关注" : "+ 关注"}</button>`,
       }) + `<div class="profile-tabs"><button class="${tab === "posts" ? "on" : ""}" data-act="profile-tab" data-tab="posts">微博</button>
           <button class="${tab === "album" ? "on" : ""}" data-act="profile-tab" data-tab="album">相册</button></div>${list}`;
       body.scrollTop = scroll; hydrateImages(body);
@@ -1312,6 +1345,44 @@
     setTimeout(() => reactToUserPost(post), rand(2500, 6000));
   }
 
+  function openSettings() {
+    openPage("settings", pg => {
+      const body = $(".page-body", pg.el); const scroll = body.scrollTop;
+      const excluded = new Set(S.meta.excludedChars || []);
+      const charsHtml = S.chars.length ? S.chars.map(c => {
+        const a = authorOf({ authorType: "char", charId: c.id });
+        const on = !excluded.has(c.id);
+        return `<div class="list-cell">${avatarHtml(a)}<div class="cell-main"><div>${esc(c.name)}</div><div class="cell-sub">${esc(a.name !== c.name ? `微博：${a.name}` : "还没有微博账号")}</div></div>
+          <button class="star-btn ${isStarred(c.id) ? "on" : ""}" data-act="toggle-star" data-char="${esc(c.id)}" aria-label="特别关注">${isStarred(c.id) ? "★" : "☆"}</button>
+          <button class="switch ${on ? "on" : ""}" data-act="toggle-part" data-char="${esc(c.id)}" aria-label="参与"><span></span></button></div>`;
+      }).join("") : `<div class="empty" style="padding:24px">这个身份还没有角色好友</div>`;
+      const pool = S.meta.avatarPool || [];
+      body.innerHTML = `
+        <div class="form-note">参与的角色 · 开关关掉的人不发微博也不来评论；★ 特别关注的人每次刷新和你发博时一定会被叫到</div>
+        ${charsHtml}
+        <div class="form-note" style="margin-top:8px">路人头像库 · 路人从这里分头像，同一个路人一直是同一张。点图片可以删除</div>
+        <div class="album avatar-pool">${pool.map((ref, i) => `<div class="pic" data-act="pool-rm" data-idx="${i}"><img data-ref="${esc(ref)}" alt=""></div>`).join("")}
+          <button class="compose-add" data-act="pool-add">＋</button></div>
+        <div class="form-note" style="margin-top:8px">默认配图 · 还没生成的配图显示这张，点开能看到图片描述和「生成这张图」</div>
+        <div class="list-cell"><div class="pic" style="width:72px;flex:none">${placeholderImg()}</div><div class="cell-main"></div>
+          <button class="btn-ghost" data-act="ph-upload">上传更换</button>${S.meta.placeholderRef ? `<button class="btn-ghost" data-act="ph-reset">恢复默认</button>` : ""}</div>
+        <div class="form-note"><button class="link" data-act="open-raw" style="font-size:12px">调试记录：查看最近 10 次 AI 调用</button></div>`;
+      body.scrollTop = scroll; hydrateImages(body);
+    }, { title: "微博设置" });
+  }
+
+  async function pickImages(max, size) {
+    const r = await api.media.pick({ accept: "image/*", multiple: max > 1, limit: max });
+    const files = (r && (r.files || (r.file ? [r.file] : []))) || [];
+    const refs = [];
+    for (const f of files.slice(0, max)) {
+      const dataUrl = await compressImage(f.dataUrl, size);
+      const stored = await api.media.put({ dataUrl });
+      S.mediaCache.set(stored.ref, dataUrl); refs.push(stored.ref);
+    }
+    return refs;
+  }
+
   function openEditMe() {
     openPage("edit-me", pg => {
       // 重绘时保留还没保存的输入
@@ -1343,8 +1414,8 @@
     const draw = async () => {
       const url = img.ref ? await mediaUrl(img.ref) : "";
       el.innerHTML = `<div class="idx">${idx + 1}/${imgs.length}</div>
-        ${url ? `<img src="${url}" alt="">` : `<div class="placeholder-big" style="background:${gradientFor(img.desc || idx)}">${esc(img.desc || "图片")}</div>`}
-        ${img.desc && url ? `<div class="desc">${esc(img.desc)}</div>` : ""}
+        ${url ? `<img src="${url}" alt="">` : placeholderImg()}
+        ${img.desc ? `<div class="desc">${esc(img.desc)}</div>` : ""}
         <div class="tools">${!url && img.desc ? `<button data-v="gen">生成这张图</button>` : ""}<button data-v="close">关闭</button></div>`;
     };
     el.onclick = async e => {
@@ -1361,7 +1432,7 @@
         } catch (err) { toast(`生图失败：${(err && err.message) || err}`.slice(0, 60)); b.disabled = false; b.textContent = "生成这张图"; }
       }
     };
-    document.body.appendChild(el); draw();
+    document.body.appendChild(el); await draw(); hydrateImages(el);
   }
 
   // ───────────────────────── 交互 ─────────────────────────
@@ -1447,6 +1518,50 @@
       case "me-tab": meTab = el.dataset.tab; renderMe(); return;
       case "edit-me": openEditMe(); return;
       case "open-raw": openRaw(); return;
+      case "open-settings": openSettings(); return;
+      case "toggle-star": {
+        const id = el.dataset.char; const on = isStarred(id);
+        S.meta.starredChars = on ? S.meta.starredChars.filter(x => x !== id) : [...(S.meta.starredChars || []), id];
+        saveMeta(); toast(on ? "已取消特别关注" : "已设为特别关注"); refreshAll(); return;
+      }
+      case "toggle-part": {
+        const id = el.dataset.char; const off = (S.meta.excludedChars || []).includes(id);
+        S.meta.excludedChars = off ? S.meta.excludedChars.filter(x => x !== id) : [...(S.meta.excludedChars || []), id];
+        saveMeta(); refreshAll(); return;
+      }
+      case "pool-add": {
+        try { const refs = await pickImages(20, 300); if (refs.length) { S.meta.avatarPool = [...(S.meta.avatarPool || []), ...refs]; saveMeta(); toast(`加了 ${refs.length} 张`); refreshAll(); } }
+        catch (err) { toast("上传失败"); }
+        return;
+      }
+      case "pool-rm": {
+        const i = +el.dataset.idx; const ref = (S.meta.avatarPool || [])[i]; if (!ref) return;
+        const ok = await sheet("从头像库删除这张？", [{ label: "删除", value: "yes", danger: true }]);
+        if (ok !== "yes") return;
+        S.meta.avatarPool.splice(i, 1); api.media.delete({ ref }).catch(() => {}); saveMeta(); refreshAll(); return;
+      }
+      case "ph-upload": {
+        try {
+          const [ref] = await pickImages(1, 900); if (!ref) return;
+          if (S.meta.placeholderRef) api.media.delete({ ref: S.meta.placeholderRef }).catch(() => {});
+          S.meta.placeholderRef = ref; saveMeta(); toast("已更换"); refreshAll();
+        } catch (err) { toast("上传失败"); }
+        return;
+      }
+      case "ph-reset": {
+        if (S.meta.placeholderRef) api.media.delete({ ref: S.meta.placeholderRef }).catch(() => {});
+        S.meta.placeholderRef = null; saveMeta(); refreshAll(); return;
+      }
+      case "char-cover": {
+        const id = el.dataset.char;
+        try {
+          const [ref] = await pickImages(1, 1280); if (!ref) return;
+          const acc = S.accounts[id] || {};
+          if (acc.coverRef) api.media.delete({ ref: acc.coverRef }).catch(() => {});
+          ensureAccount(id, { coverRef: ref }); toast("已更换"); refreshAll();
+        } catch (err) { toast("上传失败"); }
+        return;
+      }
       case "pick-cover": {
         if (S.meta.coverRef) { api.media.delete({ ref: S.meta.coverRef }).catch(() => {}); S.meta.coverRef = null; }
         S.meta.cover = +el.dataset.idx; saveMeta(); const pg = topPage(); pg.render(pg); hydrateImages(pg.el); return;

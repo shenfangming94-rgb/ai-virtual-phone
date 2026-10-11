@@ -208,7 +208,12 @@ IP属地：上海
       async generateImage() { await sleep(300); return { dataUrl: "data:image/svg+xml;utf8," + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="400" height="300"><rect width="400" height="300" fill="#7ab"/><text x="20" y="150" font-size="30" fill="#fff">generated</text></svg>') }; },
     },
     media: {
-      async pick() { return { files: [] }; },
+      async pick(p) {
+        const n = (p && p.limit) || 1; const files = [];
+        for (let i = 0; i < Math.min(n, 3); i++) { const h = Math.floor(Math.random() * 360);
+          files.push({ dataUrl: "data:image/svg+xml;utf8," + encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200"><rect width="200" height="200" fill="hsl(${h},70%,60%)"/><circle cx="100" cy="85" r="40" fill="#fff8"/></svg>`) }); }
+        return { files, file: files[0] };
+      },
       async put({ dataUrl }) { const ref = "media-store://" + Math.random(); media[ref] = dataUrl; return { ref }; },
       async get({ ref }) { return { ref, dataUrl: media[ref] }; },
       async delete() { return true; },

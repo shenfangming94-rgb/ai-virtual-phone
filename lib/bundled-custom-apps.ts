@@ -3,7 +3,8 @@
  * 启动时没装就自动装上并放到桌面，版本变了就原地换包（数据保留）。
  * 只有用户在应用市场里主动卸载过的不再装回来（导入备份覆盖掉 APP 列表时会补装）。
  */
-import { hydrateKvDb, kvGet } from "./kv-db";
+import { hydrateKvDb, kvGet, kvRemove } from "./kv-db";
+import { CUSTOM_APPS_PLACE_PENDING_KEY } from "./custom-app-types";
 import {
     CUSTOM_APPS_UNINSTALLED_KEY,
     CUSTOM_APP_PLACE_DESKTOP_EVENT,
@@ -35,6 +36,15 @@ async function syncOne(bundled: BundledApp): Promise<void> {
     if (!existing) window.dispatchEvent(new CustomEvent(CUSTOM_APP_PLACE_DESKTOP_EVENT, { detail: { appId: installed.id } }));
 }
 
+/** 导入备份后：把所有已安装的 APP 摆回桌面（已在桌面/程序坞/文件夹里的会被跳过） */
+function placeImportedAppsIfPending(): void {
+    if (!kvGet(CUSTOM_APPS_PLACE_PENDING_KEY)) return;
+    kvRemove(CUSTOM_APPS_PLACE_PENDING_KEY);
+    for (const app of loadInstalledCustomApps()) {
+        window.dispatchEvent(new CustomEvent(CUSTOM_APP_PLACE_DESKTOP_EVENT, { detail: { appId: app.id } }));
+    }
+}
+
 let running: Promise<void> | null = null;
 
 export function syncBundledCustomApps(): Promise<void> {
@@ -48,6 +58,7 @@ async function syncAll(): Promise<void> {
         await hydrateKvDb();
         const res = await fetch("/apps/bundled.json", { cache: "no-cache" });
         if (!res.ok) return;
+        placeImportedAppsIfPending();
         const list = (await res.json()) as BundledApp[];
         for (const bundled of list) {
             try {

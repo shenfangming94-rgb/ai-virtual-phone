@@ -295,3 +295,6 @@ export function toCustomAppIconId(appId: string): CustomAppIconId {
 export function customAppIdFromIconId(iconId: string): string | null {
   return isCustomAppIconId(iconId) ? iconId.slice(CUSTOM_APP_ICON_PREFIX.length) : null;
 }
+
+/** 导入备份带进了自定义 APP 时置位：下次进桌面把已安装 APP 都摆回桌面 */
+export const CUSTOM_APPS_PLACE_PENDING_KEY = "ai_phone_custom_apps_place_pending_v1";

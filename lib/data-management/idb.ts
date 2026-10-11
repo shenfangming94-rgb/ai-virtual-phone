@@ -21,6 +21,9 @@ import {
   type MediaResolver,
 } from "./serializers";
 import { kvEntries, kvGet, kvRemove, kvSetAsync } from "../kv-db";
+import { CUSTOM_APPS_PLACE_PENDING_KEY } from "../custom-app-types";
+
+const CUSTOM_APPS_STORAGE_KEY = "ai_phone_custom_apps_v1";
 
 type SourceStats = {
   records: number;
@@ -622,6 +625,7 @@ export async function importSource(
   }
 
   if (payload.type === "kv") {
+    let importedCustomApps = false;
     for (const record of payload.records) {
       // 逐条兜底：以前整个循环包在一个 try 里，第一条出错后剩余记录全部
       // 静默丢弃——正是「恢复内容不全」的来源之一。
@@ -629,6 +633,7 @@ export async function importSource(
         const incoming = await deserializeStorageString(record.value, resolver);
         const existing = kvGet(record.key);
         const exists = existing !== null;
+        if (record.key === CUSTOM_APPS_STORAGE_KEY) importedCustomApps = true;
         if (!exists) {
           await kvSetAsync(record.key, incoming);
           result.added += 1;
@@ -653,6 +658,8 @@ export async function importSource(
         tick();
       }
     }
+    // 导入了自定义 APP：下次进桌面把它们都摆回桌面（桌面布局可能因已存在而被跳过）
+    if (importedCustomApps) await kvSetAsync(CUSTOM_APPS_PLACE_PENDING_KEY, "1");
     return result;
   }
 

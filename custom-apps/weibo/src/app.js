@@ -895,6 +895,33 @@
     rerenderDetail(post);
   }
 
+  /**
+   * 历史微博的时间挤在一起（模型写成「20分钟前」之类）时，按给出的顺序（近→远）往前铺开：
+   * 第一条在 before 之前 0.5～3 天，之后每条再往前 1～40 天。
+   */
+  function spreadHistory(posts, before) {
+    const times = posts.map(p => new Date(p.createdAt).getTime());
+    const span = Math.max(...times) - Math.min(...times);
+    const tooRecent = times.some(t => t > before - 12 * 3600e3);
+    if (posts.length < 2 ? !tooRecent : span > 3 * 86400e3 && !tooRecent) return false;
+    let t = before - (0.5 + Math.random() * 2.5) * 86400e3;
+    for (const p of posts) {
+      p.createdAt = new Date(t - rand(0, 12 * 3600) * 1000).toISOString();
+      t -= (1 + Math.random() * 39) * 86400e3;
+    }
+    return true;
+  }
+  /** 修旧数据：主页历史微博时间都挤在一起的，重新铺开 */
+  function repairHistoryTimes(charId) {
+    const hist = S.posts.filter(p => p.charId === charId && p.origin === "profile");
+    if (hist.length < 2 || S.accounts[charId]?.historyFixed) return;
+    const feed = S.posts.filter(p => p.charId === charId && p.origin !== "profile").map(p => new Date(p.createdAt).getTime());
+    const before = feed.length ? Math.min(...feed) : Date.now();
+    const ordered = hist.slice().sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+    if (spreadHistory(ordered, before)) ordered.forEach(savePost);
+    ensureAccount(charId, { historyFixed: true });
+  }
+
   /** 角色主页：建号 + 历史微博 */
   async function ensureCharProfile(charId, more) {
     const acc = S.accounts[charId];
@@ -924,13 +951,10 @@
       const oldest = mine.length ? new Date(mine[mine.length - 1].createdAt).getTime() : Date.now();
       const posts = parseBlocks(text, "微博").map(b => postFromBlock(b, { origin: "profile" }))
         .filter(p => p.text || p.images.length || p.repost)
-        .map(p => {
-          p.authorType = "char"; p.charId = charId; p.authorName = charNickname(charId);
-          if (new Date(p.createdAt).getTime() >= oldest) p.createdAt = new Date(oldest - rand(1, 20) * 86400000).toISOString();
-          return p;
-        });
+        .map(p => { p.authorType = "char"; p.charId = charId; p.authorName = charNickname(charId); return p; });
+      spreadHistory(posts, oldest);
       for (const p of posts) { S.posts.push(p); savePost(p); S.allPostRows++; }
-      ensureAccount(charId, { profileGenerated: true });
+      ensureAccount(charId, { profileGenerated: true, historyFixed: true });
       pruneIfNeeded();
     }
     rerenderProfile(charId);
@@ -1243,6 +1267,7 @@
       body.scrollTop = scroll; hydrateImages(body);
     }, { clearHead: true });
     page.setTab = t => { tab = t; page.render(page); };
+    repairHistoryTimes(charId);
     ensureCharProfile(charId);
   }
 

@@ -11,6 +11,7 @@ import {
     saveUserIdentities,
     USER_IDENTITIES_UPDATED_EVENT,
 } from "@/lib/settings-storage";
+import { switchCurrentIdentity } from "@/lib/identity-scope";
 import { fileToUserAvatarDataUrl } from "@/lib/user-avatar-image";
 import { loadChatAppSettings, saveChatAppSettings } from "@/lib/chat-storage";
 import type { UserIdentity } from "@/components/settings/user-identity";
@@ -44,6 +45,7 @@ import {
     Loader2,
     Bell,
     Camera,
+    Check,
     CloudUpload,
     ChevronRight,
     Clock,
@@ -169,6 +171,19 @@ export function UserProfilePanel({ onClose, className }: UserProfilePanelProps) 
     const [showPushSettings, setShowPushSettings] = useState(false);
     const [showGlobalChatInfo, setShowGlobalChatInfo] = useState(false);
     const profileAvatarInputRef = useRef<HTMLInputElement>(null);
+    const [showIdentitySwitcher, setShowIdentitySwitcher] = useState(false);
+    const [identityOptions, setIdentityOptions] = useState<UserIdentity[]>([]);
+
+    const openIdentitySwitcher = () => {
+        setIdentityOptions(loadUserIdentities());
+        setShowIdentitySwitcher(true);
+    };
+
+    const handleSwitchIdentity = (identityId: string) => {
+        switchCurrentIdentity(identityId, loadChatContacts().map(c => c.characterId));
+        setIdentity(resolveUserIdentity());
+        setShowIdentitySwitcher(false);
+    };
     const [enterToSendEnabled, setEnterToSendEnabled] = useState(false);
     const [callVibrationEnabled, setCallVibrationEnabled] = useState(true);
     const [userStats, setUserStats] = useState({ chats: 0, moments: 0, visitors: 1234 });
@@ -366,9 +381,9 @@ export function UserProfilePanel({ onClose, className }: UserProfilePanelProps) 
                                 type="button"
                                 className="w-[84px] h-[84px] rounded-full overflow-hidden bg-[var(--c-card)] border-2 border-white/50 shadow-sm flex items-center justify-center relative active:scale-[0.97] transition-transform"
                                 style={{ boxShadow: "0 4px 20px rgba(0,0,0,0.06)" }}
-                                onClick={() => profileAvatarInputRef.current?.click()}
-                                aria-label="更换用户资料头像"
-                                title="点击更换用户资料头像"
+                                onClick={openIdentitySwitcher}
+                                aria-label="切换身份或更换头像"
+                                title="点击切换身份或更换头像"
                             >
                                 {identity?.avatarUrl ? (
                                     <img src={identity.avatarUrl} alt="User Avatar" className="w-full h-full object-cover" />
@@ -391,6 +406,65 @@ export function UserProfilePanel({ onClose, className }: UserProfilePanelProps) 
                                 }}
                             />
                         </div>
+                        {showIdentitySwitcher && (
+                            <div className="modal-overlay" data-ui="modal" onClick={() => setShowIdentitySwitcher(false)}>
+                                <div
+                                    className="binding-picker-dialog"
+                                    role="dialog"
+                                    aria-modal="true"
+                                    aria-label="切换身份"
+                                    onClick={event => event.stopPropagation()}
+                                >
+                                    <div className="binding-picker-header">
+                                        <button
+                                            type="button"
+                                            className="binding-picker-icon-btn"
+                                            onClick={() => setShowIdentitySwitcher(false)}
+                                            aria-label="关闭"
+                                        >
+                                            <X size={17} />
+                                        </button>
+                                        <h3 className="binding-picker-title">切换身份</h3>
+                                        <span className="binding-picker-header-spacer" />
+                                    </div>
+                                    <div className="binding-picker-body">
+                                        <div className="binding-sheet-list">
+                                            {identityOptions.length === 0 ? (
+                                                <div className="binding-sheet-empty">还没有用户身份，请先在设置的「用户信息」中创建。</div>
+                                            ) : (
+                                                identityOptions.map(option => {
+                                                    const selected = option.id === identity?.id;
+                                                    return (
+                                                        <button
+                                                            key={option.id}
+                                                            type="button"
+                                                            className="binding-sheet-option"
+                                                            data-selected={selected}
+                                                            aria-pressed={selected}
+                                                            onClick={() => handleSwitchIdentity(option.id)}
+                                                        >
+                                                            <span className="binding-sheet-check">{selected && <Check size={15} />}</span>
+                                                            <span className="binding-sheet-option-text">{option.name}</span>
+                                                        </button>
+                                                    );
+                                                })
+                                            )}
+                                            <button
+                                                type="button"
+                                                className="binding-sheet-option"
+                                                onClick={() => {
+                                                    setShowIdentitySwitcher(false);
+                                                    profileAvatarInputRef.current?.click();
+                                                }}
+                                            >
+                                                <span className="binding-sheet-check"><Camera size={15} /></span>
+                                                <span className="binding-sheet-option-text">更换「{identity?.name || "当前身份"}」的头像</span>
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
 
                         {/* Info & Stats */}
                         <div className="flex flex-col flex-1 justify-center gap-2">

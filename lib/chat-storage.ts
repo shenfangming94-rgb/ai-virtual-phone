@@ -8,6 +8,7 @@ import {
     dbReplaceContacts, dbReplaceSessions, dbBulkPutMessages,
 } from "./chat-db";
 import { resolveUserIdentity } from "./settings-storage";
+import { bindCharacterToCurrentIdentity } from "./identity-scope";
 import { loadCharacters, saveCharacters } from "./character-storage";
 import { kvGet, kvSet, registerKvMigration } from "./kv-db";
 import { emitChatPluginEvent, runChatPluginTransformSync } from "./chat-plugin-hooks";
@@ -1285,6 +1286,8 @@ export function addChatContact(characterId: string): ChatContact | null {
         addedAt: new Date().toISOString()
     };
     saveChatContacts([...contacts, newContact]);
+    // 用哪个身份加的好友，角色就归哪个身份
+    bindCharacterToCurrentIdentity(characterId);
     return newContact;
 }
 

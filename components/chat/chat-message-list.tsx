@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useSyncExternalStore } from "react";
 import { ChevronLeft } from "lucide-react";
 import { CHAT_MESSAGE_PUSHED_EVENT, loadChatSessions, loadChatContacts, ChatSession, createOrGetSession, createGroupSession, pushChatMessage, addChatContact, loadChatMessages, getLastVisibleSessionMessage, getChatMessagePreview } from "@/lib/chat-storage";
+import { createIdentityMatcher, sessionMatchesIdentity, USER_IDENTITY_SWITCHED_EVENT } from "@/lib/identity-scope";
 import { loadCharacters } from "@/lib/character-storage";
 import { Character } from "@/lib/character-types";
 import { resolveUserIdentity, USER_IDENTITIES_UPDATED_EVENT } from "@/lib/settings-storage";
@@ -152,7 +153,9 @@ export function ChatMessageList({ onCloseApp, activeSession, onSelectSession, on
         window.addEventListener("chat-messages-updated", refreshSessions);
         window.addEventListener(CHAT_MESSAGE_PUSHED_EVENT, refreshSessions);
         window.addEventListener("characters-updated", refreshSessions);
+        window.addEventListener(USER_IDENTITY_SWITCHED_EVENT, refreshSessions);
         return () => {
+            window.removeEventListener(USER_IDENTITY_SWITCHED_EVENT, refreshSessions);
             window.removeEventListener("weixin-messages-updated", refreshSessions);
             window.removeEventListener("chat-messages-updated", refreshSessions);
             window.removeEventListener(CHAT_MESSAGE_PUSHED_EVENT, refreshSessions);
@@ -292,9 +295,11 @@ export function ChatMessageList({ onCloseApp, activeSession, onSelectSession, on
                             const showMascot = mascotSettings.chatEnabled
                                 && listTab !== "group"
                                 && (!keyword || (mascotSettings.nickname || "AI助手").toLowerCase().includes(keyword));
+                            const matchesIdentity = createIdentityMatcher();
                             const regularItems = [...sessions]
                             .filter(s => {
                                 if (!(s.isGroup || contactIds.has(s.contactId))) return false;
+                                if (!sessionMatchesIdentity(s, matchesIdentity)) return false;
                                 if (!hasSessionListContent(s.id)) return false;
                                 if (listTab === "private" && s.isGroup) return false;
                                 if (listTab === "group" && !s.isGroup) return false;
@@ -716,7 +721,8 @@ function MascotSessionItem({
 }
 
 function ContactPicker({ onClose, onSelect }: { onClose: () => void; onSelect: (charId: string) => void }) {
-    const contacts = loadChatContacts();
+    const matchesIdentity = createIdentityMatcher();
+    const contacts = loadChatContacts().filter(c => matchesIdentity(c.characterId));
     const chars = loadCharacters();
 
     const enrichedContacts = contacts

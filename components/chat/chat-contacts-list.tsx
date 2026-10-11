@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo, useDeferredValue, useSyncExternalStore } from "react";
 import { loadChatContacts, ChatContact, createOrGetSession, ChatSession, addChatContact, pushChatMessage, loadChatMessages } from "@/lib/chat-storage";
 import { resolveUserIdentity } from "@/lib/settings-storage";
+import { createIdentityMatcher, USER_IDENTITY_SWITCHED_EVENT } from "@/lib/identity-scope";
 import { PENDING_REPLY_PREFIX } from "@/lib/friend-request-engine";
 import { loadCharacters } from "@/lib/character-storage";
 import { Character } from "@/lib/character-types";
@@ -101,7 +102,8 @@ export function ChatContactsList({ onCloseApp, onSelectSession, onSelectMascot, 
     }
 
     const refresh = useCallback(() => {
-        const rawContacts = loadChatContacts();
+        const matchesIdentity = createIdentityMatcher();
+        const rawContacts = loadChatContacts().filter(c => matchesIdentity(c.characterId));
         const enriched = rawContacts.map(c => ({
             ...c,
             char: chars.find(ch => ch.id === c.characterId)
@@ -124,7 +126,11 @@ export function ChatContactsList({ onCloseApp, onSelectSession, onSelectMascot, 
         refresh();
         const handler = () => refresh();
         window.addEventListener("friend-requests-updated", handler);
-        return () => window.removeEventListener("friend-requests-updated", handler);
+        window.addEventListener(USER_IDENTITY_SWITCHED_EVENT, handler);
+        return () => {
+            window.removeEventListener("friend-requests-updated", handler);
+            window.removeEventListener(USER_IDENTITY_SWITCHED_EVENT, handler);
+        };
     }, [refresh]);
 
     /** Group contacts by pinyin initial */

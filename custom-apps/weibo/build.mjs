@@ -8,20 +8,20 @@ const root = dirname(fileURLToPath(import.meta.url));
 const read = p => readFileSync(join(root, p), "utf8");
 const tpl = read("src/index.html");
 const css = read("src/style.css");
-const js = read("src/app.js");
+const rules = JSON.parse(read("rules.json")).rules;
+const js = read("src/app.js").replace("/*__RULES__*/{}", () => JSON.stringify(rules));
 const fill = mock => tpl.replace("/*__CSS__*/", () => css).replace("/*__JS__*/", () => js).replace("<!--__MOCK__-->", () => mock);
 
 mkdirSync(join(root, "dist"), { recursive: true });
 writeFileSync(join(root, "dist/index.html"), fill(""));
 copyFileSync(join(root, "manifest.json"), join(root, "dist/manifest.json"));
-copyFileSync(join(root, "presets.json"), join(root, "dist/presets.json"));
 if (existsSync(join(root, "icon.png"))) copyFileSync(join(root, "icon.png"), join(root, "dist/icon.png"));
 writeFileSync(join(root, "dev/test.html"), fill(`<script>${read("dev/mock.js")}</script>`));
 
 const version = JSON.parse(read("manifest.json")).version;
 const zip = join(root, `weibo-${version}.zip`);
 if (existsSync(zip)) rmSync(zip);
-execSync(`cd "${join(root, "dist")}" && zip -q -r "${zip}" manifest.json presets.json index.html icon.png`);
+execSync(`cd "${join(root, "dist")}" && zip -q -r "${zip}" manifest.json index.html icon.png`);
 // 随站点发布：小手机启动时会按 bundled.json 自动安装/更新
 const pub = join(root, "../../public/apps");
 mkdirSync(pub, { recursive: true });

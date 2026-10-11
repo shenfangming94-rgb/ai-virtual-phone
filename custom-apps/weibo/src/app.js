@@ -320,8 +320,10 @@
   const KEYS = ["角色", "作者", "认证", "认证说明", "会员", "来源", "时间", "配图", "转评赞", "转发自", "原文", "转发链", "正文", "编号", "回复", "赞", "内容",
     "性别", "点赞角色", "转发", "路人点赞", "新增粉丝", "昵称", "简介", "IP属地", "粉丝", "关注",
     // 模型常换的叫法
+    "博主昵称", "发博时间", "发布时间", "图片描述", "配图描述", "转评赞数据", "互动数据", "热评列表", "评论列表", "热评", "评论区",
     "微博昵称", "博主", "发布者", "发博人", "用户名", "评论者", "评论人", "角色本名", "本名", "角色名", "微博正文", "评论内容", "回复内容", "正文内容"];
-  const ALIAS = { 微博昵称: "作者", 博主: "作者", 发布者: "作者", 发博人: "作者", 用户名: "作者", 评论者: "作者", 评论人: "作者",
+  const ALIAS = { 博主昵称: "作者", 发博时间: "时间", 发布时间: "时间", 图片描述: "配图", 配图描述: "配图", 转评赞数据: "转评赞", 互动数据: "转评赞",
+    热评列表: "热评", 评论列表: "热评", 评论区: "热评", 微博昵称: "作者", 博主: "作者", 发布者: "作者", 发博人: "作者", 用户名: "作者", 评论者: "作者", 评论人: "作者",
     角色本名: "角色", 本名: "角色", 角色名: "角色", 微博正文: "正文", 正文内容: "正文", 评论内容: "内容", 回复内容: "内容" };
   const KEY_ALT = KEYS.slice().sort((a, b) => b.length - a.length).join("|");
   // 支持「作者：xx」「作者: xx」「[作者]xx」「【作者】：xx」「**作者**：xx」「- 作者：xx」
@@ -379,6 +381,14 @@
   const yes = v => /^(是|有|true|yes)/i.test(String(v || "").trim());
 
   function parseCounts(s) {
+    s = String(s || "");
+    const num = x => { if (!x) return null; const n = parseFloat(x); return /万/.test(x) ? Math.round(n * 1e4) : /亿/.test(x) ? Math.round(n * 1e8) : Math.round(n); };
+    const lab = re => { const m = s.match(re); return m ? num(m[1]) : null; };
+    const r = lab(/转发\D{0,3}?([\d.]+\s*[万亿]?)/), c = lab(/评论\D{0,3}?([\d.]+\s*[万亿]?)/), l = lab(/(?:点赞|赞)\D{0,3}?([\d.]+\s*[万亿]?)/);
+    if (r != null || c != null || l != null) return { reposts: r || 0, comments: c || 0, likes: l || 0 };
+    return parseCountsPlain(s);
+  }
+  function parseCountsPlain(s) {
     const nums = String(s || "").split(/[\/|｜,，、 ]+/).map(x => {
       x = x.trim(); if (!x) return null;
       const n = parseFloat(x); if (!Number.isFinite(n)) return null;
@@ -414,6 +424,11 @@
       liked: false, comments: [], commentsGenerated: false,
       ...extra,
     };
+    if (b["热评"]) {
+      post.comments = commentsFromBlocks(inlineComments(b["热评"]), post, {});
+      if (post.comments.length >= 3) post.commentsGenerated = true;
+      post.counts.comments = Math.max(post.counts.comments, post.comments.length);
+    }
     if (ch) {
       const acc = S.accounts[ch.id];
       if (!acc || !acc.nickname || acc.nickname === ch.name) ensureAccount(ch.id, { nickname: post.authorName, verified: post.verified, vip: post.vip });
@@ -423,9 +438,34 @@
     return post;
   }
 
+  /** 模型自创的评论列表：「- 昵称：内容」「↳ A 回复 B：内容」 */
+  function inlineComments(text) {
+    const out = [];
+    for (const raw of String(text || "").split(/\r?\n/)) {
+      const line = raw.replace(/\*\*/g, "").trim(); if (!line) continue;
+      let m = line.match(/^[↳└┗╰>→]+[─—\-\s]*([^：:\s][^：:]{0,30}?)\s*回复\s*@?([^：:]{1,30}?)\s*[：:]\s*(.+)$/);
+      if (m) { out.push({ 作者: m[1].trim(), 内容: m[3].trim(), _replyToName: m[2].trim() }); continue; }
+      m = line.match(/^(?:[-*•·]|\d+[.、])\s*([^：:]{1,30}?)\s*[：:]\s*(.+)$/);
+      if (m) { out.push({ 作者: m[1].trim(), 内容: m[2].trim() }); continue; }
+      if (out.length && !/^[【=]/.test(line)) out[out.length - 1].内容 += line;
+    }
+    return out;
+  }
+  /** 评论块解析，失败时退回到自由格式 */
+  function parseComments(text) {
+    const blocks = parseBlocks(text, "评论");
+    return blocks.length ? blocks : inlineComments(normalizeOutput(text).replace(/===[^=\n]+===/g, ""));
+  }
+  /** 是不是在冒充用户本人 */
+  function isUserName(name) {
+    const n = String(name || "").replace(/\s/g, "");
+    return [S.meta.nickname, S.identity.name].filter(x => x && x.length >= 2).some(x => n === x || n.includes(x));
+  }
+
   function commentsFromBlocks(blocks, post, idMap) {
     const out = [];
     for (const b of blocks) {
+      if (isUserName(b["作者"]) || isUserName(b["角色"])) continue;
       const ch = charByName(b["角色"]) || charByName(b["作者"] || b["昵称"], true);
       const name = (b["作者"] || b["昵称"] || (ch && charNickname(ch.id)) || "微博用户").replace(/^@/, "");
       const isPostAuthor = (post.authorType === "char" && ch && ch.id === post.charId) || (post.authorType === "npc" && !ch && name === post.authorName);
@@ -441,7 +481,11 @@
       const code = String(b["编号"] || "").trim();
       if (code) { idMap[code] = c; c._local = code; }
       const replyCode = String(b["回复"] || "").trim();
-      if (!none(replyCode)) {
+      if (b._replyToName) {
+        const t = [...out].reverse().find(x => x.authorName === b._replyToName)
+          || (post.comments || []).slice().reverse().find(x => x.authorName === b._replyToName || (x.authorType === "user" && isUserName(b._replyToName)));
+        if (t) { c.parentId = t.parentId || t.id; c.replyToName = t.parentId ? t.authorName : ""; }
+      } else if (!none(replyCode)) {
         const target = idMap[replyCode] || (post.comments || []).find(x => x.code === replyCode) || out.find(x => x._local === replyCode);
         if (target) {
           c.parentId = target.parentId || target.id; c.replyToName = target.parentId ? target.authorName : "";
@@ -493,6 +537,8 @@
     const d = new Date(); const w = "日一二三四五六"[d.getDay()];
     return `${d.getFullYear()}年${d.getMonth() + 1}月${d.getDate()}日 星期${w} ${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
   }
+  // 规则和输出格式随每次请求发送（用户可能用自己的预设，APP 的预设条目不一定生效）
+  const RULES = /*__RULES__*/{};
   const FORMAT_HINT = {
     feed: "===微博===", comments: "===评论===", reaction: "===评论=== 和 ===互动===", reply: "===评论===", profile: "===主页=== 和 ===微博===",
   };
@@ -507,7 +553,12 @@
   async function generate(payload, label) {
     const job = uid("job"); S.jobs.add(job);
     const scene = (payload.appTags || [])[1];
-    if (FORMAT_HINT[scene]) payload = { ...payload, instruction: `${payload.instruction}\n\n【输出要求】这不是聊天回复：不要用聊天格式，不要写旁白、动作或心理描写，不要加任何解释，只输出 ${FORMAT_HINT[scene]} 格式的内容，字段名照抄。` };
+    const who = `用户的名字是「${S.identity.name || "用户"}」，微博昵称是「${S.meta.nickname}」。`;
+    if (RULES[scene]) payload = { ...payload, instruction: [
+      "【你正在为「微博」App 生成内容，以下是规则】", RULES.world, who, RULES[scene],
+      "【本轮说明】", payload.instruction,
+      `【输出要求】这不是聊天回复：不要用聊天格式，不要写旁白、动作或心理描写，不要加任何解释，不要自创字段名或用【】标题，只输出 ${FORMAT_HINT[scene]} 格式的内容，每个字段名和分隔线照抄上面的格式。`,
+    ].join("\n\n") };
     try {
       const r = await api.ai.generate(payload);
       const text = (r && r.text) || "";
@@ -589,10 +640,10 @@
       recent ? `首页最近已有的微博（不要重复类似内容）：\n${recent}` : "",
       reservedLine(),
     ].filter(Boolean).join("\n\n");
-    const text = await generate({ characterIds: cast.map(c => c.id), appTags: ["weibo", "feed"], instruction }, "刷新");
+    const text = await generate({ characterIds: cast.map(c => c.id), appTags: ["nox_weibo", "feed"], instruction }, "刷新");
     S.feedBusy = false;
     if (text == null) { renderHome(); return; }
-    const posts = parseBlocks(text, "微博").map(b => postFromBlock(b, { origin: "feed" })).filter(p => p.text || p.images.length || p.repost);
+    const posts = parseBlocks(text, "微博").filter(b => !isUserName(b["作者"])).map(b => postFromBlock(b, { origin: "feed" })).filter(p => p.text || p.images.length || p.repost);
     if (!posts.length) { renderHome(); parseFailed("刷新"); return; }
     for (const p of posts) { S.posts.push(p); savePost(p); S.allPostRows++; }
     const charPosts = posts.filter(p => p.authorType === "char");
@@ -626,10 +677,10 @@
       `生成约 ${want} 条评论，其中楼中楼回复 2~5 条${post.authorType === "char" ? "，博主本人至少回复 1 条" : ""}。`,
       reservedLine(),
     ].filter(Boolean).join("\n\n");
-    const text = await generate({ characterIds: cast.map(c => c.id), appTags: ["weibo", "comments"], instruction }, "加载评论");
+    const text = await generate({ characterIds: cast.map(c => c.id), appTags: ["nox_weibo", "comments"], instruction }, "加载评论");
     post._genComments = false;
     if (text != null) {
-      const list = commentsFromBlocks(parseBlocks(text, "评论"), post, {});
+      const list = commentsFromBlocks(parseComments(text), post, {});
       if (list.length) noteParsed(`${list.length} 条评论`); else parseFailed("加载评论");
       post.comments = [...list, ...post.comments];
       post.commentsGenerated = true;
@@ -654,9 +705,9 @@
       `可能来互动的角色：\n${charsForPrompt(cast)}`,
       reservedLine(),
     ].filter(Boolean).join("\n\n");
-    const text = await generate({ characterIds: cast.map(c => c.id), appTags: ["weibo", "reaction"], instruction }, "获取互动");
+    const text = await generate({ characterIds: cast.map(c => c.id), appTags: ["nox_weibo", "reaction"], instruction }, "获取互动");
     if (text == null) return;
-    const list = commentsFromBlocks(parseBlocks(text, "评论"), post, {});
+    const list = commentsFromBlocks(parseComments(text), post, {});
     const sum = parseBlocks(text, "互动")[0] || {};
     if (!list.length && !Object.keys(sum).length) { parseFailed("发博后的互动"); return; }
     noteParsed(`${list.length} 条评论，点赞角色：${sum["点赞角色"] || "无"}`);
@@ -714,9 +765,9 @@
       `你的微博昵称：${charNickname(charId)}。回复用户时「回复」字段填 ${uCode}。`,
       reservedLine(),
     ].filter(Boolean).join("\n\n");
-    const text = await generate({ characterId: charId, appTags: ["weibo", "reply"], instruction }, `${ch.name}回复`);
+    const text = await generate({ characterId: charId, appTags: ["nox_weibo", "reply"], instruction }, `${ch.name}回复`);
     if (text == null) return;
-    const list = commentsFromBlocks(parseBlocks(text, "评论"), post, {});
+    const list = commentsFromBlocks(parseComments(text), post, {});
     if (list.length) noteParsed(`${list.length} 条回复`); else { parseFailed(`${ch.name}回复`); return; }
     const fresh = S.posts.find(p => p.id === post.id); if (!fresh) return;
     let delay = rand(1500, 4000);
@@ -767,7 +818,7 @@
     finally { S.jobs.delete(job); }
     if (!text) return;
     const fresh = S.posts.find(p => p.id === post.id); if (!fresh) return;
-    const list = commentsFromBlocks(parseBlocks(text, "评论"), fresh, {}).map(c => ({ ...c, authorType: "npc", charId: undefined }));
+    const list = commentsFromBlocks(parseComments(text), fresh, {}).map(c => ({ ...c, authorType: "npc", charId: undefined }));
     if (!list.length) { parseFailed("路人回复"); return; }
     noteParsed(`${list.length} 条回复`);
     let delay = rand(1500, 4000);
@@ -800,10 +851,10 @@
       `可能来评论的其他角色（符合关系才来）：\n${charsForPrompt(others) || "无"}`,
       reservedLine(),
     ].filter(Boolean).join("\n\n");
-    const text = await generate({ characterIds: cast.map(c => c.id), appTags: ["weibo", "comments"], instruction }, "加载评论");
+    const text = await generate({ characterIds: cast.map(c => c.id), appTags: ["nox_weibo", "comments"], instruction }, "加载评论");
     post._genComments = false;
     if (text != null) {
-      const list = commentsFromBlocks(parseBlocks(text, "评论"), post, {});
+      const list = commentsFromBlocks(parseComments(text), post, {});
       if (list.length) noteParsed(`${list.length} 条评论`); else parseFailed("加载评论");
       post.comments.push(...list);
       post.counts.comments = Math.max(post.counts.comments, post.comments.length);
@@ -826,7 +877,7 @@
       mine.length ? `你最近已经发过的微博（不要重复，历史微博要比这些更早）：\n${mine.slice(0, 8).map(p => `- ${fmtTime(p.createdAt)}：${p.text.slice(0, 40)}`).join("\n")}` : "",
       `写 ${more ? rand(4, 6) : rand(5, 7)} 条历史微博${mine.length ? `，时间都早于 ${fmtTime(mine[mine.length - 1].createdAt)}` : ""}。`,
     ].filter(Boolean).join("\n\n");
-    const text = await generate({ characterId: charId, appTags: ["weibo", "profile"], instruction }, "加载主页");
+    const text = await generate({ characterId: charId, appTags: ["nox_weibo", "profile"], instruction }, "加载主页");
     S[`_gen_${charId}`] = false;
     if (text != null) {
       const pb = parseBlocks(text, "主页")[0];

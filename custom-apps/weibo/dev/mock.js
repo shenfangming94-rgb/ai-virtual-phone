@@ -4,7 +4,7 @@
   const col = c => (db[c] = db[c] || []);
   const sleep = ms => new Promise(r => setTimeout(r, ms));
   const media = {};
-  const chars = [
+  const chars = window.__MOCK_CHARS || [
     { id: "c1", name: "沈砚", avatar: "" },
     { id: "c2", name: "陆知遥", avatar: "" },
   ];
@@ -196,6 +196,7 @@ IP属地：上海
       async generate(p) {
         calls.push(p); await sleep(400);
         const t = p.appTags.join(",");
+        if (window.__MOCK_TEXT && window.__MOCK_TEXT[p.appTags[1]] != null) return { text: window.__MOCK_TEXT[p.appTags[1]] };
         if (t.includes("feed")) return { text: feed };
         if (t.includes("comments")) return { text: comments };
         if (t.includes("reaction")) return { text: reaction };

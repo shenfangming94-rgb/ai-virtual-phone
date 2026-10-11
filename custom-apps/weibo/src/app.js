@@ -128,6 +128,9 @@
   }
   async function deletePost(p) {
     S.posts = S.posts.filter(x => x.id !== p.id);
+    if (p.authorType === "char" && api.memory && api.memory.deleteTimeline) {
+      api.memory.deleteTimeline({ characterId: p.charId, appEventId: `weibo_own_${p.id}` }).catch(() => {});
+    }
     try { await api.db.delete(COL.posts, p.id); } catch (e) { console.warn(e); }
     for (const img of p.images || []) if (img.ref) api.media.delete({ ref: img.ref }).catch(() => {});
   }
@@ -641,9 +644,17 @@
     renderTab(); toast("已清空");
   }
 
-  function remember(charId, summary, eventId) {
+  function remember(charId, summary, eventId, createdAt) {
     if (!charId || !api.memory || !api.memory.addTimeline) return;
-    api.memory.addTimeline({ characterId: charId, appLabel: "微博", detail: "weibo", summary, appEventId: eventId }).catch(e => console.warn("写入记忆失败", e));
+    api.memory.addTimeline({ characterId: charId, appLabel: "微博", detail: "weibo", summary, appEventId: eventId, ...(createdAt ? { createdAt } : {}) })
+      .catch(e => console.warn("写入记忆失败", e));
+  }
+  /** 角色自己发的微博也记进他的记忆，回微信聊天时接得上 */
+  function rememberOwnPost(p) {
+    if (p.authorType !== "char") return;
+    const pics = p.images && p.images.length ? `（配图：${p.images.map(i => i.desc || "图片").join("、").slice(0, 60)}）` : "";
+    const what = p.repost ? `转发了 @${p.repost.author} 的微博「${p.repost.text.slice(0, 40)}」，转发语：「${p.text.slice(0, 60)}」` : `发了一条微博：「${p.text.slice(0, 120)}」${pics}`;
+    remember(p.charId, `${charById(p.charId)?.name || "我"}在微博${what}`, `weibo_own_${p.id}`, p.createdAt);
   }
 
   /** 首页刷新 */
@@ -675,7 +686,7 @@
     const posts = parseBlocks(text, "微博").filter(b => !isUserName(b["作者"])).map(b => postFromBlock(b, { origin: "feed", followFeed: followTab || undefined }))
       .filter(p => p.text || p.images.length || p.repost);
     if (!posts.length) { renderHome(); parseFailed("刷新"); return; }
-    for (const p of posts) { S.posts.push(p); savePost(p); S.allPostRows++; }
+    for (const p of posts) { S.posts.push(p); savePost(p); S.allPostRows++; rememberOwnPost(p); }
     const charPosts = posts.filter(p => p.authorType === "char");
     noteParsed(`${posts.length} 条微博（角色 ${charPosts.length} 条${charPosts.length ? "：" + charPosts.map(p => charById(p.charId)?.name).join("、") : ""}；路人 ${posts.length - charPosts.length} 条）`);
     const visibleHere = posts.filter(p => followTab ? inFollowFeed(p) : true).length;

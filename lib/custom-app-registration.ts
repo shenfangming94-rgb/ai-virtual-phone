@@ -176,8 +176,8 @@ function findBuiltInPreset(presets: PresetConfig[]): PresetConfig | null {
 
 /**
  * 把 APP 的预设条目挂进预设：默认预设整组替换为最新版；用户自建的预设也挂上，
- * 方便用自己预设的人直接生效。用户预设里已有的同名条目视为用户改过，保留不动，
- * 只补缺的、删掉 APP 已不再提供的。
+ * 方便用自己预设的人直接生效。用户预设里的同名条目：内容和默认预设里的旧版一致
+ * 说明没改过，换成新版；不一致说明用户改过，保留不动。缺的补上，APP 不再提供的删掉。
  */
 function attachPromptEntriesToPresets(app: InstalledCustomApp, prompts: Prompt[]): number {
   if (prompts.length === 0) return 0;
@@ -186,6 +186,8 @@ function attachPromptEntriesToPresets(app: InstalledCustomApp, prompts: Prompt[]
   if (!builtIn) return 0;
   const prefix = customAppPromptPrefix(app.id);
   const promptIds = new Set(prompts.map(prompt => prompt.identifier));
+  const promptById = new Map(prompts.map(prompt => [prompt.identifier, prompt]));
+  const previousContent = new Map((builtIn.prompts ?? []).map(prompt => [prompt.identifier, prompt.content]));
   const insertOrder = (order: NonNullable<PresetConfig["prompt_order"]>, entries: NonNullable<PresetConfig["prompt_order"]>) => {
     const dividerIndex = order.findIndex(entry => entry.identifier === "shortTermMemory" || entry.identifier === "chatHistory");
     return dividerIndex >= 0
@@ -196,14 +198,19 @@ function attachPromptEntriesToPresets(app: InstalledCustomApp, prompts: Prompt[]
   const nextPresets = presets.map(preset => {
     const isBuiltIn = preset.id === builtIn.id;
     const current = preset.prompts ?? [];
-    const kept = isBuiltIn ? [] : current.filter(prompt => promptIds.has(prompt.identifier));
+    const kept = isBuiltIn ? [] : current
+      .filter(prompt => promptIds.has(prompt.identifier))
+      .map(prompt => (previousContent.get(prompt.identifier) === prompt.content
+        ? { ...promptById.get(prompt.identifier)!, enabled: prompt.enabled }
+        : prompt));
     const keptIds = new Set(kept.map(prompt => prompt.identifier));
     const added = prompts.filter(prompt => !keptIds.has(prompt.identifier));
     const others = current.filter(prompt => !prompt.identifier.startsWith(prefix) && !promptIds.has(prompt.identifier));
     const order = (preset.prompt_order ?? []).filter(entry => (
       !entry.identifier.startsWith(prefix) && !promptIds.has(entry.identifier)
     ) || keptIds.has(entry.identifier));
-    if (!isBuiltIn && added.length === 0 && kept.length === current.filter(prompt => prompt.identifier.startsWith(prefix)).length) return preset;
+    const unchanged = kept.every(prompt => current.includes(prompt));
+    if (!isBuiltIn && added.length === 0 && unchanged && kept.length === current.filter(prompt => prompt.identifier.startsWith(prefix)).length) return preset;
     return {
       ...preset,
       prompts: [...others, ...kept, ...added],

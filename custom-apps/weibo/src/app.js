@@ -426,7 +426,10 @@
 
   function postFromBlock(b, extra) {
     const ch = charByName(b["角色"]) || charByName(b["作者"] || b["昵称"], true);
-    const images = none(b["配图"]) ? [] : b["配图"].split(/\s*[|｜]\s*/).filter(Boolean).slice(0, 9).map(desc => ({ desc }));
+    const images = none(b["配图"]) ? [] : b["配图"].split(/\s*[|｜]\s*/).filter(Boolean).slice(0, 9).map(raw => {
+      const withFace = /^[【\[(（]\s*本人\s*[】\])）]/.test(raw);
+      return { desc: raw.replace(/^[【\[(（]\s*本人\s*[】\])）]\s*/, ""), withFace };
+    });
     let repost = null;
     if (!none(b["转发自"]) || !none(b["原文"])) {
       repost = {
@@ -1482,7 +1485,9 @@
       if (b.dataset.v === "gen") {
         b.disabled = true; b.textContent = "生成中…（10~30 秒）";
         try {
-          const r = await api.ai.generateImage({ prompt: img.desc, characterId: post.charId, useReferenceImage: !!post.charId, timeoutMs: 120000 });
+          // 只有本人出镜的图才带参考图；旧数据没有标注，按描述里的词猜
+          const withFace = img.withFace ?? /自拍|合照|合影|镜子|对镜|露脸|侧脸|正脸|背影|本人|我的手|穿搭|自己/.test(img.desc || "");
+          const r = await api.ai.generateImage({ prompt: img.desc, characterId: post.charId, useReferenceImage: !!post.charId && withFace, timeoutMs: 120000 });
           if (r && r.dataUrl) {
             const stored = await api.media.put({ dataUrl: await compressImage(r.dataUrl, 1400) });
             img.ref = stored.ref; S.mediaCache.set(stored.ref, r.dataUrl); savePost(post); await draw(); refreshAll();

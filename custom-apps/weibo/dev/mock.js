@@ -218,7 +218,10 @@ IP属地：上海
       async get({ ref }) { return { ref, dataUrl: media[ref] }; },
       async delete() { return true; },
     },
-    memory: { async addTimeline(p) { calls.push({ memory: p }); return { entry: { id: "m" } }; } },
+    memory: {
+      async addTimeline(p) { calls.push({ memory: p }); return { entry: { id: "m" } }; },
+      async deleteTimeline(p) { calls.push({ forget: p }); return true; },
+    },
     ui: { async toast() {} },
   };
 })();

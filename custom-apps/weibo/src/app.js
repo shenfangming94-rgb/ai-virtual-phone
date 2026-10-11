@@ -128,9 +128,7 @@
   }
   async function deletePost(p) {
     S.posts = S.posts.filter(x => x.id !== p.id);
-    if (p.authorType === "char" && api.memory && api.memory.deleteTimeline) {
-      api.memory.deleteTimeline({ characterId: p.charId, appEventId: `weibo_own_${p.id}` }).catch(() => {});
-    }
+    forget(memEventsOfPost(p));
     try { await api.db.delete(COL.posts, p.id); } catch (e) { console.warn(e); }
     for (const img of p.images || []) if (img.ref) api.media.delete({ ref: img.ref }).catch(() => {});
   }
@@ -644,17 +642,39 @@
     renderTab(); toast("已清空");
   }
 
-  function remember(charId, summary, eventId, createdAt) {
+  /** 写记忆并登记到相关的微博/评论上，删除时能一起删掉 */
+  function remember(charId, summary, eventId, createdAt, ...owners) {
     if (!charId || !api.memory || !api.memory.addTimeline) return;
+    for (const o of owners) {
+      if (!o) continue;
+      o.memEvents = (o.memEvents || []).filter(e => !(e.charId === charId && e.eventId === eventId));
+      o.memEvents.push({ charId, eventId });
+    }
     api.memory.addTimeline({ characterId: charId, appLabel: "微博", detail: "weibo", summary, appEventId: eventId, ...(createdAt ? { createdAt } : {}) })
       .catch(e => console.warn("写入记忆失败", e));
   }
+  function forget(events) {
+    if (!api.memory || !api.memory.deleteTimeline) return;
+    for (const e of events || []) api.memory.deleteTimeline({ characterId: e.charId, appEventId: e.eventId }).catch(() => {});
+  }
+  /** 一条微博相关的全部记忆：登记过的 + 旧数据按规则推出来的 */
+  function memEventsOfPost(p) {
+    const list = [...(p.memEvents || [])];
+    for (const c of p.comments || []) list.push(...(c.memEvents || []));
+    if (p.authorType === "char") list.push({ charId: p.charId, eventId: `weibo_own_${p.id}` }, { charId: p.charId, eventId: `weibo_like_${p.id}` });
+    if (p.authorType === "user") {
+      const chars = new Set([...(p.comments || []).filter(c => c.charId).map(c => c.charId), ...(p.likedBy || []), ...(p.reposts || []).filter(r => r.charId).map(r => r.charId)]);
+      for (const ch of chars) list.push({ charId: ch, eventId: `weibo_post_${p.id}_${ch}` });
+    }
+    return list;
+  }
+
   /** 角色自己发的微博也记进他的记忆，回微信聊天时接得上 */
   function rememberOwnPost(p) {
     if (p.authorType !== "char") return;
     const pics = p.images && p.images.length ? `（配图：${p.images.map(i => i.desc || "图片").join("、").slice(0, 60)}）` : "";
     const what = p.repost ? `转发了 @${p.repost.author} 的微博「${p.repost.text.slice(0, 40)}」，转发语：「${p.text.slice(0, 60)}」` : `发了一条微博：「${p.text.slice(0, 120)}」${pics}`;
-    remember(p.charId, `${charById(p.charId)?.name || "我"}在微博${what}`, `weibo_own_${p.id}`, p.createdAt);
+    remember(p.charId, `${charById(p.charId)?.name || "我"}在微博${what}`, `weibo_own_${p.id}`, p.createdAt, p);
   }
 
   /** 首页刷新 */
@@ -784,8 +804,9 @@
     for (const ch of new Set([...list.filter(c => c.charId).map(c => c.charId), ...likedChars.map(c => c.id), ...reposts.filter(r => r.charId).map(r => r.charId)])) {
       const mine = list.filter(c => c.charId === ch).map(c => c.text).join(" / ");
       const did = [likedChars.some(c => c.id === ch) ? "点了赞" : "", mine ? `评论：「${mine.slice(0, 80)}」` : "", reposts.some(r => r.charId === ch) ? "转发了" : ""].filter(Boolean).join("，");
-      remember(ch, `${userName}在微博发了「${snippet}」，${charById(ch)?.name || "我"}${did}`, `weibo_post_${post.id}_${ch}`);
+      remember(ch, `${userName}在微博发了「${snippet}」，${charById(ch)?.name || "我"}${did}`, `weibo_post_${post.id}_${ch}`, null, fresh);
     }
+    savePost(fresh);
   }
 
   /** 用户评论 / 回复后，相关角色回复 */
@@ -823,7 +844,8 @@
       delay += rand(1500, 3000);
     }
     const said = list.filter(c => c.charId === charId).map(c => c.text).join(" / ");
-    remember(charId, `${S.identity.name || S.meta.nickname}在微博${post.authorType === "char" && post.charId === charId ? "我的微博下" : ""}评论：「${userComment.text.slice(0, 60)}」${said ? `，我回复：「${said.slice(0, 80)}」` : ""}`, `weibo_reply_${userComment.id}`);
+    remember(charId, `${S.identity.name || S.meta.nickname}在微博${post.authorType === "char" && post.charId === charId ? "我的微博下" : ""}评论：「${userComment.text.slice(0, 60)}」${said ? `，我回复：「${said.slice(0, 80)}」` : ""}`, `weibo_reply_${userComment.id}`, null, userComment);
+    savePost(fresh);
   }
 
   const NPC_SYSTEM = [
@@ -1373,7 +1395,7 @@
         : { author: a.name, text: repostOf.text, images: repostOf.images, postId: repostOf.id, chain: [] };
       if (draft.text.includes(`//@${a.name}:`)) { post.text = draft.text.split(`//@${a.name}:`)[0].trim() || "转发微博"; }
       repostOf.counts.reposts++; savePost(repostOf);
-      if (repostOf.authorType === "char") remember(repostOf.charId, `${S.identity.name || S.meta.nickname}在微博转发了我的微博「${repostOf.text.slice(0, 40)}」，转发语：「${post.text.slice(0, 60)}」`, `weibo_repost_${post.id}`);
+      if (repostOf.authorType === "char") remember(repostOf.charId, `${S.identity.name || S.meta.nickname}在微博转发了我的微博「${repostOf.text.slice(0, 40)}」，转发语：「${post.text.slice(0, 60)}」`, `weibo_repost_${post.id}`, null, post, repostOf);
     }
     S.posts.push(post); savePost(post); S.allPostRows++;
     closePage(); toast("发送成功");
@@ -1498,7 +1520,8 @@
       case "like": {
         if (!post) return;
         post.liked = !post.liked; post.counts.likes += post.liked ? 1 : -1; post.likedAt = post.liked ? nowIso() : undefined; savePost(post);
-        if (post.liked && post.authorType === "char") remember(post.charId, `${S.identity.name || S.meta.nickname}在微博给我的「${post.text.slice(0, 30)}」点了赞`, `weibo_like_${post.id}`);
+        if (post.liked && post.authorType === "char") remember(post.charId, `${S.identity.name || S.meta.nickname}在微博给我的「${post.text.slice(0, 30)}」点了赞`, `weibo_like_${post.id}`, null, post);
+        if (!post.liked && post.authorType === "char") forget([{ charId: post.charId, eventId: `weibo_like_${post.id}` }]);
         refreshVisible(post); return;
       }
       case "repost": if (post) openCompose(post); return;
@@ -1523,17 +1546,18 @@
         if (!post) return;
         const mine = post.authorType === "user";
         const choice = await sheet("", mine
-          ? [{ label: S.meta.pinnedPostId === post.id ? "取消置顶" : "置顶", value: "pin" }, { label: "删除", value: "del", danger: true }]
-          : [{ label: "收藏", value: "fav" }, { label: "不感兴趣", value: "hide" }, { label: "举报", value: "report" }]);
+          ? [{ label: S.meta.pinnedPostId === post.id ? "取消置顶" : "置顶", value: "pin" }, { label: "删除（相关记忆一起删）", value: "del", danger: true }]
+          : [{ label: "收藏", value: "fav" }, { label: "不感兴趣", value: "hide" }, { label: "举报", value: "report" },
+            { label: "删除这条微博（相关记忆一起删）", value: "del", danger: true }]);
+        if (choice === "hide") { await deletePost(post); toast("将减少此类内容推荐"); refreshAll(); }
+        if (choice === "fav") toast("已收藏");
+        if (choice === "report") toast("举报已提交");
         if (choice === "pin") { S.meta.pinnedPostId = S.meta.pinnedPostId === post.id ? null : post.id; saveMeta(); toast(S.meta.pinnedPostId ? "已置顶" : "已取消置顶"); refreshAll(); }
         if (choice === "del") {
           for (const p of S.posts) if (p.repost && p.repost.postId === post.id) { p.repost.deleted = true; savePost(p); }
           await deletePost(post); toast("已删除");
           const pg = topPage(); if (pg && pg.key === `detail:${post.id}`) closePage(); else refreshAll();
         }
-        if (choice === "hide") { await deletePost(post); toast("将减少此类内容推荐"); refreshAll(); }
-        if (choice === "fav") toast("已收藏");
-        if (choice === "report") toast("举报已提交");
         return;
       }
       case "detail-tab": { const pg = topPage(); pg.tab = el.dataset.tab; pg.render(pg); return; }
@@ -1548,7 +1572,9 @@
       }
       case "del-cmt": {
         const [p, c] = findComment(el.dataset.cmt); if (!c) return;
-        p.comments = p.comments.filter(x => x.id !== c.id && x.parentId !== c.id); p.counts.comments = Math.max(0, p.counts.comments - 1); savePost(p); rerenderDetail(p); return;
+        const gone = p.comments.filter(x => x.id === c.id || x.parentId === c.id);
+        forget(gone.flatMap(x => x.memEvents || []));
+        p.comments = p.comments.filter(x => !gone.includes(x)); p.counts.comments = Math.max(0, p.counts.comments - gone.length); savePost(p); rerenderDetail(p); return;
       }
       case "view-pic": { const p = findPost(el.dataset.post); if (p) openViewer(p, +el.dataset.idx); return; }
       case "me-tab": meTab = el.dataset.tab; renderMe(); return;

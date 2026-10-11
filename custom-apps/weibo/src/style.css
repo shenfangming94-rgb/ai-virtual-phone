@@ -300,3 +300,4 @@ img { display: block; }
 .emoji-btn:active { background: var(--wb-quote); }
 .form-row .btn-ghost { flex: none; height: 30px; padding: 0 12px; font-size: 13px; }
 .form-row .avatar { flex: none; }
+.profile-real { margin-top: 2px; font-size: 12px; color: var(--wb-text-3); }

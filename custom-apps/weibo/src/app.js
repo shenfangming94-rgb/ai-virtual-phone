@@ -1020,6 +1020,7 @@
         ${avatarHtml(a)}
         <div class="profile-actions">${info.actions || ""}</div>
         <div class="profile-name ${a.vip ? "vip" : ""}">${esc(a.name)}${a.vip ? I.crown : ""}</div>
+        ${info.realName ? `<div class="profile-real">${esc(info.realName)}</div>` : ""}
         ${info.verifiedNote ? `<div class="profile-verify"><span class="v ${vClass(a.verified)}" style="position:static;width:14px;height:14px;display:inline-grid;place-items:center;border-radius:50%;color:#fff;font-size:9px;font-weight:800;font-style:italic">V</span>${esc(info.verifiedNote)}</div>` : ""}
         <div class="profile-bio">简介：${esc(info.bio || "暂无简介")}</div>
         ${info.ip ? `<div class="profile-ip">IP属地：${esc(info.ip)}</div>` : ""}
@@ -1200,6 +1201,7 @@
         list = pics.length ? `<div class="album">${pics.join("")}</div>` : `<div class="empty">还没有图片</div>`;
       }
       body.innerHTML = profileHeaderHtml(a, {
+        realName: `${acc.gender === "女" ? "她" : acc.gender === "男" ? "他" : "TA"}是${charById(charId)?.name || ""}`,
         cover: gradientFor(charId + "cover"), bio: acc.bio, ip: acc.ip, verifiedNote: acc.verifiedNote, posts: Math.max(posts.length, acc.postCount || 0),
         following: acc.following || 0, followers: acc.followers || 0,
         actions: `<button class="follow-btn ${following ? "on" : ""}" style="height:32px;padding:0 16px;font-size:14px" data-act="toggle-follow-char" data-char="${esc(charId)}">${following ? "已关注" : "+ 关注"}</button>`,

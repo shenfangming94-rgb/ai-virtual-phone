@@ -174,38 +174,44 @@ function findBuiltInPreset(presets: PresetConfig[]): PresetConfig | null {
   return presets.find(item => item.builtIn) ?? presets[0] ?? null;
 }
 
-function attachPromptEntriesToBuiltInPreset(app: InstalledCustomApp, prompts: Prompt[]): number {
+/**
+ * 把 APP 的预设条目挂进预设：默认预设整组替换为最新版；用户自建的预设也挂上，
+ * 方便用自己预设的人直接生效。用户预设里已有的同名条目视为用户改过，保留不动，
+ * 只补缺的、删掉 APP 已不再提供的。
+ */
+function attachPromptEntriesToPresets(app: InstalledCustomApp, prompts: Prompt[]): number {
   if (prompts.length === 0) return 0;
   const presets = loadPresets();
   const builtIn = findBuiltInPreset(presets);
   if (!builtIn) return 0;
   const prefix = customAppPromptPrefix(app.id);
   const promptIds = new Set(prompts.map(prompt => prompt.identifier));
-  const existingPrompts = (builtIn.prompts ?? []).filter(prompt => (
-    !prompt.identifier.startsWith(prefix) && !promptIds.has(prompt.identifier)
-  ));
-  const existingOrder = (builtIn.prompt_order ?? []).filter(entry => (
-    !entry.identifier.startsWith(prefix) && !promptIds.has(entry.identifier)
-  ));
-  const nextOrderEntries = prompts.map(prompt => ({
-    identifier: prompt.identifier,
-    enabled: prompt.enabled !== false,
-  }));
-  const dividerIndex = existingOrder.findIndex(entry => entry.identifier === "shortTermMemory" || entry.identifier === "chatHistory");
-  const promptOrder = dividerIndex >= 0
-    ? [
-      ...existingOrder.slice(0, dividerIndex + 1),
-      ...nextOrderEntries,
-      ...existingOrder.slice(dividerIndex + 1),
-    ]
-    : [...existingOrder, ...nextOrderEntries];
-  const nextBuiltIn: PresetConfig = {
-    ...builtIn,
-    prompts: [...existingPrompts, ...prompts],
-    prompt_order: promptOrder,
-    updatedAt: Date.now(),
+  const insertOrder = (order: NonNullable<PresetConfig["prompt_order"]>, entries: NonNullable<PresetConfig["prompt_order"]>) => {
+    const dividerIndex = order.findIndex(entry => entry.identifier === "shortTermMemory" || entry.identifier === "chatHistory");
+    return dividerIndex >= 0
+      ? [...order.slice(0, dividerIndex + 1), ...entries, ...order.slice(dividerIndex + 1)]
+      : [...order, ...entries];
   };
-  savePresets(presets.map(item => item.id === builtIn.id ? nextBuiltIn : item));
+
+  const nextPresets = presets.map(preset => {
+    const isBuiltIn = preset.id === builtIn.id;
+    const current = preset.prompts ?? [];
+    const kept = isBuiltIn ? [] : current.filter(prompt => promptIds.has(prompt.identifier));
+    const keptIds = new Set(kept.map(prompt => prompt.identifier));
+    const added = prompts.filter(prompt => !keptIds.has(prompt.identifier));
+    const others = current.filter(prompt => !prompt.identifier.startsWith(prefix) && !promptIds.has(prompt.identifier));
+    const order = (preset.prompt_order ?? []).filter(entry => (
+      !entry.identifier.startsWith(prefix) && !promptIds.has(entry.identifier)
+    ) || keptIds.has(entry.identifier));
+    if (!isBuiltIn && added.length === 0 && kept.length === current.filter(prompt => prompt.identifier.startsWith(prefix)).length) return preset;
+    return {
+      ...preset,
+      prompts: [...others, ...kept, ...added],
+      prompt_order: insertOrder(order, added.map(prompt => ({ identifier: prompt.identifier, enabled: prompt.enabled !== false }))),
+      updatedAt: Date.now(),
+    };
+  });
+  savePresets(nextPresets);
   window.dispatchEvent(new CustomEvent("settings-presets-updated"));
   return prompts.length;
 }
@@ -271,7 +277,7 @@ function importPresets(app: InstalledCustomApp, raw: unknown, warnings: string[]
     }
   });
   return {
-    count: attachPromptEntriesToBuiltInPreset(app, prompts),
+    count: attachPromptEntriesToPresets(app, prompts),
     refs,
   };
 }

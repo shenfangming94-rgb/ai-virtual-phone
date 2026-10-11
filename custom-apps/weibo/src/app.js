@@ -537,8 +537,7 @@
     const d = new Date(); const w = "日一二三四五六"[d.getDay()];
     return `${d.getFullYear()}年${d.getMonth() + 1}月${d.getDate()}日 星期${w} ${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
   }
-  // 规则和输出格式随每次请求发送（用户可能用自己的预设，APP 的预设条目不一定生效）
-  const RULES = /*__RULES__*/{};
+  // 规则和输出格式在预设条目里（presets.json，按 nox_weibo 标签命中）；这里只在末尾再提醒一次格式
   const FORMAT_HINT = {
     feed: "===微博===", comments: "===评论===", reaction: "===评论=== 和 ===互动===", reply: "===评论===", profile: "===主页=== 和 ===微博===",
   };
@@ -554,10 +553,9 @@
     const job = uid("job"); S.jobs.add(job);
     const scene = (payload.appTags || [])[1];
     const who = `用户的名字是「${S.identity.name || "用户"}」，微博昵称是「${S.meta.nickname}」。`;
-    if (RULES[scene]) payload = { ...payload, instruction: [
-      "【你正在为「微博」App 生成内容，以下是规则】", RULES.world, who, RULES[scene],
-      "【本轮说明】", payload.instruction,
-      `【输出要求】这不是聊天回复：不要用聊天格式，不要写旁白、动作或心理描写，不要加任何解释，不要自创字段名或用【】标题，只输出 ${FORMAT_HINT[scene]} 格式的内容，每个字段名和分隔线照抄上面的格式。`,
+    if (FORMAT_HINT[scene]) payload = { ...payload, instruction: [
+      who, payload.instruction,
+      `【输出要求】这不是聊天回复：不要用聊天格式，不要写旁白、动作或心理描写，不要加任何解释，不要自创字段名或用【】标题，只输出 ${FORMAT_HINT[scene]} 格式的内容，字段名和分隔线照抄「微博」规则里的格式。用户本人不能出现在你生成的内容里。`,
     ].join("\n\n") };
     try {
       const r = await api.ai.generate(payload);
@@ -627,13 +625,13 @@
     const followed = S.chars.filter(c => isFollowingChar(c.id));
     const cast = shuffle(followed.length ? followed : S.chars).slice(0, followTab ? 4 : 2);
     const charCount = followTab ? Math.min(cast.length + 1, rand(2, 4)) : 1;
-    const npcCount = followTab ? Math.min((S.meta.followNpc || []).length, rand(1, 2)) : rand(5, 7);
+    const npcCount = followTab ? rand(2, 3) : rand(5, 7);
     const followNpc = (S.meta.followNpc || []).slice(0, 6);
     const recent = S.posts.slice().sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)).slice(0, 8)
       .map(p => `- ${authorOf(p).name}：${p.text.slice(0, 40)}`).join("\n");
     const instruction = [
       `当前时间：${nowText()}`,
-      `本轮生成 ${charCount + npcCount} 条微博：角色本人发的约 ${charCount} 条，路人博主 ${npcCount} 条${followTab && npcCount ? `（路人只能是用户关注的这些博主，昵称一字不差：${followNpc.join("、")}）` : ""}。`,
+      `本轮生成 ${charCount + npcCount} 条微博：角色本人发的约 ${charCount} 条，路人博主 ${npcCount} 条${followTab && followNpc.length ? `（路人里可以有用户关注的博主：${followNpc.join("、")}，昵称一字不差）` : ""}。`,
       `角色微博昵称（已注册的必须沿用）：\n${charsForPrompt(cast)}`,
       `角色是否发博、发什么，按他此刻的状态和心情决定；同一个角色本轮最多 2 条。`,
       `${S.meta.nickname ? `用户的微博昵称是「${S.meta.nickname}」，角色如果在微博里提到用户要用这个昵称 @。` : ""}`,
@@ -643,7 +641,9 @@
     const text = await generate({ characterIds: cast.map(c => c.id), appTags: ["nox_weibo", "feed"], instruction }, "刷新");
     S.feedBusy = false;
     if (text == null) { renderHome(); return; }
-    const posts = parseBlocks(text, "微博").filter(b => !isUserName(b["作者"])).map(b => postFromBlock(b, { origin: "feed" })).filter(p => p.text || p.images.length || p.repost);
+    // 在「关注」页刷出来的路人微博也留在关注页（像关注页里混进来的推荐）
+    const posts = parseBlocks(text, "微博").filter(b => !isUserName(b["作者"])).map(b => postFromBlock(b, { origin: "feed", followFeed: followTab || undefined }))
+      .filter(p => p.text || p.images.length || p.repost);
     if (!posts.length) { renderHome(); parseFailed("刷新"); return; }
     for (const p of posts) { S.posts.push(p); savePost(p); S.allPostRows++; }
     const charPosts = posts.filter(p => p.authorType === "char");
@@ -947,7 +947,7 @@
   }
 
   // ───────────────────────── 首页 ─────────────────────────
-  const inFollowFeed = p => p.authorType === "user" || (p.authorType === "char" && isFollowingChar(p.charId)) || (p.authorType === "npc" && isFollowingNpc(p.authorName));
+  const inFollowFeed = p => p.authorType === "user" || p.followFeed || (p.authorType === "char" && isFollowingChar(p.charId)) || (p.authorType === "npc" && isFollowingNpc(p.authorName));
   function feedPosts() {
     const list = S.posts.filter(p => p.origin !== "profile" || p.authorType === "user");
     const filtered = S.homeTab === "follow" ? list.filter(inFollowFeed) : list.filter(p => p.authorType === "npc" || p.authorType === "char");

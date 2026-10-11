@@ -14,6 +14,7 @@ import {
     normalizeCustomAppManifestId,
 } from "./custom-app-storage";
 import { applyCustomAppRegistrationsAsync } from "./custom-app-registration";
+import { ensureSettingsStorageHydrated } from "./settings-storage";
 
 type BundledApp = { id: string; version: string; url: string };
 
@@ -55,7 +56,8 @@ export function syncBundledCustomApps(): Promise<void> {
 
 async function syncAll(): Promise<void> {
     try {
-        await hydrateKvDb();
+        // 预设存在 SettingsDB：没读出来就挂预设条目，会漏掉用户自建的预设
+        await Promise.all([hydrateKvDb(), ensureSettingsStorageHydrated()]);
         const res = await fetch("/apps/bundled.json", { cache: "no-cache" });
         if (!res.ok) return;
         placeImportedAppsIfPending();

@@ -9,11 +9,17 @@ const read = p => readFileSync(join(root, p), "utf8");
 const tpl = read("src/index.html");
 const css = read("src/style.css");
 const rules = JSON.parse(read("rules.json")).rules;
-const js = read("src/app.js").replace("/*__RULES__*/{}", () => JSON.stringify(rules));
+const js = read("src/app.js");
+const NAMES = { world: "平台规则", feed: "首页刷新", comments: "评论区", reaction: "用户发博后的反应", reply: "回复评论", profile: "角色主页" };
+const presets = Object.entries(rules).map(([scene, content]) => ({
+  id: `weibo-${scene}`, name: `微博：${NAMES[scene] || scene}`, content, enabled: true,
+  tags: scene === "world" ? ["nox_weibo"] : ["nox_weibo", scene],
+}));
 const fill = mock => tpl.replace("/*__CSS__*/", () => css).replace("/*__JS__*/", () => js).replace("<!--__MOCK__-->", () => mock);
 
 mkdirSync(join(root, "dist"), { recursive: true });
 writeFileSync(join(root, "dist/index.html"), fill(""));
+writeFileSync(join(root, "dist/presets.json"), JSON.stringify({ presets }, null, 2) + "\n");
 copyFileSync(join(root, "manifest.json"), join(root, "dist/manifest.json"));
 if (existsSync(join(root, "icon.png"))) copyFileSync(join(root, "icon.png"), join(root, "dist/icon.png"));
 writeFileSync(join(root, "dev/test.html"), fill(`<script>${read("dev/mock.js")}</script>`));
@@ -21,7 +27,7 @@ writeFileSync(join(root, "dev/test.html"), fill(`<script>${read("dev/mock.js")}<
 const version = JSON.parse(read("manifest.json")).version;
 const zip = join(root, `weibo-${version}.zip`);
 if (existsSync(zip)) rmSync(zip);
-execSync(`cd "${join(root, "dist")}" && zip -q -r "${zip}" manifest.json index.html icon.png`);
+execSync(`cd "${join(root, "dist")}" && zip -q -r "${zip}" manifest.json presets.json index.html icon.png`);
 // 随站点发布：小手机启动时会按 bundled.json 自动安装/更新
 const pub = join(root, "../../public/apps");
 mkdirSync(pub, { recursive: true });

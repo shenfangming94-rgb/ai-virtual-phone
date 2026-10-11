@@ -317,7 +317,7 @@
 
   // ───────────────────────── AI 输出解析 ─────────────────────────
   const KEYS = ["角色", "作者", "认证", "认证说明", "会员", "来源", "时间", "配图", "转评赞", "转发自", "原文", "转发链", "正文", "编号", "回复", "赞", "内容",
-    "点赞角色", "转发", "路人点赞", "新增粉丝", "昵称", "简介", "IP属地", "粉丝", "关注",
+    "性别", "点赞角色", "转发", "路人点赞", "新增粉丝", "昵称", "简介", "IP属地", "粉丝", "关注",
     // 模型常换的叫法
     "微博昵称", "博主", "发布者", "发博人", "用户名", "评论者", "评论人", "角色本名", "本名", "角色名", "微博正文", "评论内容", "回复内容", "正文内容"];
   const ALIAS = { 微博昵称: "作者", 博主: "作者", 发布者: "作者", 发博人: "作者", 用户名: "作者", 评论者: "作者", 评论人: "作者",
@@ -404,6 +404,7 @@
       authorType: ch ? "char" : "npc", charId: ch ? ch.id : undefined,
       authorName: (b["作者"] || b["昵称"] || (ch && ch.name) || "微博用户").replace(/^@/, ""),
       verified: b["认证"] || "无", vip: yes(b["会员"]),
+      gender: /女/.test(b["性别"] || "") ? "女" : /男/.test(b["性别"] || "") ? "男" : "",
       source: none(b["来源"]) ? "" : b["来源"],
       createdAt: parseRelTime(b["时间"]),
       text: (b["正文"] || "").trim(),
@@ -415,6 +416,7 @@
     if (ch) {
       const acc = S.accounts[ch.id];
       if (!acc || !acc.nickname || acc.nickname === ch.name) ensureAccount(ch.id, { nickname: post.authorName, verified: post.verified, vip: post.vip });
+      if (post.gender && !S.accounts[ch.id].gender) ensureAccount(ch.id, { gender: post.gender });
       post.authorName = S.accounts[ch.id].nickname;
     }
     return post;
@@ -475,6 +477,16 @@
       const a = S.accounts[c.id];
       return `- ${c.name}${a && a.nickname ? `（微博昵称：${a.nickname}，必须沿用）` : "（还没有微博账号，自取一个昵称）"}`;
     }).join("\n");
+  }
+  function genderOf(post) {
+    if (post.authorType === "user") return S.identity.gender || "";
+    if (post.authorType === "char") return (S.accounts[post.charId] || {}).gender || post.gender || "";
+    return post.gender || "";
+  }
+  function genderLine(post) {
+    const g = genderOf(post);
+    const who = post.authorType === "char" ? `（角色 ${charById(post.charId)?.name}，以角色设定为准）` : "";
+    return g ? `博主性别：${g}${who}。评论里称呼博主一定要用对性别。` : `博主性别：${post.authorType === "char" ? "以角色设定为准" : "不确定，评论里用「博主」「ta」称呼"}。`;
   }
   function nowText() {
     const d = new Date(); const w = "日一二三四五六"[d.getDay()];
@@ -583,6 +595,7 @@
       `当前时间：${nowText()}`,
       `博主：${author.name}${post.authorType === "char" ? `（就是角色 ${charById(post.charId)?.name}）` : "（路人博主）"}`,
       `微博发布于：${fmtTime(post.createdAt)}`,
+      genderLine(post),
       `微博正文：\n${post.text}`,
       post.images.length ? `配图：${post.images.map(i => i.desc || "图片").join(" | ")}` : "",
       post.repost ? `这是一条转发，原微博 @${post.repost.author}：${post.repost.text}` : "",
@@ -595,7 +608,7 @@
     post._genComments = false;
     if (text != null) {
       const list = commentsFromBlocks(parseBlocks(text, "评论"), post, {});
-      if (!list.length) parseFailed("加载评论");
+      if (list.length) noteParsed(`${list.length} 条评论`); else parseFailed("加载评论");
       post.comments = [...list, ...post.comments];
       post.commentsGenerated = true;
       post.counts.comments = Math.max(post.counts.comments, post.comments.length);
@@ -610,7 +623,7 @@
     const cast = shuffle(S.chars).slice(0, 6);
     const instruction = [
       `当前时间：${nowText()}`,
-      `用户的微博昵称：${S.meta.nickname}，粉丝 ${S.meta.followers} 人。`,
+      `用户的微博昵称：${S.meta.nickname}，粉丝 ${S.meta.followers} 人。用户性别：${S.identity.gender || "未知（评论里用「博主」「ta」）"}，评论称呼一定要用对性别。`,
       post.repost ? `用户转发了 @${post.repost.author} 的微博：「${post.repost.text}」，转发语：` : `用户的微博正文：`,
       post.text || "（无文字）",
       post.images.length ? `配图：${post.images.map(i => i.desc || "一张用户自己上传的照片").join(" | ")}（看不到图片时不要臆测细节）` : "",
@@ -624,6 +637,7 @@
     const list = commentsFromBlocks(parseBlocks(text, "评论"), post, {});
     const sum = parseBlocks(text, "互动")[0] || {};
     if (!list.length && !Object.keys(sum).length) { parseFailed("发博后的互动"); return; }
+    noteParsed(`${list.length} 条评论，点赞角色：${sum["点赞角色"] || "无"}`);
     const likedChars = none(sum["点赞角色"]) ? [] : sum["点赞角色"].split(/[、,，\s]+/).map(charByName).filter(Boolean);
     const reposts = none(sum["转发"]) ? [] : sum["转发"].split(/\s*\|\|\s*/).map(seg => {
       const i = seg.search(/[：:]/); if (i <= 0) return null;
@@ -681,6 +695,7 @@
     const text = await generate({ characterId: charId, appTags: ["weibo", "reply"], instruction }, `${ch.name}回复`);
     if (text == null) return;
     const list = commentsFromBlocks(parseBlocks(text, "评论"), post, {});
+    if (list.length) noteParsed(`${list.length} 条回复`); else { parseFailed(`${ch.name}回复`); return; }
     const fresh = S.posts.find(p => p.id === post.id); if (!fresh) return;
     let delay = rand(1500, 4000);
     for (const c of list) {
@@ -714,6 +729,8 @@
     const uCode = codeOf(post, userComment);
     const prompt = [
       `微博博主：${authorOf(post).name}${post.authorType === "user" ? "（就是用户本人）" : ""}`,
+      genderLine(post),
+      `用户本人的性别：${S.identity.gender || "未知（用 ta 称呼）"}`,
       `微博正文：${post.text.slice(0, 300)}`,
       targetComment ? `这层评论楼的完整对话（按时间）：\n${floorLines(post, userComment)}` : "",
       `用户（微博昵称「${S.meta.nickname}」）刚刚${targetComment ? `回复了「${targetName}」` : `评论了博主「${targetName}」的微博`}：「${userComment.text}」，编号 ${uCode}。`,
@@ -730,6 +747,7 @@
     const fresh = S.posts.find(p => p.id === post.id); if (!fresh) return;
     const list = commentsFromBlocks(parseBlocks(text, "评论"), fresh, {}).map(c => ({ ...c, authorType: "npc", charId: undefined }));
     if (!list.length) { parseFailed("路人回复"); return; }
+    noteParsed(`${list.length} 条回复`);
     let delay = rand(1500, 4000);
     for (const c of list) {
       if (!c.parentId) { c.parentId = userComment.parentId || userComment.id; c.replyToName = S.meta.nickname; }
@@ -754,6 +772,7 @@
       `当前时间：${nowText()}`,
       `博主：${authorOf(post).name}${post.authorType === "user" ? "（就是用户本人，用户不要出现在新评论里）" : post.authorType === "char" ? `（就是角色 ${charById(post.charId)?.name}）` : "（路人博主）"}`,
       `微博正文：\n${post.text}`,
+      genderLine(post),
       `已有评论（方括号里是编号）：\n${existing || "无"}`,
       `继续生成 ${rand(5, 8)} 条新评论：可以是新的一级评论，也可以回复已有评论（「回复」字段填已有编号）或本次新评论（填本次编号）。新评论的编号用 n1、n2……`,
       `可能来评论的其他角色（符合关系才来）：\n${charsForPrompt(others) || "无"}`,
@@ -763,6 +782,7 @@
     post._genComments = false;
     if (text != null) {
       const list = commentsFromBlocks(parseBlocks(text, "评论"), post, {});
+      if (list.length) noteParsed(`${list.length} 条评论`); else parseFailed("加载评论");
       post.comments.push(...list);
       post.counts.comments = Math.max(post.counts.comments, post.comments.length);
       savePost(post);

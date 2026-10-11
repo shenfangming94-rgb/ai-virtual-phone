@@ -161,6 +161,7 @@
     S.posts = postRows.filter(p => p.scope === S.identity.id).map(p => ({ ...p, comments: p.comments || [] }));
     S.accounts = {};
     for (const a of accRows) if (a.charId) S.accounts[a.charId] = a;
+    S.debug = (metaRows.find(m => m.id === "debug_log") || {}).entries || [];
     S.meta = metaRows.find(m => m.id === `meta_${S.identity.id}`) || {
       id: `meta_${S.identity.id}`,
       nickname: S.identity.name || "微博用户",
@@ -177,11 +178,12 @@
 
   // ───────────────────────── 账号 / 头像 ─────────────────────────
   const charById = id => S.chars.find(c => c.id === id);
-  function charByName(name) {
-    name = String(name || "").trim(); if (!name || name === "无") return null;
+  /** strict：只认本名或已登记的微博昵称（用来从「作者」反查，避免「沈砚的粉丝」被认成沈砚） */
+  function charByName(name, strict) {
+    name = String(name || "").replace(/^@/, "").trim(); if (!name || none(name)) return null;
     return S.chars.find(c => c.name === name)
       || S.chars.find(c => S.accounts[c.id] && S.accounts[c.id].nickname === name)
-      || S.chars.find(c => name.includes(c.name) || c.name.includes(name));
+      || (strict ? null : S.chars.find(c => name.includes(c.name) || (name.length >= 2 && c.name.includes(name))));
   }
   function charNickname(charId) { const a = S.accounts[charId]; const c = charById(charId); return (a && a.nickname) || (c && c.name) || "微博用户"; }
   function ensureAccount(charId, patch) {
@@ -315,7 +317,11 @@
 
   // ───────────────────────── AI 输出解析 ─────────────────────────
   const KEYS = ["角色", "作者", "认证", "认证说明", "会员", "来源", "时间", "配图", "转评赞", "转发自", "原文", "转发链", "正文", "编号", "回复", "赞", "内容",
-    "点赞角色", "转发", "路人点赞", "新增粉丝", "昵称", "简介", "IP属地", "粉丝", "关注"];
+    "点赞角色", "转发", "路人点赞", "新增粉丝", "昵称", "简介", "IP属地", "粉丝", "关注",
+    // 模型常换的叫法
+    "微博昵称", "博主", "发布者", "发博人", "用户名", "评论者", "评论人", "角色本名", "本名", "角色名", "微博正文", "评论内容", "回复内容", "正文内容"];
+  const ALIAS = { 微博昵称: "作者", 博主: "作者", 发布者: "作者", 发博人: "作者", 用户名: "作者", 评论者: "作者", 评论人: "作者",
+    角色本名: "角色", 本名: "角色", 角色名: "角色", 微博正文: "正文", 正文内容: "正文", 评论内容: "内容", 回复内容: "内容" };
   const KEY_ALT = KEYS.slice().sort((a, b) => b.length - a.length).join("|");
   // 支持「作者：xx」「作者: xx」「[作者]xx」「【作者】：xx」「**作者**：xx」「- 作者：xx」
   const KEY_RE = new RegExp(`^\\s*(?:[-*•]\\s*)?(?:[\\[【]\\s*(${KEY_ALT})\\s*[\\]】]\\s*[：:]?|(${KEY_ALT})\\s*[：:])\\s*(.*)$`);
@@ -343,7 +349,8 @@
     for (const line of chunk.split(/\r?\n/)) {
       const km = line.match(KEY_RE);
       if (km) {
-        const key = km[1] || km[2];
+        let key = km[1] || km[2];
+        key = ALIAS[key] || key;
         if (key in fields) push();
         cur = key; fields[cur] = (km[3] || "").trim();
       } else if (cur) fields[cur] = (fields[cur] ? fields[cur] + "\n" : "") + line;
@@ -380,7 +387,7 @@
   }
 
   function postFromBlock(b, extra) {
-    const ch = charByName(b["角色"]) || (none(b["角色"]) ? null : charByName(b["作者"]));
+    const ch = charByName(b["角色"]) || charByName(b["作者"] || b["昵称"], true);
     const images = none(b["配图"]) ? [] : b["配图"].split(/\s*[|｜]\s*/).filter(Boolean).slice(0, 9).map(desc => ({ desc }));
     let repost = null;
     if (!none(b["转发自"]) || !none(b["原文"])) {
@@ -395,7 +402,7 @@
     const post = {
       id: uid("wb"), scope: S.identity.id,
       authorType: ch ? "char" : "npc", charId: ch ? ch.id : undefined,
-      authorName: (b["作者"] || (ch && ch.name) || "微博用户").replace(/^@/, ""),
+      authorName: (b["作者"] || b["昵称"] || (ch && ch.name) || "微博用户").replace(/^@/, ""),
       verified: b["认证"] || "无", vip: yes(b["会员"]),
       source: none(b["来源"]) ? "" : b["来源"],
       createdAt: parseRelTime(b["时间"]),
@@ -416,8 +423,8 @@
   function commentsFromBlocks(blocks, post, idMap) {
     const out = [];
     for (const b of blocks) {
-      const ch = charByName(b["角色"]);
-      const name = (b["作者"] || (ch && charNickname(ch.id)) || "微博用户").replace(/^@/, "");
+      const ch = charByName(b["角色"]) || charByName(b["作者"] || b["昵称"], true);
+      const name = (b["作者"] || b["昵称"] || (ch && charNickname(ch.id)) || "微博用户").replace(/^@/, "");
       const isPostAuthor = (post.authorType === "char" && ch && ch.id === post.charId) || (post.authorType === "npc" && !ch && name === post.authorName);
       if (ch) { const acc = S.accounts[ch.id]; if (!acc || !acc.nickname) ensureAccount(ch.id, { nickname: name }); }
       const c = {
@@ -476,6 +483,14 @@
   const FORMAT_HINT = {
     feed: "===微博===", comments: "===评论===", reaction: "===评论=== 和 ===互动===", reply: "===评论===", profile: "===主页=== 和 ===微博===",
   };
+  // 调试记录：最近 10 次 AI 调用，存进 db，关掉 APP 也在
+  S.debug = [];
+  function logAi(entry) {
+    S.debug = [{ at: nowIso(), ...entry, text: String(entry.text || "").slice(0, 6000) }, ...S.debug].slice(0, 10);
+    dbUpsert(COL.meta, { id: "debug_log", entries: S.debug }).catch(() => {});
+  }
+  function noteParsed(summary) { if (S.debug[0]) { S.debug[0].parsed = summary; dbUpsert(COL.meta, { id: "debug_log", entries: S.debug }).catch(() => {}); } }
+
   async function generate(payload, label) {
     const job = uid("job"); S.jobs.add(job);
     const scene = (payload.appTags || [])[1];
@@ -483,26 +498,34 @@
     try {
       const r = await api.ai.generate(payload);
       const text = (r && r.text) || "";
-      S.lastRaw = { label, text, at: nowIso() };
+      logAi({ label, ok: true, text });
       return text;
     } catch (e) {
       console.error(label, e);
+      logAi({ label, ok: false, error: String((e && e.message) || e) });
       toast(`${label}失败：${(e && e.message) || e}`.slice(0, 80));
       return null;
     } finally { S.jobs.delete(job); }
   }
   /** 解析不出内容时，让用户能看到 AI 原始返回，方便排查 */
   async function parseFailed(label) {
+    noteParsed("❗ 没认出任何内容");
     const choice = await sheet(`${label}：没认出 AI 返回的内容`, [{ label: "查看 AI 原始返回", value: "raw" }]);
     if (choice === "raw") openRaw();
   }
   function openRaw() {
-    const r = S.lastRaw;
     openPage("raw", pg => {
-      $(".page-body", pg.el).innerHTML = r
-        ? `<div class="form-note">${esc(r.label)} · ${fmtTime(r.at)} · 共 ${r.text.length} 字。截图发给 Nox 就能修～</div><pre style="margin:0;padding:12px 16px;white-space:pre-wrap;word-break:break-all;font-size:12px;line-height:1.5;background:var(--wb-card);user-select:text;-webkit-user-select:text">${esc(r.text || "（空的，AI 什么都没返回）")}</pre>`
+      const list = S.debug;
+      $(".page-body", pg.el).innerHTML = list.length
+        ? `<div class="form-note">最近 ${list.length} 次 AI 调用，最新的在最上面。截图发给 Nox 就能修～</div>` + list.map(r => `
+          <div style="background:var(--wb-card);margin-bottom:8px;padding:10px 16px">
+            <div style="font-size:13px;font-weight:600">${r.ok ? "✅" : "❌"} ${esc(r.label)} <span style="font-weight:400;color:var(--wb-text-3)">· ${fmtTime(r.at)}${r.ok ? ` · ${String(r.text || "").length} 字` : ""}</span></div>
+            ${r.parsed ? `<div style="font-size:12px;color:var(--wb-orange);margin-top:2px">解析结果：${esc(r.parsed)}</div>` : ""}
+            ${r.error ? `<div style="font-size:12px;color:var(--wb-red);margin-top:4px">${esc(r.error)}</div>` : ""}
+            ${r.ok ? `<pre style="margin:6px 0 0;white-space:pre-wrap;word-break:break-all;font-size:11px;line-height:1.5;max-height:320px;overflow:auto;color:var(--wb-text-2);user-select:text;-webkit-user-select:text">${esc(r.text || "（空的，AI 什么都没返回）")}</pre>` : ""}
+          </div>`).join("")
         : `<div class="empty">还没有调用过 AI</div>`;
-    }, { title: "AI 原始返回" });
+    }, { title: "调试记录" });
   }
 
   function remember(charId, summary, eventId) {
@@ -538,7 +561,11 @@
     const posts = parseBlocks(text, "微博").map(b => postFromBlock(b, { origin: "feed" })).filter(p => p.text || p.images.length || p.repost);
     if (!posts.length) { renderHome(); parseFailed("刷新"); return; }
     for (const p of posts) { S.posts.push(p); savePost(p); S.allPostRows++; }
-    S.lastRefreshCount = posts.filter(p => followTab ? inFollowFeed(p) : p.authorType === "npc").length || posts.length;
+    const charPosts = posts.filter(p => p.authorType === "char");
+    noteParsed(`${posts.length} 条微博（角色 ${charPosts.length} 条${charPosts.length ? "：" + charPosts.map(p => charById(p.charId)?.name).join("、") : ""}；路人 ${posts.length - charPosts.length} 条）`);
+    const visibleHere = posts.filter(p => followTab ? inFollowFeed(p) : true).length;
+    if (!visibleHere && followTab) { S.homeTab = "recommend"; toast("刷出来的都是路人微博，在「推荐」里"); }
+    S.lastRefreshCount = visibleHere || posts.length;
     pruneIfNeeded();
     renderHome(true);
   }
@@ -672,7 +699,7 @@
   const NPC_SYSTEM = [
     "你在模拟微博评论区里的陌生网友（路人），只输出评论，不要任何解释。",
     "活人感要求：",
-    "- 回复像真实评论区接话：短、口语、就事论事，可用黑话、梗、不完整句、微博表情（[doge] [允悲] [二哈] [笑cry] [吃瓜]）；不写小作文、不煽情。",
+    "- 回复像真实评论区接话：短、口语、就事论事，可用黑话、梗、微博表情（[doge] [允悲] [二哈] [笑cry] [吃瓜]）；正常打标点（可以用空格代替逗号），但不能整句没标点；不写小作文、不煽情。",
     "- 接住对方具体那句话往下聊：调侃、反问、附和、轻怼、阴阳、跑题都行。*绝对禁止说教、爹味、强行升华或客服式回应*。",
     "- 每个路人保持自己的性格和立场。之前在抬杠、阴阳的人被反驳后会继续嘴硬、换角度怼、或者拉别人站队，不会突然认错道歉或变成和事佬；被怼得没话说时可以转移话题、发 [允悲] 或「你急了」。",
     "- 多个路人之间性格各异、可以站不同队，禁止集体吹捧或集体围攻同一个人。",
@@ -696,8 +723,8 @@
     ].filter(Boolean).join("\n\n");
     const job = uid("job"); S.jobs.add(job);
     let text = null;
-    try { const r = await api.ai.chat({ system: NPC_SYSTEM, prompt, timeoutMs: 90000 }); text = (r && r.text) || ""; S.lastRaw = { label: "路人回复", text, at: nowIso() }; }
-    catch (e) { console.error(e); toast(`路人回复失败：${(e && e.message) || e}`.slice(0, 60)); }
+    try { const r = await api.ai.chat({ system: NPC_SYSTEM, prompt, timeoutMs: 90000 }); text = (r && r.text) || ""; logAi({ label: "路人回复", ok: true, text }); }
+    catch (e) { console.error(e); logAi({ label: "路人回复", ok: false, error: String((e && e.message) || e) }); toast(`路人回复失败：${(e && e.message) || e}`.slice(0, 60)); }
     finally { S.jobs.delete(job); }
     if (!text) return;
     const fresh = S.posts.find(p => p.id === post.id); if (!fresh) return;
@@ -1204,7 +1231,7 @@
         <div class="form-row" style="display:block;padding-top:12px"><label>封面</label>
           <div class="profile-cover" style="height:90px;border-radius:8px;margin-top:8px;background:${COVERS[S.meta.cover || 0]}" ${S.meta.coverRef ? `data-bg-ref="${esc(S.meta.coverRef)}"` : ""}></div>
           <div class="swatches"><button class="btn-ghost" data-act="upload-cover">上传图片</button>${COVERS.map((c, i) => `<button class="swatch ${!S.meta.coverRef && S.meta.cover === i ? "on" : ""}" style="background:${c}" data-act="pick-cover" data-idx="${i}"></button>`).join("")}</div></div>
-      </div><div class="form-note"><button class="link" data-act="open-raw" style="font-size:12px">调试：查看最近一次 AI 原始返回</button></div><div class="form-note">头像默认用小手机里的身份头像，也可以单独上传。昵称是你在微博上的名字，角色在微博里会用它称呼你。</div>`;
+      </div><div class="form-note"><button class="link" data-act="open-raw" style="font-size:12px">调试记录：查看最近 10 次 AI 调用</button></div><div class="form-note">头像默认用小手机里的身份头像，也可以单独上传。昵称是你在微博上的名字，角色在微博里会用它称呼你。</div>`;
       for (const id in keep) $("#" + id, pg.el).value = keep[id];
       if (vipEl) $("#f-vip", pg.el).checked = vipEl.checked;
       hydrateImages(pg.el);

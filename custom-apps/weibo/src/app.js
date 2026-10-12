@@ -1248,6 +1248,14 @@
       .sort((a, b) => score(b) - score(a));
   }
   let findLimit = 20;
+  let findTab = "hot";
+  /** 看过的话题：按最近看的排，旧版本没记录的按生成时间补在后面 */
+  function seenTopics() {
+    const recent = (S.topics.recent || []).filter(t => S.topics.map[t]);
+    const rest = Object.keys(S.topics.map).filter(t => !recent.includes(t))
+      .sort((a, b) => new Date(S.topics.map[b].at || 0) - new Date(S.topics.map[a].at || 0));
+    return [...recent, ...rest].slice(0, 50);
+  }
   function renderFind(justRefreshed) {
     for (const pg of pages) if (pg.key === "hot-all") pg.render(pg);
     if (S.tab !== "find") return;
@@ -1259,13 +1267,22 @@
           <div class="hot-cell hot-more" data-act="open-hot-all">更多热搜 ›</div></div>`
       : S.hotBusy ? "" : `<div class="empty"><div class="big">🔥</div>热搜榜还空着<br>刷新一下看看大家在聊什么
         <div><button class="btn-primary" data-act="hot-refresh">${I.refresh.replace("<svg", '<svg width="16" height="16"')}生成热搜</button></div></div>`;
-    const recent = (S.topics.recent || []).filter(t => S.topics.map[t]).slice(0, 12);
-    const chips = recent.length ? `<div class="find-sec">最近看过的话题</div>
-      <div class="topic-chips">${recent.map(t => `<button class="topic-chip" data-act="open-topic" data-topic="${esc(t)}">#${esc(t)}#</button>`).join("")}</div>` : "";
-    const feed = hotFeedPosts();
-    const feedHtml = feed.length ? `<div class="find-sec">热门微博</div>${feed.slice(0, findLimit).map(p => cardHtml(p, { noFollow: true })).join("")}
-      ${feed.length > findLimit ? '<button class="load-more" data-act="find-more">查看更多</button>' : '<div class="load-more">没有更多了</div>'}` : "";
-    $("#view").innerHTML = hotHeadHtml() + hot + chips + feedHtml;
+    const tabs = `<div class="profile-tabs find-tabs"><button class="${findTab === "hot" ? "on" : ""}" data-act="find-tab" data-tab="hot">热门微博</button>
+      <button class="${findTab === "seen" ? "on" : ""}" data-act="find-tab" data-tab="seen">看过的话题</button></div>`;
+    let below = "";
+    if (findTab === "seen") {
+      const seen = seenTopics();
+      below = seen.length ? `<div class="hot-list">${seen.map(t => { const info = S.topics.map[t]; const rank = hotRank(t);
+          return `<div class="hot-row" data-act="open-topic" data-topic="${esc(t)}"><span class="hot-title link">#${esc(t)}#</span>
+            <span class="hot-heat">${[rank ? `热搜第${rank}` : "", info.reads ? `阅读${fmtNum(info.reads)}` : ""].filter(Boolean).join(" · ")}</span></div>`; }).join("")}</div>`
+        : `<div class="empty">还没有看过话题<br>点热搜或微博里的 #话题# 进去看看吧</div>`;
+    } else {
+      const feed = hotFeedPosts();
+      below = feed.length ? feed.slice(0, findLimit).map(p => cardHtml(p, { noFollow: true })).join("")
+        + (feed.length > findLimit ? '<button class="load-more" data-act="find-more">查看更多</button>' : '<div class="load-more">没有更多了</div>')
+        : `<div class="empty">还没有微博<br>去首页刷新，或者点开热搜看看</div>`;
+    }
+    $("#view").innerHTML = hotHeadHtml() + hot + tabs + below;
     if (justRefreshed) $("#view").scrollTop = 0;
     hydrateImages($("#view"));
   }
@@ -1967,6 +1984,7 @@
       case "hot-refresh": refreshHot(); return;
       case "open-hot-all": openHotAll(); return;
       case "find-more": findLimit += 20; renderFind(); return;
+      case "find-tab": findTab = el.dataset.tab; findLimit = 20; renderFind(); return;
       case "open-topic": openTopic(el.dataset.topic); return;
       case "topic-more": { const pg = topPage(); if (pg && pg.topic) genTopic(pg, !!S.topics.map[pg.topic]); return; }
       case "join-topic": openCompose(null, { text: `#${el.dataset.topic}# ` }); return;

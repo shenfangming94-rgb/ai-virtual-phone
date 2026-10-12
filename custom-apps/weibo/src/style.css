@@ -361,3 +361,5 @@ img { display: block; }
 .hot-cell .hot-title { font-size: 14px; }
 .hot-cell .hot-tag { width: 16px; height: 16px; font-size: 11px; }
 .hot-cell.hot-more { justify-content: flex-start; padding-left: 24px; color: var(--wb-orange); font-size: 14px; text-align: left; }
+.find-tabs { margin-top: 8px; position: static; }
+.hot-row .hot-title.link { color: var(--wb-link); }

@@ -1568,9 +1568,12 @@
       const t = getThread(g.peer);
       if (g.peer.type === "npc" && !t.about && ctx.about) t.about = ctx.about;
       const texts = g.texts.slice(0, 5);
-      texts.forEach((text, i) => setTimeout(() => {
+      const msgs = texts.map(text => ({ id: uid("m"), from: "peer", text, at: null }));
+      if (g.peer.type === "char") remember(g.peer.charId, `我在微博私信了${userName()}：「${texts.join(" / ").slice(0, 120)}」`, `weibo_dmout_${uid("e")}`, null, ...msgs);
+      msgs.forEach((m, i) => setTimeout(() => {
+        const text = m.text;
         const fresh = S.threads.find(x => x.key === t.key); if (!fresh) return;
-        fresh.messages.push({ id: uid("m"), from: "peer", text, at: nowIso() });
+        m.at = nowIso(); fresh.messages.push(m);
         fresh.updatedAt = nowIso();
         if (!pages.some(pg => pg.key === `dm:${fresh.key}`)) fresh.unread = (fresh.unread || 0) + 1;
         saveThread(fresh);
@@ -1578,7 +1581,6 @@
         refreshMsgViews();
       }, delay + i * rand(1200, 2600)));
       delay += texts.length * 2600 + rand(2000, 5000);
-      if (g.peer.type === "char") remember(g.peer.charId, `我在微博私信了${userName()}：「${texts.join(" / ").slice(0, 120)}」`, `weibo_dmout_${uid("e")}`, null);
     }
   }
 
@@ -1764,14 +1766,22 @@
     if (!lines.length) { refreshMsgViews(); parseFailed("私信"); return; }
     noteParsed(`${lines.length} 条私信`);
     fresh._typing = true; refreshMsgViews();
-    lines.slice(0, 5).forEach((line, i) => setTimeout(() => {
+    const replies = lines.slice(0, 5).map(text => ({ id: uid("m"), from: "peer", text, at: null }));
+    if (th.peer.type === "char") {
+      const mine = lastIsMine ? fresh.messages.find(m => m.id === msg.id) : null;
+      remember(th.peer.charId, lastIsMine ? `${userName()}在微博私信我：「${msg.text.slice(0, 60)}」，我回：「${lines.join(" / ").slice(0, 100)}」` : `我在微博私信跟${userName()}说：「${lines.join(" / ").slice(0, 100)}」`,
+        lastIsMine ? `weibo_dm_${msg.id}` : `weibo_dmout_${uid("e")}`, null, mine, ...replies);
+      if (mine) saveThread(fresh);
+    }
+    replies.forEach((m, i) => setTimeout(() => {
+      const line = m.text;
       const t2 = S.threads.find(x => x.key === th.key); if (!t2) return;
-      t2.messages.push({ id: uid("m"), from: "peer", text: line, at: nowIso() }); t2.updatedAt = nowIso();
+      m.at = nowIso(); t2.messages.push(m); t2.updatedAt = nowIso();
       if (i === Math.min(lines.length, 5) - 1) t2._typing = false;
       if (!pages.some(pg => pg.key === `dm:${t2.key}`)) { t2.unread = (t2.unread || 0) + 1; if (i === 0) banner(peerAuthor(t2), peerAuthor(t2).name, `私信：${line}`, () => openThread(t2)); }
       saveThread(t2); refreshMsgViews();
     }, 600 + i * rand(1100, 2400)));
-    if (th.peer.type === "char") remember(th.peer.charId, lastIsMine ? `${userName()}在微博私信我：「${msg.text.slice(0, 60)}」，我回：「${lines.join(" / ").slice(0, 100)}」` : `我在微博私信跟${userName()}说：「${lines.join(" / ").slice(0, 100)}」`, lastIsMine ? `weibo_dm_${msg.id}` : `weibo_dmout_${uid("e")}`, null);
+
   }
 
   function renderTabbar() {
@@ -2083,7 +2093,7 @@
     const under = topPage();
     if (under && under.topic) under.setTab("live");
     else { S.tab = "home"; S.homeTab = "follow"; renderTab(); }
-    setTimeout(() => reactToUserPost(post), rand(2500, 6000));
+    if (S.meta.autoReact !== false) setTimeout(() => reactToUserPost(post), rand(2500, 6000));
   }
 
   function openSettings() {
@@ -2101,6 +2111,8 @@
       body.innerHTML = `
         <div class="form-note">参与的角色 · 开关关掉的人不发微博也不来评论；★ 特别关注的人每次刷新和你发博时一定会被叫到</div>
         ${charsHtml}
+        <div class="list-cell"><div class="cell-main"><div>发博后自动来互动</div><div class="cell-sub">关掉后发完是安静的，想要互动时点「看看有没有人来评论」</div></div>
+          <button class="switch ${S.meta.autoReact !== false ? "on" : ""}" data-act="toggle-auto-react" aria-label="发博后自动来互动"><span></span></button></div>
         <div class="form-note" style="margin-top:8px">路人头像库 · 路人从这里分头像，同一个路人一直是同一张。点图片可以删除</div>
         <div class="album avatar-pool">${pool.map((ref, i) => `<div class="pic" data-act="pool-rm" data-idx="${i}"><img data-ref="${esc(ref)}" alt=""></div>`).join("")}
           <button class="compose-add" data-act="pool-add">＋</button></div>
@@ -2289,6 +2301,7 @@
         S.meta.starredChars = on ? S.meta.starredChars.filter(x => x !== id) : [...(S.meta.starredChars || []), id];
         saveMeta(); toast(on ? "已取消特别关注" : "已设为特别关注"); refreshAll(); return;
       }
+      case "toggle-auto-react": S.meta.autoReact = S.meta.autoReact === false; saveMeta(); refreshAll(); return;
       case "toggle-part": {
         const id = el.dataset.char; const off = (S.meta.excludedChars || []).includes(id);
         S.meta.excludedChars = off ? S.meta.excludedChars.filter(x => x !== id) : [...(S.meta.excludedChars || []), id];
@@ -2371,8 +2384,16 @@
       }
       case "dm-msg": {
         const pg = topPage(); const th = pg && S.threads.find(x => x.key === pg.thread); if (!th) return;
-        const v = await sheet("", [{ label: "删除这条", value: "del", danger: true }]);
-        if (v === "del") { th.messages = th.messages.filter(m => m.id !== el.dataset.id); saveThread(th); refreshMsgViews(); }
+        const m = th.messages.find(x => x.id === el.dataset.id); if (!m) return;
+        const v = await sheet("", [{ label: th.peer.type === "char" ? "删除这条（相关记忆一起删）" : "删除这条", value: "del", danger: true }]);
+        if (v === "del") {
+          // 同一轮对话共用一条记忆：删掉其中一句，这条记忆就删掉，其他消息上的登记也清掉
+          const evs = m.memEvents || [];
+          forget(evs);
+          const ids = new Set(evs.map(e => e.eventId));
+          for (const x of th.messages) if (x.memEvents) x.memEvents = x.memEvents.filter(e => !ids.has(e.eventId));
+          th.messages = th.messages.filter(x => x.id !== m.id); saveThread(th); refreshMsgViews();
+        }
         return;
       }
       case "dm-regen": {
@@ -2382,8 +2403,11 @@
       }
       case "thread-menu": {
         const pg = topPage(); const th = pg && S.threads.find(x => x.key === pg.thread); if (!th) return;
-        const choice = await sheet("", [{ label: "删除对话（不会删除记忆）", value: "del", danger: true }]);
-        if (choice === "del") { S.threads = S.threads.filter(x => x !== th); try { await api.db.delete(COL.dms, th.id); } catch (e) { /* ignore */ } closePage(); refreshMsgViews(); }
+        const choice = await sheet("", th.peer.type === "char"
+          ? [{ label: "只删聊天记录（他还记得）", value: "del", danger: true }, { label: "删除聊天记录和相关记忆", value: "delmem", danger: true }]
+          : [{ label: "删除对话", value: "del", danger: true }]);
+        if (choice === "delmem") forget(th.messages.flatMap(m => m.memEvents || []));
+        if (choice === "del" || choice === "delmem") { S.threads = S.threads.filter(x => x !== th); try { await api.db.delete(COL.dms, th.id); } catch (e) { /* ignore */ } closePage(); refreshMsgViews(); }
         return;
       }
       case "npc-gen": { const pg = topPage(); if (pg && pg.npc) genNpcProfile(pg); return; }

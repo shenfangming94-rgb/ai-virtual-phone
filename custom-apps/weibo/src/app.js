@@ -3353,6 +3353,7 @@
       }
       case "del-cmt": {
         const [p, c] = findComment(el.dataset.cmt); if (!c) return;
+        if (await sheet("确定删除这条评论吗？回复它的评论和相关记忆会一起删掉", [{ label: "删除", value: "yes", danger: true }]) !== "yes") return;
         const gone = repliesTo(p, c);
         forget(gone.flatMap(x => x.memEvents || []));
         p.comments = p.comments.filter(x => !gone.includes(x)); p.counts.comments = Math.max(0, p.counts.comments - gone.length); savePost(p); rerenderDetail(p); return;

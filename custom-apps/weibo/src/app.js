@@ -1254,8 +1254,9 @@
     $("#topbar").innerHTML = `<div class="topbar-inner"><button class="search-box" data-act="open-search">${I.search}<span>搜索微博、用户</span></button></div>`;
     const items = S.hot.items || [];
     const hot = items.length
-      ? `<div class="hot-list">${items.slice(0, 10).map(hotRowHtml).join("")}
-          ${items.length > 10 ? `<div class="hot-more" data-act="open-hot-all">更多热搜 ›</div>` : ""}</div>`
+      ? `<div class="hot-grid">${items.slice(0, 9).map((x, i) => `<div class="hot-cell" data-act="open-topic" data-topic="${esc(x.title)}">
+          <span class="hot-rank r${i + 1}">${i + 1}</span><span class="hot-title">${esc(x.title)}</span>${x.tag ? `<span class="hot-tag ${TAG_CLASS[x.tag]}">${x.tag}</span>` : ""}</div>`).join("")}
+          <div class="hot-cell hot-more" data-act="open-hot-all">更多热搜 ›</div></div>`
       : S.hotBusy ? "" : `<div class="empty"><div class="big">🔥</div>热搜榜还空着<br>刷新一下看看大家在聊什么
         <div><button class="btn-primary" data-act="hot-refresh">${I.refresh.replace("<svg", '<svg width="16" height="16"')}生成热搜</button></div></div>`;
     const recent = (S.topics.recent || []).filter(t => S.topics.map[t]).slice(0, 12);

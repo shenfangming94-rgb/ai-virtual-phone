@@ -505,3 +505,5 @@ img { display: block; }
 .share-pick.on { background: var(--wb-bg); color: var(--wb-orange); font-weight: 600; }
 .share-pick.on .avatar { box-shadow: 0 0 0 2px var(--wb-orange); border-radius: 50%; }
 .sheet-item.ok:disabled { color: var(--wb-text-3); font-weight: 400; }
+.acct-switch { margin-left: 10px; font-size: 12px; padding: 2px 9px; border: 1px solid var(--wb-line); border-radius: 12px; color: var(--wb-text-2); }
+.alt-tag { display: inline-block; margin-left: 6px; padding: 1px 6px; border-radius: 4px; font-size: 11px; font-weight: 400; color: var(--wb-orange); background: rgba(255,130,0,.12); vertical-align: 2px; }

@@ -56,6 +56,10 @@
   }
 
   const DEFAULT_PLACEHOLDER = "/*__PLACEHOLDER__*/";
+  // 路人和 char 小号主页的默认背景（Flora 挑的三张，按名字固定分一张）
+  const NPC_COVERS = ["/*__NPC_COVERS__*/"];
+  const NPC_COVER_POS = ["center 64%", "center 20%", "center 40%"];
+  const npcCover = name => { const i = hashNum(name) % NPC_COVERS.length; return NPC_COVERS[i].startsWith("data:") ? `#222 url(${NPC_COVERS[i]}) ${NPC_COVER_POS[i] || "center"} / cover no-repeat` : gradientFor(name + "cover"); };
   function hashNum(s) { let h = 0; for (const c of String(s)) h = (h * 31 + c.charCodeAt(0)) >>> 0; return h; }
   function hashHue(s) { let h = 0; for (const c of String(s)) h = (h * 31 + c.charCodeAt(0)) >>> 0; return h % 360; }
   function gradientFor(s) { const h = hashHue(s); return `linear-gradient(135deg, hsl(${h} 62% 66%), hsl(${(h + 40) % 360} 58% 52%))`; }
@@ -2720,7 +2724,9 @@
       const menuBtn = `<button class="follow-btn on" style="height:32px;width:32px;padding:0;font-size:14px" data-act="npc-menu" data-name="${esc(name)}" aria-label="更多">${I.more}</button>`;
       body.innerHTML = profileHeaderHtml(a, {
         realName: seen ? `${altOpen(owner) ? "💬" : "🤫"} ${charById(owner)?.name || ""}的小号${altOpen(owner) ? "" : "（只有你看得到）"}` : "",
-        cover: gradientFor(name + "cover"), bio: info ? info.bio : "", ip: info && info.ip, verifiedNote: info && info.verifiedNote,
+        cover: npcCover(name), coverRef: seen ? calt(owner).coverRef : undefined,
+        coverAction: seen ? `<button class="cover-btn" data-act="alt-cover" data-char="${esc(owner)}">${I.camera}换背景</button>` : "",
+        bio: info ? info.bio : "", ip: info && info.ip, verifiedNote: info && info.verifiedNote,
         posts: info ? Math.max(posts.length, info.postCount || 0) : posts.length + (hashHue(name) % 900),
         following: info ? info.following : hashHue(name) % 300 + 20, followers: info ? info.followers : fakeFans,
         actions: `${genBtn}${outBtn}${menuBtn}<button class="follow-btn on" style="height:32px;padding:0 12px;font-size:14px" data-act="open-dm" data-name="${esc(name)}">私信</button><button class="follow-btn ${following ? "on" : ""}" style="height:32px;padding:0 16px;font-size:14px" data-act="toggle-follow-npc" data-name="${esc(name)}">${following ? "已关注" : "+ 关注"}</button>`,
@@ -3513,6 +3519,15 @@
       case "ph-reset": {
         if (S.meta.placeholderRef) api.media.delete({ ref: S.meta.placeholderRef }).catch(() => {});
         S.meta.placeholderRef = null; saveMeta(); refreshAll(); return;
+      }
+      case "alt-cover": {
+        const id = el.dataset.char; const a = calt(id); if (!a) return;
+        try {
+          const [ref] = await pickImages(1, 1280); if (!ref) return;
+          if (a.coverRef) api.media.delete({ ref: a.coverRef }).catch(() => {});
+          a.coverRef = ref; saveCalts(); toast("已更换"); refreshAll();
+        } catch (err) { toast("上传失败"); }
+        return;
       }
       case "char-cover": {
         const id = el.dataset.char;

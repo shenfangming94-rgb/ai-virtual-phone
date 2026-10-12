@@ -154,7 +154,7 @@
     S.allPostRows = rows.length;
     if (rows.length < MAX_ROWS) return;
     const victims = rows
-      .filter(r => r.authorType === "npc" && r.origin !== "profile" && !r.liked && !(r.comments || []).some(c => c.authorType === "user"))
+      .filter(r => r.authorType === "npc" && r.origin !== "profile" && !r.liked && !isFav(r.id) && !(r.comments || []).some(c => c.authorType === "user"))
       .sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt))
       .slice(0, rows.length - MAX_ROWS + 60);
     for (const v of victims) { try { await api.db.delete(COL.posts, v.id); } catch (e) { /* ignore */ } }
@@ -192,7 +192,7 @@
       unfollowChars: [],
       pinnedPostId: null,
     };
-    for (const k of ["excludedChars", "starredChars", "avatarPool", "fans", "publicChars"]) if (!Array.isArray(S.meta[k])) S.meta[k] = [];
+    for (const k of ["excludedChars", "starredChars", "avatarPool", "fans", "publicChars", "visits", "history", "favs", "drafts"]) if (!Array.isArray(S.meta[k])) S.meta[k] = [];
     // 第一次有消息页：以前的评论和赞都算已读，列表里照样能看到
     if (!S.meta.seen) { const t = nowIso(); S.meta.seen = { at: t, comment: t, like: t, follow: t }; saveMeta(); }
     if (!metaRows.some(m => m.id === S.meta.id)) saveMeta();
@@ -1213,16 +1213,14 @@
         ${info.verifiedNote ? `<div class="profile-verify"><span class="v ${vClass(a.verified)}" style="position:static;width:14px;height:14px;display:inline-grid;place-items:center;border-radius:50%;color:#fff;font-size:9px;font-weight:800;font-style:italic">V</span>${esc(info.verifiedNote)}</div>` : ""}
         <div class="profile-bio">简介：${esc(info.bio || "暂无简介")}</div>
         ${info.ip ? `<div class="profile-ip">IP属地：${esc(info.ip)}</div>` : ""}
-        <div class="profile-stats"><span><b>${fmtNum(info.posts)}</b>微博</span><span><b>${fmtNum(info.following)}</b>关注</span><span><b>${fmtNum(info.followers)}</b>粉丝</span></div>
+        <div class="profile-stats"><span><b>${fmtNum(info.posts)}</b>微博</span><span ${info.mine ? 'data-act="open-following"' : ""}><b>${fmtNum(info.following)}</b>关注</span><span ${info.mine ? 'data-act="open-fans"' : ""}><b>${fmtNum(info.followers)}</b>粉丝</span></div>
       </div>`;
   }
-  function renderMe() {
-    if (S.tab !== "me") return;
-    $("#topbar").innerHTML = `<div class="topbar-inner"><span class="top-title">我</span></div>`;
+  /** 我的主页（点头像进）：背景图 + 微博 / 相册 / 赞过 */
+  function myHomeHtml() {
     const a = authorOf({ authorType: "user" });
     const posts = myPosts();
     const liked = S.posts.filter(p => p.liked && p.authorType !== "user").sort((x, y) => new Date(y.likedAt || y.createdAt) - new Date(x.likedAt || x.createdAt));
-    const following = S.chars.filter(c => isFollowingChar(c.id)).length + (S.meta.followNpc || []).length;
     let body = "";
     if (meTab === "posts") body = posts.length ? posts.map(p => cardHtml(p, { showPin: true })).join("") : `<div class="empty"><div class="big">✏️</div>还没有发过微博<div><button class="btn-primary" data-act="compose">发一条</button></div></div>`;
     if (meTab === "album") {
@@ -1230,17 +1228,131 @@
       body = pics.length ? `<div class="album">${pics.join("")}</div>` : `<div class="empty">还没有图片</div>`;
     }
     if (meTab === "liked") body = liked.length ? liked.map(p => cardHtml(p, { noFollow: true })).join("") : `<div class="empty">还没有赞过微博</div>`;
-    $("#view").innerHTML = profileHeaderHtml(a, {
-      cover: COVERS[S.meta.cover || 0], coverRef: S.meta.coverRef, bio: S.meta.bio, ip: S.meta.ip, posts: posts.length, following, followers: S.meta.followers,
+    return profileHeaderHtml(a, {
+      cover: COVERS[S.meta.cover || 0], coverRef: S.meta.coverRef, bio: S.meta.bio, ip: S.meta.ip, posts: posts.length, following: followingCount(), followers: S.meta.followers, mine: true,
       actions: `<button class="btn-ghost icon-only" data-act="open-settings" aria-label="设置">${I.gear}</button><button class="btn-ghost" data-act="edit-me">编辑资料</button>`,
     }) + `<div class="profile-tabs">
         <button class="${meTab === "posts" ? "on" : ""}" data-act="me-tab" data-tab="posts">微博</button>
         <button class="${meTab === "album" ? "on" : ""}" data-act="me-tab" data-tab="album">相册</button>
         <button class="${meTab === "liked" ? "on" : ""}" data-act="me-tab" data-tab="liked">赞过</button>
       </div>${body}`;
+  }
+  function openMyHome() {
+    if (topPage() && topPage().key === "me-home") return;
+    openPage("me-home", pg => { const b = $(".page-body", pg.el); const sc = b.scrollTop; b.innerHTML = myHomeHtml(); b.scrollTop = sc; hydrateImages(b); }, { clearHead: true });
+  }
+  const followingCount = () => S.chars.filter(c => isFollowingChar(c.id)).length + (S.meta.followNpc || []).length;
+  const ME_GRID = [
+    { act: "open-album", label: "我的相册", icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><rect x="3.5" y="4.5" width="17" height="15" rx="2"/><circle cx="9" cy="10" r="1.8"/><path d="m4 18 5-5 4 4 3-3 4 4"/></svg>' },
+    { act: "open-likefav", label: "赞/收藏", icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><path d="M6 3.5h12v17l-6-4-6 4z"/><path d="m12 7 1.2 2.4 2.6.4-1.9 1.8.5 2.6L12 13l-2.4 1.2.5-2.6-1.9-1.8 2.6-.4z"/></svg>' },
+    { act: "open-history", label: "浏览记录", icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></svg>' },
+    { act: "open-drafts", label: "草稿箱", icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><path d="M5 3.5h10l4 4v13H5z"/><path d="M8.5 11h7M8.5 14.5h7M8.5 18h4" stroke-linecap="round"/></svg>' },
+    { act: "open-super", label: "超话社区", icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><path d="M12 3.5 14.6 9l6 .7-4.4 4.1 1.2 5.9L12 16.8l-5.4 2.9 1.2-5.9L3.4 9.7l6-.7z"/></svg>' },
+    { act: "edit-me", label: "编辑资料", icon: I.edit },
+    { act: "open-settings", label: "微博设置", icon: I.gear },
+  ];
+  function renderMe() {
+    if (S.tab !== "me") return;
+    $("#topbar").innerHTML = `<div class="topbar-inner"><span class="top-title">我</span><button class="top-icon" data-act="open-settings" aria-label="设置">${I.gear}</button></div>`;
+    const a = authorOf({ authorType: "user" });
+    const visits = (S.meta.visits || []).slice(0, 12);
+    const visitHtml = visits.length ? visits.map(v => { const va = v.type === "char" ? authorOf({ authorType: "char", charId: v.charId }) : authorOf({ authorType: "npc", authorName: v.name });
+      return `<div class="visit" ${profileAttrs(va)}>${avatarHtml(va)}<span>${esc(va.name)}</span><em>访问${v.count || 1}次</em></div>`; }).join("")
+      : `<div class="visit-empty">点进谁的主页，这里就会记下来</div>`;
+    $("#view").innerHTML = `<div class="me-head" data-act="open-my-home">${avatarHtml(a)}<div class="cell-main">
+        <div class="profile-name ${a.vip ? "vip" : ""}">${esc(a.name)}${a.vip ? I.crown : ""}</div>
+        <div class="me-bio">简介：${esc(S.meta.bio || "暂无简介")}</div></div><span class="me-home-link">我的主页 ›</span></div>
+      <div class="me-stats">
+        <button data-act="open-my-home"><b>${fmtNum(myPosts().length)}</b>微博</button>
+        <button data-act="open-following"><b>${fmtNum(followingCount())}</b>关注</button>
+        <button data-act="open-fans"><b>${fmtNum(S.meta.followers)}</b>粉丝</button>
+        <button data-act="open-visitors"><b>${fmtNum((S.meta.visitors || []).length)}</b>访客</button>
+      </div>
+      <div class="me-grid">${ME_GRID.map(g => `<button data-act="${g.act}">${g.icon}<span>${g.label}</span></button>`).join("")}</div>
+      <div class="me-card"><div class="me-card-head"><b>我的访问记录</b>${visits.length ? `<button data-act="open-visits">查看全部 ›</button>` : ""}</div><div class="visit-row">${visitHtml}</div></div>`;
     hydrateImages($("#view"));
   }
-
+  /** 访问记录：点进谁的主页记一笔（最近 50 个） */
+  function noteVisit(v) {
+    const key = v.type === "char" ? `c_${v.charId}` : `n_${v.name}`;
+    const old = (S.meta.visits || []).find(x => x.key === key);
+    S.meta.visits = [{ ...v, key, at: nowIso(), count: (old ? old.count || 1 : 0) + 1 }, ...(S.meta.visits || []).filter(x => x.key !== key)].slice(0, 50);
+    saveMeta();
+  }
+  function noteHistory(postId) {
+    S.meta.history = [{ id: postId, at: nowIso() }, ...(S.meta.history || []).filter(x => x.id !== postId)].slice(0, 100);
+    saveMeta();
+  }
+  const isFav = id => (S.meta.favs || []).some(f => f.id === id);
+  function personRow(a, extra) {
+    return `<div class="list-cell" ${profileAttrs(a)}>${avatarHtml(a)}<div class="cell-main"><div class="${a.vip ? "vip" : ""}">${esc(a.name)}</div>${extra && extra.sub ? `<div class="cell-sub">${esc(extra.sub)}</div>` : ""}</div>${(extra && extra.right) || ""}</div>`;
+  }
+  function charSub(id) { const acc = S.accounts[id] || {}; return acc.bio || (acc.verifiedNote ? acc.verifiedNote : `TA是${charById(id)?.name || ""}`); }
+  function openListPage(key, title, render) { openPage(key, pg => { const b = $(".page-body", pg.el); const sc = b.scrollTop; b.innerHTML = render(pg); b.scrollTop = sc; hydrateImages(b); }, { title }); }
+  function openFollowing() {
+    openListPage("following", "我的关注", () => {
+      const chars = S.chars.filter(c => isFollowingChar(c.id));
+      const npcs = S.meta.followNpc || [];
+      const rows = [...chars.map(c => personRow(authorOf({ authorType: "char", charId: c.id }), { sub: charSub(c.id), right: `<button class="follow-btn on mutual" data-act="toggle-follow-char" data-char="${esc(c.id)}">互相关注</button>` })),
+        ...npcs.map(n => personRow(authorOf({ authorType: "npc", authorName: n }), { sub: (S.npcs.map[n] || {}).bio || "", right: `<button class="follow-btn on" data-act="toggle-follow-npc" data-name="${esc(n)}">已关注</button>` }))];
+      return rows.length ? `<div class="form-note">共 ${rows.length} 人</div>${rows.join("")}` : `<div class="empty">还没有关注任何人</div>`;
+    });
+  }
+  function openFans() {
+    openListPage("fans", "我的粉丝", () => {
+      const chars = S.chars.filter(c => isFollowingChar(c.id));
+      const fans = (S.meta.fans || []);
+      const rows = [...chars.map(c => personRow(authorOf({ authorType: "char", charId: c.id }), { sub: charSub(c.id), right: `<span class="cell-sub">互相关注</span>` })),
+        ...fans.map(f => personRow(authorOf({ authorType: "npc", authorName: f.name }), { sub: `${fmtTime(f.at)} 关注了你`, right: isFollowingNpc(f.name) ? `<span class="cell-sub">互相关注</span>` : `<button class="follow-btn" data-act="toggle-follow-npc" data-name="${esc(f.name)}">回关</button>` }))];
+      const rest = Math.max(0, (S.meta.followers || 0) - rows.length);
+      return `<div class="form-note">共 ${fmtNum(S.meta.followers)} 位粉丝</div>${rows.join("")}${rest ? `<div class="load-more">还有 ${fmtNum(rest)} 位粉丝</div>` : ""}`;
+    });
+  }
+  function openVisitors() {
+    openListPage("visitors", "访客", () => `<div class="empty"><div class="big">👀</div>谁来看过你的主页，会在「char 自动发博」那期上线<br>到时候 char 偷偷来看你、路人来翻你老底，这里都会记着</div>`);
+  }
+  function openVisits() {
+    openListPage("visits", "我的访问记录", () => {
+      const list = S.meta.visits || [];
+      return list.length ? list.map(v => { const va = v.type === "char" ? authorOf({ authorType: "char", charId: v.charId }) : authorOf({ authorType: "npc", authorName: v.name });
+        return personRow(va, { sub: `${fmtTime(v.at)} · 访问${v.count || 1}次` }); }).join("") : `<div class="empty">还没有访问记录</div>`;
+    });
+  }
+  function openAlbum() {
+    openListPage("album", "我的相册", () => {
+      const pics = myPosts().flatMap(p => (p.images || []).map((img, i) => picTile(img, p.id, i)));
+      return pics.length ? `<div class="album">${pics.join("")}</div>` : `<div class="empty">还没有图片</div>`;
+    });
+  }
+  function openLikeFav() {
+    let tab = "fav";
+    const page = openPage("likefav", pg => {
+      const b = $(".page-body", pg.el);
+      const favs = (S.meta.favs || []).map(f => S.posts.find(p => p.id === f.id)).filter(Boolean);
+      const liked = S.posts.filter(p => p.liked && p.authorType !== "user").sort((x, y) => new Date(y.likedAt || y.createdAt) - new Date(x.likedAt || x.createdAt));
+      const list = tab === "fav" ? favs : liked;
+      b.innerHTML = `<div class="profile-tabs"><button class="${tab === "fav" ? "on" : ""}" data-act="profile-tab" data-tab="fav">收藏 ${favs.length}</button><button class="${tab === "liked" ? "on" : ""}" data-act="profile-tab" data-tab="liked">赞过 ${liked.length}</button></div>`
+        + (list.length ? list.map(p => cardHtml(p, { noFollow: true })).join("") : `<div class="empty">${tab === "fav" ? "还没有收藏，微博右上角「…」里可以收藏" : "还没有赞过微博"}</div>`);
+      hydrateImages(b);
+    }, { title: "赞/收藏" });
+    page.setTab = t => { tab = t; page.render(page); };
+  }
+  function openHistory() {
+    openListPage("history", "浏览记录", () => {
+      const list = (S.meta.history || []).map(h => S.posts.find(p => p.id === h.id)).filter(Boolean);
+      return list.length ? list.map(p => cardHtml(p, { noFollow: true })).join("") + `<div class="form-note"><button class="link" data-act="clear-history">清空浏览记录</button></div>` : `<div class="empty">还没有浏览记录</div>`;
+    });
+  }
+  function openDrafts() {
+    openListPage("drafts", "草稿箱", () => {
+      const list = S.meta.drafts || [];
+      return list.length ? `<div class="form-note">发微博写到一半退出时可以存成草稿（只存文字）</div>` + list.map(d => `<div class="list-cell draft" data-act="open-draft" data-id="${esc(d.id)}"><div class="cell-main"><div class="draft-text">${esc(d.text)}</div><div class="cell-sub">${fmtTime(d.at)}</div></div>
+          <button class="btn-ghost" data-act="del-draft" data-id="${esc(d.id)}">删除</button></div>`).join("") : `<div class="empty">草稿箱是空的</div>`;
+    });
+  }
+  function openSuper() {
+    openListPage("super", "超话社区", () => `<div class="coming"><div class="big">⭐</div><b>超话社区正在装修中</b>你关注的超话、搜超话、推荐超话、char 的个人超话和 CP 超话，下一期见～</div>`);
+  }
   function renderComing(title, icon, what) {
     $("#topbar").innerHTML = `<div class="topbar-inner"><span class="top-title">${title}</span></div>`;
     $("#view").innerHTML = `<div class="coming"><div class="big">${icon}</div><b>${title}正在装修中</b>${what}</div>`;
@@ -1865,7 +1977,7 @@
     renderTab();
   }
   function refreshVisible(post) {
-    for (const p of pages) if (!post || p.key === `detail:${post.id}` || p.key.startsWith("profile") || p.key.startsWith("topic:") || p.key === "search" || p.key === "me") p.render(p);
+    for (const p of pages) if (!post || p.key === `detail:${post.id}` || p.key.startsWith("profile") || p.key.startsWith("topic:") || p.key === "search" || p.key === "me-home" || ["likefav", "history", "album", "following", "fans"].includes(p.key)) p.render(p);
     if (!pages.length || true) { if (S.tab === "home") renderHome(); else if (S.tab === "me") renderMe(); }
   }
   function rerenderDetail(post) { const p = pages.find(x => x.key === `detail:${post.id}`); if (p) p.render(p); }
@@ -1874,6 +1986,7 @@
   // ───────────────────────── 正文页 ─────────────────────────
   function openDetail(postId) {
     const post = S.posts.find(p => p.id === postId); if (!post) return;
+    noteHistory(postId);
     let sort = "hot"; let replyTarget = null;
     const page = openPage(`detail:${postId}`, pg => {
       const p = S.posts.find(x => x.id === postId);
@@ -1953,6 +2066,7 @@
   // ───────────────────────── 角色 / 路人主页 ─────────────────────────
   function openCharProfile(charId) {
     if (!charById(charId)) return;
+    noteVisit({ type: "char", charId });
     let tab = "posts";
     const page = openPage(`profile:${charId}`, pg => {
       const body = $(".page-body", pg.el); const scroll = body.scrollTop;
@@ -1987,6 +2101,7 @@
   }
 
   function openNpcProfile(name) {
+    noteVisit({ type: "npc", name });
     let tab = "posts";
     const page = openPage(`profile-npc:${name}`, pg => {
       const body = $(".page-body", pg.el); const scroll = body.scrollTop;
@@ -2103,7 +2218,7 @@
         <button class="tool" data-act="compose-loc">${I.loc}</button>
         <button class="visibility" data-act="compose-vis"></button></div><div class="emoji-wrap hidden">${emojiPanelHtml()}</div>`,
     });
-    page.draft = draft; page.repostOf = repostOf;
+    page.draft = draft; page.repostOf = repostOf; page.draftId = init && init.draftId; page.initText = init && init.draftId ? "" : (init && init.text) || "";
   }
 
   async function sendCompose(page) {
@@ -2131,6 +2246,8 @@
       if (repostOf.authorType === "char") remember(repostOf.charId, `${S.identity.name || S.meta.nickname}在微博转发了我的微博「${repostOf.text.slice(0, 40)}」，转发语：「${post.text.slice(0, 60)}」`, `weibo_repost_${post.id}`, null, post, repostOf);
     }
     S.posts.push(post); savePost(post); S.allPostRows++;
+    page.sent = true;
+    if (page.draftId) { S.meta.drafts = (S.meta.drafts || []).filter(d => d.id !== page.draftId); saveMeta(); }
     closePage(); toast("发送成功");
     const under = topPage();
     if (under && under.topic) under.setTab("live");
@@ -2255,9 +2372,33 @@
       case "refresh": refreshFeed(); return;
       case "wipe": wipeAll(); return;
       case "feed-more": feedLimit += 30; renderHome(); return;
-      case "back": closePage(); return;
+      case "back": {
+        const pg = topPage();
+        if (pg && pg.key === "compose" && !pg.repostOf && !pg.sent && (pg.draft.text || "").trim() && (pg.draft.text || "").trim() !== (pg.initText || "").trim()) {
+          const v = await sheet("要保存草稿吗？", [{ label: "保存草稿", value: "save" }, { label: "不保存", value: "drop", danger: true }]);
+          if (!v) return;
+          if (v === "save") {
+            const id = pg.draftId || uid("d");
+            S.meta.drafts = [{ id, text: pg.draft.text.trim(), at: nowIso() }, ...(S.meta.drafts || []).filter(d => d.id !== id)].slice(0, 50);
+            saveMeta(); toast("已存到草稿箱");
+          }
+        }
+        closePage(); return;
+      }
       case "open-detail": if (post) openDetail(post.id); return;
-      case "open-me": while (pages.length) closePage(); S.tab = "me"; renderTab(); return;
+      case "open-me": case "open-my-home": openMyHome(); return;
+      case "open-following": openFollowing(); return;
+      case "open-fans": openFans(); return;
+      case "open-visitors": openVisitors(); return;
+      case "open-visits": openVisits(); return;
+      case "open-album": openAlbum(); return;
+      case "open-likefav": openLikeFav(); return;
+      case "open-history": openHistory(); return;
+      case "clear-history": S.meta.history = []; saveMeta(); refreshAll(); return;
+      case "open-drafts": openDrafts(); return;
+      case "open-draft": { const d = (S.meta.drafts || []).find(x => x.id === el.dataset.id); if (d) openCompose(null, { text: d.text, draftId: d.id }); return; }
+      case "del-draft": S.meta.drafts = (S.meta.drafts || []).filter(x => x.id !== el.dataset.id); saveMeta(); refreshAll(); return;
+      case "open-super": openSuper(); return;
       case "open-profile": openCharProfile(el.dataset.char); return;
       case "open-npc": openNpcProfile(el.dataset.name); return;
       case "like": {
@@ -2290,10 +2431,14 @@
         const mine = post.authorType === "user";
         const choice = await sheet("", mine
           ? [{ label: S.meta.pinnedPostId === post.id ? "取消置顶" : "置顶", value: "pin" }, { label: "删除（相关记忆一起删）", value: "del", danger: true }]
-          : [{ label: "收藏", value: "fav" }, { label: "不感兴趣", value: "hide" }, { label: "举报", value: "report" },
+          : [{ label: isFav(post.id) ? "取消收藏" : "收藏", value: "fav" }, { label: "不感兴趣", value: "hide" }, { label: "举报", value: "report" },
             { label: "删除这条微博（相关记忆一起删）", value: "del", danger: true }]);
         if (choice === "hide") { await deletePost(post); toast("将减少此类内容推荐"); refreshAll(); }
-        if (choice === "fav") toast("已收藏");
+        if (choice === "fav") {
+          const on = isFav(post.id);
+          S.meta.favs = on ? S.meta.favs.filter(f => f.id !== post.id) : [{ id: post.id, at: nowIso() }, ...(S.meta.favs || [])];
+          saveMeta(); toast(on ? "已取消收藏" : "已收藏"); refreshAll();
+        }
         if (choice === "report") toast("举报已提交");
         if (choice === "pin") { S.meta.pinnedPostId = S.meta.pinnedPostId === post.id ? null : post.id; saveMeta(); toast(S.meta.pinnedPostId ? "已置顶" : "已取消置顶"); refreshAll(); }
         if (choice === "del") {
@@ -2337,7 +2482,7 @@
         p.comments = p.comments.filter(x => !gone.includes(x)); p.counts.comments = Math.max(0, p.counts.comments - gone.length); savePost(p); rerenderDetail(p); return;
       }
       case "view-pic": { const p = findPost(el.dataset.post); if (p) openViewer(p, +el.dataset.idx); return; }
-      case "me-tab": meTab = el.dataset.tab; renderMe(); return;
+      case "me-tab": meTab = el.dataset.tab; refreshAll(); return;
       case "edit-me": openEditMe(); return;
       case "open-raw": openRaw(); return;
       case "open-settings": openSettings(); return;

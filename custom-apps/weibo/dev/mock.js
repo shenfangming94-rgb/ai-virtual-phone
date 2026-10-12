@@ -239,6 +239,7 @@ IP属地：上海
         calls.push(p); await sleep(400);
         const t = p.appTags.join(",");
         if (window.__MOCK_TEXT && window.__MOCK_TEXT[p.appTags[1]] != null) return { text: window.__MOCK_TEXT[p.appTags[1]] };
+        if (t.includes("charalt")) return { text: (/不要输出 ===主页===/.test(p.instruction) ? "" : `===主页===\n昵称：不想起床的猫\n性别：男\n简介：困\n认证：无\n会员：否\nIP属地：上海\n粉丝：12\n关注：48\n===结束===\n`) + `===微博===\n角色：沈砚\n作者：不想起床的猫\n认证：无\n会员：否\n来源：iPhone 15 Pro\n时间：2026-10-01\n配图：无\n转评赞：0 / 1 / 3\n转发自：无\n原文：无\n转发链：无\n正文：\n又没敢说 下次一定\n===结束===\n===微博===\n角色：沈砚\n作者：不想起床的猫\n认证：无\n会员：否\n来源：iPhone 15 Pro\n时间：2026-09-12\n配图：凌晨的天花板\n转评赞：0 / 0 / 1\n转发自：无\n原文：无\n转发链：无\n正文：\n睡不着\n===结束===` };
         if (t.includes("super")) return { text: /推荐 6 个/.test(p.instruction) ? superRec : /和你有关的超话/.test(p.instruction) ? charSup : superPostsText };
         if (t.includes("dm")) return { text: dmText };
         if (t.includes("npc")) return { text: npcText };

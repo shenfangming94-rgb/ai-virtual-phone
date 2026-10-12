@@ -496,3 +496,6 @@ img { display: block; }
 .super-tag { white-space: nowrap; }
 .super-tag svg { width: 15px; height: 15px; vertical-align: -2px; margin-right: 2px; }
 .csup-rm { flex: none; margin-left: 6px; height: 28px; padding: 0 10px; font-size: 12px; }
+.input-sheet-row { padding: 8px 16px 12px; }
+.input-sheet-row .search-input { width: 100%; height: 40px; font-size: 15px; }
+.sheet-item.ok { color: var(--wb-orange); font-weight: 600; }

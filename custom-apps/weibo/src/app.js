@@ -371,6 +371,18 @@
     });
   }
 
+  /** 应用内输入框（宿主 iframe 里 window.prompt 可能被禁用） */
+  function inputSheet(title, { placeholder = "", value = "", maxlength = 30, ok = "确定" } = {}) {
+    return new Promise(resolve => {
+      const mask = document.createElement("div"); mask.className = "sheet-mask";
+      mask.innerHTML = `<form class="sheet input-sheet" action="#">${title ? `<div class="sheet-title">${esc(title)}</div>` : ""}<div class="input-sheet-row"><input class="search-input" maxlength="${maxlength}" placeholder="${esc(placeholder)}" value="${esc(value)}" enterkeyhint="done"></div><button class="sheet-item ok" type="submit">${esc(ok)}</button><div class="sheet-gap"></div><button class="sheet-item" type="button" data-cancel>取消</button></form>`;
+      const input = $("input", mask); const done = v => { mask.remove(); resolve(v); };
+      $("form", mask).onsubmit = e => { e.preventDefault(); done(input.value.trim()); };
+      mask.onclick = e => { if (e.target === mask || e.target.closest("[data-cancel]")) done(null); };
+      document.body.appendChild(mask); setTimeout(() => input.focus(), 50);
+    });
+  }
+
   // ───────────────────────── AI 输出解析 ─────────────────────────
   const KEYS = ["角色", "作者", "认证", "认证说明", "会员", "来源", "时间", "配图", "转评赞", "转发自", "原文", "转发链", "正文", "编号", "回复", "赞", "内容",
     "性别", "点赞角色", "转发", "路人点赞", "新增粉丝", "昵称", "简介", "IP属地", "粉丝", "关注",
@@ -2149,6 +2161,7 @@
     const charId = page.charId; const ch = charById(charId); if (!ch || page.busy) return;
     page.busy = true; page.render(page);
     const both = isPublic(charId) && isPublic("user"); const one = isPublic(charId) !== isPublic("user");
+    const old = (S.supers.charSupers || {})[charId];
     const instruction = [
       `当前时间：${nowText()}`,
       "这次只输出超话信息，不要输出帖子：列出和你有关的超话、以及你自己常逛的超话。",
@@ -2157,20 +2170,26 @@
         : one ? "你们只有一方是公众人物：只有你们的恋情已经公开、或者剧情里有过曝光和风吹草动，才会有你们的 CP 超话（分类写 CP）；否则不要输出 CP 超话。"
         : "你们都是普通人：只有剧情里你们已经被同学嗑出名了（比如上过学校表白墙），才可能有同学建的 CP 超话（分类写 CP）；否则不要输出 CP 超话。",
       "你常逛的超话 2～4 个（分类写 兴趣 或 学校），按你的人设、爱好、学校来，「相关」写你的本名。",
+      old && (old.haunts || []).length ? `这是重新生成：你之前常逛的是 ${old.haunts.map(n => `「${n}」`).join("")}，这次整个换一批，常逛的超话*不要*再出现这些。关于你的个人/CP 超话照实写。` : "",
       `你的微博昵称：${charNickname(charId)}`,
-    ].join("\n\n");
+    ].filter(Boolean).join("\n\n");
     const text = await generate({ characterId: charId, appTags: ["nox_weibo", "super"], instruction }, `${ch.name}的超话`);
     page.busy = false;
     if (text != null) {
       const about = [], haunts = [];
-      for (const b of parseBlocks(text, "超话")) {
+      const blocks = parseBlocks(text, "超话");
+      if (blocks.length && old) for (const n of [...(old.about || []), ...(old.haunts || [])]) {
+        const sp = getSuper(n); if (sp) sp.rel = String(sp.rel || "").split(/[、,，\s]+/).filter(x => x && x !== ch.name).join("、");
+      }
+      for (const b of blocks) {
         const s = upsertSuper(b); if (!s) continue;
         if (s.kind === "person") { if (!isPublic(charId)) { delete S.supers.map[s.name]; continue; } about.push(s.name); }
         else if (s.kind === "cp") about.push(s.name);
         else haunts.push(s.name);
         if (!String(s.rel || "").includes(ch.name)) s.rel = [s.rel, ch.name].filter(x => x && !none(x)).join("、");
       }
-      S.supers.charSupers = { ...(S.supers.charSupers || {}), [charId]: { about, haunts, at: nowIso() } }; saveSupers();
+      if (about.length || haunts.length) S.supers.charSupers = { ...(S.supers.charSupers || {}), [charId]: { about, haunts, at: nowIso() } };
+      saveSupers();
       if (about.length || haunts.length) noteParsed(`关于TA ${about.length} 个，常逛 ${haunts.length} 个`); else parseFailed(`${ch.name}的超话`);
     }
     page.render(page);
@@ -2681,11 +2700,9 @@
       case "char-super-add": {
         const id = el.dataset.char; const ch = charById(id); if (!ch) return;
         const info = (S.supers.charSupers || {})[id] || { about: [], haunts: [] };
-        const have = new Set([...(info.about || []), ...(info.haunts || [])]);
-        const choices = Object.values(S.supers.map).filter(sp => !have.has(sp.name)).slice(0, 12).map(sp => ({ label: `${sp.name}超话`, value: sp.name }));
-        let name = await sheet(`让${ch.name}关注哪个超话？`, [...choices, { label: "✏️ 输入一个新的超话名", value: "__new" }]);
+        const name = normSuper(await inputSheet(`让${ch.name}关注哪个超话？`, { placeholder: "超话名，不用写「超话」两个字", ok: "关注" }));
         if (!name) return;
-        if (name === "__new") { const v = window.prompt ? window.prompt("超话名（不用写「超话」两个字）", "") : null; name = normSuper(v); if (!name) return; }
+        if ([...(info.about || []), ...(info.haunts || [])].includes(name)) { toast(`${ch.name}已经关注了「${name}超话」`); return; }
         if (!getSuper(name)) S.supers.map[name] = { name, intro: "", kind: "interest", postCount: 0, fans: 0 };
         const sp = getSuper(name);
         if (sp.kind === "person" || sp.kind === "cp") info.about = [...(info.about || []), name]; else info.haunts = [...(info.haunts || []), name];
@@ -2943,7 +2960,7 @@
       }
       case "compose-loc": {
         const pg = topPage();
-        const v = window.prompt ? window.prompt("所在位置", pg.draft.location || "") : null;
+        const v = await inputSheet("所在位置", { value: pg.draft.location || "", placeholder: "如 上海·外滩", ok: "好" });
         if (v != null) { pg.draft.location = v.trim(); pg.render(pg); }
         return;
       }

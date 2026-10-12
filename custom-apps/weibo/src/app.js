@@ -727,7 +727,7 @@
     ].join("\n\n") };
     else if (FORMAT_HINT[scene]) payload = { ...payload, instruction: [
       who, payload.instruction,
-      `【输出要求】这不是聊天回复：不要用聊天格式，不要写旁白、动作或心理描写，不要加任何解释，不要自创字段名或用【】标题，只输出 ${FORMAT_HINT[scene]} 格式的内容，字段名和分隔线照抄「微博」规则里的格式。${scene === "hot" ? "用户是公众人物、或剧情里真的发生了大事时，热搜词条可以和用户有关，但只写事件，不替用户说话。" : "用户本人不能出现在你生成的内容里。"}`,
+      `【输出要求】这不是聊天回复：不要用聊天格式，不要写旁白、动作或心理描写，不要加任何解释，不要自创字段名或用【】标题，只输出 ${FORMAT_HINT[scene]} 格式的内容，字段名和分隔线照抄「微博」规则里的格式。${scene === "hot" ? "用户是公众人物、或剧情里真的发生了大事时，热搜词条可以和用户有关，但只写事件，不替用户说话。" : "用户本人不能出现在你生成的内容里。"}不要用「某人」「某些人」「有些人」暗指谁；不要对用户发号施令或叮嘱（「不准……」「记得……」），人设不是爹系就不能有家长口吻。`,
     ].join("\n\n") };
     try {
       const r = await api.ai.generate(payload);
@@ -929,7 +929,7 @@
     const cast = alt ? [...altKnown.slice(0, 4), ...altStrangers] : sup ? [...lurkers, ...peekers].slice(0, 6) : pickCast(activeChars(), 6);
     const castIds = (cast.length ? cast : pickCast(activeChars(), 1)).map(c => c.id);
     const altPostLine = alt ? [
-      `这是用户用小号「${prof.nickname}」发的${sup ? `「${sup}」超话帖` : "微博"}：小号只有 ${prof.followers} 个粉丝，来互动的人很少，大多是路过的陌生网友${sup ? "（超话里的同好，用圈内的口吻和梗）" : ""}；不会上热搜。`,
+      `这是用户用小号「${prof.nickname}」发的${sup ? `「${sup}」超话帖` : "微博"}：小号只有 ${prof.followers} 个粉丝，来互动的大多是路过的陌生网友（比大号冷清一些，但正常有人回）${sup ? "（超话里的同好，用圈内的口吻和梗）" : ""}；不会上热搜。`,
       altKnown.length ? `${altKnown.map(c => c.name).join("、")} 知道这个小号是用户：刷到了可能来点赞、评论或私信，语气就是平时对用户的语气（可以调侃用户在小号上发的东西），也可以不来。` : "",
       altStrangers.length ? `${altStrangers.map(c => c.name).join("、")} 不知道这个小号是用户：只是偶然刷到一个陌生网友的${sup ? "超话帖" : "微博"}。来不来看内容戳不戳他，大多数时候不来；来了也只当是陌生人，绝对认不出是用户，不私信、不点名用户。` : "",
       cast.length ? "除此之外的角色都看不到这条，绝对不会出现。" : "没有角色会刷到这条，绝对不会出现。",
@@ -949,7 +949,7 @@
       post.images.length ? `配图：${post.images.map(i => i.desc || "一张用户自己上传的照片").join(" | ")}（看不到图片时不要臆测细节）` : "",
       post.location ? `定位：${post.location}` : "",
       topicLine(post),
-      post.visibility === "friends" ? "这条微博仅好友圈可见：只有角色能看到，不要生成路人评论。" : `路人评论 ${alt ? rand(1, 4) : topicsIn(post.text).some(hotItem) ? rand(5, 9) : rand(2, 6)} 条左右${alt ? "，路人点赞个位数到十几个，新增粉丝 0～2 个" : ""}。`,
+      post.visibility === "friends" ? "这条微博仅好友圈可见：只有角色能看到，不要生成路人评论。" : `路人评论 ${alt ? rand(3, 7) : topicsIn(post.text).some(hotItem) ? rand(5, 9) : rand(2, 6)} 条左右${alt ? "，路人点赞十几到几十个，新增粉丝 0～2 个" : ""}。`,
       `可能来互动的角色：\n${charsForPrompt(cast) || "无（没有角色会来）"}`,
       sup || alt ? "" : starredLine(cast),
       reservedLine(),
@@ -993,8 +993,9 @@
     }
     // 超话帖：char 私信只放行三成，免得每次一发帖就有人来
     const isCharDm = b => charByName(b["角色"]) || charByName(b["来自"], true);
-    const dmsOk = alt ? dms.filter(b => { const ch = isCharDm(b); return !ch || knowsAlt(ch.id); })
-      : post.superName && Math.random() > 0.3 ? dms.filter(b => !isCharDm(b)) : dms;
+    const commented = new Set(list.filter(c => c.charId).map(c => c.charId));
+    const dmsOk = alt ? dms.filter(b => { const ch = isCharDm(b); return !ch || (knowsAlt(ch.id) && !commented.has(ch.id)); })
+      : post.superName && Math.random() > 0.3 ? dms.filter(b => !isCharDm(b)) : dms.filter(b => { const ch = isCharDm(b); return !ch || !commented.has(ch.id); });
     if (dmsOk.length) deliverDms(dmsOk, { acct: acctOf(post), about: `看到用户${post.superName ? `在「${post.superName}」超话` : ""}发的「${(post.text || "（图片）").slice(0, 50)}」后来私信`, delay: delay + rand(2000, 6000) });
     setTimeout(refreshMsgViews, delay + 500);
     savePost(fresh); refreshVisible(fresh);
@@ -1046,7 +1047,8 @@
     const alive = () => { const p = S.posts.find(x => x.id === post.id); return p && p.comments.some(c => c.id === userComment.id); };
     if (!alive()) { noteParsed("用户已删除评论，回复作废"); return; }
     const list = commentsFromBlocks(parseComments(text), post, {});
-    const dms = knows ? parseBlocks(text, "私信") : []; const sum = parseBlocks(text, "互动")[0];
+    // 评论区已经回了：私信只偶尔放行，免得回一句评论就追来私信
+    const dms = knows && Math.random() < 0.3 ? parseBlocks(text, "私信") : []; const sum = parseBlocks(text, "互动")[0];
     if (list.length || dms.length) noteParsed(`${list.length} 条回复${dms.length ? `，私信 ${dms.length} 条` : ""}`); else { parseFailed(`${ch.name}回复`); return; }
     const fresh = S.posts.find(p => p.id === post.id); if (!fresh) return;
     likeUserComment(fresh, userComment, sum);
@@ -1141,7 +1143,7 @@
       `微博正文：\n${post.text}`,
       genderLine(post),
       `已有评论（方括号里是编号）：\n${existing || "无"}`,
-      `继续生成 ${altPost ? rand(1, 3) : rand(5, 8)} 条新评论：可以是新的一级评论，也可以回复已有评论（「回复」字段填已有编号）或本次新评论（填本次编号）。新评论的编号用 n1、n2……`,
+      `继续生成 ${altPost ? rand(4, 7) : rand(5, 8)} 条新评论：可以是新的一级评论，也可以回复已有评论（「回复」字段填已有编号）或本次新评论（填本次编号）。新评论的编号用 n1、n2……`,
       `可能来评论的其他角色（符合关系才来）：\n${charsForPrompt(others) || "无"}`,
       reservedLine(),
     ].filter(Boolean).join("\n\n");

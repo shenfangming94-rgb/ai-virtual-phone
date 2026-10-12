@@ -85,6 +85,7 @@
     gear: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 2.8l1.6 2.3 2.8-.5.9 2.7 2.6 1.2-.6 2.8 1.6 2.3-2.1 1.9.2 2.8-2.8.6-1.3 2.5-2.7-.9-2.2 1.7-2.2-1.7-2.7.9-1.3-2.5-2.8-.6.2-2.8-2.1-1.9 1.6-2.3-.6-2.8 2.6-1.2.9-2.7 2.8.5z"/></svg>',
     camera: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M4 8h3l1.5-2.5h7L17 8h3v11H4z"/><circle cx="12" cy="13.5" r="3.3"/></svg>',
     trash: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M9 7V4.5h6V7M6.5 7l1 13h9l1-13M10 11v6M14 11v6"/></svg>',
+    search: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><circle cx="11" cy="11" r="6.5"/><path d="m16 16 4.5 4.5"/></svg>',
     refresh: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 11a8 8 0 1 0-2.3 5.7"/><path d="M20 4v7h-7"/></svg>',
   };
 
@@ -105,6 +106,9 @@
     feedBusy: false,
     jobs: new Set(),
     mediaCache: new Map(),
+    hot: null,           // 当前身份的热搜榜 { id, at, items: [{ title, heat, tag, rel }] }
+    topics: null,        // 当前身份生成过的话题页 { id, map: { 话题: { lead, host, reads, discussions, at } } }
+    hotBusy: false,
   };
 
   async function dbList(c) { try { return (await api.db.list(c, { limit: 500 })) || []; } catch (e) { console.warn(e); return []; } }
@@ -133,6 +137,8 @@
     for (const img of p.images || []) if (img.ref) api.media.delete({ ref: img.ref }).catch(() => {});
   }
   function saveMeta() { if (S.meta) dbUpsert(COL.meta, S.meta).catch(e => console.warn(e)); }
+  function saveHot() { if (S.hot) dbUpsert(COL.meta, S.hot).catch(e => console.warn(e)); }
+  function saveTopics() { if (S.topics) dbUpsert(COL.meta, S.topics).catch(e => console.warn(e)); }
   function saveAccount(charId) {
     const acc = S.accounts[charId]; if (!acc) return;
     dbUpsert(COL.accounts, { ...acc, id: `acc_${charId}`, charId }).catch(e => console.warn(e));
@@ -168,6 +174,8 @@
     S.accounts = {};
     for (const a of accRows) if (a.charId) S.accounts[a.charId] = a;
     S.debug = (metaRows.find(m => m.id === "debug_log") || {}).entries || [];
+    S.hot = metaRows.find(m => m.id === `hot_${S.identity.id}`) || { id: `hot_${S.identity.id}`, at: null, items: [] };
+    S.topics = metaRows.find(m => m.id === `topics_${S.identity.id}`) || { id: `topics_${S.identity.id}`, map: {} };
     S.meta = metaRows.find(m => m.id === `meta_${S.identity.id}`) || {
       id: `meta_${S.identity.id}`,
       nickname: S.identity.name || "微博用户",
@@ -264,7 +272,7 @@
   // ───────────────────────── 文本渲染 ─────────────────────────
   function richText(t) {
     return esc(t)
-      .replace(/#([^#\n]{1,40})#/g, '<span class="link">#$1#</span>')
+      .replace(/#([^#\n]{1,40})#/g, (m0, t) => `<span class="link" data-act="open-topic" data-topic="${t}">#${t}#</span>`)
       .replace(/@([一-龥\w\-·]{1,24})/g, '<span class="link">@$1</span>')
       .replace(/\[([一-龥a-zA-Z]{1,8})\]/g, (m0, k) => EMOJI[k] ? `<span class="emoji" title="[${k}]">${EMOJI[k]}</span>` : `<span class="emo">[${k}]</span>`)
       .replace(/(https?:\/\/[^\s<]+)/g, '<span class="link">🔗网页链接</span>');
@@ -346,16 +354,18 @@
   // ───────────────────────── AI 输出解析 ─────────────────────────
   const KEYS = ["角色", "作者", "认证", "认证说明", "会员", "来源", "时间", "配图", "转评赞", "转发自", "原文", "转发链", "正文", "编号", "回复", "赞", "内容",
     "性别", "点赞角色", "转发", "路人点赞", "新增粉丝", "昵称", "简介", "IP属地", "粉丝", "关注",
+    "热搜词", "热度", "标签", "相关", "导语", "主持人", "阅读", "讨论", "分区", "词条", "热搜", "阅读量", "讨论量",
     // 模型常换的叫法
     "博主昵称", "发博时间", "发布时间", "图片描述", "配图描述", "转评赞数据", "互动数据", "热评列表", "评论列表", "热评", "评论区",
     "微博昵称", "博主", "发布者", "发博人", "用户名", "评论者", "评论人", "角色本名", "本名", "角色名", "微博正文", "评论内容", "回复内容", "正文内容"];
   const ALIAS = { 博主昵称: "作者", 发博时间: "时间", 发布时间: "时间", 图片描述: "配图", 配图描述: "配图", 转评赞数据: "转评赞", 互动数据: "转评赞",
     热评列表: "热评", 评论列表: "热评", 评论区: "热评", 微博昵称: "作者", 博主: "作者", 发布者: "作者", 发博人: "作者", 用户名: "作者", 评论者: "作者", 评论人: "作者",
-    角色本名: "角色", 本名: "角色", 角色名: "角色", 微博正文: "正文", 正文内容: "正文", 评论内容: "内容", 回复内容: "内容" };
+    角色本名: "角色", 本名: "角色", 角色名: "角色", 微博正文: "正文", 正文内容: "正文", 评论内容: "内容", 回复内容: "内容",
+    词条: "热搜词", 热搜: "热搜词", 阅读量: "阅读", 讨论量: "讨论" };
   const KEY_ALT = KEYS.slice().sort((a, b) => b.length - a.length).join("|");
   // 支持「作者：xx」「作者: xx」「[作者]xx」「【作者】：xx」「**作者**：xx」「- 作者：xx」
   const KEY_RE = new RegExp(`^\\s*(?:[-*•]\\s*)?(?:[\\[【]\\s*(${KEY_ALT})\\s*[\\]】]\\s*[：:]?|(${KEY_ALT})\\s*[：:])\\s*(.*)$`);
-  const KINDS = "微博|评论|互动|主页|结束";
+  const KINDS = "微博|评论|互动|主页|热搜|话题|结束";
 
   /** 把模型常见的格式偏差统一成 ===xx=== 块 */
   function normalizeOutput(text) {
@@ -391,7 +401,7 @@
 
   function parseBlocks(raw, kind) {
     const text = normalizeOutput(raw);
-    const bodyKey = { 微博: "正文", 评论: "内容", 互动: "点赞角色", 主页: "昵称" }[kind];
+    const bodyKey = { 微博: "正文", 评论: "内容", 互动: "点赞角色", 主页: "昵称", 热搜: "热搜词", 话题: "导语" }[kind];
     // 按分隔标记切段；标记之外的散段（模型漏写标记）也一并按字段解析，最后按必需字段筛
     const out = [];
     let label = null;
@@ -402,6 +412,7 @@
     }
     if (kind === "互动") return out.filter(f => "点赞角色" in f || "新增粉丝" in f || "转发" in f || "路人点赞" in f).slice(0, 1);
     if (kind === "主页") return out.filter(f => "昵称" in f && ("粉丝" in f || "简介" in f)).slice(0, 1);
+    if (kind === "话题") return out.filter(f => f["导语"] && !f["正文"]).slice(0, 1);
     return out.filter(f => f[bodyKey]);
   }
   const none = v => !v || /^(无|没有|none|null|-|—)$/i.test(String(v).trim());
@@ -414,6 +425,11 @@
     const r = lab(/转发\D{0,3}?([\d.]+\s*[万亿]?)/), c = lab(/评论\D{0,3}?([\d.]+\s*[万亿]?)/), l = lab(/(?:点赞|赞)\D{0,3}?([\d.]+\s*[万亿]?)/);
     if (r != null || c != null || l != null) return { reposts: r || 0, comments: c || 0, likes: l || 0 };
     return parseCountsPlain(s);
+  }
+  function parseNum(x, d = 0) {
+    x = String(x || "").replace(/[,，\s]/g, ""); const n = parseFloat(x);
+    if (!Number.isFinite(n)) return d;
+    return /亿/.test(x) ? Math.round(n * 1e8) : /万/.test(x) ? Math.round(n * 1e4) : Math.round(n);
   }
   function parseCountsPlain(s) {
     const nums = String(s || "").split(/[\/|｜,，、 ]+/).map(x => {
@@ -452,6 +468,7 @@
       images, repost,
       counts: parseCounts(b["转评赞"]),
       liked: false, comments: [], commentsGenerated: false,
+      ...(b["分区"] ? { section: /实时/.test(b["分区"]) ? "live" : "hot" } : {}),
       ...extra,
     };
     if (b["热评"]) {
@@ -570,6 +587,7 @@
   // 规则和输出格式在预设条目里（presets.json，按 nox_weibo 标签命中）；这里只在末尾再提醒一次格式
   const FORMAT_HINT = {
     feed: "===微博===", comments: "===评论===", reaction: "===评论=== 和 ===互动===", reply: "===评论===", profile: "===主页=== 和 ===微博===",
+    hot: "===热搜===", topic: "===话题=== 和 ===微博===", search: "===微博===",
   };
   // 调试记录：最近 10 次 AI 调用，存进 db，关掉 APP 也在
   S.debug = [];
@@ -585,7 +603,7 @@
     const who = `用户的名字是「${S.identity.name || "用户"}」，微博昵称是「${S.meta.nickname}」。`;
     if (FORMAT_HINT[scene]) payload = { ...payload, instruction: [
       who, payload.instruction,
-      `【输出要求】这不是聊天回复：不要用聊天格式，不要写旁白、动作或心理描写，不要加任何解释，不要自创字段名或用【】标题，只输出 ${FORMAT_HINT[scene]} 格式的内容，字段名和分隔线照抄「微博」规则里的格式。用户本人不能出现在你生成的内容里。`,
+      `【输出要求】这不是聊天回复：不要用聊天格式，不要写旁白、动作或心理描写，不要加任何解释，不要自创字段名或用【】标题，只输出 ${FORMAT_HINT[scene]} 格式的内容，字段名和分隔线照抄「微博」规则里的格式。${scene === "hot" ? "用户是公众人物、或剧情里真的发生了大事时，热搜词条可以和用户有关，但只写事件，不替用户说话。" : "用户本人不能出现在你生成的内容里。"}`,
     ].join("\n\n") };
     try {
       const r = await api.ai.generate(payload);
@@ -639,6 +657,8 @@
     S.meta = { id: S.meta.id, nickname: S.identity.name || "微博用户", bio: "", ip: "", cover: 0, followers: rand(18, 120), followNpc: [], unfollowChars: [], pinnedPostId: null,
       excludedChars: S.meta.excludedChars || [], starredChars: S.meta.starredChars || [], avatarPool: S.meta.avatarPool || [], placeholderRef: S.meta.placeholderRef || null };
     saveMeta();
+    S.hot = { id: S.hot.id, at: null, items: [] }; saveHot();
+    S.topics = { id: S.topics.id, map: {} }; saveTopics();
     S.allPostRows = (await dbList(COL.posts)).length;
     S.homeTab = "follow"; feedLimit = 30;
     while (pages.length) closePage();
@@ -754,6 +774,11 @@
     rerenderDetail(post);
   }
 
+  function topicLine(post) {
+    const ts = topicsIn(post.text); if (!ts.length) return "";
+    const hot = ts.filter(hotItem);
+    return `这条微博带了话题 ${ts.map(t => `#${t}#`).join(" ")}${hot.length ? `，其中 ${hot.map(t => `#${t}#`).join(" ")} 正在热搜上：逛话题的路人也会刷到，评论里会有从话题点进来的陌生人` : ""}。`;
+  }
   /** 用户发博后：角色和路人的反应 */
   async function reactToUserPost(post) {
     if (post.visibility === "self" || !activeChars().length) return;
@@ -765,7 +790,8 @@
       post.text || "（无文字）",
       post.images.length ? `配图：${post.images.map(i => i.desc || "一张用户自己上传的照片").join(" | ")}（看不到图片时不要臆测细节）` : "",
       post.location ? `定位：${post.location}` : "",
-      post.visibility === "friends" ? "这条微博仅好友圈可见：只有角色能看到，不要生成路人评论。" : `路人评论 ${rand(2, 6)} 条左右。`,
+      topicLine(post),
+      post.visibility === "friends" ? "这条微博仅好友圈可见：只有角色能看到，不要生成路人评论。" : `路人评论 ${topicsIn(post.text).some(hotItem) ? rand(5, 9) : rand(2, 6)} 条左右。`,
       `可能来互动的角色：\n${charsForPrompt(cast)}`,
       starredLine(cast),
       reservedLine(),
@@ -1041,7 +1067,8 @@
   // ───────────────────────── 首页 ─────────────────────────
   const inFollowFeed = p => p.authorType === "user" || p.followFeed || (p.authorType === "char" && isFollowingChar(p.charId)) || (p.authorType === "npc" && isFollowingNpc(p.authorName));
   function feedPosts() {
-    const list = S.posts.filter(p => p.origin !== "profile" || p.authorType === "user");
+    // 话题页、搜索出来的微博只在那边看，不混进首页
+    const list = S.posts.filter(p => p.authorType === "user" || !["profile", "topic", "search"].includes(p.origin));
     const filtered = S.homeTab === "follow" ? list.filter(inFollowFeed) : list.filter(p => p.authorType === "npc" || p.authorType === "char");
     return filtered.filter(p => p.visibility !== "self" || p.authorType === "user").sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
   }
@@ -1148,6 +1175,247 @@
     $("#view").innerHTML = `<div class="coming"><div class="big">${icon}</div><b>${title}正在装修中</b>${what}</div>`;
   }
 
+  // ───────────────────────── 发现：热搜 / 话题 / 搜索 ─────────────────────────
+  const HOT_COUNT = 20;
+  const TAG_CLASS = { 爆: "boom", 沸: "boil", 热: "hot", 新: "new" };
+  const normTopic = t => String(t || "").replace(/^[#\s]+|[#\s]+$/g, "").slice(0, 40);
+  const hotItem = title => (S.hot.items || []).find(x => x.title === title);
+  const hotRank = title => (S.hot.items || []).findIndex(x => x.title === title) + 1;
+  const topicsIn = text => Array.from(new Set([...String(text || "").matchAll(/#([^#\n]{1,40})#/g)].map(m => normTopic(m[1]))));
+  /** 和话题有关的角色：热搜上标了的，加上名字或昵称出现在话题里的 */
+  function charsOfTopic(title, rel) {
+    const set = new Set();
+    for (const n of String(rel || "").split(/[、,，\s]+/)) { const c = charByName(n, true); if (c) set.add(c); }
+    for (const c of activeChars()) {
+      const nick = S.accounts[c.id] && S.accounts[c.id].nickname;
+      if (title.includes(c.name) || (nick && nick.length >= 2 && title.includes(nick))) set.add(c);
+    }
+    const active = activeChars();
+    return [...set].filter(c => active.includes(c));
+  }
+  function recentFeedLines(n) {
+    return S.posts.filter(p => p.authorType !== "user" && p.origin === "feed").sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)).slice(0, n)
+      .map(p => `- ${authorOf(p).name}：${p.text.slice(0, 40)}`).join("\n");
+  }
+
+  /** 热搜榜：只有点刷新才重新生成 */
+  async function refreshHot() {
+    if (S.hotBusy) return;
+    if (!activeChars().length) { toast("没有参与微博的角色：先去微信加个好友，或在设置里打开角色"); return; }
+    S.hotBusy = true; renderFind();
+    const cast = pickCast(activeChars(), 5);
+    const prev = (S.hot.items || []).map((x, i) => `${i + 1}. ${x.title}`).join("\n");
+    const recent = recentFeedLines(6);
+    const instruction = [
+      `当前时间：${nowText()}`,
+      `本轮生成 ${HOT_COUNT} 条热搜。`,
+      `角色微博昵称：\n${charsForPrompt(cast)}`,
+      "用户是不是公众人物、会不会上热搜，以用户设定为准。",
+      prev ? `上一版热搜（${fmtTime(S.hot.at)}的，隔得近的话有几条还挂在榜上、热度变了，其余换成新的）：\n${prev}` : "",
+      recent ? `首页最近大家在发的（有的可能发酵成热搜）：\n${recent}` : "",
+    ].filter(Boolean).join("\n\n");
+    const text = await generate({ characterIds: cast.map(c => c.id), appTags: ["nox_weibo", "hot"], instruction }, "刷新热搜");
+    S.hotBusy = false;
+    if (text == null) { renderFind(); return; }
+    const seen = new Set();
+    const items = parseBlocks(text, "热搜").map(b => ({
+      title: normTopic(b["热搜词"]), heat: parseNum(b["热度"]),
+      tag: (String(b["标签"] || "").match(/[爆沸热新]/) || [""])[0], rel: none(b["相关"]) ? "" : b["相关"].trim(),
+    })).filter(x => x.title && !seen.has(x.title) && seen.add(x.title)).slice(0, HOT_COUNT);
+    if (!items.length) { renderFind(); parseFailed("刷新热搜"); return; }
+    // 模型漏写热度时按名次补
+    items.forEach((x, i) => { if (!x.heat) x.heat = Math.round(8e6 / (i + 1) + rand(1e4, 9e4)); });
+    items.sort((a, b) => b.heat - a.heat);
+    noteParsed(`${items.length} 条热搜`);
+    S.hot = { ...S.hot, at: nowIso(), items }; saveHot();
+    renderFind(true);
+  }
+
+  function hotRowHtml(x, i) {
+    return `<div class="hot-row" data-act="open-topic" data-topic="${esc(x.title)}"><span class="hot-rank r${i + 1}">${i + 1}</span>
+      <span class="hot-title">${esc(x.title)}</span><span class="hot-heat">${fmtNum(x.heat)}</span>${x.tag ? `<span class="hot-tag ${TAG_CLASS[x.tag]}">${x.tag}</span>` : ""}</div>`;
+  }
+  function renderFind(justRefreshed) {
+    if (S.tab !== "find") return;
+    $("#topbar").innerHTML = `<div class="topbar-inner"><button class="search-box" data-act="open-search">${I.search}<span>搜索微博、用户</span></button></div>`;
+    const items = S.hot.items || [];
+    const head = `<div class="hot-head"><b>🔥 微博热搜</b><span class="hot-time">${S.hot.at ? `${fmtTime(S.hot.at)} 更新` : ""}</span>
+      <button class="hot-refresh" data-act="hot-refresh" ${S.hotBusy ? "disabled" : ""}>${I.refresh}${S.hotBusy ? "刷新中" : "刷新"}</button></div>`;
+    const busy = S.hotBusy ? `<div class="gen-tip"><span class="spinner"></span>正在刷新热搜，看看大家在吃什么瓜…</div>` : "";
+    const list = items.length ? `<div class="hot-list">${items.map(hotRowHtml).join("")}</div>`
+      : S.hotBusy ? "" : `<div class="empty"><div class="big">🔥</div>热搜榜还空着<br>刷新一下看看大家在聊什么
+        <div><button class="btn-primary" data-act="hot-refresh">${I.refresh.replace("<svg", '<svg width="16" height="16"')}生成热搜</button></div></div>`;
+    $("#view").innerHTML = head + busy + list;
+    if (justRefreshed) $("#view").scrollTop = 0;
+  }
+
+  // ── 话题页 ──
+  function topicPosts(title) {
+    const tag = `#${title}#`;
+    return S.posts.filter(p => (p.topic === title || (p.text || "").includes(tag) || (p.repost && (p.repost.text || "").includes(tag)))
+      && (p.visibility !== "self" || p.authorType === "user"));
+  }
+  const heatOf = p => p.counts.likes + p.counts.comments * 3 + p.counts.reposts * 2;
+  function openTopic(title) {
+    title = normTopic(title); if (!title) return;
+    const top = topPage(); if (top && top.key === `topic:${title}`) return;
+    let tab = "hot";
+    const page = openPage(`topic:${title}`, pg => {
+      const body = $(".page-body", pg.el); const scroll = body.scrollTop;
+      const info = S.topics.map[title];
+      const h = hotItem(title); const rank = hotRank(title);
+      const all = topicPosts(title);
+      const list = tab === "hot"
+        ? all.filter(p => p.section !== "live" || p.authorType === "char").sort((a, b) => heatOf(b) - heatOf(a))
+        : all.slice().sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+      const stats = [info && info.reads ? `阅读 ${fmtNum(info.reads)}` : "", info && info.discussions ? `讨论 ${fmtNum(info.discussions)}` : "", rank ? `热搜第 ${rank}` : ""].filter(Boolean).join(" · ");
+      const spin = `<div class="gen-tip"><span class="spinner"></span>${info ? "正在加载更多微博…" : "正在打开话题…"}</div>`;
+      body.innerHTML = `<div class="topic-head">
+          <div class="topic-title">#${esc(title)}#${h && h.tag ? `<span class="hot-tag ${TAG_CLASS[h.tag]}">${h.tag}</span>` : ""}</div>
+          ${stats ? `<div class="topic-stats">${stats}</div>` : ""}
+          ${info && info.lead ? `<div class="topic-lead"><b>导语</b>${richText(info.lead)}${info.host ? `<div class="topic-host">主持人：${esc(info.host)}</div>` : ""}</div>` : ""}
+        </div>
+        <div class="profile-tabs"><button class="${tab === "hot" ? "on" : ""}" data-act="profile-tab" data-tab="hot">热门</button>
+          <button class="${tab === "live" ? "on" : ""}" data-act="profile-tab" data-tab="live">实时</button></div>
+        ${list.map(p => cardHtml(p, { noFollow: true })).join("")}
+        ${pg.busy ? spin
+          : info ? `<button class="load-more" data-act="topic-more">${list.length ? "加载更多微博" : "还没有微博，点这里加载"}</button>`
+          : `<div class="empty">话题还没加载出来<div><button class="btn-primary" data-act="topic-more">重新加载</button></div></div>`}`;
+      body.scrollTop = scroll; hydrateImages(body);
+    }, {
+      title: `#${title}#`,
+      footer: `<div class="topic-join"><button class="btn-primary" data-act="join-topic" data-topic="${esc(title)}">${I.edit.replace("<svg", '<svg width="16" height="16"')}参与话题</button></div>`,
+    });
+    page.topic = title;
+    page.setTab = t => { tab = t; page.render(page); };
+    if (!S.topics.map[title]) genTopic(page, false);
+  }
+
+  async function genTopic(page, more) {
+    const title = page.topic;
+    if (page.busy) return;
+    if (!activeChars().length) { toast("没有参与微博的角色：先去微信加个好友，或在设置里打开角色"); return; }
+    page.busy = true; page.render(page);
+    const h = hotItem(title); const rank = hotRank(title);
+    const related = charsOfTopic(title, h && h.rel);
+    const cast = [...related, ...pickCast(activeChars().filter(c => !related.includes(c)), Math.max(0, 3 - related.length))].slice(0, 4);
+    const existing = topicPosts(title).sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)).slice(0, 8)
+      .map(p => `- ${authorOf(p).name}${p.authorType === "user" ? "（用户本人）" : ""}：${p.text.slice(0, 60)}`).join("\n");
+    const instruction = [
+      `当前时间：${nowText()}`,
+      `话题：#${title}#`,
+      h ? `这是微博热搜第 ${rank} 名，热度 ${fmtNum(h.heat)}${h.tag ? `，标签「${h.tag}」` : ""}。` : "这个话题不在热搜榜上，热度按话题本身来，小话题就冷清一点。",
+      related.length ? `和这个话题有关的角色：${related.map(c => c.name).join("、")}` : "",
+      h && /用户/.test(h.rel) ? `这个话题和用户本人有关（用户的微博昵称「${S.meta.nickname}」）：大家会讨论用户，但用户本人不发言。` : "",
+      `角色微博昵称（已注册的必须沿用）：\n${charsForPrompt(cast)}`,
+      existing ? `话题里已经有的微博（不要重复，${more ? "接着往下聊" : "说法保持一致"}）：\n${existing}` : "",
+      more ? `这次不要输出 ===话题===，只生成 ${rand(5, 7)} 条新的微博，大部分是实时（刚发的）。` : `先输出 ===话题===，再生成 ${rand(7, 9)} 条微博：热门 4 条左右，其余是实时。`,
+      reservedLine(),
+    ].filter(Boolean).join("\n\n");
+    const text = await generate({ characterIds: cast.map(c => c.id), appTags: ["nox_weibo", "topic"], instruction }, "加载话题");
+    page.busy = false;
+    if (text != null) {
+      const tb = parseBlocks(text, "话题")[0];
+      const posts = parseBlocks(text, "微博").filter(b => !isUserName(b["作者"])).map(b => postFromBlock(b, { origin: "topic", topic: title }))
+        .filter(p => p.text || p.images.length || p.repost);
+      if (!S.topics.map[title] && (tb || posts.length)) {
+        const reads = parseNum(tb && tb["阅读"]) || (h ? h.heat * rand(8, 30) : rand(2, 400) * 1e4);
+        S.topics.map[title] = { lead: tb ? tb["导语"].trim() : "", host: tb && !none(tb["主持人"]) ? tb["主持人"].replace(/^@/, "").trim() : "",
+          reads, discussions: parseNum(tb && tb["讨论"]) || Math.round(reads / rand(60, 300)), at: nowIso() };
+        saveTopics();
+      }
+      for (const p of posts) {
+        if (!p.section) p.section = more ? "live" : "hot";
+        if (!p.text.includes(`#${title}#`)) p.text = `#${title}# ${p.text}`;
+        S.posts.push(p); savePost(p); S.allPostRows++; rememberOwnPost(p);
+      }
+      if (posts.length) noteParsed(`${tb ? "导语 + " : ""}${posts.length} 条微博`); else parseFailed("加载话题");
+      pruneIfNeeded();
+    }
+    page.render(page);
+  }
+
+  // ── 搜索 ──
+  function searchUsers(q) {
+    const ql = q.toLowerCase(); const hit = n => n && String(n).toLowerCase().includes(ql);
+    const out = S.chars.filter(c => hit(c.name) || hit(S.accounts[c.id] && S.accounts[c.id].nickname)).map(c => authorOf({ authorType: "char", charId: c.id }));
+    const seen = new Set();
+    for (const p of S.posts) if (p.authorType === "npc" && hit(p.authorName) && !seen.has(p.authorName)) { seen.add(p.authorName); out.push(authorOf(p)); }
+    if (hit(S.meta.nickname)) out.push(authorOf({ authorType: "user" }));
+    return out;
+  }
+  function searchPosts(q) {
+    const ql = q.toLowerCase(); const hit = s => s && String(s).toLowerCase().includes(ql);
+    return S.posts.filter(p => (p.visibility !== "self" || p.authorType === "user")
+      && (hit(p.text) || hit(p.repost && p.repost.text) || hit(authorOf(p).name) || p.searchQuery === q))
+      .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)).slice(0, 80);
+  }
+  function userCellHtml(a) {
+    let sub = "";
+    if (a.type === "char") { const acc = S.accounts[a.charId] || {}; sub = [acc.verifiedNote, acc.followers ? `粉丝 ${fmtNum(acc.followers)}` : "", acc.bio].filter(Boolean).join(" · ") || `TA是${charById(a.charId)?.name || ""}`; }
+    else if (a.type === "user") sub = "我自己";
+    else sub = `微博 ${S.posts.filter(p => p.authorType === "npc" && p.authorName === a.name).length} 条`;
+    return `<div class="list-cell" ${profileAttrs(a)}>${avatarHtml(a)}<div class="cell-main"><div class="${a.vip ? "vip" : ""}">${esc(a.name)}</div><div class="cell-sub">${esc(sub)}</div></div></div>`;
+  }
+  function openSearch(initial) {
+    let q = initial || ""; let tab = "posts";
+    const page = openPage("search", pg => {
+      const body = $(".page-body", pg.el); const scroll = body.scrollTop;
+      if (!q) {
+        const items = (S.hot.items || []).slice(0, 10);
+        body.innerHTML = items.length
+          ? `<div class="form-note">大家都在搜</div><div class="hot-list">${items.map(hotRowHtml).join("")}</div>`
+          : `<div class="empty">搜搜你想看的人和事～<br>站内没有的，还可以点「搜更多」让大家现发</div>`;
+        return;
+      }
+      const users = searchUsers(q); const posts = searchPosts(q);
+      const more = pg.busy ? `<div class="gen-tip"><span class="spinner"></span>正在搜更多「${esc(q)}」…</div>`
+        : `<button class="load-more search-more" data-act="search-more">🔍 搜更多「${esc(q)}」相关微博</button>`;
+      const list = tab === "users"
+        ? (users.length ? users.map(userCellHtml).join("") : `<div class="empty">没有找到相关用户</div>`)
+        : (posts.length ? posts.map(p => cardHtml(p, { noFollow: true })).join("") : `<div class="empty">站内还没有「${esc(q)}」相关的微博</div>`) + more;
+      body.innerHTML = `<div class="profile-tabs"><button class="${tab === "posts" ? "on" : ""}" data-act="profile-tab" data-tab="posts">微博 ${posts.length}</button>
+        <button class="${tab === "users" ? "on" : ""}" data-act="profile-tab" data-tab="users">用户 ${users.length}</button></div>${list}`;
+      body.scrollTop = pg.lastQ === q ? scroll : 0; pg.lastQ = q;
+      hydrateImages(body);
+    }, { title: "", action: `<button class="page-action" data-act="do-search">搜索</button>` });
+    $(".page-title", page.el).outerHTML = `<form class="search-form" action="#"><input class="search-input" type="search" maxlength="40" placeholder="搜索微博、用户" enterkeyhint="search"></form>`;
+    const input = $(".search-input", page.el); input.value = q;
+    page.setTab = t => { tab = t; page.render(page); };
+    page.search = () => { q = input.value.trim(); input.blur(); tab = "posts"; page.render(page); };
+    page.query = () => q;
+    $(".search-form", page.el).addEventListener("submit", e => { e.preventDefault(); page.search(); });
+    if (!q) setTimeout(() => input.focus(), 250);
+  }
+
+  async function searchMore(page) {
+    const q = page.query(); if (!q || page.busy) return;
+    if (!activeChars().length) { toast("没有参与微博的角色：先去微信加个好友，或在设置里打开角色"); return; }
+    page.busy = true; page.render(page);
+    const related = activeChars().filter(c => { const nick = S.accounts[c.id] && S.accounts[c.id].nickname; return q.includes(c.name) || c.name.includes(q) || (nick && (q.includes(nick) || nick.includes(q))); });
+    const cast = [...related, ...pickCast(activeChars().filter(c => !related.includes(c)), Math.max(0, 2 - related.length))].slice(0, 4);
+    const existing = searchPosts(q).slice(0, 8).map(p => `- ${authorOf(p).name}：${p.text.slice(0, 50)}`).join("\n");
+    const instruction = [
+      `当前时间：${nowText()}`,
+      `用户在微博搜索的关键词：「${q}」`,
+      related.length ? `关键词和这些角色有关：${related.map(c => c.name).join("、")}` : "",
+      `角色微博昵称（已注册的必须沿用）：\n${charsForPrompt(cast)}`,
+      existing ? `已经搜到的微博（不要重复）：\n${existing}` : "",
+      `生成 ${rand(6, 8)} 条搜索结果微博。`,
+      reservedLine(),
+    ].filter(Boolean).join("\n\n");
+    const text = await generate({ characterIds: cast.map(c => c.id), appTags: ["nox_weibo", "search"], instruction }, "搜索");
+    page.busy = false;
+    if (text != null) {
+      const posts = parseBlocks(text, "微博").filter(b => !isUserName(b["作者"])).map(b => postFromBlock(b, { origin: "search", searchQuery: q }))
+        .filter(p => p.text || p.images.length || p.repost);
+      for (const p of posts) { S.posts.push(p); savePost(p); S.allPostRows++; rememberOwnPost(p); }
+      if (posts.length) noteParsed(`${posts.length} 条搜索结果`); else parseFailed("搜索");
+      pruneIfNeeded();
+    }
+    page.render(page);
+  }
+
   function renderTabbar() {
     const t = S.tab;
     $("#tabbar").innerHTML = `
@@ -1161,7 +1429,7 @@
     renderTabbar();
     if (S.tab === "home") renderHome();
     else if (S.tab === "me") renderMe();
-    else if (S.tab === "find") renderComing("发现", "🔥", "热搜榜、话题页、搜索会在第二期上线");
+    else if (S.tab === "find") renderFind();
     else renderComing("消息", "💌", "@我的、评论、赞和私信会在第三期上线");
   }
 
@@ -1187,7 +1455,7 @@
     renderTab();
   }
   function refreshVisible(post) {
-    for (const p of pages) if (!post || p.key === `detail:${post.id}` || p.key.startsWith("profile") || p.key === "me") p.render(p);
+    for (const p of pages) if (!post || p.key === `detail:${post.id}` || p.key.startsWith("profile") || p.key.startsWith("topic:") || p.key === "search" || p.key === "me") p.render(p);
     if (!pages.length || true) { if (S.tab === "home") renderHome(); else if (S.tab === "me") renderMe(); }
   }
   function rerenderDetail(post) { const p = pages.find(x => x.key === `detail:${post.id}`); if (p) p.render(p); }
@@ -1329,8 +1597,8 @@
   }
 
   // ───────────────────────── 发微博 ─────────────────────────
-  function openCompose(repostOf) {
-    const draft = { text: "", images: [], location: "", visibility: "public" };
+  function openCompose(repostOf, init) {
+    const draft = { text: (init && init.text) || "", images: [], location: "", visibility: "public" };
     if (repostOf) {
       const a = authorOf(repostOf);
       // 转发转发微博时，接上转发链
@@ -1348,7 +1616,7 @@
         </div>`;
         const ta = $(".compose-text", pg.el); ta.value = draft.text;
         ta.addEventListener("input", () => { draft.text = ta.value; updateSend(); });
-        setTimeout(() => { ta.focus(); ta.setSelectionRange(0, 0); }, 250);
+        setTimeout(() => { ta.focus(); const at = repostOf ? 0 : ta.value.length; ta.setSelectionRange(at, at); }, 250);
       }
       const pics = $(".compose-pics", pg.el);
       pics.innerHTML = draft.images.map((img, i) => `<div class="pic"><img src="${img.dataUrl}" alt=""><button class="rm" data-act="compose-rm" data-idx="${i}">×</button></div>`).join("")
@@ -1402,7 +1670,9 @@
     }
     S.posts.push(post); savePost(post); S.allPostRows++;
     closePage(); toast("发送成功");
-    S.tab = "home"; S.homeTab = "follow"; renderTab();
+    const under = topPage();
+    if (under && under.topic) under.setTab("live");
+    else { S.tab = "home"; S.homeTab = "follow"; renderTab(); }
     setTimeout(() => reactToUserPost(post), rand(2500, 6000));
   }
 
@@ -1662,6 +1932,13 @@
       case "profile-tab": topPage().setTab(el.dataset.tab); return;
       case "char-more": ensureCharProfile(el.dataset.char, true); return;
       case "compose": openCompose(null); return;
+      case "hot-refresh": refreshHot(); return;
+      case "open-topic": openTopic(el.dataset.topic); return;
+      case "topic-more": { const pg = topPage(); if (pg && pg.topic) genTopic(pg, !!S.topics.map[pg.topic]); return; }
+      case "join-topic": openCompose(null, { text: `#${el.dataset.topic}# ` }); return;
+      case "open-search": openSearch(); return;
+      case "do-search": { const pg = topPage(); if (pg && pg.search) pg.search(); return; }
+      case "search-more": searchMore(topPage()); return;
       case "toggle-emoji": { const pg = topPage(); const w = pg && $(".emoji-wrap", pg.el); if (w) w.classList.toggle("hidden"); return; }
       case "insert-emoji": {
         const pg = topPage(); const ta = pg && ($(".compose-text", pg.el) || $(".reply-input", pg.el)); if (!ta) return;

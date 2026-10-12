@@ -2103,8 +2103,15 @@
     openListPage(`likers:${post.id}`, "赞", () => {
       const chars = (post.likedBy || []).map(id => authorOf({ authorType: "char", charId: id }));
       const npcs = (post.npcLikers || []).map(n => authorOf({ authorType: "npc", authorName: n }));
-      const people = [...chars, ...npcs.sort((a, b) => hashNum(post.id + a.name) - hashNum(post.id + b.name))];
       const total = post.counts.likes - (post.liked ? 1 : 0) - (post.likedAlt ? 1 : 0);
+      // 陪跑：再列几个见过的真路人（评论区、粉丝、关注的人、别的微博），小号混在里面不显眼；每条微博挑的人固定
+      const taken = new Set([...(post.npcLikers || []), ...S.chars.map(c => c.name), ...S.chars.map(c => charNickname(c.id)), S.meta.nickname, S.alt && S.alt.nickname].filter(Boolean));
+      const pool = [...new Set([...(post.comments || []).filter(c => c.authorType === "npc" && !c.altOf).map(c => c.authorName),
+        ...(S.meta.fans || []).map(f => f.name), ...(S.meta.followNpc || []),
+        ...S.posts.filter(p => p.authorType === "npc" && !p.altOf).map(p => p.authorName)])].filter(n => n && !taken.has(n) && !altOwner(n));
+      const want = Math.max(0, Math.min(total - chars.length, 4 + hashNum(post.id) % 3) - npcs.length);
+      const decoys = pool.sort((a, b) => hashNum(post.id + a) - hashNum(post.id + b)).slice(0, want).map(n => authorOf({ authorType: "npc", authorName: n }));
+      const people = [...chars, ...[...npcs, ...decoys].sort((a, b) => hashNum(post.id + a.name) - hashNum(post.id + b.name))];
       const rest = Math.max(0, total - people.length);
       return `<div class="note-quote" style="margin:10px 16px">${esc((post.text || "（图片）").slice(0, 60))}</div>`
         + people.map(a => personRow(a, { sub: "赞了这条微博" })).join("")

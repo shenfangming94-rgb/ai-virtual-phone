@@ -281,6 +281,24 @@
   const isStarred = id => (S.meta.starredChars || []).includes(id);
   /** 公众人物：用户在编辑资料里开、角色在微博设置里开（按身份分开存） */
   const isPublic = id => id === "user" ? !!S.meta.publicFigure : (S.meta.publicChars || []).includes(id);
+  // ── 恋情状态（按身份存 S.meta.love[charId] = { state: none|secret|open, announcedAt } ） ──
+  const LOVE_LABEL = { none: "不是恋人", secret: "地下恋", open: "已公开" };
+  const LOVE_NOTE = {
+    none: "按你们现在的关系来，不额外设定",
+    secret: "大号只能暗戳戳：只有你懂的歌词、深夜的月亮、不经意的细节；他绝不在公开场合直接秀",
+    open: "公开很久了，大家早习惯了：自然互动，朋友偶尔起哄，不会每条都刷「99」",
+  };
+  const loveOf = id => ((S.meta.love || {})[id]) || { state: "none" };
+  const loveFresh = id => { const l = loveOf(id); return l.state === "open" && l.announcedAt && Date.now() - new Date(l.announcedAt).getTime() < 3 * 864e5; };
+  /** 告诉 AI 每个人和用户的恋情状态（只写不是「不是恋人」的） */
+  function loveLine() {
+    return S.chars.filter(c => loveOf(c.id).state !== "none" && c.id !== S._announcing).map(c => {
+      const pub = isPublic(c.id); const l = loveOf(c.id);
+      if (l.state === "secret") return `【恋情】${c.name} 和用户在谈恋爱，但*没有公开*（地下恋）：他的大号只能暗戳戳——发只有用户懂的歌词、深夜的月亮、不经意的细节，绝不在公开场合直接秀恩爱，被问也不承认；${pub ? "粉丝会猜、CP 粉会扒细节、有人嗑有人坚决否认" : "同学朋友隐约嗅到不对劲，但没有实锤"}。`;
+      if (loveFresh(c.id)) return `【恋情】${c.name} 和用户${(d => d ? `${d} 天前` : "今天")(Math.floor((Date.now() - new Date(l.announcedAt).getTime()) / 864e5))}刚在微博官宣：评论区还在沸腾，祝福、起哄、「我就知道」${pub ? "、哭着脱粉、黑粉阴阳、营销号搬运" : ""}；他可以大方互动。`;
+      return `【恋情】${c.name} 和用户的恋情*公开很久了*，大家早就习惯：他可以自然地互动、互相 @、偶尔秀一下；朋友${pub ? "和粉丝" : ""}偶尔起哄，大多数时候就正常聊，不会每条互动都刷「99」「锁死」，也不会像刚知道一样惊讶。`;
+    }).join("\n");
+  }
   function publicLine(forHot) {
     const pubs = [S.meta.publicFigure ? `用户（${S.meta.nickname}）` : "", ...S.chars.filter(c => isPublic(c.id)).map(c => c.name)].filter(Boolean);
     const plain = [S.meta.publicFigure ? "" : "用户", ...S.chars.filter(c => !isPublic(c.id)).map(c => c.name)].filter(Boolean);
@@ -791,7 +809,7 @@
     const scene = (payload.appTags || [])[1];
     const inline = typeof INLINE_RULES === "object" && INLINE_RULES[scene];
     if (inline) payload = { ...payload, instruction: `【微博：${scene === "charalt" ? "角色小号" : scene}规则】\n${inline}\n\n${payload.instruction}` };
-    const who = `用户的名字是「${S.identity.name || "用户"}」，微博昵称是「${S.meta.nickname}」。` + (scene === "hot" ? "" : `\n${publicLine(false)}`) + (scene === "hot" || !isAlt() ? "" : `\n${altLine()}`);
+    const who = `用户的名字是「${S.identity.name || "用户"}」，微博昵称是「${S.meta.nickname}」。` + (scene === "hot" ? "" : `\n${publicLine(false)}`) + (loveLine() ? `\n${loveLine()}` : "") + (scene === "hot" || !isAlt() ? "" : `\n${altLine()}`);
     if (scene === "dm") payload = { ...payload, instruction: [
       who, payload.instruction,
       "【输出要求】只输出 ===私信=== 块，一句话一个块，字段名照抄「私信聊天」规则里的格式；不要写旁白、动作或心理描写，不要加任何解释，不能替用户说话。",
@@ -2475,7 +2493,9 @@
       "这次只输出超话信息，不要输出帖子：列出和你有关的超话、以及你自己常逛的超话。",
       isPublic(charId) ? "你是公众人物：有你的个人超话（分类写 个人）。" : "你不是公众人物：*没有*个人超话。",
       both ? `你和用户都是公众人物：你们有 CP 超话（分类写 CP，名称用粉丝会起的 CP 名）。`
-        : one ? "你们只有一方是公众人物：只有你们的恋情已经公开、或者剧情里有过曝光和风吹草动，才会有你们的 CP 超话（分类写 CP）；否则不要输出 CP 超话。"
+        : one ? (loveOf(charId).state === "open" ? "你们的恋情已经公开，有你们的 CP 超话（分类写 CP，名称用粉丝会起的 CP 名）。"
+          : loveOf(charId).state === "secret" ? "你们是地下恋，没公开：只有剧情里有过曝光和风吹草动、被粉丝扒到蛛丝马迹，才会有你们的 CP 超话（分类写 CP）；否则不要输出 CP 超话。"
+          : "你们只有一方是公众人物：只有剧情里有过曝光和风吹草动，才会有你们的 CP 超话（分类写 CP）；否则不要输出 CP 超话。")
         : "你们都是普通人：只有剧情里你们已经被同学嗑出名了（比如上过学校表白墙），才可能有同学建的 CP 超话（分类写 CP）；否则不要输出 CP 超话。",
       "你常逛的超话 2～4 个（分类写 兴趣 或 学校），按你的人设、爱好、学校来，「相关」写你的本名。",
       old && (old.haunts || []).length ? `这是重新生成：你之前常逛的是 ${old.haunts.map(n => `「${n}」`).join("")}，这次整个换一批，常逛的超话*不要*再出现这些。关于你的个人/CP 超话照实写。` : "",
@@ -3063,11 +3083,11 @@
       const charsHtml = S.chars.length ? S.chars.map(c => {
         const a = authorOf({ authorType: "char", charId: c.id });
         const on = !excluded.has(c.id);
-        return `<div class="list-cell">${avatarHtml(a)}<div class="cell-main"><div>${esc(c.name)}</div><div class="cell-sub">${esc(a.name !== c.name ? `微博：${a.name}` : "还没有微博账号")}</div></div>
-          <button class="pub-btn ${calt(c.id) ? "on" : ""}" data-act="char-alt" data-char="${esc(c.id)}">${S[`_galt_${c.id}`] ? "生成中…" : !calt(c.id) ? "+小号" : altSeen(c.id) ? "小号" : "小号🔒"}</button>
-          <button class="pub-btn ${isPublic(c.id) ? "on" : ""}" data-act="toggle-public" data-char="${esc(c.id)}">${isPublic(c.id) ? "公众人物" : "普通人"}</button>
-          <button class="star-btn ${isStarred(c.id) ? "on" : ""}" data-act="toggle-star" data-char="${esc(c.id)}" aria-label="特别关注">${isStarred(c.id) ? "★" : "☆"}</button>
-          <button class="switch ${on ? "on" : ""}" data-act="toggle-part" data-char="${esc(c.id)}" aria-label="参与"><span></span></button></div>`;
+        const love = loveOf(c.id).state;
+        const tags = [isPublic(c.id) ? "公众人物" : "普通人", isStarred(c.id) ? `<em class="ic">★</em> 特别关注` : "", love !== "none" ? `<em class="ic">♥</em> ${LOVE_LABEL[love]}` : ""].filter(Boolean)
+          .map(t => `<i>${t}</i>`).join("") + (calt(c.id) ? `<i class="alt">${altSeen(c.id) ? "小号" : "小号🔒"}</i>` : "");
+        return `<div class="list-cell char-set-row" data-act="open-char-set" data-char="${esc(c.id)}">${avatarHtml(a)}<div class="cell-main"><div>${esc(c.name)}</div><div class="set-tags">${tags}</div></div>
+          <button class="switch ${on ? "on" : ""}" data-act="toggle-part" data-char="${esc(c.id)}" aria-label="参与"><span></span></button><span class="set-chev">›</span></div>`;
       }).join("") : `<div class="empty" style="padding:24px">这个身份还没有角色好友</div>`;
       const pool = S.meta.avatarPool || [];
       const altHtml = isAlt() ? `<div class="form-note">谁知道这个小号「${esc(S.alt.nickname)}」· 打开的人知道是你，会来点赞、评论、私信；没打开的人只把它当陌生网友。${S.alt.posted ? "现在打开算他自己发现的" : "发博前打开算你告诉他的"}（会写进他的记忆，关掉就删掉）</div>
@@ -3076,7 +3096,7 @@
           <button class="switch ${on ? "on" : ""}" data-act="toggle-alt-know" data-char="${esc(c.id)}" aria-label="知道小号"><span></span></button></div>`; }).join("")}
         <div style="height:8px"></div>` : "";
       body.innerHTML = `${altHtml}
-        <div class="form-note">参与的角色 · 开关关掉的人不发微博也不来评论；★ 特别关注的人每次刷新和你发博时一定会被叫到；点「普通人 / 公众人物」切换，公众人物才会上热搜、有粉丝控评；点「+小号」给他生成一个微博小号</div>
+        <div class="form-note">参与的角色 · 开关关掉的人不发微博也不来评论；点那一行进去设置身份、特别关注、小号、恋情状态</div>
         ${charsHtml}
         <div class="list-cell"><div class="cell-main"><div>发博后自动来互动</div><div class="cell-sub">关掉后发完是安静的，想要互动时点「看看有没有人来评论」</div></div>
           <button class="switch ${S.meta.autoReact !== false ? "on" : ""}" data-act="toggle-auto-react" aria-label="发博后自动来互动"><span></span></button></div>
@@ -3090,6 +3110,70 @@
         <div class="form-note" style="text-align:center">微博 v/*__VERSION__*/</div>`;
       body.scrollTop = scroll; hydrateImages(body);
     }, { title: "微博设置" });
+  }
+
+  /** 单个角色的微博设置：参与、特别关注、身份、小号、恋情状态 */
+  function openCharSettings(charId) {
+    const ch = charById(charId); if (!ch) return;
+    openPage(`char-set:${charId}`, pg => {
+      const body = $(".page-body", pg.el); const sc = body.scrollTop;
+      const a = authorOf({ authorType: "char", charId }); const on = !(S.meta.excludedChars || []).includes(charId);
+      const love = loveOf(charId).state; const al = calt(charId);
+      const seg = (act, opts, cur) => `<div class="seg">${opts.map(([v, label]) => `<button class="${v === cur ? "on" : ""}" data-act="${act}" data-char="${esc(charId)}" data-v="${v}">${label}</button>`).join("")}</div>`;
+      const altSub = S[`_galt_${charId}`] ? "生成中…" : !al ? "＋ 给他生成一个小号（会用一次 API）" : al.state === "hidden" ? "🔒 藏着，名字保密（你还没找到）" : `${al.nick} · ${al.state === "open" ? "公开" : "你知道了，他以为你不知道"}`;
+      body.innerHTML = `<div class="cs-head">${avatarHtml(a, 52)}<div><div class="cs-name">${esc(ch.name)}</div><div class="cs-s">${esc(a.name !== ch.name ? `微博：${a.name}` : "还没有微博账号")}</div></div></div>
+        <div class="cs-row cs-flex"><div><div class="cs-t">参与微博</div><div class="cs-s">关掉后他不发微博也不来评论</div></div><button class="switch ${on ? "on" : ""}" data-act="toggle-part" data-char="${esc(charId)}"><span></span></button></div>
+        <div class="cs-row cs-flex"><div><div class="cs-t">★ 特别关注</div><div class="cs-s">刷新和你发博时一定会叫到他</div></div><button class="switch ${isStarred(charId) ? "on" : ""}" data-act="toggle-star" data-char="${esc(charId)}"><span></span></button></div>
+        <div class="cs-row"><div class="cs-t">身份</div>${seg("set-public", [["0", "普通人"], ["1", "公众人物"]], isPublic(charId) ? "1" : "0")}<div class="cs-s">公众人物才会上热搜、有粉丝控评</div></div>
+        <div class="cs-row cs-flex" data-act="char-alt" data-char="${esc(charId)}"><div><div class="cs-t">微博小号</div><div class="cs-s">${esc(altSub)}</div></div><span class="set-chev">›</span></div>
+        <div class="cs-row"><div class="cs-t">恋情状态</div>${seg("set-love", Object.entries(LOVE_LABEL), love)}<div class="cs-s">${love === "open" && loveFresh(charId) ? "刚官宣，前三天评论区沸腾，之后慢慢变成「公开很久了」" : LOVE_NOTE[love]}</div></div>
+        ${love === "secret" ? (pg.busy ? `<div class="gen-tip"><span class="spinner"></span>他正在写官宣微博…</div>` : `<button class="cs-btn" data-act="love-announce" data-char="${esc(charId)}">📢 让他发官宣微博（会用 1～2 次 API）</button>`) : ""}
+        <div class="form-note" style="text-align:center">选「已公开」= 公开很久了，大家早习惯了；点官宣 = 刚官宣，前三天评论区沸腾<br>切换恋情状态会写进他的记忆</div>`;
+      body.scrollTop = sc; hydrateImages(body);
+    }, { title: `${ch.name}的微博设置` });
+  }
+  /** 切换恋情状态：换掉他记忆里的那一条 */
+  function setLove(charId, state, announced) {
+    const ch = charById(charId); if (!ch) return;
+    const who = S.identity.name || S.meta.nickname;
+    S.meta.love = { ...(S.meta.love || {}), [charId]: { state, ...(announced ? { announcedAt: nowIso() } : {}) } };
+    saveMeta();
+    const evt = `weibo_love_${charId}`;
+    forget([{ charId, eventId: evt }]);
+    const text = state === "secret" ? `我和${who}在谈恋爱，但在微博上还没公开，是地下恋：公开场合我只能暗戳戳的`
+      : state === "open" ? (announced ? `我在微博上官宣了和${who}的恋情` : `我和${who}的恋情在微博上早就公开了，大家都知道`) : "";
+    if (text) setTimeout(() => remember(charId, text, evt), 300);
+  }
+  async function announceLove(page, charId) {
+    const ch = charById(charId); if (!ch || page.busy) return;
+    page.busy = true; page.render(page);
+    const nick = charNickname(charId);
+    const instruction = [
+      `当前时间：${nowText()}`,
+      `本轮*只生成 1 条微博*：${ch.name} 本人用大号发的官宣微博，宣布和用户在一起了。不要生成路人微博，不要生成别的角色的微博。`,
+      `按他的人设和说话方式来写：可以 @ 用户的微博昵称「${S.meta.nickname}」，可以配图（合照、牵手、两杯饮料之类，出镜的标注规则照常）。别写成通稿，像他本人会发的样子。`,
+      `他的微博昵称：${nick}`,
+      reservedLine(),
+    ].join("\n\n");
+    S._announcing = charId; // 正在官宣：不再提醒 AI「地下恋不能秀」
+    const text = await generate({ characterId: charId, appTags: ["nox_weibo", "feed"], instruction }, `${ch.name}官宣`).finally(() => { S._announcing = null; });
+    page.busy = false;
+    if (text == null) { page.render(page); return; }
+    const post = parseBlocks(text, "微博").filter(b => !isUserName(b["作者"])).map(b => postFromBlock(b, { origin: "feed", followFeed: true }))
+      .filter(p => p.text || p.images.length).map(p => Object.assign(p, { authorType: "char", charId, authorName: nick, createdAt: nowIso(), loveAnnounce: true }))[0];
+    if (!post) { page.render(page); parseFailed(`${ch.name}官宣`); return; }
+    if (isPublic(charId)) post.counts.likes = Math.max(post.counts.likes, rand(50, 300) * 1000);
+    S.posts.push(post); savePost(post); S.allPostRows++; rememberOwnPost(post);
+    setLove(charId, "open", true);
+    // 公众人物官宣直接上热搜（不花 API）
+    if (isPublic(charId)) {
+      const title = `${ch.name}官宣`;
+      S.hot.items = [{ title, heat: rand(300, 900) * 10000, tag: "爆", rel: `${ch.name}、用户` }, ...(S.hot.items || []).filter(x => x.title !== title)].slice(0, HOT_COUNT);
+      saveHot();
+    }
+    noteParsed(`官宣微博：${post.text.slice(0, 30)}`);
+    page.render(page); refreshAll(); toast(`${ch.name}官宣了！`);
+    openDetail(post.id);
   }
 
   async function pickImages(max, size) {
@@ -3385,6 +3469,21 @@
         const id = el.dataset.char; const on = isPublic(id);
         S.meta.publicChars = on ? S.meta.publicChars.filter(x => x !== id) : [...(S.meta.publicChars || []), id];
         saveMeta(); refreshAll(); return;
+      }
+      case "open-char-set": openCharSettings(el.dataset.char); return;
+      case "set-public": {
+        const id = el.dataset.char; const want = el.dataset.v === "1";
+        if (want !== isPublic(id)) { S.meta.publicChars = want ? [...(S.meta.publicChars || []), id] : (S.meta.publicChars || []).filter(x => x !== id); saveMeta(); }
+        refreshAll(); return;
+      }
+      case "set-love": {
+        const id = el.dataset.char; const v = el.dataset.v; const ch = charById(id); if (!ch || loveOf(id).state === v) return;
+        setLove(id, v, false); toast(v === "none" ? `${ch.name}：不是恋人` : `${ch.name}：${LOVE_LABEL[v]}（已写进他的记忆）`); refreshAll(); return;
+      }
+      case "love-announce": {
+        const pg = topPage(); const id = el.dataset.char; const ch = charById(id); if (!pg || !ch) return;
+        if (await sheet(`让${ch.name}在微博官宣？会发一条官宣微博${isPublic(id) ? "，还会上热搜" : ""}`, [{ label: "官宣！", value: "yes" }]) !== "yes") return;
+        announceLove(pg, id); return;
       }
       case "toggle-auto-react": S.meta.autoReact = S.meta.autoReact === false; saveMeta(); refreshAll(); return;
       case "toggle-part": {

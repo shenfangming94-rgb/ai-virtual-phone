@@ -507,3 +507,20 @@ img { display: block; }
 .sheet-item.ok:disabled { color: var(--wb-text-3); font-weight: 400; }
 .acct-switch { margin-left: 10px; font-size: 12px; padding: 2px 9px; border: 1px solid var(--wb-line); border-radius: 12px; color: var(--wb-text-2); }
 .alt-tag { display: inline-block; margin-left: 6px; padding: 1px 6px; border-radius: 4px; font-size: 11px; font-weight: 400; color: var(--wb-orange); background: rgba(255,130,0,.12); vertical-align: 2px; }
+/* 设置页：每个角色一行，标签 + 参与开关，点进去是他的单独设置 */
+.char-set-row { cursor: pointer; }
+.set-tags { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+.set-tags i { font-style: normal; font-size: 11px; line-height: 18px; padding: 0 6px; border-radius: 4px; background: var(--wb-bg); color: var(--wb-text-3); }
+.set-tags i.alt { background: rgba(255,130,0,.12); color: var(--wb-orange); }
+.set-tags em.ic { font-style: normal; color: #f5a623; }
+.set-chev { flex: none; margin-left: 8px; font-size: 20px; color: var(--wb-text-3); }
+.cs-head { display: flex; align-items: center; gap: 12px; padding: 16px; background: var(--wb-card); }
+.cs-name { font-size: 16px; font-weight: 600; color: var(--wb-text); }
+.cs-row { padding: 12px 16px; background: var(--wb-card); border-top: 1px solid var(--wb-line); }
+.cs-flex { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.cs-t { font-size: 15px; color: var(--wb-text); }
+.cs-s { margin-top: 4px; font-size: 12px; line-height: 1.5; color: var(--wb-text-3); }
+.seg { display: flex; margin-top: 8px; padding: 2px; border-radius: 8px; background: var(--wb-bg); }
+.seg button { flex: 1; padding: 6px 0; border-radius: 6px; font-size: 13px; color: var(--wb-text-2); }
+.seg button.on { background: var(--wb-card); color: var(--wb-orange); font-weight: 600; box-shadow: 0 1px 3px rgba(0,0,0,.08); }
+.cs-btn { display: block; width: calc(100% - 32px); margin: 14px 16px 4px; padding: 11px 0; border-radius: 22px; font-size: 14px; color: #fff; background: linear-gradient(90deg, #ffa53a, #ff8200); }

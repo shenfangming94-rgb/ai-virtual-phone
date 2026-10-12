@@ -22,10 +22,22 @@ function loadUninstalled(): string[] {
     try { return JSON.parse(kvGet(CUSTOM_APPS_UNINSTALLED_KEY) || "[]"); } catch { return []; }
 }
 
+/** 比较版本号：a 比 b 新返回正数（"0.3.2" > "0.2.10"），认不出的数字段按 0 算 */
+function compareVersions(a: string, b: string): number {
+    const pa = String(a || "").split(/[.-]/).map(x => parseInt(x, 10) || 0);
+    const pb = String(b || "").split(/[.-]/).map(x => parseInt(x, 10) || 0);
+    for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
+        const d = (pa[i] || 0) - (pb[i] || 0);
+        if (d) return d;
+    }
+    return 0;
+}
+
 async function syncOne(bundled: BundledApp): Promise<void> {
     const manifestId = normalizeCustomAppManifestId(bundled.id);
     const existing = loadInstalledCustomApps().find(app => app.manifest?.id === manifestId);
-    if (existing ? existing.version === bundled.version : loadUninstalled().includes(manifestId)) return;
+    // 只往新版本升：用户手动换上的测试版比站点自带的新，不能被旧版盖回去
+    if (existing ? compareVersions(bundled.version, existing.version) <= 0 : loadUninstalled().includes(manifestId)) return;
 
     const res = await fetch(bundled.url, { cache: "no-cache" });
     if (!res.ok) throw new Error(`下载 ${bundled.url} 失败：${res.status}`);

@@ -880,7 +880,9 @@
       }, delay);
       delay += rand(1200, 3500);
     }
-    if (dms.length) deliverDms(dms, { about: `看到用户发的微博「${(post.text || "（图片）").slice(0, 50)}」后来私信`, delay: delay + rand(2000, 6000) });
+    // 超话帖：char 私信只放行三成，免得每次一发帖就有人来
+    const dmsOk = post.superName && Math.random() > 0.3 ? dms.filter(b => !charByName(b["角色"]) && !charByName(b["来自"], true)) : dms;
+    if (dmsOk.length) deliverDms(dmsOk, { about: `看到用户${post.superName ? `在「${post.superName}」超话` : ""}发的「${(post.text || "（图片）").slice(0, 50)}」后来私信`, delay: delay + rand(2000, 6000) });
     setTimeout(refreshMsgViews, delay + 500);
     savePost(fresh); refreshVisible(fresh);
     // 让角色记住
@@ -1783,8 +1785,10 @@
       for (const p of mine) {
         const n = p.counts.likes - (p.liked ? 1 : 0); if (n <= 0) continue;
         const names = (p.likedBy || []).map(charNickname);
-        const who = (p.likedBy || []).length ? authorOf({ authorType: "char", charId: p.likedBy[0] }) : { type: "npc", name: "路人", seed: p.id };
-        out.push({ at: p.likeAt || p.createdAt, who, title: likeTitle(names, n), action: "赞了你的微博", text: "", post: p });
+        // 没有角色点赞时，从这条博的路人评论里挑一个名字放前面
+        const npcName = names.length ? "" : ((p.comments || []).find(c => c.authorType === "npc") || {}).authorName;
+        const who = (p.likedBy || []).length ? authorOf({ authorType: "char", charId: p.likedBy[0] }) : npcName ? authorOf({ authorType: "npc", authorName: npcName }) : { type: "npc", name: "路人", seed: p.id };
+        out.push({ at: p.likeAt || p.createdAt, who, title: likeTitle(npcName ? [npcName] : names, n), action: "赞了你的微博", text: "", post: p });
       }
       for (const p of S.posts) for (const c of p.comments || []) {
         if (c.authorType !== "user") continue;
@@ -2015,7 +2019,7 @@
         <div class="find-sec super-rec-head">推荐超话<button class="hot-refresh" data-act="super-rec" ${pg.busy ? "disabled" : ""}>${I.refresh}${pg.busy ? "生成中" : rec.length ? "换一批" : "看看推荐"}</button></div>
         ${pg.busy ? `<div class="gen-tip"><span class="spinner"></span>正在找你可能喜欢的超话…</div>` : ""}
         ${rec.map(superRowHtml).join("") || (pg.busy ? "" : `<div class="list-cell"><div class="cell-sub">点「看看推荐」，按你们的世界和兴趣推荐 6 个超话（会用一次 API）</div></div>`)}`;
-      body.scrollTop = sc;
+      body.scrollTop = sc; hydrateImages(body);
       const form = $(".super-form", body);
       form.addEventListener("submit", e => { e.preventDefault(); q = normSuper($(".search-input", form).value); page.render(page); });
     }, { title: "超话社区" });
@@ -2130,9 +2134,13 @@
       const info = (S.supers.charSupers || {})[charId];
       const body = $(".page-body", pg.el);
       if (!info) { body.innerHTML = pg.busy ? `<div class="gen-tip"><span class="spinner"></span>正在看看TA在逛哪些超话…</div>` : `<div class="empty">还没看过TA的超话<div><button class="btn-primary" data-act="char-supers-gen" data-char="${esc(charId)}">看看（会用一次 API）</button></div></div>`; return; }
-      const rows = names => names.map(getSuper).filter(Boolean).map(superRowHtml).join("");
+      const rows = names => names.map(getSuper).filter(Boolean).map(sp => superRowHtml(sp).replace(/<\/div>$/, `<button class="btn-ghost csup-rm" data-act="char-super-rm" data-char="${esc(charId)}" data-name="${esc(sp.name)}">移除</button></div>`)).join("");
+      const ta = charById(charId)?.name || "TA";
       body.innerHTML = `<div class="find-sec">关于TA的</div>${rows(info.about || []) || `<div class="list-cell"><div class="cell-sub">${isPublic(charId) ? "暂时没有" : "TA不是公众人物，没有个人超话；你们的 CP 超话可以去超话社区搜"}</div></div>`}
-        <div class="find-sec">TA常逛的</div>${rows(info.haunts || []) || `<div class="list-cell"><div class="cell-sub">TA好像不怎么逛超话</div></div>`}`;
+        <div class="find-sec">TA常逛的</div>${rows(info.haunts || []) || `<div class="list-cell"><div class="cell-sub">TA好像不怎么逛超话</div></div>`}
+        <button class="load-more search-more" data-act="char-super-add" data-char="${esc(charId)}">＋ 让${esc(ta)}关注一个超话</button>
+        ${pg.busy ? `<div class="gen-tip"><span class="spinner"></span>重新生成中…</div>` : `<button class="load-more" data-act="char-supers-gen" data-char="${esc(charId)}">重新生成（会用一次 API）</button>`}`;
+      hydrateImages(body);
     }, { title: `${charNickname(charId)}的超话` });
     page.charId = charId;
     if (!(S.supers.charSupers || {})[charId]) genCharSupers(page);
@@ -2663,6 +2671,27 @@
       case "super-post": openCompose(null, { superName: el.dataset.name }); return;
       case "open-char-supers": openCharSupers(el.dataset.char); return;
       case "char-supers-gen": { const pg = topPage(); if (pg && pg.charId) genCharSupers(pg); return; }
+      case "char-super-rm": {
+        const id = el.dataset.char, name = el.dataset.name; const ch = charById(id); const info = (S.supers.charSupers || {})[id]; if (!info || !ch) return;
+        const ok = await sheet(`让${ch.name}不再关注「${name}超话」？`, [{ label: "移除", value: "yes", danger: true }]); if (ok !== "yes") return;
+        info.about = (info.about || []).filter(n => n !== name); info.haunts = (info.haunts || []).filter(n => n !== name);
+        const sp = getSuper(name); if (sp) sp.rel = String(sp.rel || "").split(/[、,，\s]+/).filter(n => n && n !== ch.name).join("、");
+        saveSupers(); refreshAll(); return;
+      }
+      case "char-super-add": {
+        const id = el.dataset.char; const ch = charById(id); if (!ch) return;
+        const info = (S.supers.charSupers || {})[id] || { about: [], haunts: [] };
+        const have = new Set([...(info.about || []), ...(info.haunts || [])]);
+        const choices = Object.values(S.supers.map).filter(sp => !have.has(sp.name)).slice(0, 12).map(sp => ({ label: `${sp.name}超话`, value: sp.name }));
+        let name = await sheet(`让${ch.name}关注哪个超话？`, [...choices, { label: "✏️ 输入一个新的超话名", value: "__new" }]);
+        if (!name) return;
+        if (name === "__new") { const v = window.prompt ? window.prompt("超话名（不用写「超话」两个字）", "") : null; name = normSuper(v); if (!name) return; }
+        if (!getSuper(name)) S.supers.map[name] = { name, intro: "", kind: "interest", postCount: 0, fans: 0 };
+        const sp = getSuper(name);
+        if (sp.kind === "person" || sp.kind === "cp") info.about = [...(info.about || []), name]; else info.haunts = [...(info.haunts || []), name];
+        if (!String(sp.rel || "").includes(ch.name)) sp.rel = [sp.rel, ch.name].filter(x => x && !none(x)).join("、");
+        S.supers.charSupers = { ...(S.supers.charSupers || {}), [id]: info }; saveSupers(); toast(`${ch.name}关注了「${name}超话」`); refreshAll(); return;
+      }
       case "open-profile": openCharProfile(el.dataset.char); return;
       case "open-npc": openNpcProfile(el.dataset.name); return;
       case "like": {

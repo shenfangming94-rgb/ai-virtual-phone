@@ -15,7 +15,8 @@ const js = read("src/app.js").replace("/*__PLACEHOLDER__*/", () => placeholder).
   .replace('"/*__INLINE_RULES__*/"', () => JSON.stringify({ charalt: JSON.parse(read("rules.json")).rules.charalt }));
 const NAMES = { world: "平台规则", feed: "首页刷新", comments: "评论区", reaction: "用户发博后的反应", reply: "回复评论", profile: "角色主页", hot: "热搜榜", topic: "话题页", search: "搜索", npc: "路人主页", dm: "私信聊天", super: "超话", charalt: "角色小号" };
 const presets = Object.entries(rules).map(([scene, content]) => ({
-  id: `weibo-${scene}`, name: `微博：${NAMES[scene] || scene}`, content, enabled: true,
+  // charalt 换了 id：旧 id 在用户预设里可能留下「在条目里、不在排序里」的隐形残留，宿主会当成已存在跳过
+  id: scene === "charalt" ? "weibo-charalt2" : `weibo-${scene}`, name: `微博：${NAMES[scene] || scene}`, content, enabled: true,
   tags: scene === "world" ? ["nox_weibo"] : ["nox_weibo", scene],
 }));
 const fill = mock => tpl.replace("/*__CSS__*/", () => css).replace("/*__JS__*/", () => js).replace("<!--__MOCK__-->", () => mock);

@@ -383,6 +383,59 @@
     });
   }
 
+  /** 分享面板：选一个 char + 可选附言 → { charId, note } */
+  function shareSheet() {
+    return new Promise(resolve => {
+      const chars = S.chars || [];
+      const mask = document.createElement("div"); mask.className = "sheet-mask";
+      mask.innerHTML = `<form class="sheet share-sheet" action="#"><div class="sheet-title">分享给</div>
+        <div class="share-grid">${chars.map(c => `<button type="button" class="share-pick" data-id="${esc(c.id)}">${avatarHtml({ type: "char", avatar: c.avatar, seed: c.id, name: c.name, verified: "无" }, 48)}<span>${esc(c.name)}</span></button>`).join("") || `<div class="cell-sub" style="padding:12px">还没有可以分享的人</div>`}</div>
+        <div class="input-sheet-row"><input class="search-input" maxlength="200" placeholder="说点什么吧（可不填）" enterkeyhint="send"></div>
+        <button class="sheet-item ok" type="submit" disabled>发送</button><div class="sheet-gap"></div><button class="sheet-item" type="button" data-cancel>取消</button></form>`;
+      let picked = null; const send = $(".ok", mask);
+      const done = v => { mask.remove(); resolve(v); };
+      mask.onclick = e => {
+        if (e.target === mask || e.target.closest("[data-cancel]")) return done(null);
+        const b = e.target.closest(".share-pick"); if (!b) return;
+        picked = b.dataset.id; mask.querySelectorAll(".share-pick").forEach(x => x.classList.toggle("on", x === b)); send.disabled = false;
+      };
+      $("form", mask).onsubmit = e => { e.preventDefault(); if (picked) done({ charId: picked, note: $("input", mask).value.trim() }); };
+      document.body.appendChild(mask);
+    });
+  }
+  async function sharePost(post) {
+    const r = await shareSheet(); if (!r) return;
+    const ch = charById(r.charId); if (!ch) return;
+    const a = authorOf(post); const me = S.identity.name || S.meta.nickname || "我";
+    const isHim = post.authorType === "char" && post.charId === ch.id;
+    const imgs = post.images || [];
+    const brief = t => { t = String(t || "").replace(/\s+/g, " ").trim(); return t.length > 90 ? t.slice(0, 90) + "…" : t; };
+    const top = (post.comments || []).filter(c => !c.parentId).slice().sort((x, y) => (y.likes || 0) - (x.likes || 0)).slice(0, 3);
+    const history = [
+      `[微博分享] ${me}在微博刷到一条微博，分享给了${ch.name}${isHim ? "（就是你自己发的这条）" : ""}`,
+      `博主：@${a.name}${post.authorType === "user" ? `（${me}自己的微博）` : post.authorType === "char" && !isHim ? `（${charById(post.charId)?.name || ""}）` : ""}`,
+      post.superName ? `来自「${post.superName}」超话` : "",
+      `正文：${post.text}`,
+      imgs.length ? `配图：${imgs.map(i => i.desc || "图片").join(" | ")}` : "",
+      post.repost ? `转发的原微博 @${post.repost.author}：${post.repost.text}` : "",
+      top.length ? `热评：${top.map(c => `${authorOf(c).name}：${c.text}`).join("；")}` : "",
+    ].filter(Boolean).join("\n");
+    try {
+      await api.chat.sendCard({
+        characterId: ch.id, role: "user", historyRole: "user",
+        summary: `[微博] @${a.name}：${brief(post.text)}`, historyText: history,
+        sceneId: post.id, sceneTag: "weibo_share",
+        card: {
+          appLabel: "微博", title: `@${a.name}`, subtitle: post.superName ? `${post.superName}超话` : "微博",
+          body: brief(post.text) + (imgs.length ? " [图片]" : "") + (post.repost ? `\n//@${post.repost.author}：${brief(post.repost.text)}` : ""),
+          accentColor: "#ff8200",
+        },
+      });
+      if (r.note) await api.chat.sendMessage({ characterId: ch.id, role: "user", content: r.note });
+      toast(`已分享给${ch.name}`);
+    } catch (e) { console.error(e); toast("分享失败：" + (e.message || e)); }
+  }
+
   // ───────────────────────── AI 输出解析 ─────────────────────────
   const KEYS = ["角色", "作者", "认证", "认证说明", "会员", "来源", "时间", "配图", "转评赞", "转发自", "原文", "转发链", "正文", "编号", "回复", "赞", "内容",
     "性别", "点赞角色", "转发", "路人点赞", "新增粉丝", "昵称", "简介", "IP属地", "粉丝", "关注",
@@ -2740,9 +2793,10 @@
         if (!post) return;
         const mine = post.authorType === "user";
         const choice = await sheet("", mine
-          ? [{ label: S.meta.pinnedPostId === post.id ? "取消置顶" : "置顶", value: "pin" }, { label: "删除（相关记忆一起删）", value: "del", danger: true }]
-          : [{ label: isFav(post.id) ? "取消收藏" : "收藏", value: "fav" }, { label: "不感兴趣", value: "hide" }, { label: "举报", value: "report" },
+          ? [{ label: "分享给…", value: "share" }, { label: S.meta.pinnedPostId === post.id ? "取消置顶" : "置顶", value: "pin" }, { label: "删除（相关记忆一起删）", value: "del", danger: true }]
+          : [{ label: "分享给…", value: "share" }, { label: isFav(post.id) ? "取消收藏" : "收藏", value: "fav" }, { label: "不感兴趣", value: "hide" }, { label: "举报", value: "report" },
             { label: "删除这条微博（相关记忆一起删）", value: "del", danger: true }]);
+        if (choice === "share") sharePost(post);
         if (choice === "hide") { await deletePost(post); toast("将减少此类内容推荐"); refreshAll(); }
         if (choice === "fav") {
           const on = isFav(post.id);
@@ -2982,6 +3036,12 @@
     if (!api) { $("#view").innerHTML = `<div class="empty">请在小手机里打开这个 APP</div>`; return; }
     try { await loadAll(); } catch (e) { console.error(e); $("#view").innerHTML = `<div class="empty">加载失败：${esc(e.message || e)}</div>`; return; }
     renderTab();
+    try { // 从聊天里的分享卡片点进来：直接打开那条微博
+      const lc = api.app && api.app.getLaunchContext ? await api.app.getLaunchContext() : null;
+      if (lc && lc.sceneTag === "weibo_share" && lc.sceneId) {
+        if (S.posts.some(p => p.id === lc.sceneId)) openDetail(lc.sceneId); else toast("这条微博已经被删除了");
+      }
+    } catch (e) { console.error(e); }
   }
   boot();
 })();

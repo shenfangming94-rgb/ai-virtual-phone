@@ -1,6 +1,6 @@
 // 本地测试用：模拟小手机宿主的 window.AiPhone，AI 返回固定的样例文本
 (function () {
-  const db = {};
+  const db = window.__SEED_DB || {}; window.__DB = db;
   const col = c => (db[c] = db[c] || []);
   const sleep = ms => new Promise(r => setTimeout(r, ms));
   const media = {};
@@ -271,5 +271,10 @@ IP属地：上海
       async deleteTimeline(p) { calls.push({ forget: p }); return true; },
     },
     ui: { async toast() {} },
+    chat: {
+      async sendCard(p) { (window.__SENT = window.__SENT || []).push({ card: p }); return { messageId: "m1" }; },
+      async sendMessage(p) { (window.__SENT = window.__SENT || []).push({ msg: p }); return { messageId: "m2" }; },
+    },
+    app: { async getLaunchContext() { return window.__LAUNCH || null; } },
   };
 })();

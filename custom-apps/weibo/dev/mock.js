@@ -190,6 +190,9 @@ IP属地：上海
 ===微博===\n分区：实时\n角色：无\n作者：抢票失败第一人\n认证：无\n会员：否\n来源：iPhone 13\n时间：3分钟前\n配图：无\n转评赞：0 / 2 / 5\n转发自：无\n原文：无\n转发链：无\n正文：\n手速练起来了 谁有抢票攻略[允悲]\n===结束===`;
   const searchText = `===微博===\n角色：无\n作者：蛋糕测评小王\n认证：无\n会员：否\n来源：小米14\n时间：昨天 21:30\n配图：无\n转评赞：1 / 3 / 20\n转发自：无\n原文：无\n转发链：无\n正文：\n搜到的蛋糕店真的好吃\n===结束===
 ===微博===\n角色：无\n作者：路过的猫\n认证：无\n会员：否\n来源：iPhone 15\n时间：2025-08-14\n配图：无\n转评赞：0 / 0 / 2\n转发自：无\n原文：无\n转发链：无\n正文：\n蛋糕 yyds\n===结束===`;
+  const npcText = `===主页===\n昵称：吃瓜第一线\n性别：女\n简介：瓜田里的猹 有瓜必吃\n认证：无\n认证说明：无\n会员：是\nIP属地：浙江\n粉丝：1288\n关注：356\n===结束===
+===微博===\n角色：无\n作者：吃瓜第一线\n认证：无\n会员：是\n来源：iPhone 14\n时间：2026-09-30\n配图：无\n转评赞：0 / 3 / 12\n转发自：无\n原文：无\n转发链：无\n正文：\n国庆前最后一天班 摸鱼摸到飞起\n===结束===
+===微博===\n角色：无\n作者：吃瓜第一线\n认证：无\n会员：是\n来源：iPhone 14\n时间：2026-08-02\n配图：猫咪睡觉\n转评赞：1 / 5 / 40\n转发自：无\n原文：无\n转发链：无\n正文：\n我家猫又睡了一整天 羡慕\n===结束===`;
   const calls = [];
   window.__mockCalls = calls;
   window.AiPhone = {
@@ -207,6 +210,7 @@ IP属地：上海
         calls.push(p); await sleep(400);
         const t = p.appTags.join(",");
         if (window.__MOCK_TEXT && window.__MOCK_TEXT[p.appTags[1]] != null) return { text: window.__MOCK_TEXT[p.appTags[1]] };
+        if (t.includes("npc")) return { text: npcText };
         if (t.includes("hot")) return { text: hot };
         if (t.includes("topic")) return { text: topicText };
         if (t.includes("search")) return { text: searchText };

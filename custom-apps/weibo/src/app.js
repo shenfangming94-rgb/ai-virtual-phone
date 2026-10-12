@@ -109,6 +109,7 @@
     hot: null,           // 当前身份的热搜榜 { id, at, items: [{ title, heat, tag, rel }] }
     topics: null,        // 当前身份生成过的话题页 { id, map: { 话题: { lead, host, reads, discussions, at } } }
     hotBusy: false,
+    npcs: null,          // 生成过主页的路人 { id, map: { 昵称: { bio, gender, verified, verifiedNote, vip, ip, followers, following, at } } }
   };
 
   async function dbList(c) { try { return (await api.db.list(c, { limit: 500 })) || []; } catch (e) { console.warn(e); return []; } }
@@ -139,6 +140,7 @@
   function saveMeta() { if (S.meta) dbUpsert(COL.meta, S.meta).catch(e => console.warn(e)); }
   function saveHot() { if (S.hot) dbUpsert(COL.meta, S.hot).catch(e => console.warn(e)); }
   function saveTopics() { if (S.topics) dbUpsert(COL.meta, S.topics).catch(e => console.warn(e)); }
+  function saveNpcs() { if (S.npcs) dbUpsert(COL.meta, S.npcs).catch(e => console.warn(e)); }
   function saveAccount(charId) {
     const acc = S.accounts[charId]; if (!acc) return;
     dbUpsert(COL.accounts, { ...acc, id: `acc_${charId}`, charId }).catch(e => console.warn(e));
@@ -151,7 +153,7 @@
     S.allPostRows = rows.length;
     if (rows.length < MAX_ROWS) return;
     const victims = rows
-      .filter(r => r.authorType === "npc" && !r.liked && !(r.comments || []).some(c => c.authorType === "user"))
+      .filter(r => r.authorType === "npc" && r.origin !== "profile" && !r.liked && !(r.comments || []).some(c => c.authorType === "user"))
       .sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt))
       .slice(0, rows.length - MAX_ROWS + 60);
     for (const v of victims) { try { await api.db.delete(COL.posts, v.id); } catch (e) { /* ignore */ } }
@@ -176,6 +178,7 @@
     S.debug = (metaRows.find(m => m.id === "debug_log") || {}).entries || [];
     S.hot = metaRows.find(m => m.id === `hot_${S.identity.id}`) || { id: `hot_${S.identity.id}`, at: null, items: [] };
     S.topics = metaRows.find(m => m.id === `topics_${S.identity.id}`) || { id: `topics_${S.identity.id}`, map: {} };
+    S.npcs = metaRows.find(m => m.id === `npcs_${S.identity.id}`) || { id: `npcs_${S.identity.id}`, map: {} };
     S.meta = metaRows.find(m => m.id === `meta_${S.identity.id}`) || {
       id: `meta_${S.identity.id}`,
       nickname: S.identity.name || "微博用户",
@@ -235,7 +238,8 @@
     }
     const pool = S.meta.avatarPool || [];
     const npcName = x.authorName || "微博用户";
-    return { type: "npc", name: npcName, verified: x.verified || "无", vip: !!x.vip, avatar: null, seed: npcName,
+    const info = S.npcs && S.npcs.map[npcName];
+    return { type: "npc", name: npcName, verified: (info && info.verified) || x.verified || "无", vip: info ? !!info.vip : !!x.vip, avatar: null, seed: npcName,
       avatarRef: pool.length ? pool[hashNum(npcName) % pool.length] : null };
   }
 
@@ -587,7 +591,7 @@
   // 规则和输出格式在预设条目里（presets.json，按 nox_weibo 标签命中）；这里只在末尾再提醒一次格式
   const FORMAT_HINT = {
     feed: "===微博===", comments: "===评论===", reaction: "===评论=== 和 ===互动===", reply: "===评论===", profile: "===主页=== 和 ===微博===",
-    hot: "===热搜===", topic: "===话题=== 和 ===微博===", search: "===微博===",
+    hot: "===热搜===", topic: "===话题=== 和 ===微博===", search: "===微博===", npc: "===主页=== 和 ===微博===",
   };
   // 调试记录：最近 10 次 AI 调用，存进 db，关掉 APP 也在
   S.debug = [];
@@ -659,6 +663,7 @@
     saveMeta();
     S.hot = { id: S.hot.id, at: null, items: [] }; saveHot();
     S.topics = { id: S.topics.id, map: {}, recent: [] }; saveTopics();
+    S.npcs = { id: S.npcs.id, map: {} }; saveNpcs();
     S.allPostRows = (await dbList(COL.posts)).length;
     S.homeTab = "follow"; feedLimit = 30;
     while (pages.length) closePage();
@@ -1626,22 +1631,73 @@
   function openNpcProfile(name) {
     let tab = "posts";
     const page = openPage(`profile-npc:${name}`, pg => {
-      const body = $(".page-body", pg.el);
+      const body = $(".page-body", pg.el); const scroll = body.scrollTop;
       const posts = S.posts.filter(p => p.authorType === "npc" && p.authorName === name).sort((x, y) => new Date(y.createdAt) - new Date(x.createdAt));
       const sample = posts[0] || { authorType: "npc", authorName: name };
       const a = authorOf(sample);
+      const info = S.npcs.map[name];
       const following = isFollowingNpc(name);
       const fakeFans = (hashHue(name) * 97) % 50000 + (vClass(a.verified) ? 200000 : 300);
-      const list = tab === "posts" ? (posts.map(p => cardHtml(p, { noFollow: true })).join("") || `<div class="empty">暂无微博</div>`)
+      const busy = pg.busy ? `<div class="gen-tip"><span class="spinner"></span>${info ? "加载更早的微博…" : "正在生成TA的主页…"}</div>` : "";
+      const more = !pg.busy && info ? `<button class="load-more" data-act="npc-gen">查看更早的微博</button>` : "";
+      const list = tab === "posts" ? (posts.map(p => cardHtml(p, { noFollow: true })).join("") || (pg.busy ? "" : `<div class="empty">暂无微博</div>`)) + busy + more
         : (() => { const pics = posts.flatMap(p => (p.images || []).map((img, i) => picTile(img, p.id, i))); return pics.length ? `<div class="album">${pics.join("")}</div>` : `<div class="empty">还没有图片</div>`; })();
+      const genBtn = info ? "" : `<button class="follow-btn gen-btn" style="height:32px;padding:0 12px;font-size:14px" data-act="npc-gen" ${pg.busy ? "disabled" : ""}>${pg.busy ? "生成中…" : "✨ 生成主页"}</button>`;
       body.innerHTML = profileHeaderHtml(a, {
-        cover: gradientFor(name + "cover"), bio: "", posts: posts.length + (hashHue(name) % 900), following: hashHue(name) % 300 + 20, followers: fakeFans,
-        actions: `<button class="follow-btn ${following ? "on" : ""}" style="height:32px;padding:0 16px;font-size:14px" data-act="toggle-follow-npc" data-name="${esc(name)}">${following ? "已关注" : "+ 关注"}</button>`,
-      }) + `<div class="profile-tabs"><button class="${tab === "posts" ? "on" : ""}" data-act="profile-tab" data-tab="posts">微博</button>
+        cover: gradientFor(name + "cover"), bio: info ? info.bio : "", ip: info && info.ip, verifiedNote: info && info.verifiedNote,
+        posts: info ? Math.max(posts.length, info.postCount || 0) : posts.length + (hashHue(name) % 900),
+        following: info ? info.following : hashHue(name) % 300 + 20, followers: info ? info.followers : fakeFans,
+        actions: `${genBtn}<button class="follow-btn ${following ? "on" : ""}" style="height:32px;padding:0 16px;font-size:14px" data-act="toggle-follow-npc" data-name="${esc(name)}">${following ? "已关注" : "+ 关注"}</button>`,
+      }) + (info ? "" : `<div class="form-note">点「✨ 生成主页」，按TA发过的微博和评论生成简介、资料和以前的微博（会用一次 API）</div>`)
+        + `<div class="profile-tabs"><button class="${tab === "posts" ? "on" : ""}" data-act="profile-tab" data-tab="posts">微博</button>
           <button class="${tab === "album" ? "on" : ""}" data-act="profile-tab" data-tab="album">相册</button></div>${list}`;
-      hydrateImages(body);
+      body.scrollTop = scroll; hydrateImages(body);
     }, { clearHead: true });
+    page.npc = name;
     page.setTab = t => { tab = t; page.render(page); };
+  }
+
+  /** 路人主页：点了才生成，按他发过的博和评论定人设；生成过的再点就是加载更早的微博 */
+  async function genNpcProfile(page) {
+    const name = page.npc; if (!name || page.busy) return;
+    if (!activeChars().length) { toast("没有参与微博的角色：先去微信加个好友，或在设置里打开角色"); return; }
+    const info = S.npcs.map[name];
+    page.busy = true; page.render(page);
+    const mine = S.posts.filter(p => p.authorType === "npc" && p.authorName === name).sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+    const said = [];
+    for (const p of S.posts) for (const c of p.comments || []) if (c.authorType === "npc" && c.authorName === name) said.push(`- 在 ${authorOf(p).name} 的微博「${p.text.slice(0, 24)}」下评论：${c.text.slice(0, 60)}`);
+    const oldest = mine.length ? mine[mine.length - 1] : null;
+    const instruction = [
+      `当前时间：${nowText()}`,
+      `这个路人的微博昵称：「${name}」${mine[0] && mine[0].verified && !none(mine[0].verified) ? `（认证：${mine[0].verified}，主页的认证必须一致）` : ""}`,
+      mine.length ? `TA发过的微博：\n${mine.slice(0, 8).map(p => `- ${fmtTime(p.createdAt)}：${p.text.slice(0, 80)}`).join("\n")}` : "",
+      said.length ? `TA在别人微博下的评论：\n${said.slice(-10).join("\n")}` : "",
+      !mine.length && !said.length ? "关于TA的信息很少，按昵称推断一个合理的普通网友。" : "",
+      info ? `主页资料已经有了（简介：${info.bio || "无"}），这次不要输出 ===主页===，只写 ${rand(4, 6)} 条更早的历史微博${oldest ? `，时间都早于 ${fmtTime(oldest.createdAt)}` : ""}。`
+        : `写 ${rand(5, 7)} 条历史微博${oldest ? `，时间都早于 ${fmtTime(oldest.createdAt)}` : ""}。`,
+      reservedLine(),
+    ].filter(Boolean).join("\n\n");
+    const text = await generate({ characterIds: pickCast(activeChars(), 1).map(c => c.id), appTags: ["nox_weibo", "npc"], instruction }, "生成路人主页");
+    page.busy = false;
+    if (text != null) {
+      const pb = parseBlocks(text, "主页")[0];
+      if (pb && !info) {
+        S.npcs.map[name] = {
+          bio: none(pb["简介"]) ? "" : pb["简介"], gender: /女/.test(pb["性别"] || "") ? "女" : /男/.test(pb["性别"] || "") ? "男" : "",
+          verified: pb["认证"] || "无", verifiedNote: none(pb["认证说明"]) ? "" : pb["认证说明"], vip: yes(pb["会员"]),
+          ip: none(pb["IP属地"]) ? "" : pb["IP属地"], followers: clampInt(pb["粉丝"], rand(30, 3000)), following: clampInt(pb["关注"], rand(30, 600)), at: nowIso(),
+        };
+      }
+      const posts = parseBlocks(text, "微博").map(b => postFromBlock(b, { origin: "profile" }))
+        .filter(p => p.text || p.images.length || p.repost)
+        .map(p => { p.authorType = "npc"; p.charId = undefined; p.authorName = name; p.verified = (S.npcs.map[name] || {}).verified || p.verified; return p; });
+      spreadHistory(posts, oldest ? new Date(oldest.createdAt).getTime() : Date.now());
+      for (const p of posts) { S.posts.push(p); savePost(p); S.allPostRows++; }
+      if (S.npcs.map[name]) { S.npcs.map[name].postCount = Math.max(S.npcs.map[name].postCount || 0, mine.length + posts.length + rand(20, 400)); saveNpcs(); }
+      if (posts.length || pb) noteParsed(`${pb ? "主页资料 + " : ""}${posts.length} 条历史微博`); else parseFailed("生成路人主页");
+      pruneIfNeeded();
+    }
+    page.render(page);
   }
 
   // ───────────────────────── 发微博 ─────────────────────────
@@ -1983,6 +2039,7 @@
       case "compose": openCompose(null); return;
       case "hot-refresh": refreshHot(); return;
       case "open-hot-all": openHotAll(); return;
+      case "npc-gen": { const pg = topPage(); if (pg && pg.npc) genNpcProfile(pg); return; }
       case "find-more": findLimit += 20; renderFind(); return;
       case "find-tab": findTab = el.dataset.tab; findLimit = 20; renderFind(); return;
       case "open-topic": openTopic(el.dataset.topic); return;

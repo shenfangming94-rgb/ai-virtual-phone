@@ -1982,8 +1982,10 @@
   }
   function addExp(name, n) { const s = getSuper(name); if (!s) return; s.exp = (s.exp || 0) + n; saveSupers(); }
   const superPosts = name => S.posts.filter(p => p.superName === name && (p.visibility !== "self" || p.authorType === "user"));
-  function superIcon(s, size = 44) {
-    return `<div class="super-icon" style="width:${size}px;height:${size}px;background:${gradientFor(s.name)}">${esc(s.name.slice(0, 1))}</div>`;
+  function superIcon(s, size = 44, attrs = "") {
+    return s.iconRef
+      ? `<div class="super-icon" ${attrs} style="width:${size}px;height:${size}px;background:${gradientFor(s.name)}"><img data-ref="${esc(s.iconRef)}" alt=""></div>`
+      : `<div class="super-icon" ${attrs} style="width:${size}px;height:${size}px;background:${gradientFor(s.name)}">${esc(s.name.slice(0, 1))}</div>`;
   }
   function superRowHtml(s) {
     const signed = s.lastSign === dayKey(new Date());
@@ -2054,14 +2056,27 @@
       const posts = superPosts(name);
       const list = tab === "hot" ? posts.slice().sort((a, b) => heatOf(b) - heatOf(a)) : posts.slice().sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
       const signed = s.lastSign === dayKey(new Date()); const lv = superLevel(s.exp || 0);
-      body.innerHTML = `<div class="super-cover" style="background:${gradientFor(name + "super")}"></div>
-        <div class="super-head">${superIcon(s, 64)}<div class="cell-main"><div class="super-title">${esc(name)}超话 <span class="super-kind">${KIND_LABEL[s.kind] || "兴趣"}</span></div>
-          <div class="cell-sub">帖子 ${fmtNum(s.postCount || posts.length)} · 粉丝 ${fmtNum(s.fans || 0)}${s.host ? ` · 主持人 ${esc(s.host)}` : ""}</div></div></div>
+      // 今日签到人数：按粉丝数和日期定一个稳定的数，自己签了再 +1
+      const signers = Math.max(1, Math.round((s.fans || 100) / (40 + (hashNum(name + dayKey(new Date())) % 60)))) + (signed ? 1 : 0);
+      body.innerHTML = `<div class="super-top" ${s.coverRef ? `data-bg-ref="${esc(s.coverRef)}"` : ""} style="background:${gradientFor(name + "super")}">
+        <div class="super-shade"></div>
+        <button class="cover-btn super-cover-btn" data-act="super-cover" data-name="${esc(name)}">${I.camera}换背景</button>
+        <div class="super-top-inner">
+          ${superIcon(s, 76, `data-act="super-icon" data-name="${esc(name)}" title="点击更换头像"`)}
+          <div class="cell-main">
+            <div class="super-title">${esc(name)}<span class="super-badge">超话</span></div>
+            <div class="super-stats"><b>${fmtNum(s.postCount || posts.length)}</b> 帖子<i>|</i><b>${fmtNum(s.fans || 0)}</b> 粉丝</div>
+            <div class="super-chips"><span>${KIND_LABEL[s.kind] || "兴趣"}超话</span><span>今日签到 ${fmtNum(signers)} 人</span></div>
+          </div>
+          <button class="super-sign ${signed ? "done" : ""}" data-act="${s.joined ? "super-sign" : "super-join"}" data-name="${esc(name)}">
+            <span>${signed ? "✓" : s.joined ? "签" : "+"}</span><em>${signed ? "已签到" : s.joined ? "签到" : "加入"}</em></button>
+        </div>
+      </div>
+      <div class="super-info">
+        ${s.host ? `<div class="super-host">主持人：<span class="link">${esc(s.host)}</span></div>` : ""}
         ${s.intro ? `<div class="super-intro">${richText(s.intro)}</div>` : ""}
-        <div class="super-actions">${s.joined
-          ? `<span class="super-lv">LV${lv}</span><span class="cell-sub">经验 ${s.exp || 0}${lv < SUPER_LV.length ? ` / ${SUPER_LV[lv]}` : ""}${s.streak ? ` · 已连续签到 ${s.streak} 天` : ""}</span>
-             <button class="follow-btn ${signed ? "on" : ""}" data-act="super-sign" data-name="${esc(name)}">${signed ? "已签到" : "签到 +4"}</button>`
-          : `<span class="cell-sub">加入后可以签到、升级</span><button class="follow-btn" data-act="super-join" data-name="${esc(name)}">+ 加入</button>`}</div>
+        ${s.joined ? `<div class="super-mine"><span class="super-lv">LV${lv}</span><span>经验 ${s.exp || 0}${lv < SUPER_LV.length ? ` / ${SUPER_LV[lv]}` : ""}</span>${s.streak ? `<span>已连续签到 ${s.streak} 天</span>` : ""}<button class="link" data-act="super-join" data-name="${esc(name)}">退出超话</button></div>` : ""}
+      </div>
         <div class="profile-tabs"><button class="${tab === "new" ? "on" : ""}" data-act="profile-tab" data-tab="new">最新</button><button class="${tab === "hot" ? "on" : ""}" data-act="profile-tab" data-tab="hot">精华</button></div>
         ${list.map(p => cardHtml(p, { noFollow: true })).join("")}
         ${pg.busy ? `<div class="gen-tip"><span class="spinner"></span>${s.generated ? "正在加载更多帖子…" : "正在进入超话…"}</div>`
@@ -2631,6 +2646,17 @@
       case "open-super": if (el.dataset.name) openSuper(el.dataset.name); else openSuperHome(); return;
       case "super-join": { const sp = getSuper(el.dataset.name); if (sp) { sp.joined = !sp.joined; saveSupers(); toast(sp.joined ? "已加入" : "已退出"); refreshAll(); } return; }
       case "super-sign": superSign(el.dataset.name); return;
+      case "super-icon": case "super-cover": {
+        const sp = getSuper(el.dataset.name); if (!sp) return;
+        const isIcon = act === "super-icon";
+        try {
+          const [ref] = await pickImages(1, isIcon ? 400 : 1280); if (!ref) return;
+          const key = isIcon ? "iconRef" : "coverRef";
+          if (sp[key]) api.media.delete({ ref: sp[key] }).catch(() => {});
+          sp[key] = ref; saveSupers(); toast("已更换"); refreshAll();
+        } catch (err) { toast("上传失败"); }
+        return;
+      }
       case "super-rec": { const pg = topPage(); if (pg && pg.superHome) genRecommend(pg); return; }
       case "super-create": openSuper(el.dataset.name); return;
       case "super-more": { const pg = topPage(); if (pg && pg.superName) genSuperPosts(pg, !!(getSuper(pg.superName) || {}).generated); return; }

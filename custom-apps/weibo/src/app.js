@@ -699,7 +699,7 @@
       } else if (!none(replyCode)) {
         const target = idMap[replyCode] || (post.comments || []).find(x => x.code === replyCode) || out.find(x => x._local === replyCode);
         if (target) {
-          c.parentId = target.parentId || target.id; c.replyToName = target.parentId ? target.authorName : "";
+          c.parentId = target.parentId || target.id; c.replyToName = target.parentId ? target.authorName : ""; c.replyToId = target.id;
           const after = new Date(target.createdAt).getTime() + rand(20, 900) * 1000;
           c.createdAt = new Date(Math.min(after, Date.now())).toISOString();
         }
@@ -708,6 +708,24 @@
     }
     for (const c of out) { delete c._local; c.code = nextCode(post); }
     return out;
+  }
+  /** 删一条评论时要一起删的：它自己、它楼里的回复、专门回它的（一层层往下找） */
+  function repliesTo(post, c) {
+    const gone = new Set([c]);
+    if (!c.parentId) for (const x of post.comments) if (x.parentId === c.id) gone.add(x);
+    // 旧数据没有 replyToId：同一楼里、在它之后、回复对象是它作者的，且这楼里它是这个作者唯一一条
+    const sameAuthor = post.comments.filter(x => x.parentId === c.parentId && x.authorName === c.authorName && x.authorType === c.authorType);
+    let grew = true;
+    while (grew) {
+      grew = false;
+      for (const x of post.comments) {
+        if (gone.has(x)) continue;
+        const hit = [...gone].some(g => x.replyToId === g.id)
+          || (c.parentId && !x.replyToId && sameAuthor.length === 1 && x.parentId === c.parentId && x.replyToName === c.authorName && new Date(x.createdAt) >= new Date(c.createdAt));
+        if (hit) { gone.add(x); grew = true; }
+      }
+    }
+    return [...gone];
   }
   function nextCode(post) { post.codeSeq = (post.codeSeq || 0) + 1; return `F${post.codeSeq}`; }
   function codeOf(post, c) { if (!c.code) c.code = nextCode(post); return c.code; }
@@ -1003,11 +1021,14 @@
       const a = calt(c.id); if (!a) continue;
       if (!a.appeared) {
         a.wait = (a.wait == null ? 1 : a.wait) - 1; changed = true;
-        if (a.wait > 0 || fanCount < 2) continue;
-        // 插在这批新粉丝中间，时间也夹在他们之间
-        const fans = S.meta.fans || []; const i = rand(1, Math.min(fanCount, fans.length) - 1);
-        const at = new Date(new Date(fans[i - 1].at).getTime() - 500).toISOString();
-        fans.splice(i, 0, { name: a.nick, at }); S.meta.followers = (S.meta.followers || 0) + 1;
+        if (a.wait > 0) continue;
+        // 有这批新粉丝就插在他们中间（时间也夹在中间），没有就自己悄悄关注
+        const fans = S.meta.fans || (S.meta.fans = []);
+        if (fanCount >= 2 && fans.length >= 2) {
+          const i = rand(1, Math.min(fanCount, fans.length) - 1);
+          fans.splice(i, 0, { name: a.nick, at: new Date(new Date(fans[i - 1].at).getTime() - 500).toISOString() });
+        } else fans.unshift({ name: a.nick, at: new Date(Date.now() + rand(20, 90) * 1000).toISOString() });
+        S.meta.followers = (S.meta.followers || 0) + 1;
         likeAsAlt(post, a.nick);
         const older = shuffle(S.posts.filter(p => p.authorType === "user" && acctOf(p) === "main" && p.id !== post.id && p.visibility !== "self" && p.visibility !== "friends")).slice(0, rand(1, 3));
         for (const p of older) likeAsAlt(p, a.nick);
@@ -1165,7 +1186,7 @@
     likeUserComment(fresh, userComment, sum);
     let delay = rand(1500, 4000);
     for (const c of list) {
-      if (!c.parentId) { c.parentId = userComment.parentId || userComment.id; c.replyToName = nick; }
+      if (!c.parentId) { c.parentId = userComment.parentId || userComment.id; c.replyToName = nick; c.replyToId = userComment.id; }
       setTimeout(() => {
         if (!alive()) return;
         c.createdAt = nowIso(); fresh.comments.push(c); fresh.counts.comments++; savePost(fresh);
@@ -1226,7 +1247,7 @@
     likeUserComment(fresh, userComment, parseBlocks(text, "互动")[0]);
     let delay = rand(1500, 4000);
     for (const c of list) {
-      if (!c.parentId) { c.parentId = userComment.parentId || userComment.id; c.replyToName = nick; }
+      if (!c.parentId) { c.parentId = userComment.parentId || userComment.id; c.replyToName = nick; c.replyToId = userComment.id; }
       if (c.authorName === post.authorName && post.authorType === "npc") c.isPostAuthor = true;
       setTimeout(() => {
         if (!alive()) return;
@@ -2066,7 +2087,7 @@
     openPage(`notes:${type}`, pg => {
       const items = noteItems(type);
       $(".page-body", pg.el).innerHTML = items.length ? items.map(x => {
-        const go = x.post ? `data-act="open-detail" data-post="${esc(x.post.id)}"` : x.who.type === "npc" ? `data-act="open-npc" data-name="${esc(x.who.name)}"` : "";
+        const go = x.post && type === "like" && x.action === "赞了你的微博" ? `data-act="open-likers" data-post="${esc(x.post.id)}"` : x.post ? `data-act="open-detail" data-post="${esc(x.post.id)}"` : x.who.type === "npc" ? `data-act="open-npc" data-name="${esc(x.who.name)}"` : "";
         const quote = x.post ? `<div class="note-quote">${isMe(x.post) ? "我的微博：" : `@${esc(authorOf(x.post).name)}：`}${esc((x.post.text || "（图片）").slice(0, 60))}</div>` : "";
         return `<div class="note-item" ${go}><div ${x.who.type === "char" || (x.who.type === "npc" && x.who.name !== "路人") ? profileAttrs(x.who) : ""}>${avatarHtml(x.who)}</div><div class="cell-main">
           <div class="dm-top"><b>${esc(x.title || x.who.name)}</b><span>${fmtTime(x.at)}</span></div><div class="note-action">${esc(x.action)}</div>
@@ -2075,6 +2096,21 @@
       hydrateImages(pg.el);
     }, { title: def.label });
     S.me.seen = { ...(S.me.seen || {}), [type]: nowIso() }; saveMeta(); renderTabbar(); if (S.tab === "msg") renderMsg();
+  }
+
+  /** 赞过这条微博的人：角色、有名字的路人（小号也混在里面），其余只给人数 */
+  function openLikers(post) {
+    openListPage(`likers:${post.id}`, "赞", () => {
+      const chars = (post.likedBy || []).map(id => authorOf({ authorType: "char", charId: id }));
+      const npcs = (post.npcLikers || []).map(n => authorOf({ authorType: "npc", authorName: n }));
+      const people = [...chars, ...npcs.sort((a, b) => hashNum(post.id + a.name) - hashNum(post.id + b.name))];
+      const total = post.counts.likes - (post.liked ? 1 : 0) - (post.likedAlt ? 1 : 0);
+      const rest = Math.max(0, total - people.length);
+      return `<div class="note-quote" style="margin:10px 16px">${esc((post.text || "（图片）").slice(0, 60))}</div>`
+        + people.map(a => personRow(a, { sub: "赞了这条微博" })).join("")
+        + (rest ? `<div class="load-more">还有 ${fmtNum(rest)} 位路人赞过</div>` : "")
+        + (total > 0 ? "" : `<div class="empty">还没有人赞</div>`);
+    });
   }
 
   function openStrangers() {
@@ -2114,7 +2150,7 @@
     // 点了「戳穿他」又没发：当没发生
     page.opts.onClose = () => { const th = S.threads.find(x => x.key === key); if (th && th.outing) { th.outing = false; saveThread(th); } };
     const input = $(".reply-input", page.el); const send = $(".reply-send", page.el);
-    input.addEventListener("input", () => { send.disabled = !input.value.trim(); input.style.height = "auto"; input.style.height = Math.min(100, input.scrollHeight) + "px"; });
+    input.addEventListener("input", () => { send.disabled = !input.value.trim(); input.style.height = "auto"; input.style.height = Math.min(100, input.scrollHeight) + "px"; if (dmTimers.has(key)) scheduleDmReply(key); });
     send.addEventListener("click", () => {
       const th = S.threads.find(x => x.key === key); const text = input.value.trim(); if (!th || !text) return;
       const msg = { id: uid("m"), from: "me", text, at: nowIso() };
@@ -2125,8 +2161,21 @@
       th.outing = false; saveThread(th);
       input.value = ""; send.disabled = true; input.style.height = "";
       page.render(page); refreshMsgViews();
-      replyDm(th, msg);
+      scheduleDmReply(key);
     });
+  }
+  // 发完私信不马上回：停手几秒（还在打字就继续等）再回，可以连发好几条；点 ✨ 立刻回
+  const dmTimers = new Map();
+  const DM_WAIT = 7000;
+  function scheduleDmReply(key, now) {
+    clearTimeout(dmTimers.get(key)); dmTimers.delete(key);
+    const fire = () => {
+      dmTimers.delete(key);
+      const th = S.threads.find(x => x.key === key); if (!th) return;
+      const last = th.messages[th.messages.length - 1];
+      if (last && last.from === "me") replyDm(th, last);
+    };
+    if (now) fire(); else dmTimers.set(key, setTimeout(fire, DM_WAIT));
   }
 
   const NPC_DM_SYSTEM = [
@@ -2140,9 +2189,14 @@
   async function replyDm(th, msg) {
     if (th._typing) return;
     const lastIsMine = msg && th.messages.length && th.messages[th.messages.length - 1].id === msg.id;
+    // 她连发的几条（上一条对方消息之后的全部）一起回
+    let pendStart = th.messages.length;
+    if (lastIsMine) while (pendStart > 0 && th.messages[pendStart - 1].from === "me") pendStart--;
+    const pending = lastIsMine ? th.messages.slice(pendStart) : [];
+    const pendText = pending.map(m => `「${m.text}」`).join("");
     const aOwner = th.peer.type === "npc" ? altOwner(th.peer.name) : null; // 私信的是 char 的小号
     const pc = th.peer.type === "char" ? th.peer.charId : aOwner;
-    const history = (lastIsMine ? th.messages.slice(-21, -1) : th.messages.slice(-20)).map(m => `${m.from === "me" ? (acctOf(th) === "alt" && !(pc && knowsAlt(pc)) ? S.alt.nickname : "用户") : (pc ? "你" : th.peer.name)}：${m.text}`).join("\n");
+    const history = (lastIsMine ? th.messages.slice(Math.max(0, pendStart - 20), pendStart) : th.messages.slice(-20)).map(m => `${m.from === "me" ? (acctOf(th) === "alt" && !(pc && knowsAlt(pc)) ? S.alt.nickname : "用户") : (pc ? "你" : th.peer.name)}：${m.text}`).join("\n");
     const altDm = acctOf(th) === "alt"; const knows = !altDm || (!!pc && knowsAlt(pc));
     const recentMine = S.posts.filter(p => p.authorType === "user" && acctOf(p) === acctOf(th) && p.visibility !== "self").sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)).slice(0, 2)
       .map(p => `- ${fmtTime(p.createdAt)}：${(p.text || "（图片）").slice(0, 60)}`).join("\n");
@@ -2152,7 +2206,7 @@
       const ch = charById(pc);
       if (!ch) { th._typing = false; refreshMsgViews(); return; }
       const a = aOwner ? calt(aOwner) : null;
-      const outedNow = a && lastIsMine && th.outedMsg === msg.id;
+      const outedNow = a && lastIsMine && pending.some(m => m.id === th.outedMsg);
       const instruction = [
         `当前时间：${nowText()}`,
         a ? [
@@ -2165,7 +2219,7 @@
           : `这是微博私信。你的微博昵称：${charNickname(ch.id)}；用户的微博昵称：${S.meta.nickname}。`,
         recentMine ? `${knows ? "用户" : "这个网友"}最近在微博上发的：\n${recentMine}` : "",
         history ? `你们最近的私信记录：\n${history}` : "这是你们在微博私信里的第一句话。",
-        lastIsMine ? `${knows ? "用户" : "对方"}刚刚发来：「${msg.text}」` : "对方还没有新消息：你接着刚才的话往下说，或者主动找个话题（按你此刻的状态和心情），不要重复你说过的话。",
+        lastIsMine ? `${knows ? "用户" : "对方"}刚刚${pending.length > 1 ? "连着" : ""}发来：${pendText}` : "对方还没有新消息：你接着刚才的话往下说，或者主动找个话题（按你此刻的状态和心情），不要重复你说过的话。",
         a ? `「来自」写「${a.nick}」，「角色」写 无。` : `「来自」写 ${ch.name}，「角色」写 ${ch.name}。`,
       ].filter(Boolean).join("\n\n");
       text = await generate({ characterId: ch.id, appTags: ["nox_weibo", "dm"], instruction }, `${a && !altSeen(aOwner) ? "路人" : ch.name}私信`);
@@ -2174,7 +2228,7 @@
         `你是微博用户「${th.peer.name}」。${th.about ? `你和用户的交集：${th.about}` : "你是用户的一个陌生网友。"}`,
         `用户的微博昵称：${S.me.nickname}，性别：${S.identity.gender || "未知（用 ta 称呼）"}`,
         history ? `你们的私信记录：\n${history}` : "",
-        lastIsMine ? `用户刚刚私信你：「${msg.text}」` : "用户还没有回你：你接着刚才的话往下说，不要重复说过的话。",
+        lastIsMine ? `用户刚刚${pending.length > 1 ? "连着" : ""}私信你：${pendText}` : "用户还没有回你：你接着刚才的话往下说，不要重复说过的话。",
         `「来自」写 ${th.peer.name}，「角色」写 无。`,
         DM_FMT,
       ].filter(Boolean).join("\n\n");
@@ -2195,7 +2249,7 @@
     const replies = lines.slice(0, 5).map(text => ({ id: uid("m"), from: "peer", text, at: null }));
     if (pc && knows && (!aOwner || altOpen(aOwner))) {
       const mine = lastIsMine ? fresh.messages.find(m => m.id === msg.id) : null;
-      remember(pc, lastIsMine ? `${userName()}在微博私信我${aOwner ? `的小号「${th.peer.name}」` : ""}：「${msg.text.slice(0, 60)}」，我回：「${lines.join(" / ").slice(0, 100)}」` : `我在微博私信跟${userName()}说：「${lines.join(" / ").slice(0, 100)}」`,
+      remember(pc, lastIsMine ? `${userName()}在微博私信我${aOwner ? `的小号「${th.peer.name}」` : ""}：${pendText.slice(0, 120)}，我回：「${lines.join(" / ").slice(0, 100)}」` : `我在微博私信跟${userName()}说：「${lines.join(" / ").slice(0, 100)}」`,
         lastIsMine ? `weibo_dm_${msg.id}` : `weibo_dmout_${uid("e")}`, null, mine, ...replies);
       if (mine) saveThread(fresh);
     }
@@ -3270,7 +3324,7 @@
         if (c.authorType === "user") {
           const v = await sheet("", [{ label: "回复", value: "reply" }, { label: "删除（相关记忆一起删）", value: "del", danger: true }]);
           if (v === "del") {
-            const gone = p.comments.filter(x => x.id === c.id || x.parentId === c.id);
+            const gone = repliesTo(p, c);
             forget(gone.flatMap(x => x.memEvents || []));
             p.comments = p.comments.filter(x => !gone.includes(x)); p.counts.comments = Math.max(0, p.counts.comments - gone.length); savePost(p); rerenderDetail(p); refreshMsgViews();
           }
@@ -3292,7 +3346,7 @@
       }
       case "del-cmt": {
         const [p, c] = findComment(el.dataset.cmt); if (!c) return;
-        const gone = p.comments.filter(x => x.id === c.id || x.parentId === c.id);
+        const gone = repliesTo(p, c);
         forget(gone.flatMap(x => x.memEvents || []));
         p.comments = p.comments.filter(x => !gone.includes(x)); p.counts.comments = Math.max(0, p.counts.comments - gone.length); savePost(p); rerenderDetail(p); return;
       }
@@ -3399,6 +3453,7 @@
       case "hot-refresh": refreshHot(); return;
       case "open-hot-all": openHotAll(); return;
       case "open-notes": openNotes(el.dataset.type); return;
+      case "open-likers": { const p = findPost(el.dataset.post); if (p) openLikers(p); return; }
       case "open-strangers": openStrangers(); return;
       case "open-thread": openThread(el.dataset.key); return;
       case "open-dm": {
@@ -3421,6 +3476,7 @@
       }
       case "dm-regen": {
         const pg = topPage(); const th = pg && S.threads.find(x => x.key === pg.thread); if (!th || th._typing) return;
+        if (dmTimers.has(th.key)) { scheduleDmReply(th.key, true); return; }
         const lastMine = [...th.messages].reverse().find(m => m.from === "me");
         replyDm(th, lastMine || null); return;
       }

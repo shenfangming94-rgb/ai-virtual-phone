@@ -763,9 +763,13 @@
   }
   function noteParsed(summary) { if (S.debug[0]) { S.debug[0].parsed = summary; dbUpsert(COL.meta, { id: "debug_log", entries: S.debug }).catch(() => {}); } }
 
+  // 随请求发送的规则（build 时从 rules.json 打进来）：用户预设里没有这条也能生效
+  const INLINE_RULES = "/*__INLINE_RULES__*/";
   async function generate(payload, label, opts = {}) {
     const job = uid("job"); S.jobs.add(job);
     const scene = (payload.appTags || [])[1];
+    const inline = typeof INLINE_RULES === "object" && INLINE_RULES[scene];
+    if (inline) payload = { ...payload, instruction: `【微博：${scene === "charalt" ? "角色小号" : scene}规则】\n${inline}\n\n${payload.instruction}` };
     const who = `用户的名字是「${S.identity.name || "用户"}」，微博昵称是「${S.meta.nickname}」。` + (scene === "hot" ? "" : `\n${publicLine(false)}`) + (scene === "hot" || !isAlt() ? "" : `\n${altLine()}`);
     if (scene === "dm") payload = { ...payload, instruction: [
       who, payload.instruction,

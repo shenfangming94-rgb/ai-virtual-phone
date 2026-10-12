@@ -10,7 +10,9 @@ const tpl = read("src/index.html");
 const css = read("src/style.css");
 const rules = JSON.parse(read("rules.json")).rules;
 const placeholder = "data:image/jpeg;base64," + readFileSync(join(root, "assets/placeholder.jpg")).toString("base64");
-const js = read("src/app.js").replace("/*__PLACEHOLDER__*/", () => placeholder).replace("/*__VERSION__*/", () => JSON.parse(read("manifest.json")).version);
+const js = read("src/app.js").replace("/*__PLACEHOLDER__*/", () => placeholder).replace("/*__VERSION__*/", () => JSON.parse(read("manifest.json")).version)
+  // 新加的规则直接打进 app，随请求发送：不依赖宿主把它挂进用户自己的预设
+  .replace('"/*__INLINE_RULES__*/"', () => JSON.stringify({ charalt: JSON.parse(read("rules.json")).rules.charalt }));
 const NAMES = { world: "平台规则", feed: "首页刷新", comments: "评论区", reaction: "用户发博后的反应", reply: "回复评论", profile: "角色主页", hot: "热搜榜", topic: "话题页", search: "搜索", npc: "路人主页", dm: "私信聊天", super: "超话", charalt: "角色小号" };
 const presets = Object.entries(rules).map(([scene, content]) => ({
   id: `weibo-${scene}`, name: `微博：${NAMES[scene] || scene}`, content, enabled: true,

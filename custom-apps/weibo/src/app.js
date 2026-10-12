@@ -192,7 +192,7 @@
       unfollowChars: [],
       pinnedPostId: null,
     };
-    for (const k of ["excludedChars", "starredChars", "avatarPool", "fans"]) if (!Array.isArray(S.meta[k])) S.meta[k] = [];
+    for (const k of ["excludedChars", "starredChars", "avatarPool", "fans", "publicChars"]) if (!Array.isArray(S.meta[k])) S.meta[k] = [];
     // 第一次有消息页：以前的评论和赞都算已读，列表里照样能看到
     if (!S.meta.seen) { const t = nowIso(); S.meta.seen = { at: t, comment: t, like: t, follow: t }; saveMeta(); }
     if (!metaRows.some(m => m.id === S.meta.id)) saveMeta();
@@ -201,6 +201,16 @@
   // ───────────────────────── 账号 / 头像 ─────────────────────────
   const charById = id => S.chars.find(c => c.id === id);
   const isStarred = id => (S.meta.starredChars || []).includes(id);
+  /** 公众人物：用户在编辑资料里开、角色在微博设置里开（按身份分开存） */
+  const isPublic = id => id === "user" ? !!S.meta.publicFigure : (S.meta.publicChars || []).includes(id);
+  function publicLine(forHot) {
+    const pubs = [S.meta.publicFigure ? `用户（${S.meta.nickname}）` : "", ...S.chars.filter(c => isPublic(c.id)).map(c => c.name)].filter(Boolean);
+    const plain = [S.meta.publicFigure ? "" : "用户", ...S.chars.filter(c => !isPublic(c.id)).map(c => c.name)].filter(Boolean);
+    return [
+      pubs.length ? `公众人物（有粉丝、会被关注和讨论）：${pubs.join("、")}${forHot ? "。每人最多上 3 条热搜" : ""}` : "",
+      plain.length ? `普通人（不是公众人物）：${plain.join("、")}${forHot ? "。不上热搜，除非真的发生了全网讨论的重大事件（考了全省状元、做了什么事突然走红），这种整个榜单最多 1 条；聊天里聊过的话题、日常小事、恋情八卦都不会上热搜" : "，评论区按普通人的生态来"}` : "",
+    ].filter(Boolean).join("\n");
+  }
   /** 参与微博的角色（设置里关掉的不发博、不来评论） */
   const activeChars = () => S.chars.filter(c => !(S.meta.excludedChars || []).includes(c.id));
   /** 抽角色：特别关注的一定在，其余随机补满 */
@@ -610,7 +620,7 @@
   async function generate(payload, label) {
     const job = uid("job"); S.jobs.add(job);
     const scene = (payload.appTags || [])[1];
-    const who = `用户的名字是「${S.identity.name || "用户"}」，微博昵称是「${S.meta.nickname}」。`;
+    const who = `用户的名字是「${S.identity.name || "用户"}」，微博昵称是「${S.meta.nickname}」。` + (scene === "hot" ? "" : `\n${publicLine(false)}`);
     if (scene === "dm") payload = { ...payload, instruction: [
       who, payload.instruction,
       "【输出要求】只输出 ===私信=== 块，一句话一个块，字段名照抄「私信聊天」规则里的格式；不要写旁白、动作或心理描写，不要加任何解释，不能替用户说话。",
@@ -670,7 +680,7 @@
     // 设置（参与角色、特别关注、头像库、默认配图）保留，只清内容
     S.meta = { id: S.meta.id, nickname: S.identity.name || "微博用户", bio: "", ip: "", cover: 0, followers: rand(18, 120), followNpc: [], unfollowChars: [], pinnedPostId: null,
       excludedChars: S.meta.excludedChars || [], starredChars: S.meta.starredChars || [], avatarPool: S.meta.avatarPool || [], placeholderRef: S.meta.placeholderRef || null,
-      fans: [], seen: { at: nowIso(), comment: nowIso(), like: nowIso(), follow: nowIso() } };
+      publicFigure: !!S.meta.publicFigure, publicChars: S.meta.publicChars || [], fans: [], seen: { at: nowIso(), comment: nowIso(), like: nowIso(), follow: nowIso() } };
     saveMeta();
     S.hot = { id: S.hot.id, at: null, items: [] }; saveHot();
     S.topics = { id: S.topics.id, map: {}, recent: [] }; saveTopics();
@@ -1254,11 +1264,28 @@
     const active = activeChars();
     return [...set].filter(c => active.includes(c));
   }
-  /** 热搜词条是不是和角色、用户有关：AI 标了相关，或者词条里出现了名字、昵称 */
-  function isRelatedHot(x) {
-    if (x.rel && !none(x.rel)) return true;
-    const names = [S.identity.name, S.meta.nickname, ...S.chars.flatMap(c => [c.name, S.accounts[c.id] && S.accounts[c.id].nickname])].filter(n => n && n.length >= 2);
-    return names.some(n => x.title.includes(n));
+  /** 热搜词条牵扯到谁：AI 标的「相关」+ 词条里出现的名字、昵称。返回 ["user", charId…] */
+  function hotPeople(x) {
+    const out = new Set();
+    const has = n => n && n.length >= 2 && x.title.includes(n);
+    if (/用户/.test(x.rel || "") || has(S.identity.name) || has(S.meta.nickname)) out.add("user");
+    for (const c of S.chars) {
+      if (has(c.name) || has(S.accounts[c.id] && S.accounts[c.id].nickname)) out.add(c.id);
+      else if (x.rel && String(x.rel).split(/[、,，\s]+/).some(n => n === c.name)) out.add(c.id);
+    }
+    if (x.rel && !none(x.rel) && !out.size) out.add("?");
+    return [...out];
+  }
+  const isRelatedHot = x => hotPeople(x).length > 0;
+  /** 按公众人物开关砍：公众人物每人最多 3 条，其余的人加起来最多 1 条 */
+  function capHotByPeople(items) {
+    const per = {}; let plain = 0;
+    return items.filter(x => {
+      const ppl = hotPeople(x); if (!ppl.length) return true;
+      const pub = ppl.filter(isPublic);
+      if (pub.length) { if (pub.some(id => (per[id] || 0) >= 3)) return false; pub.forEach(id => { per[id] = (per[id] || 0) + 1; }); return true; }
+      return ++plain <= 1;
+    });
   }
   function recentFeedLines(n) {
     return S.posts.filter(p => p.authorType !== "user" && p.origin === "feed").sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)).slice(0, n)
@@ -1280,9 +1307,9 @@
     const recent = recentFeedLines(6);
     const instruction = [
       `当前时间：${nowText()}`,
-      `本轮生成 ${HOT_COUNT + 2} 条热搜。和角色、用户有关的（包括你们聊天里聊过的话题）最多 2 条。`,
+      `本轮生成 ${HOT_COUNT + 2} 条热搜。`,
+      publicLine(true),
       `角色微博昵称：\n${charsForPrompt(cast)}`,
-      "用户是不是公众人物、会不会上热搜，以用户设定为准。",
       prev ? `上一版热搜是 ${gapText}前的，只保留其中 ${keep} 条（热度变了），其余全部换成新的：\n${prev}` : "",
       recent ? `首页最近大家在发的（有的可能发酵成热搜）：\n${recent}` : "",
     ].filter(Boolean).join("\n\n");
@@ -1294,9 +1321,8 @@
       title: normTopic(b["热搜词"]), heat: parseNum(b["热度"]),
       tag: (String(b["标签"] || "").match(/[爆沸热新]/) || [""])[0], rel: none(b["相关"]) ? "" : b["相关"].trim(),
     })).filter(x => x.title && !seen.has(x.title) && seen.add(x.title));
-    // 兜底：和角色、用户有关的最多留 2 条
-    let related = 0;
-    const capped = items.filter(x => !isRelatedHot(x) || ++related <= 2).slice(0, HOT_COUNT);
+    // 兜底：公众人物每人最多 3 条，其他人加起来最多 1 条
+    const capped = capHotByPeople(items).slice(0, HOT_COUNT);
     items.length = 0; items.push(...capped);
     if (!items.length) { renderFind(); parseFailed("刷新热搜"); return; }
     // 模型漏写热度时按名次补
@@ -2119,12 +2145,13 @@
         const a = authorOf({ authorType: "char", charId: c.id });
         const on = !excluded.has(c.id);
         return `<div class="list-cell">${avatarHtml(a)}<div class="cell-main"><div>${esc(c.name)}</div><div class="cell-sub">${esc(a.name !== c.name ? `微博：${a.name}` : "还没有微博账号")}</div></div>
+          <button class="pub-btn ${isPublic(c.id) ? "on" : ""}" data-act="toggle-public" data-char="${esc(c.id)}">${isPublic(c.id) ? "公众人物" : "普通人"}</button>
           <button class="star-btn ${isStarred(c.id) ? "on" : ""}" data-act="toggle-star" data-char="${esc(c.id)}" aria-label="特别关注">${isStarred(c.id) ? "★" : "☆"}</button>
           <button class="switch ${on ? "on" : ""}" data-act="toggle-part" data-char="${esc(c.id)}" aria-label="参与"><span></span></button></div>`;
       }).join("") : `<div class="empty" style="padding:24px">这个身份还没有角色好友</div>`;
       const pool = S.meta.avatarPool || [];
       body.innerHTML = `
-        <div class="form-note">参与的角色 · 开关关掉的人不发微博也不来评论；★ 特别关注的人每次刷新和你发博时一定会被叫到</div>
+        <div class="form-note">参与的角色 · 开关关掉的人不发微博也不来评论；★ 特别关注的人每次刷新和你发博时一定会被叫到；点「普通人 / 公众人物」切换，公众人物才会上热搜、有粉丝控评</div>
         ${charsHtml}
         <div class="list-cell"><div class="cell-main"><div>发博后自动来互动</div><div class="cell-sub">关掉后发完是安静的，想要互动时点「看看有没有人来评论」</div></div>
           <button class="switch ${S.meta.autoReact !== false ? "on" : ""}" data-act="toggle-auto-react" aria-label="发博后自动来互动"><span></span></button></div>
@@ -2157,13 +2184,14 @@
       // 重绘时保留还没保存的输入
       const keep = {};
       for (const id of ["f-nick", "f-bio", "f-ip", "f-dev"]) { const el = $("#" + id, pg.el); if (el) keep[id] = el.value; }
-      const vipEl = $("#f-vip", pg.el);
+      const vipEl = $("#f-vip", pg.el); const pubEl = $("#f-pub", pg.el);
       $(".page-body", pg.el).innerHTML = `<div class="form">
         <div class="form-row"><label>昵称</label><input id="f-nick" maxlength="30" value="${esc(S.meta.nickname)}"></div>
         <div class="form-row"><label>简介</label><textarea id="f-bio" maxlength="140" placeholder="介绍一下自己">${esc(S.meta.bio)}</textarea></div>
         <div class="form-row"><label>IP属地</label><input id="f-ip" maxlength="20" placeholder="如 上海" value="${esc(S.meta.ip)}"></div>
         <div class="form-row"><label>发布设备</label><input id="f-dev" maxlength="30" placeholder="如 iPhone 16 Pro" value="${esc(S.meta.device || "")}"></div>
         <div class="form-row"><label>会员</label><input type="checkbox" id="f-vip" ${S.meta.vip ? "checked" : ""} style="flex:none;width:20px;height:20px"></div>
+        <div class="form-row"><label>公众人物</label><input type="checkbox" id="f-pub" ${S.meta.publicFigure ? "checked" : ""} style="flex:none;width:20px;height:20px"><span class="cell-sub" style="margin-left:8px">打开后会上热搜、有粉丝</span></div>
         <div class="form-row"><label>头像</label>${avatarHtml(authorOf({ authorType: "user" }), 44)}<button class="btn-ghost" data-act="upload-avatar">上传图片</button>${S.meta.avatarRef ? `<button class="btn-ghost" data-act="reset-avatar">用身份头像</button>` : ""}</div>
         <div class="form-row" style="display:block;padding-top:12px"><label>封面</label>
           <div class="profile-cover" style="height:90px;border-radius:8px;margin-top:8px;background:${COVERS[S.meta.cover || 0]}" ${S.meta.coverRef ? `data-bg-ref="${esc(S.meta.coverRef)}"` : ""}></div>
@@ -2171,6 +2199,7 @@
       </div><div class="form-note"><button class="link" data-act="open-raw" style="font-size:12px">调试记录：查看最近 10 次 AI 调用</button></div><div class="form-note">头像默认用小手机里的身份头像，也可以单独上传。昵称是你在微博上的名字，角色在微博里会用它称呼你。</div>`;
       for (const id in keep) $("#" + id, pg.el).value = keep[id];
       if (vipEl) $("#f-vip", pg.el).checked = vipEl.checked;
+      if (pubEl) $("#f-pub", pg.el).checked = pubEl.checked;
       hydrateImages(pg.el);
     }, { title: "编辑资料", action: `<button class="page-action" data-act="save-me">保存</button>` });
   }
@@ -2316,6 +2345,11 @@
         S.meta.starredChars = on ? S.meta.starredChars.filter(x => x !== id) : [...(S.meta.starredChars || []), id];
         saveMeta(); toast(on ? "已取消特别关注" : "已设为特别关注"); refreshAll(); return;
       }
+      case "toggle-public": {
+        const id = el.dataset.char; const on = isPublic(id);
+        S.meta.publicChars = on ? S.meta.publicChars.filter(x => x !== id) : [...(S.meta.publicChars || []), id];
+        saveMeta(); refreshAll(); return;
+      }
       case "toggle-auto-react": S.meta.autoReact = S.meta.autoReact === false; saveMeta(); refreshAll(); return;
       case "toggle-part": {
         const id = el.dataset.char; const off = (S.meta.excludedChars || []).includes(id);
@@ -2382,7 +2416,7 @@
         const pg = topPage();
         S.meta.nickname = $("#f-nick", pg.el).value.trim() || S.meta.nickname;
         S.meta.bio = $("#f-bio", pg.el).value.trim(); S.meta.ip = $("#f-ip", pg.el).value.trim();
-        S.meta.device = $("#f-dev", pg.el).value.trim(); S.meta.vip = $("#f-vip", pg.el).checked;
+        S.meta.device = $("#f-dev", pg.el).value.trim(); S.meta.vip = $("#f-vip", pg.el).checked; S.meta.publicFigure = $("#f-pub", pg.el).checked;
         saveMeta(); toast("已保存"); closePage(); return;
       }
       case "profile-tab": topPage().setTab(el.dataset.tab); return;

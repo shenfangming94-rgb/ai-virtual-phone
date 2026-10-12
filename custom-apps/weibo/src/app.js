@@ -145,6 +145,8 @@
   const altOwner = name => { if (!S.calts || !name) return null; for (const id in S.calts.map) if (S.calts.map[id].nick === name) return id; return null; };
   const altSeen = charId => !!calt(charId) && calt(charId).state !== "hidden";
   const altOpen = charId => !!calt(charId) && calt(charId).state === "open";
+  /** 路人主页资料；藏着的小号还没「生成主页」时当作没有，和普通路人一样 */
+  const npcInfo = name => { const i = S.npcs && S.npcs.map[name]; return i && i.pending && !altSeen(altOwner(name)) ? null : i || null; };
   function saveCalts() { if (S.calts) dbUpsert(COL.meta, S.calts).catch(e => console.warn(e)); }
   /**
    * 这一次 char 用哪个号（代码定，不交给 AI）：
@@ -329,7 +331,7 @@
     }
     const pool = S.meta.avatarPool || [];
     const npcName = x.authorName || "微博用户";
-    const info = S.npcs && S.npcs.map[npcName];
+    const info = npcInfo(npcName);
     return { type: "npc", name: npcName, verified: (info && info.verified) || x.verified || "无", vip: info ? !!info.vip : !!x.vip, avatar: null, seed: npcName,
       avatarRef: (info && info.avatarRef) || (pool.length ? pool[hashNum(npcName) % pool.length] : null) };
   }
@@ -1539,7 +1541,7 @@
       const chars = S.chars.filter(c => isFollowingChar(c.id));
       const npcs = S.meta.followNpc || [];
       const rows = [...chars.map(c => personRow(authorOf({ authorType: "char", charId: c.id }), { sub: charSub(c.id), right: `<button class="follow-btn on mutual" data-act="toggle-follow-char" data-char="${esc(c.id)}">互相关注</button>` })),
-        ...npcs.map(n => personRow(authorOf({ authorType: "npc", authorName: n }), { sub: (S.npcs.map[n] || {}).bio || "", right: `<button class="follow-btn on" data-act="toggle-follow-npc" data-name="${esc(n)}">已关注</button>` }))];
+        ...npcs.map(n => personRow(authorOf({ authorType: "npc", authorName: n }), { sub: (npcInfo(n) || {}).bio || "", right: `<button class="follow-btn on" data-act="toggle-follow-npc" data-name="${esc(n)}">已关注</button>` }))];
       return rows.length ? `<div class="form-note">共 ${rows.length} 人</div>${rows.join("")}` : `<div class="empty">还没有关注任何人</div>`;
     });
   }
@@ -2616,7 +2618,7 @@
       const posts = S.posts.filter(p => p.authorType === "npc" && p.authorName === name).sort((x, y) => new Date(y.createdAt) - new Date(x.createdAt));
       const sample = posts[0] || { authorType: "npc", authorName: name };
       const a = authorOf(sample);
-      const info = S.npcs.map[name];
+      const info = npcInfo(name);
       const following = isFollowingNpc(name);
       const fakeFans = (hashHue(name) * 97) % 50000 + (vClass(a.verified) ? 200000 : 300);
       const busy = pg.busy ? `<div class="gen-tip"><span class="spinner"></span>${info ? "加载更早的微博…" : "正在生成TA的主页…"}</div>` : "";
@@ -2694,7 +2696,8 @@
     const instruction = [
       `当前时间：${nowText()}`,
       `你的微博大号：「${charNickname(charId)}」${isPublic(charId) ? "（你是公众人物，大号有很多粉丝盯着）" : ""}。`,
-      `现在写出你偷偷注册的微博小号：先输出 ===主页===，再写 ${rand(3, 5)} 条小号以前发过的微博（时间从近到远，分布在过去几天到几个月）。`,
+      how === "told" ? `现在写出你偷偷注册的微博小号：先输出 ===主页===，再写 ${rand(3, 5)} 条小号以前发过的微博（时间从近到远，分布在过去几天到几个月）。`
+        : "现在写出你偷偷注册的微博小号：这次只输出 ===主页===，不要写微博。",
       reservedLine(),
     ].filter(Boolean).join("\n\n");
     const text = await generate({ characterId: charId, appTags: ["nox_weibo", "charalt"], instruction }, "生成小号", { secret: how !== "told" });
@@ -2709,7 +2712,9 @@
       verified: "无", verifiedNote: "", vip: !!(pb && yes(pb["会员"])), ip: pb && !none(pb["IP属地"]) ? pb["IP属地"] : (S.accounts[charId] || {}).ip || "",
       followers: Math.min(clampInt(pb && pb["粉丝"], rand(3, 60)), 300), following: clampInt(pb && pb["关注"], rand(20, 150)), at: nowIso(), altOf: charId,
     };
-    const posts = parseBlocks(text, "微博").map(b => postFromBlock(b, { origin: "profile" })).filter(p => p.text || p.images.length || p.repost)
+    // 藏起来的：先不写博，等她点「✨ 生成主页」再写（和路人一样）
+    if (how !== "told") S.npcs.map[nick].pending = true;
+    const posts = how !== "told" ? [] : parseBlocks(text, "微博").map(b => postFromBlock(b, { origin: "profile" })).filter(p => p.text || p.images.length || p.repost)
       .map(p => Object.assign(p, { authorType: "npc", charId: undefined, authorName: nick, altOf: charId, verified: "无", vip: S.npcs.map[nick].vip }));
     spreadHistory(posts, Date.now() - rand(2, 30) * 3600e3);
     for (const p of posts) { S.posts.push(p); savePost(p); S.allPostRows++; }
@@ -2731,7 +2736,8 @@
       `当前时间：${nowText()}`,
       `你的微博小号「${a.nick}」已经有了（简介：${(S.npcs.map[a.nick] || {}).bio || "无"}），这次不要输出 ===主页===。`,
       mine.length ? `小号最近发过的（不要重复）：\n${mine.slice(0, 8).map(p => `- ${fmtTime(p.createdAt)}：${p.text.slice(0, 50)}`).join("\n")}` : "",
-      `写 ${rand(3, 5)} 条小号更早的微博${oldest ? `，时间都早于 ${fmtTime(oldest.createdAt)}` : ""}。`,
+      (S.npcs.map[a.nick] || {}).pending ? `写 ${rand(4, 6)} 条小号以前发过的微博（时间从近到远，分布在过去几天到几个月${oldest ? `，都早于 ${fmtTime(oldest.createdAt)}` : ""}）。`
+        : `写 ${rand(3, 5)} 条小号更早的微博${oldest ? `，时间都早于 ${fmtTime(oldest.createdAt)}` : ""}。`,
       reservedLine(),
     ].filter(Boolean).join("\n\n");
     const text = await generate({ characterId: charId, appTags: ["nox_weibo", "charalt"], instruction }, altSeen(charId) ? "加载小号微博" : "生成路人主页");
@@ -2741,7 +2747,9 @@
         .map(p => Object.assign(p, { authorType: "npc", charId: undefined, authorName: a.nick, altOf: charId, verified: "无" }));
       spreadHistory(posts, oldest ? new Date(oldest.createdAt).getTime() : Date.now());
       for (const p of posts) { S.posts.push(p); savePost(p); S.allPostRows++; }
-      if (posts.length) noteParsed(altSeen(charId) ? `${posts.length} 条小号旧博` : `${posts.length} 条历史微博`); else parseFailed(altSeen(charId) ? "加载小号微博" : "生成路人主页");
+      const info = S.npcs.map[a.nick];
+      if (posts.length && info && info.pending) { delete info.pending; info.postCount = mine.length + posts.length + rand(5, 60); saveNpcs(); }
+      if (posts.length) noteParsed(altSeen(charId) ? `${posts.length} 条小号旧博` : `${mine.length ? "" : "主页资料 + "}${posts.length} 条历史微博`); else parseFailed(altSeen(charId) ? "加载小号微博" : "生成路人主页");
     }
     page.render(page);
   }

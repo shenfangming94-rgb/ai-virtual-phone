@@ -1117,7 +1117,7 @@
       && !(a.type === "char" ? isFollowingChar(a.charId) : isFollowingNpc(a.name));
     const pinned = opts.showPin && S.meta.pinnedPostId === p.id;
     const long = !opts.full && p.text.length > 140;
-    const meta = [fmtTime(p.createdAt), p.superName ? `<span class="link" data-act="open-super" data-name="${esc(p.superName)}">${esc(p.superName)}超话</span>` : p.source ? `来自 ${esc(p.source)}` : "", p.visibility === "friends" ? "好友圈" : p.visibility === "self" ? "仅自己可见" : ""].filter(Boolean).join(" ");
+    const meta = [fmtTime(p.createdAt), p.source ? `来自 ${esc(p.source)}` : "", p.visibility === "friends" ? "好友圈" : p.visibility === "self" ? "仅自己可见" : ""].filter(Boolean).join(" ");
     let quote = "";
     if (p.repost) {
       const chain = (p.repost.chain || []).map(c => `//<span class="link">@${esc(c.name)}</span>:${richText(c.text)}`).join("");
@@ -1139,7 +1139,7 @@
         ${showFollow ? `<button class="follow-btn" data-act="follow" data-post="${esc(p.id)}">+ 关注</button>` : ""}
         <button class="more-btn" data-act="post-menu" data-post="${esc(p.id)}">${I.more}</button>
       </div>
-      <div class="text ${long ? "clamp" : ""}">${pinned ? '<span class="pin-tag">置顶</span>' : ""}${richText(p.text)}${p.repost ? p._chainHtml : ""}</div>
+      <div class="text ${long ? "clamp" : ""}">${pinned ? '<span class="pin-tag">置顶</span>' : ""}${p.superName ? `<span class="link super-tag" data-act="open-super" data-name="${esc(p.superName)}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M7 4h10l4 5-9 11L3 9z"/><path d="M3 9h18M10 4 8 9l4 11 4-11-2-5"/></svg>${esc(p.superName)}超话</span> ` : ""}${richText(p.text)}${p.repost ? p._chainHtml : ""}</div>
       ${long ? '<div class="expand">全文</div>' : ""}
       ${picsHtml(p.images, p.id)}
       ${p.location ? `<div class="meta" style="margin-top:8px;color:var(--wb-link)">📍 ${esc(p.location)}</div>` : ""}
@@ -2074,7 +2074,7 @@
       </div>
       <div class="super-info">
         ${s.host ? `<div class="super-host">主持人：<span class="link">${esc(s.host)}</span></div>` : ""}
-        ${s.intro ? `<div class="super-intro">${richText(s.intro)}</div>` : ""}
+        ${s.intro ? `<div class="super-intro">简介：${richText(s.intro)}</div>` : ""}
         ${s.joined ? `<div class="super-mine"><span class="super-lv">LV${lv}</span><span>经验 ${s.exp || 0}${lv < SUPER_LV.length ? ` / ${SUPER_LV[lv]}` : ""}</span>${s.streak ? `<span>已连续签到 ${s.streak} 天</span>` : ""}<button class="link" data-act="super-join" data-name="${esc(name)}">退出超话</button></div>` : ""}
       </div>
         <div class="profile-tabs"><button class="${tab === "new" ? "on" : ""}" data-act="profile-tab" data-tab="new">最新</button><button class="${tab === "hot" ? "on" : ""}" data-act="profile-tab" data-tab="hot">精华</button></div>

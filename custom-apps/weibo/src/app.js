@@ -605,7 +605,7 @@
   }
 
   /** 角色发的「班级通知」：规则管不住时代码兜底丢掉（官方 / 机构号的路人博不管） */
-  const NOTICE_RE = /各位同学|同学们[，,！!：:\s]|全班同学|请大家|提醒大家|大家注意|注意事项|温馨提示|通知[：:]|收齐|按时(交|到|上交)|不要忘[了记]带|记得带好|班级(通知|事务)/;
+  const NOTICE_RE = /各位同学|同学们[，,！!：:\s]|全班同学|请大家|提醒大家|大家注意|注意事项|温馨提示|通知[：:]|收齐|按时(交|到|上交)|不要忘[了记]带|记得带好|班级(通知|事务)|通报|公告[：:]|紧急通知/;
   const isCharNotice = p => p.authorType === "char" && NOTICE_RE.test(p.text || "");
   function postFromBlock(b, extra) {
     const ch = charByName(b["角色"]) || charByName(b["作者"] || b["昵称"], true);

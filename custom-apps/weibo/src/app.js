@@ -1569,10 +1569,10 @@
 
   // ── 通知：评论 / @ / 赞 从已有数据推出来，关注存在 meta.fans ──
   const NOTE_TYPES = [
-    { type: "at", label: "@我的", icon: "@", color: "#3a8ee6" },
-    { type: "comment", label: "评论", icon: I.comment, color: "#2fb466" },
-    { type: "like", label: "赞", icon: I.like, color: "#ff6a3d" },
-    { type: "follow", label: "关注", icon: I.me, color: "#a26bf0" },
+    { type: "at", label: "@我的", color: "#6aaed6", icon: '<svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.6"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3.2"/><path d="M15.2 12v1.3a2.2 2.2 0 0 0 4.4 0V12" stroke-linecap="round"/></svg>' },
+    { type: "comment", label: "评论", color: "#5bb67f", icon: '<svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.6" stroke-linejoin="round"><path d="M4 5.5h16v10.5H10l-4 3.5V16H4z"/><path d="M8.5 10.8h.01M12 10.8h.01M15.5 10.8h.01" stroke-width="2.4" stroke-linecap="round"/></svg>' },
+    { type: "like", label: "赞", color: "#f0a33a", icon: '<svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.6" stroke-linejoin="round"><path d="M7.5 10.5v9.5H4.5v-9.5zM7.5 10.5 11 3.5c1.6 0 2.5 1 2.3 2.6l-.5 3.4h5.6c1.3 0 2.2 1.2 1.9 2.4l-1.6 6.3c-.2.9-1 1.5-1.9 1.5H7.5"/></svg>' },
+    { type: "follow", label: "关注", color: "#a58be6", icon: '<svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.6" stroke-linecap="round"><circle cx="10" cy="8.5" r="3.6"/><path d="M3.5 19.5c1-3.3 3.5-5 6.5-5s5.5 1.7 6.5 5M18.5 8v6M15.5 11h6"/></svg>' },
   ];
   function noteItems(type) {
     const nick = S.meta.nickname; const out = [];
@@ -1621,16 +1621,17 @@
   function renderMsg() {
     if (S.tab !== "msg") return;
     $("#topbar").innerHTML = `<div class="topbar-inner"><span class="top-title">消息</span></div>`;
-    const icons = `<div class="note-icons">${NOTE_TYPES.map(n => `<button class="note-icon" data-act="open-notes" data-type="${n.type}">
-        <span class="note-circle" style="background:${n.color}">${n.icon.startsWith("<svg") ? n.icon : `<b>${n.icon}</b>`}${badgeHtml(unreadNotes(n.type))}</span><span>${n.label}</span></button>`).join("")}</div>`;
+    const chevron = '<svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m9 5 7 7-7 7"/></svg>';
+    const icons = NOTE_TYPES.map(n => `<div class="dm-row note-row" data-act="open-notes" data-type="${n.type}">
+        <div class="note-circle" style="background:${n.color}">${n.icon}</div><div class="cell-main note-label">${n.label}</div>${badgeHtml(unreadNotes(n.type))}${chevron}</div>`).join("");
     const main = S.threads.filter(t => !isStrangerThread(t) && t.messages.length).sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
     const strangers = S.threads.filter(t => isStrangerThread(t) && t.messages.length).sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
     const row = t => { const a = peerAuthor(t); const last = t.messages[t.messages.length - 1];
       return `<div class="dm-row" data-act="open-thread" data-key="${esc(t.key)}">${avatarHtml(a)}<div class="cell-main"><div class="dm-top"><b class="${a.vip ? "vip" : ""}">${esc(a.name)}</b><span>${fmtTime(last.at)}</span></div>
-        <div class="dm-last">${last.from === "me" ? "我：" : ""}${esc(last.text)}</div></div>${badgeHtml(t.unread)}</div>`; };
-    const strangerRow = strangers.length ? `<div class="dm-row" data-act="open-strangers"><div class="avatar"><div class="face" style="background:#8a8f99">✉</div></div><div class="cell-main"><div class="dm-top"><b>陌生人私信</b><span>${fmtTime(strangers[0].updatedAt)}</span></div>
-        <div class="dm-last">${esc(peerAuthor(strangers[0]).name)}：${esc(strangers[0].messages[strangers[0].messages.length - 1].text)}</div></div>${badgeHtml(strangers.reduce((n, t) => n + (t.unread || 0), 0))}</div>` : "";
-    $("#view").innerHTML = icons + `<div class="dm-list">${main.map(row).join("")}${strangerRow}</div>`
+        <div class="dm-bottom"><div class="dm-last">${last.from === "me" ? "我：" : ""}${esc(last.text)}</div>${badgeHtml(t.unread)}</div></div></div>`; };
+    const strangerRow = strangers.length ? `<div class="dm-row" data-act="open-strangers"><div class="note-circle" style="background:#6f8fe8"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.6" stroke-linejoin="round"><rect x="3.5" y="5.5" width="17" height="13" rx="2"/><path d="m4 7 8 6 8-6"/></svg></div><div class="cell-main"><div class="dm-top"><b>陌生人私信</b><span>${fmtTime(strangers[0].updatedAt)}</span></div>
+        <div class="dm-bottom"><div class="dm-last">${esc(peerAuthor(strangers[0]).name)}：${esc(strangers[0].messages[strangers[0].messages.length - 1].text)}</div>${badgeHtml(strangers.reduce((n, t) => n + (t.unread || 0), 0))}</div></div></div>` : "";
+    $("#view").innerHTML = `<div class="dm-list">${icons}${main.map(row).join("")}${strangerRow}</div>`
       + (main.length || strangers.length ? "" : `<div class="empty">还没有私信<br>去 char 的主页点「私信」，或者发条微博等人来找你</div>`);
     hydrateImages($("#view"));
   }
@@ -1656,7 +1657,7 @@
       const list = S.threads.filter(t => isStrangerThread(t) && t.messages.length).sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
       $(".page-body", pg.el).innerHTML = `<div class="form-note">没关注的人发来的私信</div><div class="dm-list">${list.map(t => { const a = peerAuthor(t); const last = t.messages[t.messages.length - 1];
         return `<div class="dm-row" data-act="open-thread" data-key="${esc(t.key)}">${avatarHtml(a)}<div class="cell-main"><div class="dm-top"><b>${esc(a.name)}</b><span>${fmtTime(last.at)}</span></div>
-          <div class="dm-last">${last.from === "me" ? "我：" : ""}${esc(last.text)}</div></div>${badgeHtml(t.unread)}</div>`; }).join("")}</div>`
+          <div class="dm-bottom"><div class="dm-last">${last.from === "me" ? "我：" : ""}${esc(last.text)}</div>${badgeHtml(t.unread)}</div></div></div>`; }).join("")}</div>`
         + (list.length ? "" : `<div class="empty">没有陌生人私信</div>`);
       hydrateImages(pg.el);
     }, { title: "陌生人私信" });

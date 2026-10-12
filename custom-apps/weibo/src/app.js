@@ -604,6 +604,9 @@
     return { reposts: nums[0] || 0, comments: nums[1] || 0, likes: nums[2] || 0 };
   }
 
+  /** 角色发的「班级通知」：规则管不住时代码兜底丢掉（官方 / 机构号的路人博不管） */
+  const NOTICE_RE = /各位同学|同学们[，,！!：:\s]|全班同学|请大家|提醒大家|大家注意|注意事项|温馨提示|通知[：:]|收齐|按时(交|到|上交)|不要忘[了记]带|记得带好|班级(通知|事务)/;
+  const isCharNotice = p => p.authorType === "char" && NOTICE_RE.test(p.text || "");
   function postFromBlock(b, extra) {
     const ch = charByName(b["角色"]) || charByName(b["作者"] || b["昵称"], true);
     const images = none(b["配图"]) ? [] : b["配图"].split(/\s*[|｜]\s*/).filter(Boolean).slice(0, 9).map(raw => {
@@ -931,6 +934,7 @@
       `本轮生成 ${charCount + npcCount} 条微博：角色本人发的约 ${charCount} 条，路人博主 ${npcCount} 条${followTab && followNpc.length ? `（路人里可以有用户关注的博主：${followNpc.join("、")}，昵称一字不差）` : ""}。`,
       `角色微博昵称（已注册的必须沿用）：\n${charsForPrompt(cast)}`,
       `角色是否发博、发什么，按他此刻的状态和心情决定；同一个角色本轮最多 2 条。`,
+      "角色发的是个人微博：自己的生活、心情、吐槽、碎碎念。*绝对不发通知、提醒、注意事项、班级事务*（不写「各位同学」「同学们」「请大家」「记得带好…」），就算他是班长、班干部、老师也一样——这些在班级群里说，不在微博说。",
       `${S.meta.nickname ? `用户的微博昵称是「${S.meta.nickname}」，角色如果在微博里提到用户要用这个昵称 @。` : ""}`,
       recent ? `首页最近已有的微博（不要重复类似内容）：\n${recent}` : "",
       reservedLine(),
@@ -940,7 +944,7 @@
     if (text == null) { renderHome(); return; }
     // 在「关注」页刷出来的路人微博也留在关注页（像关注页里混进来的推荐）
     const posts = fixAltAuthors(parseBlocks(text, "微博").filter(b => !isUserName(b["作者"])).map(b => postFromBlock(b, { origin: "feed", followFeed: followTab || undefined })), {})
-      .filter(p => p.text || p.images.length || p.repost);
+      .filter(p => (p.text || p.images.length || p.repost) && !isCharNotice(p));
     if (!posts.length) { renderHome(); parseFailed("刷新"); return; }
     for (const p of posts) { S.posts.push(p); savePost(p); S.allPostRows++; rememberOwnPost(p); }
     const feedDms = parseBlocks(text, "私信").filter(b => charByName(b["角色"]) || charByName(b["来自"], true));
@@ -1355,7 +1359,7 @@
       const oldest = mine.length ? new Date(mine[mine.length - 1].createdAt).getTime() : Date.now();
       const posts = parseBlocks(text, "微博").map(b => postFromBlock(b, { origin: "profile" }))
         .filter(p => p.text || p.images.length || p.repost)
-        .map(p => { p.authorType = "char"; p.charId = charId; p.authorName = charNickname(charId); return p; });
+        .map(p => { p.authorType = "char"; p.charId = charId; p.authorName = charNickname(charId); return p; }).filter(p => !isCharNotice(p));
       spreadHistory(posts, oldest);
       for (const p of posts) { S.posts.push(p); savePost(p); S.allPostRows++; }
       ensureAccount(charId, { profileGenerated: true, historyFixed: true });
@@ -1412,7 +1416,7 @@
     // 话题页、搜索、超话里的微博只在那边看，不混进首页
     const list = S.posts.filter(p => !p.superName && (p.authorType !== "user" || isMe(p)) && (p.authorType === "user" || !["profile", "topic", "search", "super"].includes(p.origin)));
     const filtered = S.homeTab === "follow" ? list.filter(inFollowFeed) : list.filter(p => p.authorType === "npc" || p.authorType === "char");
-    return filtered.filter(p => p.visibility !== "self" || isMe(p)).sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+    return filtered.filter(p => (p.visibility !== "self" || isMe(p)) && !isCharNotice(p)).sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
   }
   let feedLimit = 30;
   function renderHome(justRefreshed) {

@@ -449,3 +449,22 @@ img { display: block; }
 .draft { cursor: pointer; }
 .draft-text { font-size: 15px; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
 .me-head .cell-main { flex: 1; min-width: 0; }
+
+/* ── 超话 ── */
+.super-icon { flex: none; border-radius: 10px; display: grid; place-items: center; color: #fff; font-weight: 700; font-size: 18px; }
+.super-row .cell-main > div:first-child { font-size: 15px; }
+.super-kind { display: inline-block; margin-left: 4px; padding: 0 5px; border-radius: 4px; background: var(--wb-orange-soft); color: var(--wb-orange); font-size: 11px; line-height: 16px; vertical-align: 2px; }
+.super-search { padding: 10px 16px; background: var(--wb-card); }
+.super-search .search-form { margin: 0; }
+.super-rec-head { display: flex; align-items: center; justify-content: space-between; }
+.super-cover { height: 110px; }
+.super-head { display: flex; align-items: flex-end; gap: 12px; margin-top: -32px; padding: 0 16px 8px; position: relative; }
+.super-head .super-icon { border: 3px solid var(--wb-card); border-radius: 14px; font-size: 26px; }
+.super-head .cell-main { flex: 1; min-width: 0; padding-bottom: 2px; }
+.super-title { font-size: 19px; font-weight: 700; }
+.super-intro { padding: 0 16px 10px; background: var(--wb-card); font-size: 14px; color: var(--wb-text-2); line-height: 1.6; }
+.super-head, .super-actions { background: var(--wb-card); }
+.super-actions { display: flex; align-items: center; gap: 8px; padding: 6px 16px 14px; }
+.super-actions .cell-sub { flex: 1; }
+.super-lv { flex: none; padding: 0 6px; border-radius: 4px; background: linear-gradient(90deg, #ff9a3c, #ff5f5f); color: #fff; font-size: 12px; font-weight: 700; line-height: 18px; }
+.char-super-link { cursor: pointer; margin-top: 8px; }

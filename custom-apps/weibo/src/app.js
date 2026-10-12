@@ -110,7 +110,8 @@
     topics: null,        // 当前身份生成过的话题页 { id, map: { 话题: { lead, host, reads, discussions, at } } }
     hotBusy: false,
     npcs: null,
-    threads: [],         // 当前身份的私信对话          // 生成过主页的路人 { id, map: { 昵称: { bio, gender, verified, verifiedNote, vip, ip, followers, following, at } } }
+    threads: [],         // 当前身份的私信对话
+    supers: null,        // 超话 { id, map: { 名称: {...} }, recommend: [], charSupers: { charId: { about, haunts } } }          // 生成过主页的路人 { id, map: { 昵称: { bio, gender, verified, verifiedNote, vip, ip, followers, following, at } } }
   };
 
   async function dbList(c) { try { return (await api.db.list(c, { limit: 500 })) || []; } catch (e) { console.warn(e); return []; } }
@@ -181,6 +182,7 @@
     S.hot = metaRows.find(m => m.id === `hot_${S.identity.id}`) || { id: `hot_${S.identity.id}`, at: null, items: [] };
     S.topics = metaRows.find(m => m.id === `topics_${S.identity.id}`) || { id: `topics_${S.identity.id}`, map: {} };
     S.npcs = metaRows.find(m => m.id === `npcs_${S.identity.id}`) || { id: `npcs_${S.identity.id}`, map: {} };
+    S.supers = metaRows.find(m => m.id === `supers_${S.identity.id}`) || { id: `supers_${S.identity.id}`, map: {}, recommend: [], charSupers: {} };
     S.meta = metaRows.find(m => m.id === `meta_${S.identity.id}`) || {
       id: `meta_${S.identity.id}`,
       nickname: S.identity.name || "微博用户",
@@ -372,7 +374,7 @@
   // ───────────────────────── AI 输出解析 ─────────────────────────
   const KEYS = ["角色", "作者", "认证", "认证说明", "会员", "来源", "时间", "配图", "转评赞", "转发自", "原文", "转发链", "正文", "编号", "回复", "赞", "内容",
     "性别", "点赞角色", "转发", "路人点赞", "新增粉丝", "昵称", "简介", "IP属地", "粉丝", "关注",
-    "热搜词", "热度", "标签", "相关", "来自", "新粉丝", "导语", "主持人", "阅读", "讨论", "分区", "词条", "热搜", "阅读量", "讨论量",
+    "热搜词", "热度", "标签", "相关", "来自", "新粉丝", "名称", "分类", "帖子数", "粉丝数", "导语", "主持人", "阅读", "讨论", "分区", "词条", "热搜", "阅读量", "讨论量",
     // 模型常换的叫法
     "博主昵称", "发博时间", "发布时间", "图片描述", "配图描述", "转评赞数据", "互动数据", "热评列表", "评论列表", "热评", "评论区",
     "微博昵称", "博主", "发布者", "发博人", "用户名", "评论者", "评论人", "角色本名", "本名", "角色名", "微博正文", "评论内容", "回复内容", "正文内容"];
@@ -383,7 +385,7 @@
   const KEY_ALT = KEYS.slice().sort((a, b) => b.length - a.length).join("|");
   // 支持「作者：xx」「作者: xx」「[作者]xx」「【作者】：xx」「**作者**：xx」「- 作者：xx」
   const KEY_RE = new RegExp(`^\\s*(?:[-*•]\\s*)?(?:[\\[【]\\s*(${KEY_ALT})\\s*[\\]】]\\s*[：:]?|(${KEY_ALT})\\s*[：:])\\s*(.*)$`);
-  const KINDS = "微博|评论|互动|主页|热搜|话题|私信|结束";
+  const KINDS = "微博|评论|互动|主页|热搜|话题|私信|超话|结束";
 
   /** 把模型常见的格式偏差统一成 ===xx=== 块 */
   function normalizeOutput(text) {
@@ -419,7 +421,7 @@
 
   function parseBlocks(raw, kind) {
     const text = normalizeOutput(raw);
-    const bodyKey = { 微博: "正文", 评论: "内容", 互动: "点赞角色", 主页: "昵称", 热搜: "热搜词", 话题: "导语", 私信: "内容" }[kind];
+    const bodyKey = { 微博: "正文", 评论: "内容", 互动: "点赞角色", 主页: "昵称", 热搜: "热搜词", 话题: "导语", 私信: "内容", 超话: "名称" }[kind];
     // 按分隔标记切段；标记之外的散段（模型漏写标记）也一并按字段解析，最后按必需字段筛
     const out = [];
     let label = null;
@@ -432,6 +434,7 @@
     if (kind === "主页") return out.filter(f => "昵称" in f && ("粉丝" in f || "简介" in f)).slice(0, 1);
     if (kind === "话题") return out.filter(f => f["导语"] && !f["正文"]).slice(0, 1);
     if (kind === "私信") return out.filter(f => f["内容"] && f["来自"]);
+    if (kind === "超话") return out.filter(f => f["名称"] && !f["正文"]);
     return out.filter(f => f[bodyKey]);
   }
   const none = v => !v || /^(无|没有|none|null|-|—)$/i.test(String(v).trim());
@@ -606,7 +609,7 @@
   // 规则和输出格式在预设条目里（presets.json，按 nox_weibo 标签命中）；这里只在末尾再提醒一次格式
   const FORMAT_HINT = {
     feed: "===微博===（需要时加 ===私信===）", comments: "===评论===", reaction: "===评论=== 和 ===互动===（需要时加 ===私信===）", reply: "===评论===（需要时加 ===私信=== 和 ===互动===）", profile: "===主页=== 和 ===微博===",
-    dm: "===私信===",
+    dm: "===私信===", super: "===超话=== 或 ===微博===（按本轮说明要的输出）",
     hot: "===热搜===", topic: "===话题=== 和 ===微博===", search: "===微博===", npc: "===主页=== 和 ===微博===",
   };
   // 调试记录：最近 10 次 AI 调用，存进 db，关掉 APP 也在
@@ -685,6 +688,7 @@
     S.hot = { id: S.hot.id, at: null, items: [] }; saveHot();
     S.topics = { id: S.topics.id, map: {}, recent: [] }; saveTopics();
     S.npcs = { id: S.npcs.id, map: {} }; saveNpcs();
+    S.supers = { id: S.supers.id, map: {}, recommend: [], charSupers: {} }; saveSupers();
     for (const t of S.threads) { try { await api.db.delete(COL.dms, t.id); } catch (e) { /* ignore */ } }
     S.threads = [];
     S.allPostRows = (await dbList(COL.posts)).length;
@@ -774,13 +778,14 @@
     if (post.commentsGenerated || post.authorType === "user" || post._genComments) return;
     if (!activeChars().length) return;
     post._genComments = true; rerenderDetail(post);
-    const others = pickCast(activeChars().filter(c => c.id !== post.charId), 3);
+    const others = post.superName ? superChars(post.superName).filter(c => c.id !== post.charId).slice(0, 3) : pickCast(activeChars().filter(c => c.id !== post.charId), 3);
     const cast = post.authorType === "char" ? [charById(post.charId), ...others].filter(Boolean) : others.length ? others : activeChars().slice(0, 1);
     const author = authorOf(post);
     const want = Math.min(Math.max(post.counts.comments, 3), rand(9, 14));
     const instruction = [
       `当前时间：${nowText()}`,
       `博主：${author.name}${post.authorType === "char" ? `（就是角色 ${charById(post.charId)?.name}）` : "（路人博主）"}`,
+      post.superName ? `这是「${post.superName}」超话里的帖子：评论的都是超话里的同好，用圈内的口吻和梗；没列出来的角色看不到，不会来评论。` : "",
       `微博发布于：${fmtTime(post.createdAt)}`,
       genderLine(post),
       `微博正文：\n${post.text}`,
@@ -813,9 +818,21 @@
   async function reactToUserPost(post) {
     if (post.visibility === "self" || !activeChars().length || post._genComments || post.reacted) return;
     post.reacted = true; post._genComments = true; savePost(post); rerenderDetail(post);
-    const cast = pickCast(activeChars(), 6);
+    // 超话帖：只有也逛这个超话的角色会来，特别关注的人偶尔撞见，其他人看不到
+    const sup = post.superName;
+    const lurkers = sup ? superChars(sup) : [];
+    const peekers = sup ? activeChars().filter(c => isStarred(c.id) && !lurkers.includes(c)) : [];
+    const cast = sup ? [...lurkers, ...peekers].slice(0, 6) : pickCast(activeChars(), 6);
+    const castIds = (cast.length ? cast : pickCast(activeChars(), 1)).map(c => c.id);
+    const superLine = sup ? [
+      `这是用户在「${sup}」超话里发的帖：只有超话里的同好看得到，路人评论用圈内的口吻和梗，不会有新粉丝。`,
+      lurkers.length ? `${lurkers.map(c => c.name).join("、")} 也逛这个超话，看到了可能来评论。` : "",
+      peekers.length ? `${peekers.map(c => c.name).join("、")} 特别关注用户，很少见地可能刷到这条（概率很低，大多数时候不来；来了就是意外撞见的语气，比如「你还玩这个？」）。` : "",
+      "除此之外的角色都看不到这条帖子，绝对不会出现。大多数时候没有角色来评论，私信也一样。",
+    ].filter(Boolean).join("") : "";
     const instruction = [
       `当前时间：${nowText()}`,
+      superLine,
       `用户的微博昵称：${S.meta.nickname}，粉丝 ${S.meta.followers} 人。用户性别：${S.identity.gender || "未知（评论里用「博主」「ta」）"}，评论称呼一定要用对性别。`,
       post.repost ? `用户转发了 @${post.repost.author} 的微博：「${post.repost.text}」，转发语：` : `用户的微博正文：`,
       post.text || "（无文字）",
@@ -823,11 +840,11 @@
       post.location ? `定位：${post.location}` : "",
       topicLine(post),
       post.visibility === "friends" ? "这条微博仅好友圈可见：只有角色能看到，不要生成路人评论。" : `路人评论 ${topicsIn(post.text).some(hotItem) ? rand(5, 9) : rand(2, 6)} 条左右。`,
-      `可能来互动的角色：\n${charsForPrompt(cast)}`,
-      starredLine(cast),
+      `可能来互动的角色：\n${charsForPrompt(cast) || "无（没有角色会来）"}`,
+      sup ? "" : starredLine(cast),
       reservedLine(),
     ].filter(Boolean).join("\n\n");
-    const text = await generate({ characterIds: cast.map(c => c.id), appTags: ["nox_weibo", "reaction"], instruction }, "获取互动");
+    const text = await generate({ characterIds: castIds, appTags: ["nox_weibo", "reaction"], instruction }, "获取互动");
     post._genComments = false; rerenderDetail(post);
     if (text == null) { post.reacted = false; savePost(post); return; }
     const list = commentsFromBlocks(parseComments(text), post, {});
@@ -997,7 +1014,7 @@
   async function moreComments(post) {
     if (post._genComments || !activeChars().length) return;
     post._genComments = true; rerenderDetail(post);
-    const others = pickCast(activeChars().filter(c => c.id !== post.charId), 3);
+    const others = post.superName ? superChars(post.superName).filter(c => c.id !== post.charId).slice(0, 3) : pickCast(activeChars().filter(c => c.id !== post.charId), 3);
     const cast = post.authorType === "char" ? [charById(post.charId), ...others].filter(Boolean) : others.length ? others : activeChars().slice(0, 1);
     const existing = post.comments.slice().sort((a, b) => b.likes - a.likes).slice(0, 18).map(c => cmtLine(post, c)).join("\n");
     const instruction = [
@@ -1100,7 +1117,7 @@
       && !(a.type === "char" ? isFollowingChar(a.charId) : isFollowingNpc(a.name));
     const pinned = opts.showPin && S.meta.pinnedPostId === p.id;
     const long = !opts.full && p.text.length > 140;
-    const meta = [fmtTime(p.createdAt), p.source ? `来自 ${esc(p.source)}` : "", p.visibility === "friends" ? "好友圈" : p.visibility === "self" ? "仅自己可见" : ""].filter(Boolean).join(" ");
+    const meta = [fmtTime(p.createdAt), p.superName ? `<span class="link" data-act="open-super" data-name="${esc(p.superName)}">${esc(p.superName)}超话</span>` : p.source ? `来自 ${esc(p.source)}` : "", p.visibility === "friends" ? "好友圈" : p.visibility === "self" ? "仅自己可见" : ""].filter(Boolean).join(" ");
     let quote = "";
     if (p.repost) {
       const chain = (p.repost.chain || []).map(c => `//<span class="link">@${esc(c.name)}</span>:${richText(c.text)}`).join("");
@@ -1138,8 +1155,8 @@
   // ───────────────────────── 首页 ─────────────────────────
   const inFollowFeed = p => p.authorType === "user" || p.followFeed || (p.authorType === "char" && isFollowingChar(p.charId)) || (p.authorType === "npc" && isFollowingNpc(p.authorName));
   function feedPosts() {
-    // 话题页、搜索出来的微博只在那边看，不混进首页
-    const list = S.posts.filter(p => p.authorType === "user" || !["profile", "topic", "search"].includes(p.origin));
+    // 话题页、搜索、超话里的微博只在那边看，不混进首页
+    const list = S.posts.filter(p => !p.superName && (p.authorType === "user" || !["profile", "topic", "search", "super"].includes(p.origin)));
     const filtered = S.homeTab === "follow" ? list.filter(inFollowFeed) : list.filter(p => p.authorType === "npc" || p.authorType === "char");
     return filtered.filter(p => p.visibility !== "self" || p.authorType === "user").sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
   }
@@ -1350,9 +1367,6 @@
           <button class="btn-ghost" data-act="del-draft" data-id="${esc(d.id)}">删除</button></div>`).join("") : `<div class="empty">草稿箱是空的</div>`;
     });
   }
-  function openSuper() {
-    openListPage("super", "超话社区", () => `<div class="coming"><div class="big">⭐</div><b>超话社区正在装修中</b>你关注的超话、搜超话、推荐超话、char 的个人超话和 CP 超话，下一期见～</div>`);
-  }
   function renderComing(title, icon, what) {
     $("#topbar").innerHTML = `<div class="topbar-inner"><span class="top-title">${title}</span></div>`;
     $("#view").innerHTML = `<div class="coming"><div class="big">${icon}</div><b>${title}正在装修中</b>${what}</div>`;
@@ -1458,7 +1472,7 @@
   function hotFeedPosts() {
     const now = Date.now();
     const score = p => heatOf(p) / (1 + Math.max(0, now - new Date(p.createdAt)) / 86400e3);
-    return S.posts.filter(p => p.authorType !== "user" && p.origin !== "profile" && p.visibility !== "self")
+    return S.posts.filter(p => p.authorType !== "user" && p.origin !== "profile" && p.origin !== "super" && p.visibility !== "self")
       .sort((a, b) => score(b) - score(a));
   }
   let findLimit = 20;
@@ -1938,6 +1952,217 @@
 
   }
 
+  // ───────────────────────── 超话 ─────────────────────────
+  const SUPER_LV = [0, 5, 15, 30, 50, 80, 120, 170, 230, 300, 380, 470, 570, 680, 800, 930, 1070, 1220];
+  const superLevel = exp => SUPER_LV.reduce((lv, t, i) => (exp >= t ? i + 1 : lv), 1);
+  const dayKey = d => `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`;
+  const normSuper = t => String(t || "").replace(/超话$/, "").replace(/^[#\s]+|[#\s]+$/g, "").slice(0, 30);
+  const getSuper = name => S.supers.map[name];
+  function saveSupers() { dbUpsert(COL.meta, S.supers).catch(e => console.warn(e)); }
+  const KIND = { 兴趣: "interest", 个人: "person", CP: "cp", 学校: "school" };
+  const KIND_LABEL = { interest: "兴趣", person: "个人", cp: "CP", school: "学校" };
+  /** 存超话信息：保留用户自己的加入、经验、签到 */
+  function upsertSuper(b, extra = {}) {
+    const name = normSuper(b["名称"]); if (!name) return null;
+    const old = S.supers.map[name] || {};
+    const kindRaw = Object.keys(KIND).find(k => String(b["分类"] || "").toUpperCase().includes(k)) || "兴趣";
+    S.supers.map[name] = {
+      ...old, name, intro: (b["简介"] || old.intro || "").trim(), kind: KIND[kindRaw] || old.kind || "interest",
+      host: none(b["主持人"]) ? (old.host || "") : b["主持人"].replace(/^@/, "").trim(),
+      postCount: parseNum(b["帖子数"]) || old.postCount || rand(200, 20000), fans: parseNum(b["粉丝数"]) || old.fans || rand(500, 50000),
+      rel: none(b["相关"]) ? (old.rel || "") : b["相关"].trim(), ...extra,
+    };
+    return S.supers.map[name];
+  }
+  /** 逛这个超话的角色：他的「常逛 / 关于他的」里有，或者超话信息里标了相关 */
+  function superChars(name) {
+    const cs = S.supers.charSupers || {}; const info = getSuper(name) || {};
+    const rel = String(info.rel || "").split(/[、,，\s]+/);
+    return activeChars().filter(c => (cs[c.id] && ((cs[c.id].haunts || []).includes(name) || (cs[c.id].about || []).includes(name))) || rel.includes(c.name));
+  }
+  function addExp(name, n) { const s = getSuper(name); if (!s) return; s.exp = (s.exp || 0) + n; saveSupers(); }
+  const superPosts = name => S.posts.filter(p => p.superName === name && (p.visibility !== "self" || p.authorType === "user"));
+  function superIcon(s, size = 44) {
+    return `<div class="super-icon" style="width:${size}px;height:${size}px;background:${gradientFor(s.name)}">${esc(s.name.slice(0, 1))}</div>`;
+  }
+  function superRowHtml(s) {
+    const signed = s.lastSign === dayKey(new Date());
+    const right = s.joined
+      ? `<button class="follow-btn ${signed ? "on" : ""}" data-act="super-sign" data-name="${esc(s.name)}">${signed ? "已签到" : "签到"}</button>`
+      : `<button class="follow-btn" data-act="super-join" data-name="${esc(s.name)}">+ 加入</button>`;
+    return `<div class="list-cell super-row" data-act="open-super" data-name="${esc(s.name)}">${superIcon(s)}<div class="cell-main"><div>${esc(s.name)}超话 <span class="super-kind">${KIND_LABEL[s.kind] || "兴趣"}</span></div>
+      <div class="cell-sub">${s.joined ? `LV${superLevel(s.exp || 0)} · ` : ""}帖子 ${fmtNum(s.postCount || 0)} · 粉丝 ${fmtNum(s.fans || 0)}</div></div>${right}</div>`;
+  }
+
+  function openSuperHome() {
+    let q = "";
+    const page = openPage("super-home", pg => {
+      const body = $(".page-body", pg.el); const sc = body.scrollTop;
+      const all = Object.values(S.supers.map);
+      const mine = all.filter(s => s.joined);
+      const rec = (S.supers.recommend || []).map(getSuper).filter(s => s && !s.joined);
+      let results = "";
+      if (q) {
+        const hits = all.filter(s => s.name.includes(q) || q.includes(s.name));
+        results = `<div class="find-sec">搜索「${esc(q)}」</div>${hits.map(superRowHtml).join("")}`
+          + (hits.some(s => s.name === q) ? "" : `<button class="load-more search-more" data-act="super-create" data-name="${esc(q)}">✨ 生成「${esc(q)}」超话（会用一次 API）</button>`);
+      }
+      body.innerHTML = `<div class="super-search"><form class="search-form super-form" action="#"><input class="search-input" type="search" maxlength="30" placeholder="搜超话，比如 动漫、平南一高" enterkeyhint="search" value="${esc(q)}"></form></div>
+        ${results}
+        <div class="find-sec">我关注的超话</div>${mine.length ? mine.map(superRowHtml).join("") : `<div class="list-cell"><div class="cell-sub">还没有加入超话，搜一个或者看看推荐吧</div></div>`}
+        <div class="find-sec super-rec-head">推荐超话<button class="hot-refresh" data-act="super-rec" ${pg.busy ? "disabled" : ""}>${I.refresh}${pg.busy ? "生成中" : rec.length ? "换一批" : "看看推荐"}</button></div>
+        ${pg.busy ? `<div class="gen-tip"><span class="spinner"></span>正在找你可能喜欢的超话…</div>` : ""}
+        ${rec.map(superRowHtml).join("") || (pg.busy ? "" : `<div class="list-cell"><div class="cell-sub">点「看看推荐」，按你们的世界和兴趣推荐 6 个超话（会用一次 API）</div></div>`)}`;
+      body.scrollTop = sc;
+      const form = $(".super-form", body);
+      form.addEventListener("submit", e => { e.preventDefault(); q = normSuper($(".search-input", form).value); page.render(page); });
+    }, { title: "超话社区" });
+    page.superHome = true;
+  }
+
+  async function genRecommend(page) {
+    if (page.busy) return;
+    if (!activeChars().length) { toast("没有参与微博的角色：先去微信加个好友，或在设置里打开角色"); return; }
+    page.busy = true; page.render(page);
+    const known = Object.keys(S.supers.map);
+    const cast = pickCast(activeChars(), 4);
+    const instruction = [
+      `当前时间：${nowText()}`,
+      "这次只输出超话信息，不要输出帖子：推荐 6 个用户可能会喜欢的超话。",
+      "按世界书里的世界（学校、城市、娱乐圈、流行的东西）、角色们的人设和爱好、用户的设定和你们最近聊过的东西来推荐，题材要多样（学校、追星、动漫游戏、运动、生活兴趣都可以），不要全和角色有关。",
+      known.length ? `已经有的超话（不要重复）：${known.slice(0, 40).join("、")}` : "",
+      `角色微博昵称：\n${charsForPrompt(cast)}`,
+    ].filter(Boolean).join("\n\n");
+    const text = await generate({ characterIds: cast.map(c => c.id), appTags: ["nox_weibo", "super"], instruction }, "推荐超话");
+    page.busy = false;
+    if (text != null) {
+      const got = parseBlocks(text, "超话").map(b => upsertSuper(b)).filter(Boolean)
+        .filter(s => s.kind !== "person" || superChars(s.name).every(c => isPublic(c.id)));
+      if (got.length) { S.supers.recommend = got.slice(0, 8).map(s => s.name); saveSupers(); noteParsed(`${got.length} 个超话`); } else parseFailed("推荐超话");
+    }
+    page.render(page);
+  }
+
+  function openSuper(name) {
+    name = normSuper(name); if (!name) return;
+    if (topPage() && topPage().key === `super:${name}`) return;
+    if (!getSuper(name)) { S.supers.map[name] = { name, intro: "", kind: "interest", postCount: 0, fans: 0 }; saveSupers(); }
+    let tab = "new";
+    const page = openPage(`super:${name}`, pg => {
+      const s = getSuper(name); const body = $(".page-body", pg.el); const sc = body.scrollTop;
+      if (!s) { body.innerHTML = `<div class="empty">超话不存在</div>`; return; }
+      const posts = superPosts(name);
+      const list = tab === "hot" ? posts.slice().sort((a, b) => heatOf(b) - heatOf(a)) : posts.slice().sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+      const signed = s.lastSign === dayKey(new Date()); const lv = superLevel(s.exp || 0);
+      body.innerHTML = `<div class="super-cover" style="background:${gradientFor(name + "super")}"></div>
+        <div class="super-head">${superIcon(s, 64)}<div class="cell-main"><div class="super-title">${esc(name)}超话 <span class="super-kind">${KIND_LABEL[s.kind] || "兴趣"}</span></div>
+          <div class="cell-sub">帖子 ${fmtNum(s.postCount || posts.length)} · 粉丝 ${fmtNum(s.fans || 0)}${s.host ? ` · 主持人 ${esc(s.host)}` : ""}</div></div></div>
+        ${s.intro ? `<div class="super-intro">${richText(s.intro)}</div>` : ""}
+        <div class="super-actions">${s.joined
+          ? `<span class="super-lv">LV${lv}</span><span class="cell-sub">经验 ${s.exp || 0}${lv < SUPER_LV.length ? ` / ${SUPER_LV[lv]}` : ""}${s.streak ? ` · 已连续签到 ${s.streak} 天` : ""}</span>
+             <button class="follow-btn ${signed ? "on" : ""}" data-act="super-sign" data-name="${esc(name)}">${signed ? "已签到" : "签到 +4"}</button>`
+          : `<span class="cell-sub">加入后可以签到、升级</span><button class="follow-btn" data-act="super-join" data-name="${esc(name)}">+ 加入</button>`}</div>
+        <div class="profile-tabs"><button class="${tab === "new" ? "on" : ""}" data-act="profile-tab" data-tab="new">最新</button><button class="${tab === "hot" ? "on" : ""}" data-act="profile-tab" data-tab="hot">精华</button></div>
+        ${list.map(p => cardHtml(p, { noFollow: true })).join("")}
+        ${pg.busy ? `<div class="gen-tip"><span class="spinner"></span>${s.generated ? "正在加载更多帖子…" : "正在进入超话…"}</div>`
+          : `<button class="load-more" data-act="super-more">${s.generated ? "加载更多帖子" : "进入超话（会用一次 API）"}</button>`}`;
+      body.scrollTop = sc; hydrateImages(body);
+    }, { title: `${name}超话`, footer: `<div class="topic-join"><button class="btn-primary" data-act="super-post" data-name="${esc(name)}">${I.edit.replace("<svg", '<svg width="16" height="16"')}发帖</button></div>` });
+    page.superName = name;
+    page.setTab = t => { tab = t; page.render(page); };
+    if (!getSuper(name).generated) genSuperPosts(page, false);
+  }
+
+  async function genSuperPosts(page, more) {
+    const name = page.superName; const s = getSuper(name);
+    if (!s || page.busy) return;
+    if (!activeChars().length) { toast("没有参与微博的角色：先去微信加个好友，或在设置里打开角色"); return; }
+    page.busy = true; page.render(page);
+    const lurkers = superChars(name);
+    const cast = lurkers.length ? lurkers.slice(0, 3) : pickCast(activeChars(), 1);
+    const existing = superPosts(name).sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)).slice(0, 8)
+      .map(p => `- ${authorOf(p).name}${p.authorType === "user" ? "（用户本人）" : ""}：${p.text.slice(0, 50)}`).join("\n");
+    const instruction = [
+      `当前时间：${nowText()}`,
+      `超话：「${name}」${s.intro ? `\n简介：${s.intro}` : ""}${s.kind ? `\n分类：${KIND_LABEL[s.kind]}` : ""}`,
+      s.intro ? "" : `这个超话还没有资料：先输出一个 ===超话===（名称写「${name}」），再输出帖子。`,
+      lurkers.length ? `也逛这个超话的角色：${lurkers.map(c => c.name).join("、")}（可以在帖子里出现 0～1 条他们发的，按人设来）` : "没有角色逛这个超话：帖子全是超话里的路人，不要出现任何角色。",
+      lurkers.length ? `角色微博昵称（已注册的必须沿用）：\n${charsForPrompt(lurkers)}` : "",
+      existing ? `超话里已经有的帖子（不要重复，接着往下聊）：\n${existing}` : "",
+      `生成 ${more ? rand(5, 7) : rand(7, 9)} 条帖子，时间分散，从刚刚到几天前都有。`,
+      reservedLine(),
+    ].filter(Boolean).join("\n\n");
+    const text = await generate({ characterIds: cast.map(c => c.id), appTags: ["nox_weibo", "super"], instruction }, "加载超话");
+    page.busy = false;
+    if (text != null) {
+      const info = parseBlocks(text, "超话")[0];
+      if (info && !s.intro) upsertSuper({ ...info, 名称: name });
+      const lurkIds = new Set(lurkers.map(c => c.id));
+      const posts = parseBlocks(text, "微博").filter(b => !isUserName(b["作者"])).map(b => postFromBlock(b, { origin: "super", superName: name }))
+        .filter(p => (p.text || p.images.length) && (p.authorType !== "char" || lurkIds.has(p.charId)));
+      for (const p of posts) { S.posts.push(p); savePost(p); S.allPostRows++; rememberOwnPost(p); }
+      getSuper(name).generated = true; saveSupers();
+      if (posts.length || info) noteParsed(`${info ? "超话资料 + " : ""}${posts.length} 条帖子`); else parseFailed("加载超话");
+      pruneIfNeeded();
+    }
+    page.render(page);
+  }
+
+  // ── char 主页里的「TA 的超话」 ──
+  function openCharSupers(charId) {
+    const ch = charById(charId); if (!ch) return;
+    const page = openPage(`char-supers:${charId}`, pg => {
+      const info = (S.supers.charSupers || {})[charId];
+      const body = $(".page-body", pg.el);
+      if (!info) { body.innerHTML = pg.busy ? `<div class="gen-tip"><span class="spinner"></span>正在看看TA在逛哪些超话…</div>` : `<div class="empty">还没看过TA的超话<div><button class="btn-primary" data-act="char-supers-gen" data-char="${esc(charId)}">看看（会用一次 API）</button></div></div>`; return; }
+      const rows = names => names.map(getSuper).filter(Boolean).map(superRowHtml).join("");
+      body.innerHTML = `<div class="find-sec">关于TA的</div>${rows(info.about || []) || `<div class="list-cell"><div class="cell-sub">${isPublic(charId) ? "暂时没有" : "TA不是公众人物，没有个人超话；你们的 CP 超话可以去超话社区搜"}</div></div>`}
+        <div class="find-sec">TA常逛的</div>${rows(info.haunts || []) || `<div class="list-cell"><div class="cell-sub">TA好像不怎么逛超话</div></div>`}`;
+    }, { title: `${charNickname(charId)}的超话` });
+    page.charId = charId;
+    if (!(S.supers.charSupers || {})[charId]) genCharSupers(page);
+  }
+  async function genCharSupers(page) {
+    const charId = page.charId; const ch = charById(charId); if (!ch || page.busy) return;
+    page.busy = true; page.render(page);
+    const both = isPublic(charId) && isPublic("user"); const one = isPublic(charId) !== isPublic("user");
+    const instruction = [
+      `当前时间：${nowText()}`,
+      "这次只输出超话信息，不要输出帖子：列出和你有关的超话、以及你自己常逛的超话。",
+      isPublic(charId) ? "你是公众人物：有你的个人超话（分类写 个人）。" : "你不是公众人物：*没有*个人超话。",
+      both ? `你和用户都是公众人物：你们有 CP 超话（分类写 CP，名称用粉丝会起的 CP 名）。`
+        : one ? "你们只有一方是公众人物：只有你们的恋情已经公开、或者剧情里有过曝光和风吹草动，才会有你们的 CP 超话（分类写 CP）；否则不要输出 CP 超话。"
+        : "你们都是普通人：只有剧情里你们已经被同学嗑出名了（比如上过学校表白墙），才可能有同学建的 CP 超话（分类写 CP）；否则不要输出 CP 超话。",
+      "你常逛的超话 2～4 个（分类写 兴趣 或 学校），按你的人设、爱好、学校来，「相关」写你的本名。",
+      `你的微博昵称：${charNickname(charId)}`,
+    ].join("\n\n");
+    const text = await generate({ characterId: charId, appTags: ["nox_weibo", "super"], instruction }, `${ch.name}的超话`);
+    page.busy = false;
+    if (text != null) {
+      const about = [], haunts = [];
+      for (const b of parseBlocks(text, "超话")) {
+        const s = upsertSuper(b); if (!s) continue;
+        if (s.kind === "person") { if (!isPublic(charId)) { delete S.supers.map[s.name]; continue; } about.push(s.name); }
+        else if (s.kind === "cp") about.push(s.name);
+        else haunts.push(s.name);
+        if (!String(s.rel || "").includes(ch.name)) s.rel = [s.rel, ch.name].filter(x => x && !none(x)).join("、");
+      }
+      S.supers.charSupers = { ...(S.supers.charSupers || {}), [charId]: { about, haunts, at: nowIso() } }; saveSupers();
+      if (about.length || haunts.length) noteParsed(`关于TA ${about.length} 个，常逛 ${haunts.length} 个`); else parseFailed(`${ch.name}的超话`);
+    }
+    page.render(page);
+  }
+
+  function superSign(name) {
+    const s = getSuper(name); if (!s) return;
+    const today = dayKey(new Date());
+    if (s.lastSign === today) { toast("今天已经签过啦"); return; }
+    const y = new Date(); y.setDate(y.getDate() - 1);
+    s.streak = s.lastSign === dayKey(y) ? (s.streak || 0) + 1 : 1;
+    s.lastSign = today; s.joined = true; s.exp = (s.exp || 0) + 4; saveSupers();
+    toast(`签到成功 经验+4 · 已连续签到 ${s.streak} 天`); refreshAll();
+  }
+
   function renderTabbar() {
     const t = S.tab;
     $("#tabbar").innerHTML = `
@@ -1977,7 +2202,7 @@
     renderTab();
   }
   function refreshVisible(post) {
-    for (const p of pages) if (!post || p.key === `detail:${post.id}` || p.key.startsWith("profile") || p.key.startsWith("topic:") || p.key === "search" || p.key === "me-home" || ["likefav", "history", "album", "following", "fans"].includes(p.key)) p.render(p);
+    for (const p of pages) if (!post || p.key === `detail:${post.id}` || p.key.startsWith("profile") || p.key.startsWith("topic:") || p.key === "search" || p.key === "me-home" || p.key.startsWith("super") || ["likefav", "history", "album", "following", "fans"].includes(p.key)) p.render(p);
     if (!pages.length || true) { if (S.tab === "home") renderHome(); else if (S.tab === "me") renderMe(); }
   }
   function rerenderDetail(post) { const p = pages.find(x => x.key === `detail:${post.id}`); if (p) p.render(p); }
@@ -2054,6 +2279,7 @@
       const c = { id: uid("c"), parentId: replyTarget ? (replyTarget.parentId || replyTarget.id) : null, replyToName: replyTarget && replyTarget.parentId ? (replyTarget.authorType === "user" ? S.meta.nickname : replyTarget.authorName) : "",
         authorType: "user", authorName: S.meta.nickname, text, likes: 0, liked: false, isPostAuthor: p.authorType === "user", createdAt: nowIso() };
       p.comments.push(c); p.counts.comments++; savePost(p);
+      if (p.superName && getSuper(p.superName) && getSuper(p.superName).joined) addExp(p.superName, 2);
       const target = replyTarget; replyTarget = null; input.value = ""; send.disabled = true; input.placeholder = "写评论…"; input.style.height = "";
       page.render(page); toast("评论成功");
       const charTarget = (target && target.authorType === "char") || (!target && p.authorType === "char") || (target && target.authorType === "user" && p.authorType === "char");
@@ -2091,7 +2317,8 @@
         actions: `<button class="follow-btn ${isStarred(charId) ? "star-on" : "on"}" style="height:32px;padding:0 12px;font-size:14px" data-act="toggle-star" data-char="${esc(charId)}">${isStarred(charId) ? "★ 特别关注" : "☆ 特别关注"}</button>
           <button class="follow-btn on" style="height:32px;padding:0 12px;font-size:14px" data-act="open-dm" data-char="${esc(charId)}">私信</button>
           <button class="follow-btn ${following ? "on" : ""}" style="height:32px;padding:0 16px;font-size:14px" data-act="toggle-follow-char" data-char="${esc(charId)}">${following ? "已关注" : "+ 关注"}</button>`,
-      }) + `<div class="profile-tabs"><button class="${tab === "posts" ? "on" : ""}" data-act="profile-tab" data-tab="posts">微博</button>
+      }) + `<div class="list-cell char-super-link" data-act="open-char-supers" data-char="${esc(charId)}"><div class="cell-main">⭐ ${acc.gender === "女" ? "她" : acc.gender === "男" ? "他" : "TA"}的超话</div><span class="cell-sub">›</span></div>
+        <div class="profile-tabs"><button class="${tab === "posts" ? "on" : ""}" data-act="profile-tab" data-tab="posts">微博</button>
           <button class="${tab === "album" ? "on" : ""}" data-act="profile-tab" data-tab="album">相册</button></div>${list}`;
       body.scrollTop = scroll; hydrateImages(body);
     }, { clearHead: true });
@@ -2175,7 +2402,7 @@
 
   // ───────────────────────── 发微博 ─────────────────────────
   function openCompose(repostOf, init) {
-    const draft = { text: (init && init.text) || "", images: [], location: "", visibility: "public" };
+    const draft = { text: (init && init.text) || "", images: [], location: "", visibility: "public", superName: init && init.superName };
     if (repostOf) {
       const a = authorOf(repostOf);
       // 转发转发微博时，接上转发链
@@ -2208,7 +2435,7 @@
       updateSend();
       function updateSend() { $(".page-action", pg.el).disabled = !repostOf && !draft.text.trim() && !draft.images.length; }
     }, {
-      title: repostOf ? "转发微博" : "发微博",
+      title: repostOf ? "转发微博" : draft.superName ? `发帖到 ${draft.superName}超话` : "发微博",
       action: `<button class="page-action" data-act="compose-send">发送</button>`,
       footer: `<div class="compose-tools">
         ${repostOf ? "" : `<button class="tool" data-act="compose-pic">${I.image}</button>`}
@@ -2234,7 +2461,9 @@
       source: S.meta.device || "iPhone客户端", createdAt: nowIso(), text: draft.text.trim() || (repostOf ? "转发微博" : ""), images,
       location: draft.location, visibility: draft.visibility, repost: null, counts: { reposts: 0, comments: 0, likes: 0 },
       liked: false, comments: [], commentsGenerated: true, origin: "user",
+      ...(draft.superName ? { superName: draft.superName } : {}),
     };
+    if (draft.superName) addExp(draft.superName, 5);
     if (repostOf) {
       const a = authorOf(repostOf);
       const base = repostOf.repost && !repostOf.repost.deleted ? repostOf.repost : null;
@@ -2251,6 +2480,7 @@
     closePage(); toast("发送成功");
     const under = topPage();
     if (under && under.topic) under.setTab("live");
+    else if (under && under.superName) under.setTab("new");
     else { S.tab = "home"; S.homeTab = "follow"; renderTab(); }
     if (S.meta.autoReact !== false) setTimeout(() => reactToUserPost(post), rand(2500, 6000));
   }
@@ -2398,7 +2628,15 @@
       case "open-drafts": openDrafts(); return;
       case "open-draft": { const d = (S.meta.drafts || []).find(x => x.id === el.dataset.id); if (d) openCompose(null, { text: d.text, draftId: d.id }); return; }
       case "del-draft": S.meta.drafts = (S.meta.drafts || []).filter(x => x.id !== el.dataset.id); saveMeta(); refreshAll(); return;
-      case "open-super": openSuper(); return;
+      case "open-super": if (el.dataset.name) openSuper(el.dataset.name); else openSuperHome(); return;
+      case "super-join": { const sp = getSuper(el.dataset.name); if (sp) { sp.joined = !sp.joined; saveSupers(); toast(sp.joined ? "已加入" : "已退出"); refreshAll(); } return; }
+      case "super-sign": superSign(el.dataset.name); return;
+      case "super-rec": { const pg = topPage(); if (pg && pg.superHome) genRecommend(pg); return; }
+      case "super-create": openSuper(el.dataset.name); return;
+      case "super-more": { const pg = topPage(); if (pg && pg.superName) genSuperPosts(pg, !!(getSuper(pg.superName) || {}).generated); return; }
+      case "super-post": openCompose(null, { superName: el.dataset.name }); return;
+      case "open-char-supers": openCharSupers(el.dataset.char); return;
+      case "char-supers-gen": { const pg = topPage(); if (pg && pg.charId) genCharSupers(pg); return; }
       case "open-profile": openCharProfile(el.dataset.char); return;
       case "open-npc": openNpcProfile(el.dataset.name); return;
       case "like": {

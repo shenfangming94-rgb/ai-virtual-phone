@@ -219,6 +219,9 @@ IP属地：上海
 ===微博===\n角色：无\n作者：吃瓜第一线\n认证：无\n会员：是\n来源：iPhone 14\n时间：2026-09-30\n配图：无\n转评赞：0 / 3 / 12\n转发自：无\n原文：无\n转发链：无\n正文：\n国庆前最后一天班 摸鱼摸到飞起\n===结束===
 ===微博===\n角色：无\n作者：吃瓜第一线\n认证：无\n会员：是\n来源：iPhone 14\n时间：2026-08-02\n配图：猫咪睡觉\n转评赞：1 / 5 / 40\n转发自：无\n原文：无\n转发链：无\n正文：\n我家猫又睡了一整天 羡慕\n===结束===`;
   const dmText = `===私信===\n来自：沈砚\n角色：沈砚\n内容：嗯？\n===结束===\n===私信===\n来自：沈砚\n角色：沈砚\n内容：刚开完会 你说\n===结束===\n===私信===\n来自：沈砚\n角色：沈砚\n内容：[心]\n===结束===`;
+  const superRec = ["平南一高", "猫咪日常", "原神", "篮球", "追星日记", "沈砚"].map((n, i) => `===超话===\n名称：${n}\n简介：${n}同好聚集地\n分类：${["学校", "兴趣", "兴趣", "兴趣", "兴趣", "个人"][i]}\n主持人：${n}小管家\n帖子数：${(i + 1) * 1234}\n粉丝数：${(i + 1) * 5678}\n相关：${i === 5 ? "沈砚" : "无"}\n===结束===`).join("\n");
+  const superPostsText = `===超话===\n名称：X\n简介：一个测试超话\n分类：兴趣\n主持人：超话小助手\n帖子数：888\n粉丝数：9999\n相关：无\n===结束===\n===微博===\n角色：无\n作者：圈内老人\n认证：无\n会员：否\n来源：iPhone 13\n时间：2小时前\n配图：无\n转评赞：0 / 4 / 30\n转发自：无\n原文：无\n转发链：无\n正文：\n新人报道 求带\n===结束===\n===微博===\n角色：沈砚\n作者：砚台不是盐台\n认证：黄V\n会员：是\n来源：iPhone 15 Pro\n时间：1天前\n配图：无\n转评赞：0 / 2 / 10\n转发自：无\n原文：无\n转发链：无\n正文：\n偷偷签个到\n===结束===`;
+  const charSup = `===超话===\n名称：篮球\n简介：打球的都来\n分类：兴趣\n主持人：篮球小管家\n帖子数：5000\n粉丝数：80000\n相关：沈砚\n===结束===\n===超话===\n名称：沈砚\n简介：个人超话\n分类：个人\n主持人：砚台后援会\n帖子数：100\n粉丝数：2000\n相关：沈砚\n===结束===`;
   const calls = [];
   window.__mockCalls = calls;
   window.AiPhone = {
@@ -236,6 +239,7 @@ IP属地：上海
         calls.push(p); await sleep(400);
         const t = p.appTags.join(",");
         if (window.__MOCK_TEXT && window.__MOCK_TEXT[p.appTags[1]] != null) return { text: window.__MOCK_TEXT[p.appTags[1]] };
+        if (t.includes("super")) return { text: /推荐 6 个/.test(p.instruction) ? superRec : /和你有关的超话/.test(p.instruction) ? charSup : superPostsText };
         if (t.includes("dm")) return { text: dmText };
         if (t.includes("npc")) return { text: npcText };
         if (t.includes("hot")) return { text: hot };

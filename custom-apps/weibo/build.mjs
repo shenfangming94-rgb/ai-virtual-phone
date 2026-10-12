@@ -11,7 +11,7 @@ const css = read("src/style.css");
 const rules = JSON.parse(read("rules.json")).rules;
 const placeholder = "data:image/jpeg;base64," + readFileSync(join(root, "assets/placeholder.jpg")).toString("base64");
 const js = read("src/app.js").replace("/*__PLACEHOLDER__*/", () => placeholder).replace("/*__VERSION__*/", () => JSON.parse(read("manifest.json")).version);
-const NAMES = { world: "平台规则", feed: "首页刷新", comments: "评论区", reaction: "用户发博后的反应", reply: "回复评论", profile: "角色主页", hot: "热搜榜", topic: "话题页", search: "搜索", npc: "路人主页", dm: "私信聊天" };
+const NAMES = { world: "平台规则", feed: "首页刷新", comments: "评论区", reaction: "用户发博后的反应", reply: "回复评论", profile: "角色主页", hot: "热搜榜", topic: "话题页", search: "搜索", npc: "路人主页", dm: "私信聊天", super: "超话" };
 const presets = Object.entries(rules).map(([scene, content]) => ({
   id: `weibo-${scene}`, name: `微博：${NAMES[scene] || scene}`, content, enabled: true,
   tags: scene === "world" ? ["nox_weibo"] : ["nox_weibo", scene],

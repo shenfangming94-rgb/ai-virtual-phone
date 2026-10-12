@@ -115,6 +115,22 @@
 转发：陆知遥：好看 || 吃瓜第一线：转发微博
 路人点赞：14
 新增粉丝：3
+新粉丝：今天也要早睡、是小王不是小汪
+===结束===
+===私信===
+来自：沈砚
+角色：沈砚
+内容：微信不回 跑来发微博？
+===结束===
+===私信===
+来自：沈砚
+角色：沈砚
+内容：照片里那杯奶茶是谁买的
+===结束===
+===私信===
+来自：一只柠檬精
+角色：无
+内容：姐妹你这个滤镜叫啥
 ===结束===`;
   const profile = `===主页===
 昵称：砚台不是盐台
@@ -163,6 +179,15 @@ IP属地：上海
 回复：F3
 赞：5
 内容：你又知道了？
+===结束===
+===私信===
+来自：沈砚
+角色：沈砚
+内容：评论区人多 私信说
+===结束===
+===互动===
+点赞角色：沈砚
+路人点赞：4
 ===结束===`;
   const npc = `===评论===
 编号：n1
@@ -193,6 +218,7 @@ IP属地：上海
   const npcText = `===主页===\n昵称：吃瓜第一线\n性别：女\n简介：瓜田里的猹 有瓜必吃\n认证：无\n认证说明：无\n会员：是\nIP属地：浙江\n粉丝：1288\n关注：356\n===结束===
 ===微博===\n角色：无\n作者：吃瓜第一线\n认证：无\n会员：是\n来源：iPhone 14\n时间：2026-09-30\n配图：无\n转评赞：0 / 3 / 12\n转发自：无\n原文：无\n转发链：无\n正文：\n国庆前最后一天班 摸鱼摸到飞起\n===结束===
 ===微博===\n角色：无\n作者：吃瓜第一线\n认证：无\n会员：是\n来源：iPhone 14\n时间：2026-08-02\n配图：猫咪睡觉\n转评赞：1 / 5 / 40\n转发自：无\n原文：无\n转发链：无\n正文：\n我家猫又睡了一整天 羡慕\n===结束===`;
+  const dmText = `===私信===\n来自：沈砚\n角色：沈砚\n内容：嗯？\n===结束===\n===私信===\n来自：沈砚\n角色：沈砚\n内容：刚开完会 你说\n===结束===\n===私信===\n来自：沈砚\n角色：沈砚\n内容：[心]\n===结束===`;
   const calls = [];
   window.__mockCalls = calls;
   window.AiPhone = {
@@ -210,6 +236,7 @@ IP属地：上海
         calls.push(p); await sleep(400);
         const t = p.appTags.join(",");
         if (window.__MOCK_TEXT && window.__MOCK_TEXT[p.appTags[1]] != null) return { text: window.__MOCK_TEXT[p.appTags[1]] };
+        if (t.includes("dm")) return { text: dmText };
         if (t.includes("npc")) return { text: npcText };
         if (t.includes("hot")) return { text: hot };
         if (t.includes("topic")) return { text: topicText };
@@ -221,7 +248,7 @@ IP属地：上海
         if (t.includes("reply")) return { text: reply };
         return { text: "" };
       },
-      async chat(p) { calls.push(p); await sleep(300); const code = (p.prompt.match(/编号 (F\d+)/) || [])[1] || "U"; return { text: npc.replace("回复：U", "回复：" + code) }; },
+      async chat(p) { calls.push(p); await sleep(300); if (/私信你/.test(p.prompt)) return { text: "===私信===\n来自：一只柠檬精\n角色：无\n内容：好的谢谢姐妹！\n===结束===" }; const code = (p.prompt.match(/编号 (F\d+)/) || [])[1] || "U"; return { text: npc.replace("回复：U", "回复：" + code) }; },
       async generateImage() { await sleep(300); return { dataUrl: "data:image/svg+xml;utf8," + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="400" height="300"><rect width="400" height="300" fill="#7ab"/><text x="20" y="150" font-size="30" fill="#fff">generated</text></svg>') }; },
     },
     media: {

@@ -363,3 +363,38 @@ img { display: block; }
 .hot-cell.hot-more { justify-content: flex-start; padding-left: 24px; color: var(--wb-orange); font-size: 15px; text-align: left; }
 .find-tabs { margin-top: 8px; position: static; }
 .hot-row .hot-title.link { color: var(--wb-link); }
+
+/* ── 消息：通知 / 私信 ── */
+.tab { position: relative; }
+.badge { position: absolute; top: -4px; right: -10px; min-width: 16px; height: 16px; padding: 0 4px; border-radius: 8px; background: #ff3b30; color: #fff; font-size: 10px; font-weight: 600; line-height: 16px; text-align: center; font-style: normal; }
+.tab .badge { top: 2px; right: calc(50% - 22px); }
+.note-icons { display: flex; justify-content: space-around; padding: 16px 8px 14px; background: var(--wb-card); }
+.note-icon { display: flex; flex-direction: column; align-items: center; gap: 6px; font-size: 13px; color: var(--wb-text); }
+.note-circle { position: relative; width: 48px; height: 48px; border-radius: 50%; display: grid; place-items: center; color: #fff; }
+.note-circle svg { width: 24px; height: 24px; }
+.note-circle b { font-size: 22px; }
+.note-circle .badge { top: -2px; right: -4px; }
+.dm-list { margin-top: 8px; background: var(--wb-card); }
+.dm-row { position: relative; display: flex; align-items: center; gap: 10px; padding: 12px 16px; border-bottom: 1px solid var(--wb-line); cursor: pointer; }
+.dm-row .avatar { width: 46px; height: 46px; flex: none; }
+.dm-row .badge { position: static; flex: none; }
+.dm-top { display: flex; align-items: baseline; gap: 8px; }
+.dm-top b { flex: 1; min-width: 0; font-size: 15px; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dm-top b.vip { color: #f86400; }
+.dm-top span { flex: none; font-size: 12px; color: var(--wb-text-3); }
+.dm-last { margin-top: 2px; font-size: 13px; color: var(--wb-text-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.note-item { display: flex; gap: 10px; padding: 12px 16px; background: var(--wb-card); border-bottom: 1px solid var(--wb-line); cursor: pointer; }
+.note-item .avatar { width: 40px; height: 40px; flex: none; }
+.note-action { font-size: 13px; color: var(--wb-text-2); margin-top: 1px; }
+.note-text { margin-top: 4px; font-size: 15px; line-height: 1.5; word-break: break-word; }
+.note-quote { margin-top: 8px; padding: 8px 10px; border-radius: 4px; background: var(--wb-quote); font-size: 13px; color: var(--wb-text-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dm-chat { padding: 12px 12px 20px; }
+.dm-stamp { margin: 10px 0; text-align: center; font-size: 12px; color: var(--wb-text-3); }
+.dm-msg { display: flex; align-items: flex-start; gap: 8px; margin: 10px 0; }
+.dm-msg.me { flex-direction: row-reverse; }
+.dm-msg .avatar { flex: none; }
+.dm-bubble { max-width: 72%; padding: 9px 12px; border-radius: 4px 14px 14px 14px; background: var(--wb-card); font-size: 15px; line-height: 1.5; word-break: break-word; white-space: pre-wrap; }
+.dm-msg.me .dm-bubble { border-radius: 14px 4px 14px 14px; background: #ff9a3c; color: #fff; }
+.dm-msg.me .dm-bubble .link { color: #fff; text-decoration: underline; }
+.dm-typing { margin: 8px 0 0 52px; font-size: 12px; color: var(--wb-text-3); }
+.dm-row .cell-main, .note-item .cell-main { flex: 1; min-width: 0; }

@@ -1446,7 +1446,8 @@
     const h = hotItem(title); const rank = hotRank(title);
     const related = charsOfTopic(title, h && h.rel);
     // 候选角色：话题相关的优先，没有就随便给两个让 AI 挑；最终最多出现 1 个
-    const cast = (related.length ? related : pickCast(activeChars(), 2)).slice(0, 3);
+    // 话题页不按特别关注排：随机给 3 个候选让 AI 挑最贴近的，免得每次都是同一个人
+    const cast = (related.length ? related : shuffle(activeChars()).slice(0, 3)).slice(0, 3);
     const hasChar = topicPosts(title).some(p => p.authorType === "char");
     const existing = topicPosts(title).sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)).slice(0, 8)
       .map(p => `- ${authorOf(p).name}${p.authorType === "user" ? "（用户本人）" : ""}：${p.text.slice(0, 60)}`).join("\n");
@@ -1543,7 +1544,7 @@
     if (!activeChars().length) { toast("没有参与微博的角色：先去微信加个好友，或在设置里打开角色"); return; }
     page.busy = true; page.render(page);
     const related = activeChars().filter(c => { const nick = S.accounts[c.id] && S.accounts[c.id].nickname; return q.includes(c.name) || c.name.includes(q) || (nick && (q.includes(nick) || nick.includes(q))); });
-    const cast = [...related, ...pickCast(activeChars().filter(c => !related.includes(c)), Math.max(0, 2 - related.length))].slice(0, 4);
+    const cast = [...related, ...shuffle(activeChars().filter(c => !related.includes(c))).slice(0, Math.max(0, 2 - related.length))].slice(0, 4);
     const existing = searchPosts(q).slice(0, 8).map(p => `- ${authorOf(p).name}：${p.text.slice(0, 50)}`).join("\n");
     const instruction = [
       `当前时间：${nowText()}`,

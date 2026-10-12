@@ -1254,6 +1254,12 @@
     const active = activeChars();
     return [...set].filter(c => active.includes(c));
   }
+  /** 热搜词条是不是和角色、用户有关：AI 标了相关，或者词条里出现了名字、昵称 */
+  function isRelatedHot(x) {
+    if (x.rel && !none(x.rel)) return true;
+    const names = [S.identity.name, S.meta.nickname, ...S.chars.flatMap(c => [c.name, S.accounts[c.id] && S.accounts[c.id].nickname])].filter(n => n && n.length >= 2);
+    return names.some(n => x.title.includes(n));
+  }
   function recentFeedLines(n) {
     return S.posts.filter(p => p.authorType !== "user" && p.origin === "feed").sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)).slice(0, n)
       .map(p => `- ${authorOf(p).name}：${p.text.slice(0, 40)}`).join("\n");
@@ -1265,14 +1271,19 @@
     if (!activeChars().length) { toast("没有参与微博的角色：先去微信加个好友，或在设置里打开角色"); return; }
     S.hotBusy = true; renderFind();
     const cast = pickCast(activeChars(), 5);
-    const prev = (S.hot.items || []).map((x, i) => `${i + 1}. ${x.title}`).join("\n");
+    // 上一版里和角色、用户有关的不带过去，免得一直残留在榜上
+    const prevItems = (S.hot.items || []).filter(x => !isRelatedHot(x));
+    const gapH = S.hot.at ? (Date.now() - new Date(S.hot.at)) / 3600e3 : 99;
+    const keep = gapH < 1 ? "8～10" : gapH < 3 ? "4～6" : gapH < 12 ? "2～3" : "0～1";
+    const gapText = gapH < 1 ? `${Math.max(1, Math.round(gapH * 60))} 分钟` : gapH < 48 ? `${Math.round(gapH)} 小时` : `${Math.round(gapH / 24)} 天`;
+    const prev = prevItems.map(x => `- ${x.title}`).join("\n");
     const recent = recentFeedLines(6);
     const instruction = [
       `当前时间：${nowText()}`,
-      `本轮生成 ${HOT_COUNT} 条热搜。`,
+      `本轮生成 ${HOT_COUNT + 2} 条热搜。和角色、用户有关的（包括你们聊天里聊过的话题）最多 2 条。`,
       `角色微博昵称：\n${charsForPrompt(cast)}`,
       "用户是不是公众人物、会不会上热搜，以用户设定为准。",
-      prev ? `上一版热搜（${fmtTime(S.hot.at)}的，隔得近的话有几条还挂在榜上、热度变了，其余换成新的）：\n${prev}` : "",
+      prev ? `上一版热搜是 ${gapText}前的，只保留其中 ${keep} 条（热度变了），其余全部换成新的：\n${prev}` : "",
       recent ? `首页最近大家在发的（有的可能发酵成热搜）：\n${recent}` : "",
     ].filter(Boolean).join("\n\n");
     const text = await generate({ characterIds: cast.map(c => c.id), appTags: ["nox_weibo", "hot"], instruction }, "刷新热搜");
@@ -1282,7 +1293,11 @@
     const items = parseBlocks(text, "热搜").map(b => ({
       title: normTopic(b["热搜词"]), heat: parseNum(b["热度"]),
       tag: (String(b["标签"] || "").match(/[爆沸热新]/) || [""])[0], rel: none(b["相关"]) ? "" : b["相关"].trim(),
-    })).filter(x => x.title && !seen.has(x.title) && seen.add(x.title)).slice(0, HOT_COUNT);
+    })).filter(x => x.title && !seen.has(x.title) && seen.add(x.title));
+    // 兜底：和角色、用户有关的最多留 2 条
+    let related = 0;
+    const capped = items.filter(x => !isRelatedHot(x) || ++related <= 2).slice(0, HOT_COUNT);
+    items.length = 0; items.push(...capped);
     if (!items.length) { renderFind(); parseFailed("刷新热搜"); return; }
     // 模型漏写热度时按名次补
     items.forEach((x, i) => { if (!x.heat) x.heat = Math.round(8e6 / (i + 1) + rand(1e4, 9e4)); });

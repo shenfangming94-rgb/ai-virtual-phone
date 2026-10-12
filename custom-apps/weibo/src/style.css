@@ -413,3 +413,8 @@ img { display: block; }
 .dm-bottom .dm-last { flex: 1; min-width: 0; margin-top: 0; font-size: 14px; }
 .dm-bottom .badge { position: static; flex: none; min-width: 20px; height: 20px; line-height: 20px; border-radius: 10px; font-size: 12px; }
 .note-row .badge { min-width: 20px; height: 20px; line-height: 20px; border-radius: 10px; font-size: 12px; }
+.dm-regen { font-size: 18px; }
+.dm-dots { display: flex; gap: 4px; align-items: center; padding: 14px 14px; }
+.dm-dots i { width: 6px; height: 6px; border-radius: 50%; background: var(--wb-text-3); animation: dmdot 1.2s infinite ease-in-out; }
+.dm-dots i:nth-child(2) { animation-delay: .2s; } .dm-dots i:nth-child(3) { animation-delay: .4s; }
+@keyframes dmdot { 0%, 60%, 100% { opacity: .3; transform: translateY(0); } 30% { opacity: 1; transform: translateY(-3px); } }

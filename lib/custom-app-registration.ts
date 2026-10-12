@@ -189,6 +189,9 @@ function attachPromptEntriesToPresets(app: InstalledCustomApp, prompts: Prompt[]
   const promptById = new Map(prompts.map(prompt => [prompt.identifier, prompt]));
   const previousContent = new Map((builtIn.prompts ?? []).map(prompt => [prompt.identifier, prompt.content]));
   const insertOrder = (order: NonNullable<PresetConfig["prompt_order"]>, entries: NonNullable<PresetConfig["prompt_order"]>) => {
+    // 已有同一 APP 的条目：新条目接在它们最后面，平台规则这类老条目保持在前
+    const lastOwn = order.reduce((at, entry, i) => (entry.identifier.startsWith(prefix) || promptIds.has(entry.identifier) ? i : at), -1);
+    if (lastOwn >= 0) return [...order.slice(0, lastOwn + 1), ...entries, ...order.slice(lastOwn + 1)];
     const dividerIndex = order.findIndex(entry => entry.identifier === "shortTermMemory" || entry.identifier === "chatHistory");
     return dividerIndex >= 0
       ? [...order.slice(0, dividerIndex + 1), ...entries, ...order.slice(dividerIndex + 1)]

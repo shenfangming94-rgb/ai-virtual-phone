@@ -658,7 +658,7 @@
       excludedChars: S.meta.excludedChars || [], starredChars: S.meta.starredChars || [], avatarPool: S.meta.avatarPool || [], placeholderRef: S.meta.placeholderRef || null };
     saveMeta();
     S.hot = { id: S.hot.id, at: null, items: [] }; saveHot();
-    S.topics = { id: S.topics.id, map: {} }; saveTopics();
+    S.topics = { id: S.topics.id, map: {}, recent: [] }; saveTopics();
     S.allPostRows = (await dbList(COL.posts)).length;
     S.homeTab = "follow"; feedLimit = 30;
     while (pages.length) closePage();
@@ -1235,18 +1235,44 @@
     return `<div class="hot-row" data-act="open-topic" data-topic="${esc(x.title)}"><span class="hot-rank r${i + 1}">${i + 1}</span>
       <span class="hot-title">${esc(x.title)}</span><span class="hot-heat">${fmtNum(x.heat)}</span>${x.tag ? `<span class="hot-tag ${TAG_CLASS[x.tag]}">${x.tag}</span>` : ""}</div>`;
   }
+  function hotHeadHtml() {
+    return `<div class="hot-head"><b>🔥 微博热搜</b><span class="hot-time">${S.hot.at ? `${fmtTime(S.hot.at)} 更新` : ""}</span>
+      <button class="hot-refresh" data-act="hot-refresh" ${S.hotBusy ? "disabled" : ""}>${I.refresh}${S.hotBusy ? "刷新中" : "刷新"}</button></div>
+      ${S.hotBusy ? `<div class="gen-tip"><span class="spinner"></span>正在刷新热搜，看看大家在吃什么瓜…</div>` : ""}`;
+  }
+  /** 发现页下面的热门微博：已有的微博按热度排，越新越靠前，不花 API */
+  function hotFeedPosts() {
+    const now = Date.now();
+    const score = p => heatOf(p) / (1 + Math.max(0, now - new Date(p.createdAt)) / 86400e3);
+    return S.posts.filter(p => p.authorType !== "user" && p.origin !== "profile" && p.visibility !== "self")
+      .sort((a, b) => score(b) - score(a));
+  }
+  let findLimit = 20;
   function renderFind(justRefreshed) {
+    for (const pg of pages) if (pg.key === "hot-all") pg.render(pg);
     if (S.tab !== "find") return;
     $("#topbar").innerHTML = `<div class="topbar-inner"><button class="search-box" data-act="open-search">${I.search}<span>搜索微博、用户</span></button></div>`;
     const items = S.hot.items || [];
-    const head = `<div class="hot-head"><b>🔥 微博热搜</b><span class="hot-time">${S.hot.at ? `${fmtTime(S.hot.at)} 更新` : ""}</span>
-      <button class="hot-refresh" data-act="hot-refresh" ${S.hotBusy ? "disabled" : ""}>${I.refresh}${S.hotBusy ? "刷新中" : "刷新"}</button></div>`;
-    const busy = S.hotBusy ? `<div class="gen-tip"><span class="spinner"></span>正在刷新热搜，看看大家在吃什么瓜…</div>` : "";
-    const list = items.length ? `<div class="hot-list">${items.map(hotRowHtml).join("")}</div>`
+    const hot = items.length
+      ? `<div class="hot-list">${items.slice(0, 10).map(hotRowHtml).join("")}
+          ${items.length > 10 ? `<div class="hot-more" data-act="open-hot-all">更多热搜 ›</div>` : ""}</div>`
       : S.hotBusy ? "" : `<div class="empty"><div class="big">🔥</div>热搜榜还空着<br>刷新一下看看大家在聊什么
         <div><button class="btn-primary" data-act="hot-refresh">${I.refresh.replace("<svg", '<svg width="16" height="16"')}生成热搜</button></div></div>`;
-    $("#view").innerHTML = head + busy + list;
+    const recent = (S.topics.recent || []).filter(t => S.topics.map[t]).slice(0, 12);
+    const chips = recent.length ? `<div class="find-sec">最近看过的话题</div>
+      <div class="topic-chips">${recent.map(t => `<button class="topic-chip" data-act="open-topic" data-topic="${esc(t)}">#${esc(t)}#</button>`).join("")}</div>` : "";
+    const feed = hotFeedPosts();
+    const feedHtml = feed.length ? `<div class="find-sec">热门微博</div>${feed.slice(0, findLimit).map(p => cardHtml(p, { noFollow: true })).join("")}
+      ${feed.length > findLimit ? '<button class="load-more" data-act="find-more">查看更多</button>' : '<div class="load-more">没有更多了</div>'}` : "";
+    $("#view").innerHTML = hotHeadHtml() + hot + chips + feedHtml;
     if (justRefreshed) $("#view").scrollTop = 0;
+    hydrateImages($("#view"));
+  }
+  function openHotAll() {
+    openPage("hot-all", pg => {
+      const items = S.hot.items || [];
+      $(".page-body", pg.el).innerHTML = hotHeadHtml() + (items.length ? `<div class="hot-list">${items.map(hotRowHtml).join("")}</div>` : `<div class="empty">热搜榜还空着</div>`);
+    }, { title: "微博热搜" });
   }
 
   // ── 话题页 ──
@@ -1288,6 +1314,7 @@
     });
     page.topic = title;
     page.setTab = t => { tab = t; page.render(page); };
+    S.topics.recent = [title, ...(S.topics.recent || []).filter(t => t !== title)].slice(0, 20); saveTopics();
     if (!S.topics.map[title]) genTopic(page, false);
   }
 
@@ -1298,7 +1325,9 @@
     page.busy = true; page.render(page);
     const h = hotItem(title); const rank = hotRank(title);
     const related = charsOfTopic(title, h && h.rel);
-    const cast = [...related, ...pickCast(activeChars().filter(c => !related.includes(c)), Math.max(0, 3 - related.length))].slice(0, 4);
+    // 候选角色：话题相关的优先，没有就随便给两个让 AI 挑；最终最多出现 1 个
+    const cast = (related.length ? related : pickCast(activeChars(), 2)).slice(0, 3);
+    const hasChar = topicPosts(title).some(p => p.authorType === "char");
     const existing = topicPosts(title).sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)).slice(0, 8)
       .map(p => `- ${authorOf(p).name}${p.authorType === "user" ? "（用户本人）" : ""}：${p.text.slice(0, 60)}`).join("\n");
     const instruction = [
@@ -1306,6 +1335,7 @@
       `话题：#${title}#`,
       h ? `这是微博热搜第 ${rank} 名，热度 ${fmtNum(h.heat)}${h.tag ? `，标签「${h.tag}」` : ""}。` : "这个话题不在热搜榜上，热度按话题本身来，小话题就冷清一点。",
       related.length ? `和这个话题有关的角色：${related.map(c => c.name).join("、")}` : "",
+      `最多 1 个角色发博：从下面的角色里挑和话题最贴近的那一个${hasChar ? "（话题里已经有角色发过博了，这次不要再有角色）" : ""}，都不贴近就一个都不出现，其余全是路人和媒体。`,
       h && /用户/.test(h.rel) ? `这个话题和用户本人有关（用户的微博昵称「${S.meta.nickname}」）：大家会讨论用户，但用户本人不发言。` : "",
       `角色微博昵称（已注册的必须沿用）：\n${charsForPrompt(cast)}`,
       existing ? `话题里已经有的微博（不要重复，${more ? "接着往下聊" : "说法保持一致"}）：\n${existing}` : "",
@@ -1783,7 +1813,7 @@
     switch (act) {
       case "tab":
         if (S.tab === el.dataset.tab && S.tab === "home") { $("#view").scrollTop = 0; refreshFeed(); return; }
-        S.tab = el.dataset.tab; feedLimit = 30; renderTab(); $("#view").scrollTop = 0; return;
+        S.tab = el.dataset.tab; feedLimit = 30; findLimit = 20; renderTab(); $("#view").scrollTop = 0; return;
       case "home-tab": S.homeTab = el.dataset.tab; feedLimit = 30; renderHome(); $("#view").scrollTop = 0; return;
       case "refresh": refreshFeed(); return;
       case "wipe": wipeAll(); return;
@@ -1934,6 +1964,8 @@
       case "char-more": ensureCharProfile(el.dataset.char, true); return;
       case "compose": openCompose(null); return;
       case "hot-refresh": refreshHot(); return;
+      case "open-hot-all": openHotAll(); return;
+      case "find-more": findLimit += 20; renderFind(); return;
       case "open-topic": openTopic(el.dataset.topic); return;
       case "topic-more": { const pg = topPage(); if (pg && pg.topic) genTopic(pg, !!S.topics.map[pg.topic]); return; }
       case "join-topic": openCompose(null, { text: `#${el.dataset.topic}# ` }); return;

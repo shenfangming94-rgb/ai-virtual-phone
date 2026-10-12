@@ -355,11 +355,11 @@ img { display: block; }
 .topic-chips { display: flex; gap: 8px; overflow-x: auto; padding: 0 16px 14px; background: var(--wb-card); scrollbar-width: none; }
 .topic-chips::-webkit-scrollbar { display: none; }
 .topic-chip { flex: none; max-width: 200px; height: 30px; padding: 0 12px; border-radius: 15px; background: var(--wb-bg); color: var(--wb-link); font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.hot-grid { display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: repeat(5, auto); grid-auto-flow: column; column-gap: 12px; padding: 4px 12px 8px; background: var(--wb-card); }
-.hot-cell { display: flex; align-items: center; gap: 6px; min-width: 0; height: 40px; cursor: pointer; }
+.hot-grid { display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: repeat(5, auto); grid-auto-flow: column; column-gap: 12px; padding: 6px 12px 6px; background: var(--wb-card); }
+.hot-cell { display: flex; align-items: center; gap: 6px; min-width: 0; height: 33px; cursor: pointer; }
 .hot-cell .hot-rank { width: 18px; font-size: 15px; }
 .hot-cell .hot-title { font-size: 14px; }
 .hot-cell .hot-tag { width: 16px; height: 16px; font-size: 11px; }
 .hot-cell.hot-more { justify-content: flex-start; padding-left: 24px; color: var(--wb-orange); font-size: 14px; text-align: left; }
-.find-tabs { margin-top: 8px; position: static; }
+.find-tabs { position: static; margin: 0; border-top: 1px solid var(--wb-line); }
 .hot-row .hot-title.link { color: var(--wb-link); }

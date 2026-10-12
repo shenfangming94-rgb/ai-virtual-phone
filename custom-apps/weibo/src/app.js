@@ -1249,12 +1249,12 @@
   }
   let findLimit = 20;
   let findTab = "hot";
-  /** 看过的话题：按最近看的排，旧版本没记录的按生成时间补在后面 */
+  /** 看过的话题：按最近看的排，只留最近 20 个；旧版本没记录的按生成时间补在后面 */
   function seenTopics() {
     const recent = (S.topics.recent || []).filter(t => S.topics.map[t]);
     const rest = Object.keys(S.topics.map).filter(t => !recent.includes(t))
       .sort((a, b) => new Date(S.topics.map[b].at || 0) - new Date(S.topics.map[a].at || 0));
-    return [...recent, ...rest].slice(0, 50);
+    return [...recent, ...rest].slice(0, 20);
   }
   function renderFind(justRefreshed) {
     for (const pg of pages) if (pg.key === "hot-all") pg.render(pg);

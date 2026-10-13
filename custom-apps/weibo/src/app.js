@@ -644,13 +644,15 @@
   /** 角色发的「班级通知」：规则管不住时代码兜底丢掉（官方 / 机构号的路人博不管） */
   const NOTICE_RE = /各位同学|同学们[，,！!：:\s]|全班同学|请大家|提醒大家|大家注意|注意事项|温馨提示|通知[：:]|收齐|按时(交|到|上交)|不要忘[了记]带|记得带好|班级(通知|事务)|通报|公告[：:]|紧急通知/;
   const isCharNotice = p => p.authorType === "char" && NOTICE_RE.test(p.text || "");
-  /** 兜底：一批 3 条以上的原创博全带图时，挑 1～2 条没有本人出镜、文字最长的拿掉配图 */
+  /** 兜底：一批 3 条以上的原创博全带图时，挑 1～2 条像吐槽、有感而发的拿掉配图；晒东西的、本人出镜的不动，没有合适的就不拿 */
+  const VENT_RE = /烦|累|困|无语|服了|麻了|崩溃|为什么|凭什么|emo|睡不着|失眠|难过|想哭|唉|救命|笑死|好想|又是|受不了|离谱|破防|吐槽|感觉|突然觉得|有时候/;
+  const SHOW_RE = /吃|饭|喝|奶茶|咖啡|买|拍|晒|打卡|新[剪买入到]|这家|好看|可爱|猫|狗|风景|天空|日落|花|穿搭|自拍|合照|看了|演唱会|展/;
   function thinPics(posts) {
     const own = posts.filter(p => !p.repost);
     if (own.length < 3 || own.some(p => !p.images.length)) return posts;
-    own.filter(p => !p.images.some(i => i.withFace) && (p.text || "").length >= 8)
-      .sort((a, b) => b.text.length - a.text.length).slice(0, own.length >= 5 ? 2 : 1)
-      .forEach(p => { p.images = []; });
+    own.map(p => ({ p, score: (VENT_RE.test(p.text || "") ? 2 : 0) - (SHOW_RE.test(p.text || "") ? 2 : 0) }))
+      .filter(x => x.score > 0 && !x.p.images.some(i => i.withFace)).sort((a, b) => b.score - a.score)
+      .slice(0, own.length >= 5 ? 2 : 1).forEach(x => { x.p.images = []; });
     return posts;
   }
   function postFromBlock(b, extra) {

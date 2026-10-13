@@ -552,7 +552,7 @@
   }
 
   // ───────────────────────── AI 输出解析 ─────────────────────────
-  const KEYS = ["口吻", "发博原因", "角色", "作者", "认证", "认证说明", "会员", "来源", "时间", "配图", "转评赞", "转发自", "原文", "转发链", "正文", "编号", "回复", "赞", "内容",
+  const KEYS = ["转发语", "口吻", "发博原因", "角色", "作者", "认证", "认证说明", "会员", "来源", "时间", "配图", "转评赞", "转发自", "原文", "转发链", "正文", "编号", "回复", "赞", "内容",
     "性别", "点赞角色", "转发", "路人点赞", "新增粉丝", "昵称", "简介", "IP属地", "粉丝", "关注",
     "热搜词", "热度", "标签", "相关", "来自", "新粉丝", "名称", "分类", "帖子数", "粉丝数", "导语", "主持人", "阅读", "讨论", "分区", "词条", "热搜", "阅读量", "讨论量",
     // 模型常换的叫法
@@ -565,7 +565,7 @@
   const KEY_ALT = KEYS.slice().sort((a, b) => b.length - a.length).join("|");
   // 支持「作者：xx」「作者: xx」「[作者]xx」「【作者】：xx」「**作者**：xx」「- 作者：xx」
   const KEY_RE = new RegExp(`^\\s*(?:[-*•]\\s*)?(?:[\\[【]\\s*(${KEY_ALT})\\s*[\\]】]\\s*[：:]?|(${KEY_ALT})\\s*[：:])\\s*(.*)$`);
-  const KINDS = "微博|评论|互动|主页|热搜|话题|私信|超话|结束";
+  const KINDS = "微博|评论|互动|主页|热搜|话题|私信|超话|转发|结束";
 
   /** 把模型常见的格式偏差统一成 ===xx=== 块 */
   function normalizeOutput(text) {
@@ -601,7 +601,7 @@
 
   function parseBlocks(raw, kind) {
     const text = normalizeOutput(raw);
-    const bodyKey = { 微博: "正文", 评论: "内容", 互动: "点赞角色", 主页: "昵称", 热搜: "热搜词", 话题: "导语", 私信: "内容", 超话: "名称" }[kind];
+    const bodyKey = { 转发: "转发语", 微博: "正文", 评论: "内容", 互动: "点赞角色", 主页: "昵称", 热搜: "热搜词", 话题: "导语", 私信: "内容", 超话: "名称" }[kind];
     // 按分隔标记切段；标记之外的散段（模型漏写标记）也一并按字段解析，最后按必需字段筛
     const out = [];
     let label = null;
@@ -614,6 +614,7 @@
     if (kind === "主页") return out.filter(f => "昵称" in f && ("粉丝" in f || "简介" in f)).slice(0, 1);
     if (kind === "话题") return out.filter(f => f["导语"] && !f["正文"]).slice(0, 1);
     if (kind === "私信") return out.filter(f => f["内容"] && f["来自"]);
+    if (kind === "转发") return out.filter(f => f["昵称"] && "转发语" in f && !f["正文"]);
     if (kind === "超话") return out.filter(f => f["名称"] && !f["正文"]);
     return out.filter(f => f[bodyKey]);
   }
@@ -825,7 +826,7 @@
   }
   // 规则和输出格式在预设条目里（presets.json，按 nox_weibo 标签命中）；这里只在末尾再提醒一次格式
   const FORMAT_HINT = {
-    feed: "===微博===（需要时加 ===私信===）", comments: "===评论===", reaction: "===评论=== 和 ===互动===（需要时加 ===私信===）", reply: "===评论===（需要时加 ===私信=== 和 ===互动===）", profile: "===主页=== 和 ===微博===",
+    feed: "===微博===（需要时加 ===私信===）", comments: "===评论===（本轮说明要求时，评论后面加 ===转发===）", reaction: "===评论=== 和 ===互动===（需要时加 ===私信===）", reply: "===评论===（需要时加 ===私信=== 和 ===互动===）", profile: "===主页=== 和 ===微博===",
     dm: "===私信===", super: "===超话=== 或 ===微博===（按本轮说明要的输出）",
     hot: "===热搜===", topic: "===话题=== 和 ===微博===", search: "===微博===", npc: "===主页=== 和 ===微博===", charalt: "===主页=== 和 ===微博===（主页按本轮说明决定要不要）",
   };
@@ -1065,6 +1066,31 @@
   }
 
   /** 打开正文页时生成评论区 */
+  /** 别人微博的转发列表：只有路人，只用来看，不生成真的转发微博 */
+  const repostWant = post => post.authorType !== "user" && !post.repostsGenerated && post.counts.reposts > 0 ? Math.min(post.counts.reposts, rand(5, 8)) : 0;
+  const REPOST_FMT = n => `评论写完后，再写这条微博转发列表里的 ${n} 条转发：转发的都是路人（不能是角色或用户），转发语很短，像真人随手转发，有的只写「转发微博」，有的带一句态度或玩梗，彼此不要雷同。每条格式：\n===转发===\n昵称：路人微博昵称\n转发语：一句话\n===结束===`;
+  function takeReposts(post, text) {
+    const list = parseBlocks(text, "转发").map(b => ({ name: b["昵称"].replace(/^@/, "").trim(), text: none(b["转发语"]) ? "转发微博" : b["转发语"].trim() }))
+      .filter(r => r.name && !isUserName(r.name) && !charByName(r.name, true) && !charByName(r.name) && !altOwner(r.name)).slice(0, 10);
+    if (!list.length) return 0;
+    const from = new Date(post.createdAt).getTime() || Date.now() - 3600e3, span = Math.max(60e3, Date.now() - from);
+    list.forEach(r => { r.createdAt = new Date(from + Math.random() * span).toISOString(); });
+    post.reposts = [...(post.reposts || []), ...list.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt))];
+    post.repostsGenerated = true;
+    return list.length;
+  }
+  /** 评论早就加载过的旧博：点「转发」再单独要一次 */
+  async function loadReposts(post) {
+    const n = repostWant(post); if (!n || post._genReposts) return;
+    post._genReposts = true; rerenderDetail(post);
+    const instruction = [`当前时间：${nowText()}`, `博主：${authorOf(post).name}${altBloggerNote(post)}`, `微博正文：\n${post.text}`,
+      post.repost ? `这是一条转发，原微博 @${post.repost.author}：${post.repost.text}` : "", "这次只写转发列表，不写评论。", REPOST_FMT(n).replace("评论写完后，再写", "写"), reservedLine()].filter(Boolean).join("\n\n");
+    const text = await generate({ characterIds: pickCast(activeChars(), 1).map(c => c.id), appTags: ["nox_weibo", "comments"], instruction }, "加载转发");
+    post._genReposts = false;
+    if (text != null) { const k = takeReposts(post, text); if (k) { noteParsed(`${k} 条转发`); savePost(post); } else parseFailed("加载转发"); }
+    rerenderDetail(post);
+  }
+
   async function ensureComments(post) {
     if (post.commentsGenerated || post.authorType === "user" || post._genComments) return;
     if (!activeChars().length) return;
@@ -1074,6 +1100,7 @@
     const cast = owner ? [charById(owner), ...others].filter(Boolean) : others.length ? others : activeChars().slice(0, 1);
     const author = authorOf(post);
     const want = Math.min(Math.max(post.counts.comments, 3), rand(9, 14));
+    const rpN = repostWant(post);
     const instruction = [
       `当前时间：${nowText()}`,
       `博主：${author.name}${altBloggerNote(post)}`,
@@ -1086,6 +1113,7 @@
       `可能来评论的其他角色（符合关系才来，不来就不写）：\n${charsForPrompt(others) || "无"}`,
       `用户的微博昵称：${S.meta.nickname}（用户本人不要出现在评论里）`,
       `生成约 ${want} 条评论，其中楼中楼回复 2~5 条${owner ? "，博主本人至少回复 1 条" : ""}。`,
+      rpN ? REPOST_FMT(rpN) : "",
       caltLine(cast, { post }),
       reservedLine(),
     ].filter(Boolean).join("\n\n");
@@ -1093,7 +1121,8 @@
     post._genComments = false;
     if (text != null) {
       const list = fixAltAuthors(commentsFromBlocks(parseComments(text), post, {}), { post });
-      if (list.length) noteParsed(`${list.length} 条评论`); else parseFailed("加载评论");
+      const rk = rpN ? takeReposts(post, text) : 0;
+      if (list.length) noteParsed(`${list.length} 条评论${rk ? `，${rk} 条转发` : ""}`); else parseFailed("加载评论");
       post.comments = [...list, ...post.comments];
       post.commentsGenerated = true;
       post.counts.comments = Math.max(post.counts.comments, post.comments.length);
@@ -2780,7 +2809,9 @@
             const a = r.charId ? authorOf({ authorType: "char", charId: r.charId }) : authorOf({ authorType: "npc", authorName: r.name });
             return `<div class="cmt"><div ${profileAttrs(a)}>${avatarHtml(a)}</div><div class="cmt-main"><div class="cmt-top"><span class="cmt-name">${esc(a.name)}</span></div>
               <div class="cmt-text">${richText(r.text || "转发微博")}</div><div class="cmt-meta"><span>${fmtTime(r.createdAt)}</span></div></div></div>`;
-          }).join("") : `<div class="empty">${p.counts.reposts ? "转发列表暂时只显示你的微博的转发" : "还没有人转发"}</div>`)
+          }).join("") : p._genComments || p._genReposts ? `<div class="empty"><span class="spinner"></span> 转发加载中…</div>`
+          : repostWant(p) ? `<div class="empty">还没加载转发<div><button class="btn-primary" data-act="load-reposts" data-post="${esc(p.id)}">看看谁转发了（用 1 次 API）</button></div></div>`
+          : `<div class="empty">${p.counts.reposts ? "转发列表暂时只显示你的微博的转发" : "还没有人转发"}</div>`)
         : pg.tab === "likes"
           ? ((p.likedBy || []).length ? p.likedBy.map(id => { const a = authorOf({ authorType: "char", charId: id }); return `<div class="list-cell" ${profileAttrs(a)}>${avatarHtml(a)}<div class="cell-main">${esc(a.name)}</div></div>`; }).join("")
             + `<div class="load-more">共 ${fmtNum(p.counts.likes)} 人赞过</div>` : `<div class="empty">共 ${fmtNum(p.counts.likes)} 人赞过</div>`)
@@ -3595,6 +3626,9 @@
       }
       case "cancel-reply": topPage().cancelReply(); return;
       case "open-sub": { const [p, c] = findComment(el.dataset.cmt); if (c) { c._open = true; rerenderDetail(p); } return; }
+      case "load-reposts":
+        if (post) loadReposts(post);
+        return;
       case "more-cmts":
         if (!post) return;
         // 自己的博还没人来过：走发博后那一整套（评论、点赞、新粉丝、私信）

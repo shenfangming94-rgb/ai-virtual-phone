@@ -1225,7 +1225,7 @@
     }
     return from + Math.random() * (to - from);
   }
-  const addNews = item => { S.meta.news = [{ id: uid("n"), ...item }, ...(S.meta.news || [])].slice(0, 200); };
+  const addNews = item => { S.meta.news = [{ id: uid("n"), got: nowIso(), ...item }, ...(S.meta.news || [])].slice(0, 200); };
   const visitorKey = w => (w.type === "char" ? `c:${w.charId}` : `n:${w.name}`);
   function addVisitor(who, t) {
     const at = new Date(t).toISOString(); const list = S.meta.visitors || [];
@@ -1242,7 +1242,7 @@
         const old = mine.filter(p => !(p.likedBy || []).includes(c.id) && Date.now() - new Date(p.createdAt) > 3 * 86400e3);
         const p = old[Math.floor(Math.random() * old.length)];
         if (p) {
-          p.likedBy = [c.id, ...(p.likedBy || [])]; p.counts.likes++; p.likeAt = new Date(timeIn(from, to, close)).toISOString(); savePost(p);
+          p.likedBy = [c.id, ...(p.likedBy || [])]; p.counts.likes++; p.likeAt = new Date(timeIn(from, to, close)).toISOString(); p.likeGot = nowIso(); savePost(p);
           remember(c.id, `我在微博上翻到${S.identity.name || S.meta.nickname} ${fmtTime(p.createdAt)} 发的旧微博，偷偷点了个赞：「${(p.text || "（图片）").slice(0, 40)}」`, `weibo_oldlike_${p.id}`, null, p);
         }
       }
@@ -1281,9 +1281,11 @@
     if (!last || now - last < awayHours() * 3600e3) return;
     const chars = activeChars(); if (!chars.length) return;
     const from = Math.max(last, now - 3 * 86400e3);
-    const k = (now - from) / 3600e3 > 24 ? 1.6 : 1;
-    const plans = chars.map(c => { const r = Math.random(); const n = r < 0.55 / k ? 0 : r < 0.9 ? 1 : 2;
-      return { c, n, del: n > 0 && Math.random() < 0.12, bio: Math.random() < 0.12, liked: Math.random() < 0.4 ? rand(1, 2) : 0 }; });
+    const pPost = Math.min(0.6, 0.05 + (now - from) / 3600e3 * 0.05); // 2 小时 15%，6 小时 35%，一天以上 60%
+    const plans = chars.map(c => { const n = Math.random() < pPost ? (Math.random() < 0.12 ? 2 : 1) : 0;
+      return { c, n, del: n > 0 && Math.random() < 0.12, bio: Math.random() < 0.08, liked: Math.random() < 0.3 ? rand(1, 2) : 0 }; });
+    const close = p => isStarred(p.c.id) || loveOf(p.c.id).state !== "none";
+    shuffle(plans.filter(p => p.n)).sort((a, b) => close(b) - close(a)).slice(4).forEach(p => { p.n = 0; p.del = false; });
     // 「现在试一次」：保证至少有一个人发博，不白花 API
     if (force && !plans.some(p => p.n)) plans[Math.floor(Math.random() * plans.length)].n = 1;
     const newsBefore = (S.meta.news || []).length; const likedBefore = S.posts.filter(p => p.origin === "liked").length;
@@ -1330,7 +1332,7 @@
         const name = who && !none(who) && !isUserName(who.trim()) && !charByName(who.trim(), true) ? who.trim().replace(/^@/, "") : "吃瓜第一线";
         const shot = { id: uid("wb"), scope: S.identity.id, authorType: "npc", authorName: name, verified: "无", vip: false, gender: "", source: "",
           createdAt: new Date(Math.min(now, new Date(p.createdAt).getTime() + rand(5, 60) * 60e3)).toISOString(), text: say.join("：").trim() || "我截图了 删了也没用",
-          images: [], repost: { author: charNickname(plan.c.id), text: "", images: [], deleted: true, chain: [] }, counts: { reposts: rand(0, 3), comments: rand(1, 8), likes: rand(3, 40) },
+          images: [{ desc: `微博截图：@${charNickname(plan.c.id)}（已删除）：${p.text}`, withFace: false }], repost: { author: charNickname(plan.c.id), text: "", images: [], deleted: true, chain: [] }, counts: { reposts: rand(0, 3), comments: rand(1, 8), likes: rand(3, 40) },
           liked: false, comments: [], commentsGenerated: false, origin: "feed", followFeed: true };
         S.posts.push(shot); savePost(shot); S.allPostRows++; continue;
       }
@@ -2557,7 +2559,7 @@
         const npcPool = [...(p.npcLikers || []), ...(p.comments || []).filter(c => c.authorType === "npc").slice(0, 2).map(c => c.authorName)];
         const npcName = names.length || !npcPool.length ? "" : npcPool[hashNum(p.id) % npcPool.length];
         const who = (p.likedBy || []).length ? authorOf({ authorType: "char", charId: p.likedBy[0] }) : npcName ? authorOf({ authorType: "npc", authorName: npcName }) : { type: "npc", name: "路人", seed: p.id };
-        out.push({ at: p.likeAt || p.createdAt, who, title: likeTitle(npcName ? [npcName] : names, n), action: "赞了你的微博", text: "", post: p });
+        out.push({ at: p.likeAt || p.createdAt, got: p.likeGot, who, title: likeTitle(npcName ? [npcName] : names, n), action: "赞了你的微博", text: "", post: p });
       }
       for (const p of S.posts) for (const c of p.comments || []) {
         if (!isMe(c)) continue;
@@ -2573,7 +2575,7 @@
         if (n.who.type === "char" && !charById(n.who.charId)) continue;
         const post = n.postId ? S.posts.find(p => p.id === n.postId) : null; if (n.postId && !post) continue;
         const who = n.who.type === "char" ? authorOf({ authorType: "char", charId: n.who.charId }) : authorOf({ authorType: "npc", authorName: n.who.name });
-        out.push({ at: n.at, who, action: ACT[n.kind] || "", text: n.kind === "bio" ? n.text : post ? post.text : "", post: null, postRef: post });
+        out.push({ at: n.at, got: n.got, who, action: ACT[n.kind] || "", text: n.kind === "bio" ? n.text : post ? post.text : "", post: null, postRef: post });
       }
     }
     if (type === "follow") {
@@ -2581,7 +2583,7 @@
     }
     return out.sort((a, b) => new Date(b.at) - new Date(a.at)).slice(0, 200);
   }
-  const unreadNotes = type => { const seen = new Date((S.me.seen || {})[type] || 0); return noteItems(type).filter(x => new Date(x.at) > seen).length; };
+  const unreadNotes = type => { const seen = new Date((S.me.seen || {})[type] || 0); return noteItems(type).filter(x => new Date(x.got || x.at) > seen).length; }; // 补出来的事发生在过去，按送到的时间算未读
   const unreadDms = () => S.threads.reduce((n, t) => n + (t.unread || 0), 0);
   const badgeHtml = n => n ? `<span class="badge">${n > 99 ? "99+" : n}</span>` : "";
 
@@ -3103,7 +3105,7 @@
         const a = authorOf(c);
         const sub = subs(c.id);
         return `<div class="cmt"><div ${profileAttrs(a)}>${avatarHtml(a)}</div><div class="cmt-main" data-act="reply-to" data-cmt="${esc(c.id)}">
-          <div class="cmt-top"><span class="cmt-name ${a.vip ? "vip" : ""}">${esc(a.name)}${a.vip ? I.crown : ""}</span>
+          <div class="cmt-top"><span class="cmt-name ${a.vip ? "vip" : ""}" ${profileAttrs(a)}>${esc(a.name)}${a.vip ? I.crown : ""}</span>
             ${c.isPostAuthor || (c.authorType === "user" && p.authorType === "user" && acctOf(c) === acctOf(p)) ? '<span class="tag author">博主</span>' : ""}
             ${authorLikes.has(c.id) ? '<span class="tag liked-by-author">博主赞过</span>' : ""}
             <button class="cmt-like ${c[LK()] ? "liked" : ""}" data-act="like-cmt" data-cmt="${esc(c.id)}">${c[LK()] ? I.liked : I.like}${c.likes ? fmtNum(c.likes) : ""}</button></div>
@@ -3111,7 +3113,7 @@
           <div class="cmt-meta"><span>${fmtTime(c.createdAt)}</span>${c.authorType === "user" ? `<button data-act="del-cmt" data-cmt="${esc(c.id)}">删除</button>` : ""}</div>
           ${sub.length ? `<div class="sub-box">${sub.slice(0, c._open ? 99 : 2).map(s => {
             const sa = authorOf(s);
-            return `<div class="sub-line" data-act="reply-to" data-cmt="${esc(s.id)}"><span class="who">${esc(sa.name)}</span>${s.isPostAuthor || (s.authorType === "user" && p.authorType === "user" && acctOf(s) === acctOf(p)) ? ' <span class="tag author">博主</span>' : ""}${s.replyToName ? ` 回复 <span class="who">@${esc(s.replyToName)}</span>` : ""}：${richText(s.text)}</div>`;
+            return `<div class="sub-line" data-act="reply-to" data-cmt="${esc(s.id)}"><span class="who" ${profileAttrs(sa)}>${esc(sa.name)}</span>${s.isPostAuthor || (s.authorType === "user" && p.authorType === "user" && acctOf(s) === acctOf(p)) ? ' <span class="tag author">博主</span>' : ""}${s.replyToName ? ` 回复 <span class="who" ${nameAttrs(s.replyToName)}>@${esc(s.replyToName)}</span>` : ""}：${richText(s.text)}</div>`;
           }).join("")}${sub.length > 2 && !c._open ? `<div class="sub-more" data-act="open-sub" data-cmt="${esc(c.id)}">共${sub.length}条回复 &gt;</div>` : ""}</div>` : ""}
         </div></div>`;
       };

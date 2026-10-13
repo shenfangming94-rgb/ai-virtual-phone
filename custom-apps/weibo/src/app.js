@@ -924,19 +924,52 @@
   const TIME_LINE = "【时间要对得上】每条微博的内容不能和它的发布时间冲突（不用特意去写天气和季节）：季节、节日、学期节奏（九月开学、一月和六七月期末、寒暑假）、星期几（工作日白天在上课上班，周末才休息）、几点发的（凌晨是失眠熬夜，早上是起床通勤）、事情的先后（先有考试才有出成绩，先在一起才有纪念日）。这些只是不能写错的背景，不是要写的内容，不要拿来报备自己在上课、在通勤。写历史微博时先定好日期，再按那一天的情况写，日期从近到远，不要两条写在同一天。";
   // 角色发的博要像微博、不像聊天（随请求发送，不靠预设）
   const CHAR_POST_SCENES = new Set(["feed", "profile", "super", "topic", "search", "charalt"]);
-  const CHAR_POST_LINE = `【角色发的博要像发微博，不像聊天】
-- 发微博的重点是分享情绪：开心、烦、委屈、得意、无语、心动、emo、想发疯……先有一个此刻的情绪，再写博。没有情绪的生活汇报不发：不报备在哪、在干嘛、接下来干嘛，不记录见闻和环境，不写流水账。
-- 微博是对着空气、对着陌生人自言自语，不是对某个人说话。写之前先问：这句话是说给谁听的？如果是说给用户或某个具体的人听的（报备、交代、提醒、商量、通知），那是微信里该说的，不发微博。不预设用户看到后的反应，不对她傲娇、喊话、下命令。
-- 他的聊天记录、日程、记忆只是背景，不要改写成博，不复述最近和用户聊过的事。
-- 细节为情绪服务，一两个就够，不要像日记或观察报告一样罗列场景、视角、环境。
-- 校园、班级、公司里的生活可以发，但要写成他自己的感受，不直播集体里的琐事。
-- 天气、降温、下雨不是每条都要提：整批里最多一条以天气为主，其他人各写各的事。
-- 同一批里每条博的事情和情绪都要不一样：不要好几个人都在说同一类事（都在说冷、都在说考试、都在说食堂）。
-- 口吻照他平时的样子，要比路人更有他的个人色彩，不能比路人更像机器。情绪要从语气里出来，不是陈述一件让人有情绪的事：按他的性格用语气词、感叹号问号、重复、夸张、表情或网络用语；不要每句都是句号结尾的平铺直叙。
+  const CHAR_POST_LINE = `【角色发的博：像真人随手发】
+- 真人发微博很懒：大多很短，句子不用完整，标点随意，结尾不一定是句号，情绪直接喊出来，不靠铺垫。
+- 不描写场景，不罗列物件和动作，不写成有画面感的小短文。带图的博，图自己会说话，字只是一句配文，不再描述图里的东西。
+- 本轮说明里有角色的「发博参考」：形态和题材从候选里挑最像他此刻的一个，长度照写的来；候选都不合适就按他此刻真实的状态写。
+- 微博是对着空气自言自语，不是说给用户或某个具体的人听的：不报备、不交代、不提醒，不对她喊话、下命令，不预设她看到后的反应。秀恩爱、想她可以，那是分享自己的幸福，不是在跟她说话，也不用每次都 @ 她。
+- 他的聊天记录、日程、记忆只是背景，不复述最近和用户聊过的事；题材要和此刻的日期、他的日程对得上（上课时间人不会在外面玩，可以是想去、在等、抢票）。
+- 同一批里每条博的事情和情绪都不一样，口吻要比路人更有他的个人色彩。
 - 角色发的每条微博，在「正文：」前面先多写两行（只给你自己看，不会显示）：
-  口吻：他说话是什么感觉（语气、节奏、性格，看他平时和用户聊天的样子），正文照这个感觉写；不用每条都塞口头禅，偶尔自然带出来就行
+  口吻：他说话是什么感觉（语气、节奏、性格，看他平时和用户聊天的样子），正文照这个感觉写；不用每条都塞口头禅
   发博原因：一句话写他此刻想分享的情绪，以及是什么引起的；不能是「说给用户听」「让她看到」，也不能只是「记录一下」
   路人的微博不用写这两行。`;
+  // 发博骰子：代码给每条角色博抽形态、题材、长度的候选，AI 挑最像他的（只写类别，不放例句，免得照抄）
+  const POST_FORMS = ["一句情绪直接喊出来", "晒图加一句短配文（字不描述图）", "问大家一句", "分享一首歌、一部剧、一个视频或一样东西，加一句感受",
+    "突然冒出来的一个念头、碎碎念", "只发几个字、一个表情或符号", "自拍或对镜拍，配一句很短的话", "转发别人的微博，只写几个字"];
+  const LONG_FORM = "讲一件真发生的事，用口语有感而发";
+  const POST_TOPICS = ["吃的喝的", "追剧、看综艺", "听歌", "游戏", "刷到的好笑视频或梗", "看的书、小说、漫画", "买了或想买的东西", "穿搭、新发型",
+    "身体状态（困、饿、累、生病）", "熬夜失眠", "朋友干的蠢事", "家里人", "宠物或路边的小猫小狗", "追星", "天空和风景", "发呆想事情", "深夜 emo",
+    "回忆以前、翻到旧照片", "做了个奇怪的梦", "运动", "种草拔草", "放假倒计时"];
+  const OUT_TOPICS = ["出门玩", "旅游", "看演出或演唱会", "逛街", "和朋友聚餐"];
+  const WORK_TOPIC = "学习或工作上的事";
+  const PUB_TOPICS = ["新作品宣传（杂志、海报、新歌、专辑、剧、综艺，要和设定里已有的作品对得上，不凭空宣布大事）", "活动或演出结束后感谢粉丝",
+    "自拍营业、宠粉", "工作花絮和行程碎片", "节日问候粉丝", "给粉丝分享一点自己的生活"];
+  const LOVE_TOPICS = {
+    open: ["分享幸福、秀恩爱（不一定 @ 她）", "突然很想她", "又被她可爱到了", "晒和她有关的照片（合照、她的背影或剪影）"],
+    secret: ["心情好得藏不住，但不说是因为谁", "只有她看得懂的小暗号（不暴露她）"],
+    none: ["按他的人设：心动、暗恋、想谈恋爱、吐槽单身（人设里没有这些就换别的题材）"],
+  };
+  /** 放假、周末才放出出门类题材（历史博日期不定，交给 AI 按那天判断） */
+  const isOffDay = d => { const w = d.getDay(); const md = (d.getMonth() + 1) * 100 + d.getDate();
+    return w === 0 || w === 6 || (md >= 1001 && md <= 1007) || md <= 103 || (md >= 501 && md <= 505) || (md >= 115 && md <= 225) || (md >= 710 && md <= 831); };
+  const pickN = (arr, n, avoid = []) => { const pool = arr.filter(x => !avoid.includes(x)); return shuffle(pool.length >= n ? pool : arr).slice(0, n); };
+  function postPlan(charId, { history = false } = {}) {
+    if (Math.random() < 0.25) return "自由发挥，按他此刻最想发的来";
+    const log = (S.meta.formLog || {})[charId] || [];
+    const r = Math.random(); const len = r < 0.6 ? "15 字以内" : r < 0.9 ? "40 字以内" : "不限";
+    const forms = len === "不限" ? [...pickN(POST_FORMS, 2, log), LONG_FORM] : pickN(POST_FORMS, 3, log);
+    S.meta.formLog = { ...(S.meta.formLog || {}), [charId]: [...forms, ...log].slice(0, 6) };
+    const off = history || isOffDay(new Date());
+    let topics = pickN([...POST_TOPICS, ...(off ? OUT_TOPICS : []), WORK_TOPIC, ...(off ? [] : [WORK_TOPIC, WORK_TOPIC])], 3);
+    topics = [...new Set(topics)];
+    const love = loveOf(charId).state;
+    if (Math.random() < (love === "none" ? 0.12 : 0.3)) topics[0] = pickN(LOVE_TOPICS[love] || LOVE_TOPICS.none, 1)[0];
+    if (isPublic(charId) && Math.random() < 0.5) topics = [...pickN(PUB_TOPICS, 2), topics[0]];
+    return `形态：${forms.join(" / ")}｜题材：${topics.join(" / ")}｜正文长度：${len}${history ? "｜题材要和那条博的日期对得上" : ""}`;
+  }
+  const PLAN_HEAD = "发博参考（代码抽的候选：形态、题材各挑一个最像他此刻的，长度照写；都不合适就按他此刻真实的状态写）";
   // 随请求发送的规则（build 时从 rules.json 打进来）：用户预设里没有这条也能生效
   const INLINE_RULES = "/*__INLINE_RULES__*/";
   async function generate(payload, label, opts = {}) {
@@ -1100,6 +1133,7 @@
       `角色微博昵称（已注册的必须沿用）：\n${charsForPrompt(cast) || "无（本轮不写角色的微博）"}`,
       lovers.length ? `${lovers.map(c => c.name).join("、")} 的微博这次另外写，本轮不要写他们发的博。` : "",
       `角色是否发博、发什么，看他此刻有没有想分享的情绪；同一个角色本轮最多 2 条。`,
+      cast.length ? `${PLAN_HEAD}：\n${cast.map(c => `- ${c.name}：${postPlan(c.id)}`).join("\n")}\n同一个人写第 2 条时自由发挥，和第 1 条不一样。` : "",
       "角色发的是个人微博：自己的心情、吐槽、碎碎念、想分享的东西。*绝对不发通知、提醒、注意事项、班级事务*（不写「各位同学」「同学们」「请大家」「记得带好…」），就算他是班长、班干部、老师也一样——这些在班级群里说，不在微博说。",
       `${S.meta.nickname ? `用户的微博昵称是「${S.meta.nickname}」：角色发的博只有内容真和用户有关时才 @ 这个昵称，日常博不硬加 @。` : ""}`,
       recent ? `首页最近已有的微博（不要重复类似内容）：\n${recent}` : "",
@@ -1108,6 +1142,7 @@
     ].filter(Boolean).join("\n\n");
     const loverInstr = c => [
       `当前时间：${nowText()}`,
+      `${PLAN_HEAD}：${postPlan(c.id)}`,
       `这次只写你自己（${c.name}）此刻想发的 1 条微博，不写别人和路人的。${(S.accounts[c.id] || {}).nickname ? `你的微博昵称是「${S.accounts[c.id].nickname}」，必须沿用。` : "你还没有微博账号，自取一个昵称。"}`,
       (m => m.length ? `你最近发过的微博（不要重复类似内容）：\n${m.map(p => `- ${p.text.slice(0, 40)}`).join("\n")}` : "")(S.posts.filter(p => p.charId === c.id && p.origin !== "profile").sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)).slice(0, 5)),
       recent ? `首页最近别人发的微博（不要和它们撞同一类事）：\n${recent}` : "",
@@ -1120,7 +1155,7 @@
       generate({ characterIds: (cast.length ? cast : fullCast).map(c => c.id), appTags: ["nox_weibo", "feed"], instruction }, "刷新"),
       ...lovers.map(c => generate({ characterId: c.id, appTags: ["nox_weibo", "feed"], instruction: loverInstr(c) }, `刷新·${c.name}`)),
     ]);
-    S.feedBusy = false;
+    S.feedBusy = false; saveMeta();
     if (text == null && loverTexts.every(t => t == null)) { renderHome(); return; }
     // 在「关注」页刷出来的路人微博也留在关注页（像关注页里混进来的推荐）
     const toPosts = (t, as) => fixAltAuthors(parseBlocks(t || "", "微博").filter(b => !isUserName(b["作者"])).map(b => postFromBlock(as ? { ...b, 角色: as.name } : b, { origin: "feed", followFeed: followTab || undefined })), {})
@@ -1630,13 +1665,16 @@
     S[`_gen_${charId}`] = true; rerenderProfile(charId);
     const ch = charById(charId);
     const mine = S.posts.filter(p => p.charId === charId).sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+    const n = more ? rand(4, 6) : rand(5, 7);
     const instruction = [
       `当前时间：${nowText()}`,
       acc && acc.nickname ? `你的微博昵称已经是「${acc.nickname}」，必须沿用。` : "",
       acc && acc.profileGenerated ? "主页资料已经有了，这次只输出更早的历史微博，不要输出 ===主页===。" : "",
       mine.length ? `你最近已经发过的微博（不要重复，历史微博要比这些更早）：\n${mine.slice(0, 8).map(p => `- ${fmtTime(p.createdAt)}：${p.text.slice(0, 40)}`).join("\n")}` : "",
-      `写 ${more ? rand(4, 6) : rand(5, 7)} 条历史微博${mine.length ? `，时间都早于 ${fmtTime(mine[mine.length - 1].createdAt)}` : ""}。`,
+      `写 ${n} 条历史微博${mine.length ? `，时间都早于 ${fmtTime(mine[mine.length - 1].createdAt)}` : ""}。`,
+      `每条的${PLAN_HEAD}：\n${Array.from({ length: n }, (_, i) => `- 第 ${i + 1} 条：${postPlan(charId, { history: true })}`).join("\n")}`,
     ].filter(Boolean).join("\n\n");
+    saveMeta();
     const text = await generate({ characterId: charId, appTags: ["nox_weibo", "profile"], instruction }, "加载主页");
     S[`_gen_${charId}`] = false;
     if (text != null) {

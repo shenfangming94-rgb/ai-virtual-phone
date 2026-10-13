@@ -608,7 +608,7 @@
   }
 
   // ───────────────────────── AI 输出解析 ─────────────────────────
-  const KEYS = ["回关", "取关", "转发语", "口吻", "发博原因", "删除", "点赞人", "截图", "角色", "作者", "认证", "认证说明", "会员", "来源", "时间", "配图", "转评赞", "转发自", "原文", "转发链", "正文", "编号", "回复", "赞", "内容",
+  const KEYS = ["回关", "取关", "转发语", "口吻", "发博原因", "删除", "点赞人", "截图", "做法", "代发", "角色", "作者", "认证", "认证说明", "会员", "来源", "时间", "配图", "转评赞", "转发自", "原文", "转发链", "正文", "编号", "回复", "赞", "内容",
     "性别", "点赞角色", "转发", "路人点赞", "新增粉丝", "昵称", "简介", "IP属地", "粉丝", "关注",
     "热搜词", "热度", "标签", "相关", "来自", "新粉丝", "名称", "分类", "帖子数", "粉丝数", "导语", "主持人", "阅读", "讨论", "分区", "词条", "热搜", "阅读量", "讨论量",
     // 模型常换的叫法
@@ -621,7 +621,7 @@
   const KEY_ALT = KEYS.slice().sort((a, b) => b.length - a.length).join("|");
   // 支持「作者：xx」「作者: xx」「[作者]xx」「【作者】：xx」「**作者**：xx」「- 作者：xx」
   const KEY_RE = new RegExp(`^\\s*(?:[-*•]\\s*)?(?:[\\[【]\\s*(${KEY_ALT})\\s*[\\]】]\\s*[：:]?|(${KEY_ALT})\\s*[：:])\\s*(.*)$`);
-  const KINDS = "微博|评论|互动|主页|热搜|话题|私信|超话|转发|简介|结束";
+  const KINDS = "微博|评论|互动|主页|热搜|话题|私信|超话|转发|简介|反应|授权|结束";
 
   /** 把模型常见的格式偏差统一成 ===xx=== 块 */
   function normalizeOutput(text) {
@@ -664,7 +664,7 @@
 
   function parseBlocks(raw, kind) {
     const text = normalizeOutput(raw);
-    const bodyKey = { 转发: "转发语", 微博: "正文", 评论: "内容", 互动: "点赞角色", 主页: "昵称", 热搜: "热搜词", 话题: "导语", 私信: "内容", 超话: "名称" }[kind];
+    const bodyKey = { 转发: "转发语", 微博: "正文", 评论: "内容", 互动: "点赞角色", 主页: "昵称", 热搜: "热搜词", 话题: "导语", 私信: "内容", 超话: "名称", 反应: "做法", 授权: "代发" }[kind];
     // 按分隔标记切段；标记之外的散段（模型漏写标记）也一并按字段解析，最后按必需字段筛
     const out = [];
     let label = null;
@@ -1134,6 +1134,7 @@
   /** 首页刷新 */
   async function refreshFeed() {
     if (S.feedBusy) return;
+    ghostTick();
     if (!activeChars().length) { toast("没有参与微博的角色：先去微信加个好友，或在设置里打开角色"); return; }
     S.feedBusy = true; renderHome();
     const followTab = S.homeTab === "follow";
@@ -1170,7 +1171,7 @@
       `当前时间：${nowText()}`,
       `${PLAN_HEAD}：${postPlan(c.id)}`,
       `这次只写你自己（${c.name}）此刻想发的 1 条微博，不写别人和路人的。${(S.accounts[c.id] || {}).nickname ? `你的微博昵称是「${S.accounts[c.id].nickname}」，必须沿用。` : "你还没有微博账号，自取一个昵称。"}`,
-      (m => m.length ? `你最近发过的微博（不要重复类似内容）：\n${m.map(p => `- ${p.text.slice(0, 40)}`).join("\n")}` : "")(S.posts.filter(p => p.charId === c.id && p.origin !== "profile").sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)).slice(0, 5)),
+      (m => m.length ? `你最近发过的微博（不要重复类似内容）：\n${m.map(p => `- ${p.text.slice(0, 40)}`).join("\n")}` : "")(S.posts.filter(p => p.charId === c.id && p.origin !== "profile" && !(p.ghost && p.ghost.mode === "secret" && !p.ghost.found)).sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)).slice(0, 5)),
       recent ? `首页最近别人发的微博（不要和它们撞同一类事）：\n${recent}` : "",
       "发的是个人微博：*绝对不发通知、提醒、注意事项、班级事务*。",
       `${S.meta.nickname ? `用户的微博昵称是「${S.meta.nickname}」：只有内容真和用户有关时才 @ 这个昵称，日常博不硬加 @。` : ""}`,
@@ -1303,7 +1304,7 @@
       S.awayBusy = false; saveMeta();
       texts.forEach((t, i) => t != null && takeAway(t, groups[i], from, now));
     }
-    saveMeta(); refreshAll();
+    saveMeta(); refreshAll(); ghostTick();
     const n = (S.meta.news || []).length - newsBefore + S.posts.filter(p => p.origin === "liked").length - likedBefore;
     if (n > 0) toast("你不在的时候大家有新动态，去消息页「通知」看看");
     return n;
@@ -1329,18 +1330,7 @@
         // 发了又删：原博不留；删之前有路人转发过，转发里只剩「已删除」，评论区有人问原博写了啥、转发的人存了原文。他记得自己删过
         remember(plan.c.id, `我在微博发了一条又删了：「${p.text.slice(0, 80)}」`, `weibo_deleted_${p.id}`);
         const [who, ...say] = String(b["转发"] || b["截图"] || "").split(/[：:]/);
-        const name = who && !none(who) && !isUserName(who.trim()) && !charByName(who.trim(), true) ? who.trim().replace(/^@/, "") : "吃瓜第一线";
-        const at = new Date(Math.min(now, new Date(p.createdAt).getTime() + rand(3, 40) * 60e3)).getTime();
-        const asker = shuffle(["是小王不是小汪", "今天也要早睡", "一只柠檬精", "蹲一个后续", "路过的芒果"].filter(n => n !== name))[0];
-        const ask = { id: uid("c"), parentId: null, replyToName: "", authorType: "npc", authorName: asker, text: "删了？？原博写的啥", likes: rand(3, 30), liked: false, isPostAuthor: false,
-          createdAt: new Date(Math.min(now, at + rand(30, 120) * 60e3)).toISOString() };
-        const ans = { id: uid("c"), parentId: ask.id, replyToName: asker, authorType: "npc", authorName: name, text: `原博：「${p.text.slice(0, 120)}」 我手快存了`, likes: rand(5, 60), liked: false, isPostAuthor: true,
-          createdAt: new Date(Math.min(now, new Date(ask.createdAt).getTime() + rand(2, 30) * 60e3)).toISOString() };
-        const shot = { id: uid("wb"), scope: S.identity.id, authorType: "npc", authorName: name, verified: "无", vip: false, gender: "", source: "",
-          createdAt: new Date(at).toISOString(), text: say.join("：").trim() || "转发微博",
-          images: [], repost: { author: charNickname(plan.c.id), text: "", images: [], deleted: true, chain: [] }, counts: { reposts: rand(0, 3), comments: rand(2, 8), likes: rand(3, 40) },
-          liked: false, comments: [ask, ans], commentsGenerated: false, origin: "feed", followFeed: true };
-        S.posts.push(shot); savePost(shot); S.allPostRows++; continue;
+        deletedEcho(plan.c.id, p.text, new Date(p.createdAt).getTime(), who && !none(who) ? who.trim() : "", say.join("：").trim()); continue;
       }
       p.followFeed = true; thinPics([p]);
       S.posts.push(p); savePost(p); S.allPostRows++; rememberOwnPost(p);
@@ -1363,6 +1353,87 @@
     if (document.visibilityState === "visible") awayCatchUp();
     else if (!isAlt()) { S.meta.lastOpenAt = nowIso(); saveMeta(); } // 一直开着用不算「不在」：从离开那一刻算起
   });
+
+  // ───────────── 替 char 发博：她用他的号发（偷偷发 / 他让帮忙发） ─────────────
+  const herName = () => S.identity.name || S.meta.nickname;
+  /** 删掉的博留下的痕迹：删之前有路人转发过，转发里只剩「已删除」，评论区有人问原博、转发的人存了原文 */
+  function deletedEcho(charId, text, createdMs, name, say) {
+    const now = Date.now();
+    name = name && !isUserName(name) && !charByName(name, true) ? name.replace(/^@/, "") : "吃瓜第一线";
+    const at = Math.min(now, createdMs + rand(3, 40) * 60e3);
+    const asker = shuffle(["是小王不是小汪", "今天也要早睡", "一只柠檬精", "蹲一个后续", "路过的芒果"].filter(n => n !== name))[0];
+    const ask = { id: uid("c"), parentId: null, replyToName: "", authorType: "npc", authorName: asker, text: "删了？？原博写的啥", likes: rand(3, 30), liked: false, isPostAuthor: false,
+      createdAt: new Date(Math.min(now, at + rand(30, 120) * 60e3)).toISOString() };
+    const ans = { id: uid("c"), parentId: ask.id, replyToName: asker, authorType: "npc", authorName: name, text: `原博：「${String(text || "").slice(0, 120)}」 我手快存了`, likes: rand(5, 60), liked: false, isPostAuthor: true,
+      createdAt: new Date(Math.min(now, new Date(ask.createdAt).getTime() + rand(2, 30) * 60e3)).toISOString() };
+    const echo = { id: uid("wb"), scope: S.identity.id, authorType: "npc", authorName: name, verified: "无", vip: false, gender: "", source: "",
+      createdAt: new Date(at).toISOString(), text: say || "转发微博",
+      images: [], repost: { author: charNickname(charId), text: "", images: [], deleted: true, chain: [] }, counts: { reposts: rand(0, 3), comments: rand(2, 8), likes: rand(3, 40) },
+      liked: false, comments: [ask, ans], commentsGenerated: false, origin: "feed", followFeed: true };
+    S.posts.push(echo); savePost(echo); S.allPostRows++;
+  }
+  /** 评论区提示：这条其实是她发的 */
+  function ghostLine(post) {
+    const g = post.ghost; if (!g) return "";
+    const ch = charById(post.charId); const who = ch ? ch.name : "博主";
+    if (g.mode === "asked") return `这条是${who}让用户（${herName()}）帮他发的，他知道内容，可以像回自己的博一样回复评论。熟人看口吻可能看出不是他本人写的，可以调侃（代发？谁帮你发的？），他按人设回应。`;
+    if (!g.found) return `这条其实是用户（${herName()}）拿${who}的手机偷偷发的，${who}本人还不知道：他这次*不出现在评论区*（不回复）。评论的人只看得到是他的号发的：熟人对比他平时的口吻和人设，差得多就会起疑（被盗号了？这不像你会说的话？谁拿你手机发的？），像的话就照常互动。路人不知道是谁发的，不要直接说出是用户。`;
+    return `这条是用户（${herName()}）拿${who}的手机偷偷发的，${who}已经发现了${g.react ? `（他的反应：${g.react}）` : ""}。`;
+  }
+  /** 刷新、你不在的时候：偷偷发的博，他每次 40% 发现，拖到第 3 次一定发现 */
+  function ghostTick() {
+    if (isAlt()) return;
+    const p = S.posts.find(x => x.ghost && x.ghost.mode === "secret" && !x.ghost.found && !x.ghost.busy && charById(x.charId));
+    if (!p) return;
+    p.ghost.tries = (p.ghost.tries || 0) + 1; savePost(p);
+    if (p.ghost.tries >= 3 || Math.random() < 0.4) ghostFound(p).catch(e => console.error(e));
+  }
+  async function ghostFound(post, opts = {}) {
+    const ch = charById(post.charId); if (!ch || (post.ghost.found && !opts.deleted)) return;
+    post.ghost.busy = true;
+    const cmts = (post.comments || []).slice(-6).map(c => `- ${authorOf(c).name}：${c.text.slice(0, 50)}`).join("\n");
+    const instruction = [
+      `当前时间：${nowText()}`,
+      `你（${ch.name}）刚发现：${herName()}拿你的手机，用你的微博号「${charNickname(ch.id)}」发了一条微博${opts.deleted ? "，后来她又删掉了（你在她删之前刚好看到了）" : ""}：\n「${post.text}」${post.images.length ? `\n配图：${post.images.map(i => i.desc || "图片").join(" | ")}` : ""}`,
+      cmts && !opts.deleted ? `这条下面大家的评论：\n${cmts}` : "",
+      `按你的人设和你们的关系，你*一定要有反应*，选一种或几种你真会做的：${opts.deleted ? "" : "在这条下面评论；删掉这条；"}自己再发一条微博澄清或回应；私信她。如果你们是恋人，也可以大方认下来。`,
+      `先输出你的做法：\n===反应===\n做法：${opts.deleted ? "发博 / 私信" : "评论 / 删除 / 发博 / 私信"}（可以多选，用、分隔）\n===结束===`,
+      opts.deleted ? "" : `评论：\n===评论===\n作者：${charNickname(ch.id)}\n内容：你的评论\n===结束===`,
+      "发博照 ===微博=== 格式，「角色」写你的本名。",
+      `私信一句一块：\n===私信===\n来自：${ch.name}\n角色：${ch.name}\n内容：一句话\n===结束===`,
+    ].filter(Boolean).join("\n\n");
+    const text = await generate({ characterId: ch.id, appTags: ["nox_weibo", "reply"], instruction }, `${ch.name}发现了`, { hint: "===反应===（再按做法加 ===评论=== / ===微博=== / ===私信===）" });
+    post.ghost.busy = false;
+    if (text == null) { savePost(post); return; }
+    const how = String((parseBlocks(text, "反应")[0] || {})["做法"] || "");
+    const did = [];
+    const cm = !opts.deleted && parseBlocks(text, "评论").map(b => String(b["内容"] || "").trim()).find(Boolean);
+    if (cm) {
+      post.comments.push({ id: uid("c"), parentId: null, replyToName: "", authorType: "char", charId: ch.id, authorName: charNickname(ch.id), text: cm, likes: rand(5, 80), liked: false, isPostAuthor: true, createdAt: nowIso() });
+      post.counts.comments++; did.push(`评论「${cm.slice(0, 30)}」`);
+    }
+    for (const b of parseBlocks(text, "微博").slice(0, 1)) {
+      const p = postFromBlock({ ...b, 角色: ch.name, 时间: "刚刚" }, { origin: "feed", followFeed: true });
+      if (p.authorType !== "char" || p.charId !== ch.id || !(p.text || p.images.length) || isCharNotice(p)) continue;
+      S.posts.push(p); savePost(p); S.allPostRows++; rememberOwnPost(p); did.push(`发博「${p.text.slice(0, 30)}」`);
+    }
+    const dms = parseBlocks(text, "私信");
+    if (dms.length) { deliverDms(dms, { acct: "main", onlyChar: ch.id, delay: rand(2000, 5000) }); did.push("私信了她"); }
+    const del = !opts.deleted && /删/.test(how) && S.posts.includes(post);
+    if (!did.length && !del) { // 一定要有反应：AI 什么都没写时至少留个问号
+      post.comments.push({ id: uid("c"), parentId: null, replyToName: "", authorType: "char", charId: ch.id, authorName: charNickname(ch.id), text: "？", likes: rand(5, 40), liked: false, isPostAuthor: true, createdAt: nowIso() });
+      did.push("评论「？」");
+    }
+    post.ghost = { ...post.ghost, found: true, foundAt: nowIso(), react: [...did, del ? "把这条删了" : ""].filter(Boolean).join("，") };
+    remember(ch.id, `我发现${herName()}拿我的手机用我的微博发了一条：「${post.text.slice(0, 60)}」${opts.deleted ? "（她后来删了）" : ""}，我${post.ghost.react || "看到了"}`, `weibo_ghostfound_${post.id}`);
+    addNews({ kind: "found", who: { type: "char", charId: ch.id }, postId: del || opts.deleted ? undefined : post.id, text: post.ghost.react, at: nowIso() });
+    if (del) {
+      if (Math.random() < 0.6) deletedEcho(ch.id, post.text, new Date(post.createdAt).getTime(), "", "？？？这真是你发的");
+      await deletePost(post);
+    } else if (!opts.deleted) savePost(post);
+    saveMeta(); noteParsed(`${ch.name}：${post.ghost.react}`); refreshAll(); renderTabbar();
+    toast(`${ch.name}发现了你用他的号发的微博…`);
+  }
 
   /** 评论区 prompt 里的博主说明：角色大号 / 角色小号 / 路人 */
   function altBloggerNote(post) {
@@ -1418,7 +1489,8 @@
       post.repost ? `这是一条转发，原微博 @${post.repost.author}：${post.repost.text}` : "",
       `可能来评论的其他角色（符合关系才来，不来就不写）：\n${charsForPrompt(others) || "无"}`,
       `用户的微博昵称：${S.meta.nickname}（用户本人不要出现在评论里）`,
-      `生成约 ${want} 条评论，其中楼中楼回复 2~5 条${owner ? "，博主本人至少回复 1 条" : ""}。`,
+      ghostLine(post),
+      `生成约 ${want} 条评论，其中楼中楼回复 2~5 条${owner && !(post.ghost && post.ghost.mode === "secret" && !post.ghost.found) ? "，博主本人至少回复 1 条" : ""}。`,
       rpN ? REPOST_FMT(rpN) : "",
       caltLine(cast, { post }),
       reservedLine(),
@@ -1426,7 +1498,8 @@
     const text = await generate({ characterIds: cast.map(c => c.id), appTags: ["nox_weibo", "comments"], instruction }, "加载评论");
     post._genComments = false;
     if (text != null) {
-      const list = dropCharAtUser(fixAltAuthors(commentsFromBlocks(parseComments(text), post, {}), { post }), post);
+      let list = dropCharAtUser(fixAltAuthors(commentsFromBlocks(parseComments(text), post, {}), { post }), post);
+      if (post.ghost && post.ghost.mode === "secret" && !post.ghost.found) list = list.filter(c => !(c.authorType === "char" && c.charId === post.charId)); // 他还不知道，不会来评论
       const rk = rpN ? takeReposts(post, text) : 0;
       if (list.length) noteParsed(`${list.length} 条评论${rk ? `，${rk} 条转发` : ""}`); else parseFailed("加载评论");
       post.comments = [...list, ...post.comments];
@@ -2576,12 +2649,12 @@
       }
     }
     if (type === "news" && !isAlt()) {
-      const ACT = { post: "发布了新微博", bio: "修改了简介", visit: "看过你的主页" };
+      const ACT = { post: "发布了新微博", bio: "修改了简介", visit: "看过你的主页", found: "发现了你用他的号发的微博" };
       for (const n of S.meta.news || []) {
         if (n.who.type === "char" && !charById(n.who.charId)) continue;
-        const post = n.postId ? S.posts.find(p => p.id === n.postId) : null; if (n.postId && !post) continue;
+        const post = n.postId ? S.posts.find(p => p.id === n.postId) : null; if (n.postId && !post && n.kind !== "found") continue;
         const who = n.who.type === "char" ? authorOf({ authorType: "char", charId: n.who.charId }) : authorOf({ authorType: "npc", authorName: n.who.name });
-        out.push({ at: n.at, got: n.got, who, action: ACT[n.kind] || "", text: n.kind === "bio" ? n.text : post ? post.text : "", post: null, postRef: post });
+        out.push({ at: n.at, got: n.got, who, action: ACT[n.kind] || "", text: n.kind === "bio" || n.kind === "found" ? n.text : post ? post.text : "", post: null, postRef: post });
       }
     }
     if (type === "follow") {
@@ -2674,7 +2747,9 @@
       body.innerHTML = `<div class="dm-chat">${th.messages.map(m => {
         const t0 = new Date(m.at).getTime(); const stamp = t0 - lastAt > 5 * 60e3 ? `<div class="dm-stamp">${fmtTime(m.at)}</div>` : ""; lastAt = t0;
         const who = m.from === "me" ? me : a;
-        return `${stamp}<div class="dm-msg ${m.from === "me" ? "me" : ""}"><div ${profileAttrs(who)}>${avatarHtml(who, 36)}</div><div class="dm-bubble" data-act="dm-msg" data-id="${esc(m.id)}">${richText(m.text)}</div></div>`;
+        return `${stamp}<div class="dm-msg ${m.from === "me" ? "me" : ""}"><div ${profileAttrs(who)}>${avatarHtml(who, 36)}</div>${m.kind === "ghostInvite" && th.peer.type === "char"
+          ? `<div class="dm-bubble invite ${m.used ? "used" : ""}" ${m.used ? "" : `data-act="ghost-invite" data-key="${esc(th.key)}" data-id="${esc(m.id)}"`}><b>📝 代发邀请</b><span>${esc(charNickname(th.peer.charId))} 允许你用他的微博号发一条</span><em>${m.used ? "已经发过啦" : "点这里去发 ›"}</em></div>`
+          : `<div class="dm-bubble" data-act="dm-msg" data-id="${esc(m.id)}">${richText(m.text)}</div>`}</div>`;
       }).join("")}${th._typing ? `<div class="dm-msg"><div>${avatarHtml(a, 36)}</div><div class="dm-bubble dm-dots"><i></i><i></i><i></i></div></div>` : ""}</div>`;
       body.scrollTop = body.scrollHeight; hydrateImages(body);
       if (th.unread) { th.unread = 0; saveThread(th); setTimeout(() => { renderTabbar(); if (S.tab === "msg") renderMsg(); }, 0); }
@@ -2758,6 +2833,7 @@
         history ? `你们最近的私信记录：\n${history}` : "这是你们在微博私信里的第一句话。",
         lastIsMine ? `${knows ? "用户" : "对方"}刚刚${pending.length > 1 ? "连着" : ""}发来：${pendText}` : "对方还没有新消息：你接着刚才的话往下说，或者主动找个话题（按你此刻的状态和心情），不要重复你说过的话。",
         a ? `「来自」写「${a.nick}」，「角色」写 无。` : `「来自」写 ${ch.name}，「角色」写 ${ch.name}。`,
+        !a && !altDm ? "如果她在问能不能用你的微博号帮你发一条：按你的人设和你们的关系决定（可以爽快答应、问她要发什么、讨价还价、拒绝）。答应了就在私信后面多写：\n===授权===\n代发：是\n===结束===\n没答应、或者她没提这件事就不写。" : "",
       ].filter(Boolean).join("\n\n");
       text = await generate({ characterId: ch.id, appTags: ["nox_weibo", "dm"], instruction }, `${a && !altSeen(aOwner) ? "路人" : ch.name}私信`);
     } else {
@@ -2791,6 +2867,7 @@
     }
     fresh._typing = true; refreshMsgViews();
     const replies = lines.slice(0, 5).map(text => ({ id: uid("m"), from: "peer", text, at: null }));
+    if (pc && !aOwner && !altDm && yes((parseBlocks(text, "授权")[0] || {})["代发"])) replies.push({ id: uid("m"), from: "peer", kind: "ghostInvite", text: "[代发邀请]", at: null });
     if (pc && knows && (!aOwner || altOpen(aOwner))) {
       const mine = lastIsMine ? fresh.messages.find(m => m.id === msg.id) : null;
       remember(pc, lastIsMine ? `${userName()}在微博私信我${aOwner ? `的小号「${th.peer.name}」` : ""}：${pendText.slice(0, 120)}，我回：「${lines.join(" / ").slice(0, 100)}」` : `我在微博私信跟${userName()}说：「${lines.join(" / ").slice(0, 100)}」`,
@@ -3207,7 +3284,7 @@
         realName: `${acc.gender === "女" ? "她" : acc.gender === "男" ? "他" : "TA"}是${charById(charId)?.name || ""}`,
         cover: gradientFor(charId + "cover"), coverRef: acc.coverRef, bio: acc.bio,
         bioExtra: (acc.bioLog || []).length ? ` <span class="link" data-act="bio-log" data-char="${esc(charId)}">${acc.bioAt && Date.now() - new Date(acc.bioAt) < 86400e3 ? "刚改过" : "改过"} ›</span>` : "",
-        coverAction: `<button class="cover-btn" data-act="char-cover" data-char="${esc(charId)}">${I.camera}换背景</button>`, ip: acc.ip, verifiedNote: acc.verifiedNote, posts: Math.max(posts.length, acc.postCount || 0),
+        coverAction: `<button class="cover-btn" data-act="char-cover" data-char="${esc(charId)}">${I.camera}换背景</button><button class="cover-btn" style="bottom:84px" data-act="ghost-compose" data-char="${esc(charId)}">✍️ 用他的号发</button>`, ip: acc.ip, verifiedNote: acc.verifiedNote, posts: Math.max(posts.length, acc.postCount || 0),
         following: acc.following || 0, followers: acc.followers || 0,
         actions: `<button class="follow-btn ${isStarred(charId) ? "star-on" : "on"}" style="height:32px;padding:0 12px;font-size:14px" data-act="toggle-star" data-char="${esc(charId)}">${isStarred(charId) ? "★ 特别关注" : "☆ 特别关注"}</button>
           <button class="follow-btn on" style="height:32px;padding:0 12px;font-size:14px" data-act="open-dm" data-char="${esc(charId)}">私信</button>
@@ -3517,7 +3594,7 @@
 
   // ───────────────────────── 发微博 ─────────────────────────
   function openCompose(repostOf, init) {
-    const draft = { text: (init && init.text) || "", images: [], location: "", visibility: "public", superName: init && init.superName };
+    const draft = { text: (init && init.text) || "", images: [], location: "", visibility: "public", superName: init && init.superName, asChar: init && init.asChar, ghostMode: init && init.ghostMode, invite: init && init.invite };
     if (repostOf) {
       const a = authorOf(repostOf);
       // 转发转发微博时，接上转发链
@@ -3528,6 +3605,7 @@
       if (!pg.built) {
         pg.built = true;
         body.outerHTML = `<div class="compose-body">
+          ${draft.asChar ? `<div class="form-note" style="margin:0 0 8px">${draft.ghostMode === "secret" ? `🤫 正在偷偷用${esc(charById(draft.asChar)?.name || "")}的号发，他还不知道` : `🤝 帮${esc(charById(draft.asChar)?.name || "")}发，他知道`}</div>` : ""}
           <textarea class="compose-text" placeholder="${repostOf ? "说说分享心得…" : "分享新鲜事…"}" maxlength="2000"></textarea>
           <div class="compose-pics"></div>
           <div class="compose-quote"></div>
@@ -3550,7 +3628,7 @@
       updateSend();
       function updateSend() { $(".page-action", pg.el).disabled = !repostOf && !draft.text.trim() && !draft.images.length; }
     }, {
-      title: repostOf ? "转发微博" : draft.superName ? `发帖到 ${draft.superName}超话` : "发微博",
+      title: repostOf ? "转发微博" : draft.superName ? `发帖到 ${draft.superName}超话` : draft.asChar ? `以「${charNickname(draft.asChar)}」发微博` : "发微博",
       action: `<button class="page-action" data-act="compose-send">发送</button>`,
       footer: `<div class="compose-tools">
         ${repostOf ? "" : `<button class="tool" data-act="compose-pic">${I.image}</button>`}
@@ -3570,6 +3648,19 @@
     for (const img of draft.images) {
       try { const r = await api.media.put({ dataUrl: img.dataUrl }); images.push({ ref: r.ref, desc: "" }); S.mediaCache.set(r.ref, img.dataUrl); }
       catch (e) { console.warn(e); }
+    }
+    if (draft.asChar) { // 用他的号发
+      const ch = charById(draft.asChar); const acc = S.accounts[draft.asChar] || {};
+      const post = { id: uid("wb"), scope: S.identity.id, authorType: "char", charId: ch.id, authorName: charNickname(ch.id), verified: acc.verified || "无", vip: !!acc.vip,
+        source: acc.device || "iPhone客户端", createdAt: nowIso(), text: draft.text.trim(), images, location: draft.location, repost: null,
+        counts: { reposts: 0, comments: 0, likes: rand(2, 12) }, liked: false, comments: [], commentsGenerated: false, origin: "feed", followFeed: true,
+        ghost: { mode: draft.ghostMode, found: false, tries: 0 } };
+      S.posts.push(post); savePost(post); S.allPostRows++;
+      if (draft.invite) { const th = S.threads.find(x => x.key === draft.invite.key); const m = th && th.messages.find(x => x.id === draft.invite.id); if (m) { m.used = true; saveThread(th); } }
+      if (draft.ghostMode === "asked") { rememberOwnPost(post); remember(ch.id, `这条微博是我让${herName()}帮我发的`, `weibo_ghostask_${post.id}`, null, post); }
+      page.sent = true; closePage(); toast(draft.ghostMode === "secret" ? "发出去了…他还不知道🤫" : "帮他发好啦");
+      if (S.meta.autoReact !== false) setTimeout(() => ensureComments(post), rand(2500, 6000));
+      refreshAll(); return;
     }
     const post = {
       id: uid("wb"), scope: S.identity.id, authorType: "user", ...acctTag(), authorName: S.me.nickname, verified: "无", vip: !!S.me.vip,
@@ -3925,6 +4016,19 @@
       case "post-menu": {
         if (!post) return;
         const mine = post.authorType === "user";
+        if (post.ghost) { // 她用他的号发的：能删（删了路人那边会留痕迹，偷偷发的他可能删前就看到了）
+          const g = await sheet(post.ghost.mode === "secret" ? (post.ghost.found ? "他已经发现了" : "🤫 他还不知道这条") : "🤝 帮他发的", [{ label: "分享给…", value: "share" }, { label: "删掉这条", value: "del", danger: true }]);
+          if (g === "share") sharePost(post);
+          if (g === "del") {
+            const seen = post.ghost.mode === "secret" && !post.ghost.found && Math.random() < 0.25;
+            const copy = { ...post, comments: [...post.comments], ghost: { ...post.ghost } };
+            if (Math.random() < 0.6) deletedEcho(post.charId, post.text, new Date(post.createdAt).getTime(), "", shuffle(["哈哈哈哈哈哈", "？？", "转发微博", "这真是你发的？"])[0]);
+            await deletePost(post); toast("已删除");
+            const pg = topPage(); if (pg && pg.key === `detail:${post.id}`) closePage(); else refreshAll();
+            if (seen) setTimeout(() => ghostFound(copy, { deleted: true }).catch(e => console.error(e)), rand(4000, 9000));
+          }
+          return;
+        }
         const choice = await sheet("", mine
           ? [{ label: "分享给…", value: "share" }, { label: S.me.pinnedPostId === post.id ? "取消置顶" : "置顶", value: "pin" }, { label: "删除（相关记忆一起删）", value: "del", danger: true }]
           : [{ label: "分享给…", value: "share" }, { label: isFav(post.id) ? "取消收藏" : "收藏", value: "fav" }, { label: "不感兴趣", value: "hide" }, { label: "举报", value: "report" },
@@ -4012,6 +4116,19 @@
         saveMeta(); refreshAll(); return;
       }
       case "open-char-set": openCharSettings(el.dataset.char); return;
+      case "ghost-invite": {
+        const th = S.threads.find(x => x.key === el.dataset.key); const m = th && th.messages.find(x => x.id === el.dataset.id);
+        if (!th || !m || m.used || th.peer.type !== "char" || !charById(th.peer.charId)) return;
+        openCompose(null, { asChar: th.peer.charId, ghostMode: "asked", invite: { key: th.key, id: m.id } });
+        return;
+      }
+      case "ghost-compose": {
+        const ch = charById(el.dataset.char); if (!ch) return;
+        if (isAlt()) { toast("切回大号再用他的号发"); return; }
+        const ok = await sheet(`偷偷用${ch.name}的号「${charNickname(ch.id)}」发一条？他现在不知道，之后会发现的🤫（想让他同意，就去私信问他）`, [{ label: "🤫 偷偷发", value: "secret" }]);
+        if (ok) openCompose(null, { asChar: ch.id, ghostMode: "secret" });
+        return;
+      }
       case "set-city": {
         const id = el.dataset.char; const v = el.dataset.v; const ch = charById(id); if (!ch) return;
         let cfg = { mode: v };

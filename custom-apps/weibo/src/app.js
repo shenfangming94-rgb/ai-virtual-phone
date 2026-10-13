@@ -1139,6 +1139,31 @@
     return { stranger, charId: pick && pick.id, line: lines.filter(Boolean).join("") };
   }
 
+  /** char 转发了用户的博：给他生成一条真正的转发微博（主页、首页都看得到），转发列表里记下 postId 防重复 */
+  function charRepostPost(src, r) {
+    if (!r.charId || r.postId || !charById(r.charId) || src.visibility === "friends" || src.visibility === "self") return null;
+    const a = authorOf(src); const acc = S.accounts[r.charId] || {};
+    const base = src.repost && !src.repost.deleted ? src.repost : null;
+    const post = {
+      id: uid("wb"), scope: S.identity.id, authorType: "char", charId: r.charId, authorName: charNickname(r.charId),
+      verified: acc.verified || "无", vip: !!acc.vip, source: "", createdAt: r.createdAt || nowIso(), text: (r.text || "").trim() || "转发微博", images: [],
+      repost: base ? { ...base, chain: [{ name: a.name, text: src.text }, ...(base.chain || [])].slice(0, 6), viaPostId: src.id }
+        : { author: a.name, text: src.text, images: src.images, postId: src.id, chain: [] },
+      counts: { reposts: 0, comments: rand(0, 3), likes: rand(0, 20) }, liked: false, comments: [], commentsGenerated: false, origin: "repost",
+    };
+    r.postId = post.id;
+    S.posts.push(post); savePost(post); S.allPostRows++;
+    return post;
+  }
+  /** 旧数据：以前转发过但没生成转发微博的，打开他主页时补上 */
+  function backfillCharReposts(charId) {
+    for (const p of S.posts.filter(x => x.authorType === "user" && (x.reposts || []).some(r => r.charId === charId && !r.postId))) {
+      let made = false;
+      for (const r of p.reposts) if (r.charId === charId && charRepostPost(p, r)) made = true;
+      if (made) savePost(p);
+    }
+  }
+
   /** 用户发博后：角色和路人的反应 */
   async function reactToUserPost(post) {
     if (post.visibility === "self" || !activeChars().length || post._genComments || post.reacted) return;
@@ -1207,6 +1232,7 @@
     if (likedChars.length || clampInt(sum["路人点赞"], 0)) fresh.likeAt = nowIso();
     fresh.reposts = [...(fresh.reposts || []), ...reposts];
     fresh.counts.reposts += reposts.length;
+    for (const r of reposts) charRepostPost(fresh, r);
     prof.followers = (prof.followers || 0) + Math.min(clampInt(sum["新增粉丝"], 0), alt ? 3 : 1e9);
     const fanNames = none(sum["新粉丝"]) ? [] : sum["新粉丝"].split(/[、,，\s]+/).map(x => x.replace(/^@/, "").trim()).filter(x => x && !isUserName(x) && !charByName(x, true));
     if (fanNames.length) prof.fans = [...fanNames.slice(0, alt ? 3 : 8).map((name, i) => ({ name, at: new Date(Date.now() - i * 1000).toISOString() })), ...(prof.fans || [])].slice(0, 200);
@@ -2757,6 +2783,7 @@
   function openCharProfile(charId) {
     if (!charById(charId)) return;
     noteVisit({ type: "char", charId });
+    backfillCharReposts(charId);
     let tab = "posts";
     const page = openPage(`profile:${charId}`, pg => {
       const body = $(".page-body", pg.el); const scroll = body.scrollTop;
@@ -3501,7 +3528,7 @@
         if (choice === "report") toast("举报已提交");
         if (choice === "pin") { S.me.pinnedPostId = S.me.pinnedPostId === post.id ? null : post.id; saveMeta(); toast(S.me.pinnedPostId ? "已置顶" : "已取消置顶"); refreshAll(); }
         if (choice === "del") {
-          for (const p of S.posts) if (p.repost && p.repost.postId === post.id) { p.repost.deleted = true; savePost(p); }
+          for (const p of S.posts) if (p.repost && p.repost.postId === post.id) { p.repost.deleted = true; savePost(p); } else if (p.repost && p.repost.viaPostId === post.id) { p.repost.chain = (p.repost.chain || []).filter(c => c.name !== authorOf(post).name || c.text !== post.text); delete p.repost.viaPostId; savePost(p); }
           await deletePost(post); toast("已删除");
           const pg = topPage(); if (pg && pg.key === `detail:${post.id}`) closePage(); else refreshAll();
         }

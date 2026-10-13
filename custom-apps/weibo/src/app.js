@@ -294,6 +294,12 @@
   };
   const loveOf = id => ((S.meta.love || {})[id]) || { state: "none" };
   const loveFresh = id => { const l = loveOf(id); return l.state === "open" && l.announcedAt && Date.now() - new Date(l.announcedAt).getTime() < 3 * 864e5; };
+  /** 角色怎么称呼用户：按关系和平时的叫法；恋人单独点名 */
+  function nameLine() {
+    const lovers = S.chars.filter(c => loveOf(c.id).state !== "none" && activeChars().includes(c));
+    return "【称呼】角色叫用户什么，按你们的关系和平时的叫法来，聊天记录和记忆里怎么叫就怎么叫：同学、朋友叫全名或外号都正常，照常就行；不要突然换成一个平时不用的叫法。"
+      + (lovers.length ? `${lovers.map(c => c.name).join("、")} 和用户是恋人：私信里用你们平时的爱称、昵称（看聊天记录），不要连名带姓叫全名${lovers.some(c => loveOf(c.id).state === "secret") ? "；地下恋的在评论、发博这些公开场合不能用爱称露馅" : ""}。` : "");
+  }
   /** 告诉 AI 每个人和用户的恋情状态（只写不是「不是恋人」的） */
   function loveLine() {
     return S.chars.filter(c => loveOf(c.id).state !== "none" && c.id !== S._announcing).map(c => {
@@ -826,7 +832,7 @@
     const scene = (payload.appTags || [])[1];
     const inline = typeof INLINE_RULES === "object" && INLINE_RULES[scene];
     if (inline) payload = { ...payload, instruction: `【微博：${scene === "charalt" ? "角色小号" : scene}规则】\n${inline}\n\n${payload.instruction}` };
-    const who = `用户的名字是「${S.identity.name || "用户"}」，微博昵称是「${S.meta.nickname}」。${scene === "hot" ? "" : "角色称呼用户按你们平时的叫法（看聊天记录和记忆里怎么叫）：熟人不会动不动连名带姓叫全名，私信里尤其不要。"}` + (scene === "hot" ? "" : `\n${publicLine(false)}`) + (loveLine() ? `\n${loveLine()}` : "") + (scene === "hot" || !isAlt() ? "" : `\n${altLine()}`);
+    const who = `用户的名字是「${S.identity.name || "用户"}」，微博昵称是「${S.meta.nickname}」。${scene === "hot" ? "" : `\n${nameLine()}`}` + (scene === "hot" ? "" : `\n${publicLine(false)}`) + (loveLine() ? `\n${loveLine()}` : "") + (scene === "hot" || !isAlt() ? "" : `\n${altLine()}`);
     if (scene === "dm") payload = { ...payload, instruction: [
       who, payload.instruction,
       "【输出要求】只输出 ===私信=== 块，一句话一个块，字段名照抄「私信聊天」规则里的格式；不要写旁白、动作或心理描写，不要加任何解释，不能替用户说话。",

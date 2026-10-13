@@ -1300,7 +1300,9 @@
       texts.forEach((t, i) => t != null && takeAway(t, groups[i], from, now));
     }
     saveMeta(); refreshAll();
-    if ((S.meta.news || []).length > newsBefore) toast("你不在的时候大家有新动态，去消息页「通知」看看");
+    const n = (S.meta.news || []).length - newsBefore;
+    if (n > 0) toast("你不在的时候大家有新动态，去消息页「通知」看看");
+    return n;
   }
   function takeAway(text, plans, from, now) {
     const inGap = t => (t >= from && t <= now ? t : timeIn(from, now));
@@ -3615,7 +3617,8 @@
           <button class="switch ${S.meta.autoReact !== false ? "on" : ""}" data-act="toggle-auto-react" aria-label="发博后自动来互动"><span></span></button></div>
         <div class="list-cell"><div class="cell-main"><div>你不在的时候</div><div class="cell-sub">隔一阵再打开微博时，补上这段时间 char 发的博、改的简介、偷偷点的赞和谁来看过你（每次 1 次 API，恋人另算）</div></div>
           <button class="switch ${awayOn() ? "on" : ""}" data-act="toggle-away" aria-label="你不在的时候"><span></span></button></div>
-        ${awayOn() ? `<div class="list-cell"><div class="cell-main"><div>离开多久才补</div></div><div class="seg" style="width:180px;flex:none">${AWAY_HOURS.map(h => `<button class="${awayHours() === h ? "on" : ""}" data-act="set-away-h" data-v="${h}">${h} 小时</button>`).join("")}</div></div>` : ""}
+        ${awayOn() ? `<div class="list-cell"><div class="cell-main"><div>离开多久才补</div></div><div class="seg" style="width:180px;flex:none">${AWAY_HOURS.map(h => `<button class="${awayHours() === h ? "on" : ""}" data-act="set-away-h" data-v="${h}">${h} 小时</button>`).join("")}</div></div>
+        <div class="list-cell" data-act="away-try"><div class="cell-main"><div style="color:var(--wb-link)">${S.awayBusy ? "正在补…" : "现在试一次"}</div><div class="cell-sub">假装你离开了 6 小时，马上补一次（会用 1 次 API）</div></div></div>` : ""}
         <div class="form-note" style="margin-top:8px">路人头像库 · 路人从这里分头像，同一个路人一直是同一张。点图片可以删除</div>
         <div class="album avatar-pool">${pool.map((ref, i) => `<div class="pic" data-act="pool-rm" data-idx="${i}"><img data-ref="${esc(ref)}" alt=""></div>`).join("")}
           <button class="compose-add" data-act="pool-add">＋</button></div>
@@ -4118,6 +4121,12 @@
       }
       case "toggle-away": S.meta.awayOn = !awayOn(); saveMeta(); refreshAll(); return;
       case "set-away-h": S.meta.awayHours = +el.dataset.v; saveMeta(); refreshAll(); return;
+      case "away-try":
+        if (S.awayBusy) return;
+        if (isAlt()) { toast("切回大号再试"); return; }
+        S.meta.lastOpenAt = new Date(Date.now() - 6 * 3600e3).toISOString();
+        toast("假装你离开了 6 小时，大家在补这段时间的动态…");
+        awayCatchUp().then(n => { if (!n) toast("这 6 小时大家都挺安静的，没什么动静，再试一次看看"); }).catch(e => console.error(e)); refreshAll(); return;
       case "char-more": ensureCharProfile(el.dataset.char, true); return;
       case "compose": openCompose(null); return;
       case "hot-refresh": refreshHot(); return;

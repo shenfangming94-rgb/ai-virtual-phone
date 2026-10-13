@@ -931,8 +931,9 @@
   const CHAR_POST_SCENES = new Set(["feed", "profile", "super", "topic", "search", "charalt"]);
   const CHAR_POST_LINE = `【角色发的博：像真人随手发】
 - 真人发微博很懒：大多很短，句子不用完整，标点随意，结尾不一定是句号，情绪直接喊出来，不靠铺垫。
+- 发的是他脑子里的东西：在想什么、感受怎么样、刚刷到的、突然想起的、在期待的。他此刻在哪、在干嘛只是背景，不写进博：人在教室上课自习，也不直播教室和班上发生的事。
 - 不描写场景，不罗列物件和动作，不写成有画面感的小短文。带图的博，图自己会说话，字只是一句配文，不再描述图里的东西。
-- 本轮说明里有角色的「发博参考」：形态和题材从候选里挑最像他此刻的一个，长度照写的来；候选都不合适就按他此刻真实的状态写。
+- 本轮说明里有角色的「发博参考」：形态和题材从候选里挑最像他的一个，长度照写的来；候选都不合适就自己想一个他会发的，但别写他此刻在干嘛。
 - 微博是对着空气自言自语，不是说给用户或某个具体的人听的：不报备、不交代、不提醒，不对她喊话、下命令，不预设她看到后的反应。秀恩爱、想她可以，那是分享自己的幸福，不是在跟她说话，也不用每次都 @ 她。
 - 他的聊天记录、日程、记忆只是背景，不复述最近和用户聊过的事；题材要和此刻的日期、他的日程对得上（上课时间人不会在外面玩，可以是想去、在等、抢票）。
 - 同一批里每条博的事情和情绪都不一样，口吻要比路人更有他的个人色彩。
@@ -961,20 +962,20 @@
     return w === 0 || w === 6 || (md >= 1001 && md <= 1007) || md <= 103 || (md >= 501 && md <= 505) || (md >= 115 && md <= 225) || (md >= 710 && md <= 831); };
   const pickN = (arr, n, avoid = []) => { const pool = arr.filter(x => !avoid.includes(x)); return shuffle(pool.length >= n ? pool : arr).slice(0, n); };
   function postPlan(charId, { history = false } = {}) {
-    if (Math.random() < 0.25) return "自由发挥，按他此刻最想发的来";
+    if (Math.random() < 0.25) return "自由发挥，发他最想发的（不写此刻在干嘛）";
     const log = (S.meta.formLog || {})[charId] || [];
     const r = Math.random(); const len = r < 0.6 ? "15 字以内" : r < 0.9 ? "40 字以内" : "不限";
     const forms = len === "不限" ? [...pickN(POST_FORMS, 2, log), LONG_FORM] : pickN(POST_FORMS, 3, log);
     S.meta.formLog = { ...(S.meta.formLog || {}), [charId]: [...forms, ...log].slice(0, 6) };
     const off = history || isOffDay(new Date());
-    let topics = pickN([...POST_TOPICS, ...(off ? OUT_TOPICS : []), WORK_TOPIC, ...(off ? [] : [WORK_TOPIC, WORK_TOPIC])], 3);
+    let topics = pickN([...POST_TOPICS, ...(off ? OUT_TOPICS : []), WORK_TOPIC], 3);
     topics = [...new Set(topics)];
     const love = loveOf(charId).state;
     if (Math.random() < (love === "none" ? 0.12 : 0.3)) topics[0] = pickN(LOVE_TOPICS[love] || LOVE_TOPICS.none, 1)[0];
     if (isPublic(charId) && Math.random() < 0.5) topics = [...pickN(PUB_TOPICS, 2), topics[0]];
     return `形态：${forms.join(" / ")}｜题材：${topics.join(" / ")}｜正文长度：${len}${history ? "｜题材要和那条博的日期对得上" : ""}`;
   }
-  const PLAN_HEAD = "发博参考（代码抽的候选：形态、题材各挑一个最像他此刻的，长度照写；都不合适就按他此刻真实的状态写）";
+  const PLAN_HEAD = "发博参考（代码抽的候选：形态、题材各挑一个最像他的，长度照写；都不合适就自己想一个他会发的，但别写他此刻在干嘛）";
   // 随请求发送的规则（build 时从 rules.json 打进来）：用户预设里没有这条也能生效
   const INLINE_RULES = "/*__INLINE_RULES__*/";
   async function generate(payload, label, opts = {}) {
@@ -997,7 +998,8 @@
     try {
       const r = await api.ai.generate(payload);
       const text = (r && r.text) || "";
-      logAi({ label, ok: true, text: opts.secret ? "（小号内容保密：掉马后在设置里查看小号）" : text });
+      const plan = opts.secret ? "" : ((payload.instruction || "").match(/(每条的)?发博参考（[^\n]*）：[^\n]*(\n- [^\n]*)*/) || [""])[0];
+      logAi({ label, ok: true, text: opts.secret ? "（小号内容保密：掉马后在设置里查看小号）" : text, ...(plan ? { plan: plan.replace(/^(每条的)?发博参考（[^）]*）：\n?/, "") } : {}) });
       return text;
     } catch (e) {
       console.error(label, e);
@@ -1032,6 +1034,7 @@
           <div style="background:var(--wb-card);margin-bottom:8px;padding:10px 16px">
             <div style="font-size:13px;font-weight:600">${r.ok ? "✅" : "❌"} ${esc(r.label)} <span style="font-weight:400;color:var(--wb-text-3)">· ${fmtTime(r.at)}${r.ok ? ` · ${String(r.text || "").length} 字` : ""}</span></div>
             ${r.parsed ? `<div style="font-size:12px;color:var(--wb-orange);margin-top:2px">解析结果：${esc(r.parsed)}</div>` : ""}
+            ${r.plan ? `<div style="font-size:12px;color:var(--wb-link);margin-top:4px;white-space:pre-wrap;user-select:text;-webkit-user-select:text">🎲 发博参考：${esc(r.plan)}</div>` : ""}
             ${r.error ? `<div style="font-size:12px;color:var(--wb-red);margin-top:4px">${esc(r.error)}</div>` : ""}
             ${r.ok ? `<pre style="margin:6px 0 0;white-space:pre-wrap;word-break:break-all;font-size:11px;line-height:1.5;max-height:320px;overflow:auto;color:var(--wb-text-2);user-select:text;-webkit-user-select:text">${esc(maskSecrets(r.text) || "（空的，AI 什么都没返回）")}</pre>` : ""}
           </div>`).join("")

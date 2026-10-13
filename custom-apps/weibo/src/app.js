@@ -1604,11 +1604,7 @@
     rerenderDetail(post);
   }
 
-  /**
-   * 历史微博的时间挤在一起（模型写成「20分钟前」之类）时，按给出的顺序（近→远）往前铺开：
-   * 第一条在 before 之前 0.5～3 天，之后每条再往前 1～40 天。
-   */
-  /** 主页历史微博的时间：AI 写的日期照用（内容是按那天写的）。没写、写成未来或太近的往前挪 1～4 天；和后一条挤在一小时内的，同一天里错开几个小时 */
+  /** 主页历史微博的时间（只在生成时定一次，之后不再动）：AI 写的日期照用（内容是按那天写的）。没写、写成未来或太近的往前挪 1～4 天；和后一条挤在一小时内的，同一天里错开几个小时 */
   function spreadHistory(posts, before) {
     if (!posts.length) return false;
     const order = posts.map((p, i) => ({ p, i, t: new Date(p.createdAt).getTime() }))
@@ -1625,21 +1621,6 @@
       prev = t;
     }
     return moved;
-  }
-  /** 修旧数据：主页历史微博有两条挤在一小时内的，错开 */
-  const sameDayClash = list => { const ts = list.map(p => new Date(p.createdAt).getTime()).sort((a, b) => a - b); return ts.some((t, i) => i && t - ts[i - 1] < 3600e3); };
-  function repairHistoryTimes(list, before) {
-    if (list.length < 2 || !sameDayClash(list)) return;
-    if (spreadHistory(list, before)) list.forEach(savePost);
-  }
-  function repairCharHistory(charId) {
-    const feed = S.posts.filter(p => p.charId === charId && p.origin !== "profile").map(p => new Date(p.createdAt).getTime());
-    repairHistoryTimes(S.posts.filter(p => p.charId === charId && p.origin === "profile"), feed.length ? Math.min(...feed) : Date.now());
-  }
-  function repairNpcHistory(name) {
-    const mine = S.posts.filter(p => p.authorType === "npc" && p.authorName === name);
-    const feed = mine.filter(p => p.origin !== "profile").map(p => new Date(p.createdAt).getTime());
-    repairHistoryTimes(mine.filter(p => p.origin === "profile"), feed.length ? Math.min(...feed) : Date.now());
   }
 
   /** 角色主页：建号 + 历史微博 */
@@ -2999,13 +2980,11 @@
       body.scrollTop = scroll; hydrateImages(body);
     }, { clearHead: true });
     page.setTab = t => { tab = t; page.render(page); };
-    repairCharHistory(charId);
     ensureCharProfile(charId);
   }
 
   function openNpcProfile(name) {
     noteVisit({ type: "npc", name });
-    repairNpcHistory(name);
     let tab = "posts";
     const page = openPage(`profile-npc:${name}`, pg => {
       const body = $(".page-body", pg.el); const scroll = body.scrollTop;

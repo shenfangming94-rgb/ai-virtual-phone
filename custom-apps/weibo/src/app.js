@@ -1268,7 +1268,7 @@
       plans.some(p => p.n) ? `${PLAN_HEAD}：\n${plans.filter(p => p.n).map(p => `- ${p.c.name}：${postPlan(p.c.id)}`).join("\n")}` : "",
       `「时间」都要落在这 ${gapH} 小时里，写成 HH:mm（今天）或 昨天 HH:mm，按他的作息来。`,
       `角色微博昵称（已注册的必须沿用）：\n${charsForPrompt(plans.map(p => p.c))}`,
-      "格式：\n- 角色发的博照 ===微博=== 格式。发了又删的那条，在「正文：」前加两行「删除：是」「截图：一个路人的昵称：他转发截图时说的一句话」。\n"
+      "格式：\n- 角色发的博照 ===微博=== 格式。发了又删的那条，在「正文：」前加两行「删除：是」「转发：一个路人的昵称：他在删之前转发时写的转发语（他那时还不知道会被删，就是看到这条博的正常反应）」。\n"
         + "- 改简介：\n===简介===\n角色：本名\n简介：新简介（像真人随手改的，和旧的不一样）\n===结束===\n"
         + "- 他点赞的别人的微博：也照 ===微博=== 格式，「角色」写 无，「作者」写那个路人博主的昵称，在「正文：」前加一行「点赞人：角色本名」。\n这次不写私信。",
       reservedLine(),
@@ -1326,14 +1326,20 @@
       if (made >= 6) break;
       p.createdAt = new Date(inGap(new Date(p.createdAt).getTime())).toISOString(); made++;
       if (plan.del && yes(b["删除"])) {
-        // 发了又删：原博不留，只剩路人截图转发的「已删除」，他记得自己删过
+        // 发了又删：原博不留；删之前有路人转发过，转发里只剩「已删除」，评论区有人问原博写了啥、转发的人存了原文。他记得自己删过
         remember(plan.c.id, `我在微博发了一条又删了：「${p.text.slice(0, 80)}」`, `weibo_deleted_${p.id}`);
-        const [who, ...say] = String(b["截图"] || "").split(/[：:]/);
+        const [who, ...say] = String(b["转发"] || b["截图"] || "").split(/[：:]/);
         const name = who && !none(who) && !isUserName(who.trim()) && !charByName(who.trim(), true) ? who.trim().replace(/^@/, "") : "吃瓜第一线";
+        const at = new Date(Math.min(now, new Date(p.createdAt).getTime() + rand(3, 40) * 60e3)).getTime();
+        const asker = shuffle(["是小王不是小汪", "今天也要早睡", "一只柠檬精", "蹲一个后续", "路过的芒果"].filter(n => n !== name))[0];
+        const ask = { id: uid("c"), parentId: null, replyToName: "", authorType: "npc", authorName: asker, text: "删了？？原博写的啥", likes: rand(3, 30), liked: false, isPostAuthor: false,
+          createdAt: new Date(Math.min(now, at + rand(30, 120) * 60e3)).toISOString() };
+        const ans = { id: uid("c"), parentId: ask.id, replyToName: asker, authorType: "npc", authorName: name, text: `原博：「${p.text.slice(0, 120)}」 我手快存了`, likes: rand(5, 60), liked: false, isPostAuthor: true,
+          createdAt: new Date(Math.min(now, new Date(ask.createdAt).getTime() + rand(2, 30) * 60e3)).toISOString() };
         const shot = { id: uid("wb"), scope: S.identity.id, authorType: "npc", authorName: name, verified: "无", vip: false, gender: "", source: "",
-          createdAt: new Date(Math.min(now, new Date(p.createdAt).getTime() + rand(5, 60) * 60e3)).toISOString(), text: say.join("：").trim() || "我截图了 删了也没用",
-          images: [{ desc: `微博截图：@${charNickname(plan.c.id)}（已删除）：${p.text}`, withFace: false }], repost: { author: charNickname(plan.c.id), text: "", images: [], deleted: true, chain: [] }, counts: { reposts: rand(0, 3), comments: rand(1, 8), likes: rand(3, 40) },
-          liked: false, comments: [], commentsGenerated: false, origin: "feed", followFeed: true };
+          createdAt: new Date(at).toISOString(), text: say.join("：").trim() || "转发微博",
+          images: [], repost: { author: charNickname(plan.c.id), text: "", images: [], deleted: true, chain: [] }, counts: { reposts: rand(0, 3), comments: rand(2, 8), likes: rand(3, 40) },
+          liked: false, comments: [ask, ans], commentsGenerated: false, origin: "feed", followFeed: true };
         S.posts.push(shot); savePost(shot); S.allPostRows++; continue;
       }
       p.followFeed = true; thinPics([p]);

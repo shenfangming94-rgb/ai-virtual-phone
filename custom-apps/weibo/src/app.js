@@ -123,17 +123,21 @@
 
   // ── 大号 / 小号：S.me 是当前账号的资料（大号就是 S.meta） ──
   const isAlt = () => S.acct === "alt" && !!S.alt;
-  Object.defineProperty(S, "me", { get: () => (isAlt() ? S.alt : S.meta) });
-  const acctOf = x => (x && x.acct === "alt" ? "alt" : "main");
+  /** 登着某个 char 的号（他给了登录授权）：S.acct = "c:charId" */
+  const asId = () => (typeof S.acct === "string" && S.acct.startsWith("c:") && S.meta && (S.meta.logins || {})[S.acct.slice(2)] ? S.acct.slice(2) : null);
+  const isAs = () => !!asId();
+  function asMe() { const l = S.meta.logins[asId()]; l.me = l.me || { seen: {}, favs: [], drafts: [], history: [], visits: [], fans: [] }; l.me.nickname = charNickname(asId()); return l.me; }
+  Object.defineProperty(S, "me", { get: () => (isAlt() ? S.alt : isAs() ? asMe() : S.meta) });
+  const acctOf = x => (x && x.acct ? x.acct : "main");
   const profOf = x => (acctOf(x) === "alt" && S.alt ? S.alt : S.meta);
-  const curAcct = () => (isAlt() ? "alt" : "main");
+  const curAcct = () => (isAlt() ? "alt" : isAs() ? S.acct : "main");
   const sameAcct = x => acctOf(x) === curAcct();
   /** 当前账号自己发的 */
   const isMe = x => x.authorType === "user" && sameAcct(x);
-  const acctTag = () => (isAlt() ? { acct: "alt" } : {});
+  const acctTag = () => (isAlt() ? { acct: "alt" } : isAs() ? { acct: S.acct } : {});
   const knowsAlt = charId => !!S.alt && (S.alt.knownBy || []).includes(charId);
-  const LK = () => (isAlt() ? "likedAlt" : "liked");
-  const LKAT = () => (isAlt() ? "likedAtAlt" : "likedAt");
+  const LK = () => (isAlt() ? "likedAlt" : isAs() ? `liked_${asId()}` : "liked");
+  const LKAT = () => (isAlt() ? "likedAtAlt" : isAs() ? `likedAt_${asId()}` : "likedAt");
   /** 超话里的加入 / 经验 / 签到按账号分开 */
   const su = sp => (isAlt() ? (sp.alt || (sp.alt = {})) : sp);
   /** 小号相关的一句话：写进 prompt，告诉 AI 谁知道、谁不知道 */
@@ -284,7 +288,7 @@
     };
     for (const k of ["excludedChars", "starredChars", "avatarPool", "fans", "publicChars", "visits", "history", "favs", "drafts"]) if (!Array.isArray(S.meta[k])) S.meta[k] = [];
     if (S.alt) for (const k of ["fans", "visits", "history", "favs", "drafts", "knownBy"]) if (!Array.isArray(S.alt[k])) S.alt[k] = [];
-    S.acct = S.alt && S.meta.acct === "alt" ? "alt" : "main";
+    S.acct = S.alt && S.meta.acct === "alt" ? "alt" : String(S.meta.acct || "").startsWith("c:") && (S.meta.logins || {})[S.meta.acct.slice(2)] ? S.meta.acct : "main";
     S.threads = dmRows.filter(t => t.scope === S.identity.id && t.peer && acctOf(t) === S.acct).map(t => ({ ...t, messages: t.messages || [] }));
     // 第一次有消息页：以前的评论和赞都算已读，列表里照样能看到
     if (!S.me.seen) { const t = nowIso(); S.me.seen = { at: t, comment: t, like: t, follow: t }; saveMeta(); }
@@ -608,7 +612,7 @@
   }
 
   // ───────────────────────── AI 输出解析 ─────────────────────────
-  const KEYS = ["回关", "取关", "转发语", "口吻", "发博原因", "删除", "点赞人", "截图", "做法", "代发", "角色", "作者", "认证", "认证说明", "会员", "来源", "时间", "配图", "转评赞", "转发自", "原文", "转发链", "正文", "编号", "回复", "赞", "内容",
+  const KEYS = ["回关", "取关", "转发语", "口吻", "发博原因", "删除", "点赞人", "截图", "做法", "代发", "登录", "对方", "记录", "角色", "作者", "认证", "认证说明", "会员", "来源", "时间", "配图", "转评赞", "转发自", "原文", "转发链", "正文", "编号", "回复", "赞", "内容",
     "性别", "点赞角色", "转发", "路人点赞", "新增粉丝", "昵称", "简介", "IP属地", "粉丝", "关注",
     "热搜词", "热度", "标签", "相关", "来自", "新粉丝", "名称", "分类", "帖子数", "粉丝数", "导语", "主持人", "阅读", "讨论", "分区", "词条", "热搜", "阅读量", "讨论量",
     // 模型常换的叫法
@@ -621,7 +625,7 @@
   const KEY_ALT = KEYS.slice().sort((a, b) => b.length - a.length).join("|");
   // 支持「作者：xx」「作者: xx」「[作者]xx」「【作者】：xx」「**作者**：xx」「- 作者：xx」
   const KEY_RE = new RegExp(`^\\s*(?:[-*•]\\s*)?(?:[\\[【]\\s*(${KEY_ALT})\\s*[\\]】]\\s*[：:]?|(${KEY_ALT})\\s*[：:])\\s*(.*)$`);
-  const KINDS = "微博|评论|互动|主页|热搜|话题|私信|超话|转发|简介|反应|授权|结束";
+  const KINDS = "微博|评论|互动|主页|热搜|话题|私信|超话|转发|简介|反应|授权|会话|结束";
 
   /** 把模型常见的格式偏差统一成 ===xx=== 块 */
   function normalizeOutput(text) {
@@ -664,7 +668,7 @@
 
   function parseBlocks(raw, kind) {
     const text = normalizeOutput(raw);
-    const bodyKey = { 转发: "转发语", 微博: "正文", 评论: "内容", 互动: "点赞角色", 主页: "昵称", 热搜: "热搜词", 话题: "导语", 私信: "内容", 超话: "名称", 反应: "做法", 授权: "代发" }[kind];
+    const bodyKey = { 转发: "转发语", 微博: "正文", 评论: "内容", 互动: "点赞角色", 主页: "昵称", 热搜: "热搜词", 话题: "导语", 私信: "内容", 超话: "名称", 反应: "做法", 会话: "记录" }[kind];
     // 按分隔标记切段；标记之外的散段（模型漏写标记）也一并按字段解析，最后按必需字段筛
     const out = [];
     let label = null;
@@ -679,6 +683,7 @@
     if (kind === "私信") return out.filter(f => f["内容"] && f["来自"]);
     if (kind === "转发") return out.filter(f => f["昵称"] && "转发语" in f && !f["正文"]);
     if (kind === "超话") return out.filter(f => f["名称"] && !f["正文"]);
+    if (kind === "授权") return out.filter(f => "代发" in f || "登录" in f).slice(0, 1);
     if (kind === "简介") return out.filter(f => f["简介"] && f["角色"] && !f["正文"] && !("粉丝" in f));
     return out.filter(f => f[bodyKey]);
   }
@@ -1144,7 +1149,7 @@
     const followed = activeChars().filter(c => isFollowingChar(c.id));
     const fullCast = pickCast(followed.length ? followed : activeChars(), followTab ? 4 : 2);
     // 恋人（恋情开关是地下恋/已公开）单独调用一次写他的博：像私信一样只有他，人设和聊天记录最完整
-    const lovers = isAlt() ? [] : fullCast.filter(c => loveOf(c.id).state !== "none" && loverSolo(c.id));
+    const lovers = isAlt() || isAs() ? [] : fullCast.filter(c => loveOf(c.id).state !== "none" && loverSolo(c.id));
     const cast = fullCast.filter(c => !lovers.includes(c));
     const charCount = Math.max(0, (followTab ? Math.min(fullCast.length + 1, rand(2, 4)) : 1) - lovers.length);
     const npcCount = followTab ? rand(2, 3) : rand(5, 7);
@@ -1153,7 +1158,7 @@
     const recent = S.posts.filter(p => acctOf(p) !== "alt").sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)).slice(0, 8)
       .map(p => `- ${authorOf(p).name}：${p.text.slice(0, 40)}`).join("\n");
     // 刷新时私信也掷骰子：没掷中就不来；上一条没回的不再追
-    const dmPick = isAlt() ? null : rollCharDm(fullCast);
+    const dmPick = isAlt() || isAs() ? null : rollCharDm(fullCast);
     const dmLine = c => dmPick === c ? `如果你有话想单独跟用户说，可以顺便私信用户（1～3 条，一句一个块）。${charDmRecent(c)}` : "这次不私信用户，不要输出 ===私信===。";
     const instruction = [
       `当前时间：${nowText()}`,
@@ -1379,6 +1384,7 @@
   function ghostLine(post) {
     const g = post.ghost; if (!g) return "";
     const ch = charById(post.charId); const who = ch ? ch.name : "博主";
+    if (g.mode === "login") return `这条是用户（${herName()}）登着${who}的号发的（他把号给她了，他知道）。评论的人只当是${who}本人：熟人看口吻差得多可以起疑。${who}本人这次不出现在评论区。`;
     if (g.mode === "asked") return `这条是${who}让用户（${herName()}）帮他发的，他知道内容，可以像回自己的博一样回复评论。熟人看口吻可能看出不是他本人写的，可以调侃（代发？谁帮你发的？），他按人设回应。`;
     if (!g.found) return `这条其实是用户（${herName()}）拿${who}的手机偷偷发的，${who}本人还不知道：他这次*不出现在评论区*（不回复）。评论的人只看得到是他的号发的：熟人对比他平时的口吻和人设，差得多就会起疑（被盗号了？这不像你会说的话？谁拿你手机发的？），像的话就照常互动。路人不知道是谁发的，不要直接说出是用户。`;
     return `这条是用户（${herName()}）拿${who}的手机偷偷发的，${who}已经发现了${g.react ? `（他的反应：${g.react}）` : ""}。`;
@@ -1438,6 +1444,142 @@
     toast(`${ch.name}发现了你用他的号发的微博…`);
   }
 
+  // ───────────── 登他的号：他给了登录授权，她用他的身份社交（回评论、回私信、主动私信别人、发博） ─────────────
+  const LOGIN_ICON = '<svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="#fff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 4h4a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-4"/><path d="M4 12h11M11 8l4 4-4 4"/></svg>';
+  const granted = id => !!(S.meta.logins || {})[id] && !!charById(id);
+  const asAuthor = () => authorOf({ authorType: "char", charId: asId() });
+  /** 他本人眼里的这件事：写进他的记忆 */
+  const asRemember = (summary, evt, ...owners) => remember(asId(), `${herName()}用我的微博号${summary}`, evt, null, ...owners);
+  async function grantLogin(charId) {
+    const ch = charById(charId); if (!ch) return;
+    if (!granted(charId)) {
+      S.meta.logins = { ...(S.meta.logins || {}), [charId]: { at: nowIso() } }; saveMeta();
+      remember(charId, `我把我的微博号给${herName()}登了，她可以用我的身份发博、评论、私信`, `weibo_login_${charId}`);
+    }
+    if (await sheet(`${ch.name}的微博号「${charNickname(charId)}」已经给你啦`, [{ label: "现在就登上去", value: "go" }]) === "go") switchAcct(`c:${charId}`);
+  }
+  async function logoutAs(charId) {
+    const ch = charById(charId);
+    if (await sheet(`退出${ch ? ch.name : "他"}的微博号？想再登要重新找他要`, [{ label: "退出登录", value: "yes", danger: true }]) !== "yes") return;
+    const l = { ...(S.meta.logins || {}) }; delete l[charId]; S.meta.logins = l; saveMeta();
+    if (asId() === charId) await switchAcct("main"); else refreshAll();
+    toast("已退出登录");
+  }
+  /** 第一次登上去：给他的私信箱补一批（有的他回过，有的还没回） */
+  async function seedHisDms(charId) {
+    const ch = charById(charId); const l = (S.meta.logins || {})[charId]; if (!ch || !l || l.seeded) return;
+    l.seeded = true; saveMeta();
+    const others = activeChars().filter(c => c.id !== charId).map(c => c.name);
+    const instruction = [
+      `当前时间：${nowText()}`,
+      `这是你（${ch.name}）的微博私信箱，你的微博昵称是「${charNickname(charId)}」${isPublic(charId) ? "，你是公众人物" : ""}。写 ${rand(4, 6)} 个最近找你的私信会话，结合你的人设、近况、记忆和现在的时间。`,
+      `- 找你的人：朋友兄弟、同学同事、家里人${others.length ? `、你认识的人（可以从这些人里挑：${others.join("、")}）` : ""}${isPublic(charId) ? "、粉丝" : "、偶尔的陌生网友"}。*绝对不能有暧昧对象、对你表白或撩你的人*，也不能是${herName()}本人（她的微博昵称「${S.meta.nickname}」）。`,
+      "- 大约一半会话你已经回过几句（来回 2～6 句），另一半是对方刚发来、你还没回（最后一句是对方说的）。",
+      "- 像真人私信：一句一行，短，口语。",
+      "每个会话严格用这个格式：\n===会话===\n对方：对方的微博昵称（认识的角色写本名）\n角色：角色本名（路人写 无）\n记录：\nTA：对方说的一句\n我：你说的一句\n===结束===",
+    ].join("\n\n");
+    const text = await generate({ characterId: charId, appTags: ["nox_weibo", "dm"], instruction }, `${ch.name}的私信箱`, { hint: "===会话===" });
+    if (text == null) { l.seeded = false; saveMeta(); return; }
+    let n = 0; const acct = `c:${charId}`;
+    for (const b of parseBlocks(text, "会话")) {
+      const pc = charByName(b["角色"]) || charByName(b["对方"]);
+      const name = String(b["对方"] || "").replace(/^@/, "").trim();
+      if ((pc && pc.id === charId) || isUserName(name) || (!pc && !name)) continue;
+      const peer = pc ? { type: "char", charId: pc.id } : { type: "npc", name };
+      const lines = String(b["记录"] || "").split(/\n+/).map(x => x.trim()).map(x => ({ me: /^我\s*[：:]/.test(x), text: x.replace(/^(TA|ta|Ta|我)\s*[：:]\s*/, "").trim(), ok: /^(TA|ta|Ta|我)\s*[：:]/.test(x) })).filter(x => x.ok && x.text).slice(-8);
+      if (!lines.length) continue;
+      const key = threadKey(peer); if (S.threads.some(t => t.key === key && acctOf(t) === acct)) continue;
+      let at = Date.now() - rand(20, 60 * 30) * 60e3;
+      const messages = lines.map(x => ({ id: uid("m"), from: x.me ? "me" : "peer", byHim: x.me || undefined, text: x.text, at: new Date(at += rand(1, 20) * 60e3).toISOString() }));
+      const t = { id: `dm_${S.identity.id}_${acct}_${key}`, scope: S.identity.id, acct, key, peer, about: "", messages, unread: messages[messages.length - 1].from === "peer" ? 1 : 0, updatedAt: messages[messages.length - 1].at };
+      if (asId() === charId) S.threads.push(t); saveThread(t); n++;
+    }
+    noteParsed(`${n} 个私信会话`); refreshMsgViews(); renderTabbar();
+  }
+  /** 她用他的号在评论区说话：被回复的人和看热闹的接话，都以为是他本人 */
+  async function replyToHim(post, hisC, target) {
+    const me = charById(hisC.charId); if (!me) return;
+    const targetName = target ? target.authorName : authorOf(post).name;
+    const tChar = target && target.authorType === "char" && target.charId !== me.id ? charById(target.charId) : (!target && post.authorType === "char" && post.charId !== me.id ? charById(post.charId) : null);
+    const code = codeOf(post, hisC);
+    const instruction = [
+      `当前时间：${nowText()}`,
+      `博主：${authorOf(post).name}${altBloggerNote(post)}`, `微博正文：${post.text.slice(0, 300)}`,
+      target ? `这层评论楼的对话（按时间）：\n${floorLines(post, hisC)}` : "",
+      `「${charNickname(me.id)}」（就是${me.name}本人的号）刚刚${target ? `回复了「${targetName}」` : "评论了这条微博"}：「${hisC.text}」，编号 ${code}。`,
+      `其实这句是${herName()}登着${me.name}的号打的，评论区的人都不知道，只当是${me.name}本人：熟人会对比他平时的口吻和人设，差得多可以起疑（今天怎么怪怪的？被盗号了？），像的话就正常接话。不要直接说出是她。${me.name}本人这次不出现。`,
+      `生成 1～3 条回复：「${targetName}」一定要回（昵称一字不差），其他人可以插嘴。回复他这句的「回复」字段填 ${code}。`,
+      CMT_FORMAT, reservedLine(),
+    ].filter(Boolean).join("\n\n");
+    const text = await generate(tChar ? { characterId: tChar.id, appTags: ["nox_weibo", "reply"], instruction } : { characterIds: pickCast(activeChars().filter(c => c.id !== me.id), 1).map(c => c.id), appTags: ["nox_weibo", "reply"], instruction }, "回复他");
+    const fresh = S.posts.find(p => p.id === post.id); if (text == null || !fresh || !fresh.comments.some(c => c.id === hisC.id)) return;
+    const list = commentsFromBlocks(parseComments(text), fresh, {}).filter(c => !(c.authorType === "char" && c.charId === me.id));
+    if (!list.length) { parseFailed("回复他"); return; }
+    noteParsed(`${list.length} 条回复`);
+    let delay = rand(1500, 4000);
+    for (const c of list) {
+      if (!c.parentId) { c.parentId = hisC.parentId || hisC.id; c.replyToName = hisC.authorName; c.replyToId = hisC.id; }
+      if (c.authorType === "char" && c.charId) remember(c.charId, `${me.name}在微博评论区说「${hisC.text.slice(0, 40)}」，我回：「${c.text.slice(0, 60)}」`, `weibo_ascmt_${c.id}`, null, fresh);
+      setTimeout(() => { if (!S.posts.includes(fresh)) return; c.createdAt = nowIso(); fresh.comments.push(c); fresh.counts.comments++; savePost(fresh); refreshVisible(fresh); }, delay);
+      delay += rand(1500, 4000);
+    }
+  }
+  /** 他号上的私信：对方以为在和他本人聊 */
+  async function replyDmAsHim(th) {
+    const me = charById(th.acct.slice(2)); if (!me || th._typing) return;
+    let s0 = th.messages.length; while (s0 > 0 && th.messages[s0 - 1].from === "me") s0--;
+    const pending = th.messages.slice(s0); if (!pending.length) return;
+    const pendText = pending.map(m => `「${m.text}」`).join("");
+    const peerName = peerAuthor(th).name;
+    const history = th.messages.slice(Math.max(0, s0 - 16), s0).map(m => `${m.from === "me" ? me.name : "你"}：${m.text}`).join("\n");
+    th._typing = true; refreshMsgViews();
+    let text = null;
+    if (th.peer.type === "char") {
+      const pc = charById(th.peer.charId);
+      const instruction = [
+        `当前时间：${nowText()}`,
+        `这是微博私信。你在和「${charNickname(me.id)}」私信：就是你认识的${me.name}，按你们平时的关系和他的人设来回。`,
+        `（其实是${herName()}登着${me.name}的号在打字，你不知道。如果口吻和他平时差很多，你可以起疑，但别直接说出是她。）`,
+        history ? `你们最近的私信：\n${history}` : "这是你们在微博私信里的第一句话。",
+        `${me.name}刚刚${pending.length > 1 ? "连着" : ""}发来：${pendText}`,
+        `「来自」写 ${pc.name}，「角色」写 ${pc.name}。`,
+      ].join("\n\n");
+      text = await generate({ characterId: pc.id, appTags: ["nox_weibo", "dm"], instruction }, `${pc.name}私信`);
+    } else {
+      const prompt = [`你是微博用户「${th.peer.name}」。给你发私信的是博主「${charNickname(me.id)}」${isPublic(me.id) ? "（公众人物，你是 TA 的粉丝或路人）" : ""}。`,
+        history ? `你们的私信记录：\n${history}` : "", `「${charNickname(me.id)}」刚刚${pending.length > 1 ? "连着" : ""}私信你：${pendText}`,
+        `「来自」写 ${th.peer.name}，「角色」写 无。`, DM_FMT].filter(Boolean).join("\n\n");
+      const job = uid("job"); S.jobs.add(job);
+      try { const r = await api.ai.chat({ system: NPC_DM_SYSTEM.replace("绝对不能以用户本人的身份说话。", `绝对不能以「${charNickname(me.id)}」的身份说话。`), prompt, timeoutMs: 90000 }); text = (r && r.text) || ""; logAi({ label: "路人私信", ok: true, text }); }
+      catch (e) { logAi({ label: "路人私信", ok: false, error: String((e && e.message) || e) }); }
+      finally { S.jobs.delete(job); }
+    }
+    const fresh = S.threads.find(x => x.key === th.key && x.acct === th.acct) || th; fresh._typing = false;
+    const lines = text ? parseBlocks(text, "私信").map(b => b["内容"].trim()).filter(Boolean).slice(0, 5) : [];
+    if (!lines.length) { refreshMsgViews(); if (text != null) parseFailed("私信"); return; }
+    noteParsed(`${lines.length} 条私信`);
+    if (th.peer.type === "char") remember(th.peer.charId, `${me.name}在微博私信我：${pendText.slice(0, 100)}，我回：「${lines.join(" / ").slice(0, 100)}」`, `weibo_asdm_${uid("e")}`);
+    remember(me.id, `${herName()}用我的微博号私信了${peerName}：${pendText.slice(0, 100)}，对方回：「${lines.join(" / ").slice(0, 100)}」`, `weibo_asdmme_${uid("e")}`);
+    lines.forEach((t, i) => setTimeout(() => {
+      fresh.messages.push({ id: uid("m"), from: "peer", text: t, at: nowIso() }); fresh.updatedAt = nowIso();
+      if (!pages.some(pg => pg.key === `dm:${fresh.key}`)) fresh.unread = (fresh.unread || 0) + 1;
+      saveThread(fresh); refreshMsgViews();
+    }, 800 + i * rand(1200, 2400)));
+  }
+  /** 「我」页：登着他的号时 */
+  function renderMeAs() {
+    const a = asAuthor(); const ch = charById(asId());
+    $("#topbar").innerHTML = `<div class="topbar-inner"><span class="top-title">我</span><button class="acct-switch" data-act="switch-acct">切换账号</button></div>`;
+    $("#view").innerHTML = `<div class="me-head" ${profileAttrs(a)}>${avatarHtml(a)}<div class="cell-main">
+        <div class="profile-name">${esc(a.name)}</div>
+        <div class="me-bio"><span class="alt-tag as-tag" style="margin:0 4px 0 0">🔑 登着${esc(ch.name)}的号</span>发博评论私信都算他的</div></div><span class="me-home-link">他的主页 ›</span></div>
+      <div class="list-cell" data-act="compose"><div class="cell-main">✏️ 用他的号发微博</div><span class="set-chev">›</span></div>
+      <div class="list-cell" data-act="tab" data-tab="msg"><div class="cell-main">💬 他的私信和评论</div><span class="set-chev">›</span></div>
+      <div class="list-cell" data-act="switch-acct"><div class="cell-main">🔁 切回我自己的号</div><span class="set-chev">›</span></div>
+      <div class="list-cell" data-act="logout-as" data-char="${esc(asId())}"><div class="cell-main" style="color:var(--wb-red)">退出登录（想再登得重新找他要）</div></div>`;
+    hydrateImages($("#view"));
+  }
+
   /** 评论区 prompt 里的博主说明：角色大号 / 角色小号 / 路人 */
   function altBloggerNote(post) {
     if (post.authorType === "char") return `（就是角色 ${charById(post.charId)?.name}）`;
@@ -1493,7 +1635,7 @@
       `可能来评论的其他角色（符合关系才来，不来就不写）：\n${charsForPrompt(others) || "无"}`,
       `用户的微博昵称：${S.meta.nickname}（用户本人不要出现在评论里）`,
       ghostLine(post),
-      `生成约 ${want} 条评论，其中楼中楼回复 2~5 条${owner && !(post.ghost && post.ghost.mode === "secret" && !post.ghost.found) ? "，博主本人至少回复 1 条" : ""}。`,
+      `生成约 ${want} 条评论，其中楼中楼回复 2~5 条${owner && !(post.ghost && (post.ghost.mode === "login" || (post.ghost.mode === "secret" && !post.ghost.found))) ? "，博主本人至少回复 1 条" : ""}。`,
       rpN ? REPOST_FMT(rpN) : "",
       caltLine(cast, { post }),
       reservedLine(),
@@ -1502,7 +1644,7 @@
     post._genComments = false;
     if (text != null) {
       let list = dropCharAtUser(fixAltAuthors(commentsFromBlocks(parseComments(text), post, {}), { post }), post);
-      if (post.ghost && post.ghost.mode === "secret" && !post.ghost.found) list = list.filter(c => !(c.authorType === "char" && c.charId === post.charId)); // 他还不知道，不会来评论
+      if (post.ghost && (post.ghost.mode === "login" || (post.ghost.mode === "secret" && !post.ghost.found))) list = list.filter(c => !(c.authorType === "char" && c.charId === post.charId)); // 他还不知道，不会来评论
       const rk = rpN ? takeReposts(post, text) : 0;
       if (list.length) noteParsed(`${list.length} 条评论${rk ? `，${rk} 条转发` : ""}`); else parseFailed("加载评论");
       post.comments = [...list, ...post.comments];
@@ -1961,7 +2103,7 @@
       && !(a.type === "char" ? isFollowingChar(a.charId) : isFollowingNpc(a.name));
     const pinned = opts.showPin && S.me.pinnedPostId === p.id;
     const long = !opts.full && p.text.length > 140;
-    const meta = [fmtTime(p.createdAt), p.source ? `来自 ${esc(p.source)}` : "", p.visibility === "friends" ? "好友圈" : p.visibility === "self" ? "仅自己可见" : ""].filter(Boolean).join(" ");
+    const meta = [p.ghost ? '<span class="tag dai">我代</span>' : "", fmtTime(p.createdAt), p.source ? `来自 ${esc(p.source)}` : "", p.visibility === "friends" ? "好友圈" : p.visibility === "self" ? "仅自己可见" : ""].filter(Boolean).join(" ");
     let quote = "";
     if (p.repost) {
       const chain = (p.repost.chain || []).map(c => `//<span class="link" ${nameAttrs(c.name)}>@${esc(c.name)}</span>:${richText(c.text)}`).join("");
@@ -2114,6 +2256,7 @@
   ];
   function renderMe() {
     if (S.tab !== "me") return;
+    if (isAs()) { renderMeAs(); return; }
     $("#topbar").innerHTML = `<div class="topbar-inner"><span class="top-title">我</span><button class="acct-switch" data-act="switch-acct">切换账号</button><button class="top-icon" data-act="open-settings" aria-label="设置">${I.gear}</button></div>`;
     const a = authorOf({ authorType: "user", ...acctTag() });
     const visits = (S.me.visits || []).slice(0, 12);
@@ -2552,7 +2695,7 @@
   function getThread(peer) {
     const key = threadKey(peer);
     let t = S.threads.find(x => x.key === key);
-    if (!t) { t = { id: `dm_${S.identity.id}_${isAlt() ? "alt_" : ""}${key}`, scope: S.identity.id, ...acctTag(), key, peer, about: "", messages: [], unread: 0, updatedAt: nowIso() }; S.threads.push(t); }
+    if (!t) { t = { id: `dm_${S.identity.id}_${isAlt() ? "alt_" : isAs() ? `${S.acct}_` : ""}${key}`, scope: S.identity.id, ...acctTag(), key, peer, about: "", messages: [], unread: 0, updatedAt: nowIso() }; S.threads.push(t); }
     return t;
   }
   const dmSaveQueue = new Map();
@@ -2616,13 +2759,14 @@
   function noteItems(type) {
     const nick = S.me.nickname; const out = [];
     const mine = S.posts.filter(isMe);
+    const hisPost = p => isAs() ? p.authorType === "char" && p.charId === asId() : isMe(p);
     if (type === "comment") {
       for (const p of S.posts) for (const c of p.comments || []) {
-        if (c.authorType === "user") continue;
+        if (c.authorType === "user" || (isAs() && c.authorType === "char" && c.charId === asId())) continue;
         const parent = c.parentId ? p.comments.find(x => x.id === c.parentId) : null;
-        const toMe = c.replyToName ? c.replyToName === nick : parent && isMe(parent);
+        const toMe = c.replyToName ? c.replyToName === nick : parent && (isAs() ? parent.charId === asId() && parent.authorType === "char" : isMe(parent));
         if (toMe) out.push({ at: c.createdAt, who: authorOf(c), action: "回复了你的评论", text: c.text, post: p });
-        else if (isMe(p) && !c.parentId) out.push({ at: c.createdAt, who: authorOf(c), action: "评论了你的微博", text: c.text, post: p });
+        else if (hisPost(p) && !c.parentId) out.push({ at: c.createdAt, who: authorOf(c), action: "评论了你的微博", text: c.text, post: p });
       }
     }
     if (type === "at" && nick) {
@@ -2651,7 +2795,7 @@
         out.push({ at: c.likeAt || c.createdAt, who, title: likeTitle(names, n), action: "赞了你的评论", text: c.text, post: p });
       }
     }
-    if (type === "news" && !isAlt()) {
+    if (type === "news" && !isAlt() && !isAs()) {
       const ACT = { post: "发布了新微博", bio: "修改了简介", visit: "看过你的主页", found: "发现了你用他的号发的微博" };
       for (const n of S.meta.news || []) {
         if (n.who.type === "char" && !charById(n.who.charId)) continue;
@@ -2668,12 +2812,13 @@
   const unreadNotes = type => { const seen = new Date((S.me.seen || {})[type] || 0); return noteItems(type).filter(x => new Date(x.got || x.at) > seen).length; }; // 补出来的事发生在过去，按送到的时间算未读
   const unreadDms = () => S.threads.reduce((n, t) => n + (t.unread || 0), 0);
   const badgeHtml = n => n ? `<span class="badge">${n > 99 ? "99+" : n}</span>` : "";
+  const asBanner = () => isAs() ? `<div class="form-note as-banner">🔑 正在用${esc(charById(asId()).name)}的号「${esc(charNickname(asId()))}」</div>` : "";
 
   function renderMsg() {
     if (S.tab !== "msg") return;
     $("#topbar").innerHTML = `<div class="topbar-inner"><span class="top-title">消息</span></div>`;
     const chevron = '<svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m9 5 7 7-7 7"/></svg>';
-    const icons = NOTE_TYPES.map(n => `<div class="dm-row note-row" data-act="open-notes" data-type="${n.type}">
+    const icons = NOTE_TYPES.filter(n => !isAs() || n.type === "at" || n.type === "comment").map(n => `<div class="dm-row note-row" data-act="open-notes" data-type="${n.type}">
         <div class="note-circle" style="background:${n.color}">${n.icon}</div><div class="cell-main note-label">${n.label}</div>${badgeHtml(unreadNotes(n.type))}${chevron}</div>`).join("");
     const main = S.threads.filter(t => !isStrangerThread(t) && t.messages.length).sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
     const strangers = S.threads.filter(t => isStrangerThread(t) && t.messages.length).sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
@@ -2682,7 +2827,7 @@
         <div class="dm-bottom"><div class="dm-last">${last.from === "me" ? "我：" : ""}${esc(last.text)}</div>${badgeHtml(t.unread)}</div></div></div>`; };
     const strangerRow = strangers.length ? `<div class="dm-row" data-act="open-strangers"><div class="note-circle" style="background:#6f8fe8"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.6" stroke-linejoin="round"><rect x="3.5" y="5.5" width="17" height="13" rx="2"/><path d="m4 7 8 6 8-6"/></svg></div><div class="cell-main"><div class="dm-top"><b>陌生人私信</b><span>${fmtTime(strangers[0].updatedAt)}</span></div>
         <div class="dm-bottom"><div class="dm-last">${esc(peerAuthor(strangers[0]).name)}：${esc(strangers[0].messages[strangers[0].messages.length - 1].text)}</div>${badgeHtml(strangers.reduce((n, t) => n + (t.unread || 0), 0))}</div></div></div>` : "";
-    $("#view").innerHTML = `<div class="dm-list">${icons}${main.map(row).join("")}${strangerRow}</div>`
+    $("#view").innerHTML = `${asBanner()}<div class="dm-list">${icons}${main.map(row).join("")}${strangerRow}</div>`
       + (main.length || strangers.length ? "" : `<div class="empty">还没有私信<br>去 char 的主页点「私信」，或者发条微博等人来找你</div>`);
     hydrateImages($("#view"));
   }
@@ -2745,12 +2890,14 @@
     const page = openPage(`dm:${key}`, pg => {
       const th = S.threads.find(x => x.key === key); const body = $(".page-body", pg.el);
       if (!th) { body.innerHTML = `<div class="empty">对话已删除</div>`; return; }
-      const a = peerAuthor(th); const me = authorOf({ authorType: "user", ...acctTag() });
+      const a = peerAuthor(th); const me = String(th.acct || "").startsWith("c:") ? authorOf({ authorType: "char", charId: th.acct.slice(2) }) : authorOf({ authorType: "user", ...acctTag() });
       let lastAt = 0;
       body.innerHTML = `<div class="dm-chat">${th.messages.map(m => {
         const t0 = new Date(m.at).getTime(); const stamp = t0 - lastAt > 5 * 60e3 ? `<div class="dm-stamp">${fmtTime(m.at)}</div>` : ""; lastAt = t0;
         const who = m.from === "me" ? me : a;
-        return `${stamp}<div class="dm-msg ${m.from === "me" ? "me" : ""}"><div ${profileAttrs(who)}>${avatarHtml(who, 36)}</div>${m.kind === "ghostInvite" && th.peer.type === "char"
+        return `${stamp}<div class="dm-msg ${m.from === "me" ? "me" : ""}"><div ${profileAttrs(who)}>${avatarHtml(who, 36)}</div>${m.kind === "loginGrant" && th.peer.type === "char"
+          ? `<div class="dm-bubble invite login" data-act="login-grant" data-char="${esc(th.peer.charId)}"><div class="iv-main"><div class="iv-text"><b>${esc(charNickname(th.peer.charId))} 授权你登录他的微博</b><span>${granted(th.peer.charId) ? "已登录过，点这里切过去" : "可以用TA的身份发博、评论、私信"}</span></div><i>${LOGIN_ICON}</i></div><div class="iv-foot">微博 · 账号登录</div></div>`
+          : m.kind === "ghostInvite" && th.peer.type === "char"
           ? `<div class="dm-bubble invite ${m.used ? "used" : ""}" ${m.used ? "" : `data-act="ghost-invite" data-key="${esc(th.key)}" data-id="${esc(m.id)}"`}><div class="iv-main"><div class="iv-text"><b>${esc(charNickname(th.peer.charId))} 邀请你代发一条微博</b><span>${m.used ? "已经发过啦" : "以TA的身份发布，仅限一次"}</span></div><i>✎</i></div><div class="iv-foot">微博 · 账号授权</div></div>`
           : `<div class="dm-bubble" data-act="dm-msg" data-id="${esc(m.id)}">${richText(m.text)}</div>`}</div>`;
       }).join("")}${th._typing ? `<div class="dm-msg"><div>${avatarHtml(a, 36)}</div><div class="dm-bubble dm-dots"><i></i><i></i><i></i></div></div>` : ""}</div>`;
@@ -2803,6 +2950,7 @@
   /** 你发私信后对方回复：char 走角色预设（带记忆），路人走普通对话 */
   async function replyDm(th, msg) {
     if (th._typing) return;
+    if (String(th.acct || "").startsWith("c:")) return replyDmAsHim(th);
     const lastIsMine = msg && th.messages.length && th.messages[th.messages.length - 1].id === msg.id;
     // 她连发的几条（上一条对方消息之后的全部）一起回
     let pendStart = th.messages.length;
@@ -2836,7 +2984,7 @@
         history ? `你们最近的私信记录：\n${history}` : "这是你们在微博私信里的第一句话。",
         lastIsMine ? `${knows ? "用户" : "对方"}刚刚${pending.length > 1 ? "连着" : ""}发来：${pendText}` : "对方还没有新消息：你接着刚才的话往下说，或者主动找个话题（按你此刻的状态和心情），不要重复你说过的话。",
         a ? `「来自」写「${a.nick}」，「角色」写 无。` : `「来自」写 ${ch.name}，「角色」写 ${ch.name}。`,
-        !a && !altDm ? "如果她在问能不能用你的微博号帮你发一条：按你的人设和你们的关系决定（可以爽快答应、问她要发什么、讨价还价、拒绝）。答应了就在私信后面多写：\n===授权===\n代发：是\n===结束===\n没答应、或者她没提这件事就不写。" : "",
+        !a && !altDm ? "她可能会问你借微博号，有两种，分量完全不同：\n- 代发：她帮你发*一条*微博，发完就结束（「帮你发一条」「替你发个东西」）。\n- 登录：把你整个微博号交给她，她可以*一直*用你的身份发博、回评论、私信别人，直到她自己退出（「把号给我」「让我登你的号」「借我用你的微博」）。\n听她问的是哪一种；听不出来就先问她。按你的人设和你们的关系决定（可以爽快答应、问她要干嘛、讨价还价、拒绝），可以只答应一种。答应了就在私信后面多写：\n===授权===\n代发：是（答应代发才写这行）\n登录：是（答应登录才写这行）\n===结束===\n没答应、或者她没提这件事就不写。" : "",
       ].filter(Boolean).join("\n\n");
       text = await generate({ characterId: ch.id, appTags: ["nox_weibo", "dm"], instruction }, `${a && !altSeen(aOwner) ? "路人" : ch.name}私信`);
     } else {
@@ -2870,7 +3018,10 @@
     }
     fresh._typing = true; refreshMsgViews();
     const replies = lines.slice(0, 5).map(text => ({ id: uid("m"), from: "peer", text, at: null }));
-    if (pc && !aOwner && !altDm && yes((parseBlocks(text, "授权")[0] || {})["代发"])) replies.push({ id: uid("m"), from: "peer", kind: "ghostInvite", text: "[代发邀请]", at: null });
+    const grant = pc && !aOwner && !altDm ? parseBlocks(text, "授权")[0] || {} : {};
+    const askedLogin = /登录|登你|账号|号给我|借我用|用你的号|你的号/.test(pendText) && !/帮你发|替你发|代发|发一条/.test(pendText);
+    if (yes(grant["代发"]) && !askedLogin) replies.push({ id: uid("m"), from: "peer", kind: "ghostInvite", text: "[代发邀请]", at: null });
+    if (yes(grant["登录"])) replies.push({ id: uid("m"), from: "peer", kind: "loginGrant", text: "[登录授权]", at: null });
     if (pc && knows && (!aOwner || altOpen(aOwner))) {
       const mine = lastIsMine ? fresh.messages.find(m => m.id === msg.id) : null;
       remember(pc, lastIsMine ? `${userName()}在微博私信我${aOwner ? `的小号「${th.peer.name}」` : ""}：${pendText.slice(0, 120)}，我回：「${lines.join(" / ").slice(0, 100)}」` : `我在微博私信跟${userName()}说：「${lines.join(" / ").slice(0, 100)}」`,
@@ -3191,7 +3342,7 @@
         const a = authorOf(c);
         const sub = subs(c.id);
         return `<div class="cmt"><div ${profileAttrs(a)}>${avatarHtml(a)}</div><div class="cmt-main" data-act="reply-to" data-cmt="${esc(c.id)}">
-          <div class="cmt-top"><span class="cmt-name ${a.vip ? "vip" : ""}" ${profileAttrs(a)}>${esc(a.name)}${a.vip ? I.crown : ""}</span>
+          <div class="cmt-top"><span class="cmt-name ${a.vip ? "vip" : ""}" ${profileAttrs(a)}>${esc(a.name)}${a.vip ? I.crown : ""}</span>${c.byUser ? '<span class="tag dai">我代</span>' : ""}
             ${c.isPostAuthor || (c.authorType === "user" && p.authorType === "user" && acctOf(c) === acctOf(p)) ? '<span class="tag author">博主</span>' : ""}
             ${authorLikes.has(c.id) ? '<span class="tag liked-by-author">博主赞过</span>' : ""}
             <button class="cmt-like ${c[LK()] ? "liked" : ""}" data-act="like-cmt" data-cmt="${esc(c.id)}">${c[LK()] ? I.liked : I.like}${c.likes ? fmtNum(c.likes) : ""}</button></div>
@@ -3199,7 +3350,7 @@
           <div class="cmt-meta"><span>${fmtTime(c.createdAt)}</span>${c.authorType === "user" ? `<button data-act="del-cmt" data-cmt="${esc(c.id)}">删除</button>` : ""}</div>
           ${sub.length ? `<div class="sub-box">${sub.slice(0, c._open ? 99 : 2).map(s => {
             const sa = authorOf(s);
-            return `<div class="sub-line" data-act="reply-to" data-cmt="${esc(s.id)}"><span class="who" ${profileAttrs(sa)}>${esc(sa.name)}</span>${s.isPostAuthor || (s.authorType === "user" && p.authorType === "user" && acctOf(s) === acctOf(p)) ? ' <span class="tag author">博主</span>' : ""}${s.replyToName ? ` 回复 <span class="who" ${nameAttrs(s.replyToName)}>@${esc(s.replyToName)}</span>` : ""}：${richText(s.text)}</div>`;
+            return `<div class="sub-line" data-act="reply-to" data-cmt="${esc(s.id)}"><span class="who" ${profileAttrs(sa)}>${esc(sa.name)}</span>${s.byUser ? ' <span class="tag dai">我代</span>' : ""}${s.isPostAuthor || (s.authorType === "user" && p.authorType === "user" && acctOf(s) === acctOf(p)) ? ' <span class="tag author">博主</span>' : ""}${s.replyToName ? ` 回复 <span class="who" ${nameAttrs(s.replyToName)}>@${esc(s.replyToName)}</span>` : ""}：${richText(s.text)}</div>`;
           }).join("")}${sub.length > 2 && !c._open ? `<div class="sub-more" data-act="open-sub" data-cmt="${esc(c.id)}">共${sub.length}条回复 &gt;</div>` : ""}</div>` : ""}
         </div></div>`;
       };
@@ -3243,6 +3394,17 @@
     input.addEventListener("input", () => { send.disabled = !input.value.trim(); input.style.height = "auto"; input.style.height = Math.min(100, input.scrollHeight) + "px"; });
     send.addEventListener("click", () => {
       const p = S.posts.find(x => x.id === postId); const text = input.value.trim(); if (!p || !text) return;
+      if (isAs()) { // 登着他的号：评论算他的
+        const me = asId(); const tg = replyTarget;
+        const c = { id: uid("c"), parentId: tg ? (tg.parentId || tg.id) : null, replyToName: tg && tg.parentId ? (tg.authorType === "user" ? profOf(tg).nickname : tg.authorName) : "",
+          authorType: "char", charId: me, authorName: charNickname(me), byUser: true, text, likes: 0, liked: false, isPostAuthor: p.authorType === "char" && p.charId === me, createdAt: nowIso() };
+        p.comments.push(c); p.counts.comments++; savePost(p);
+        asRemember(`在「${authorOf(p).name}」的微博${tg ? `下回复了「${tg.authorName || "别人"}」` : "下评论"}：「${text.slice(0, 80)}」`, `weibo_ascmtme_${c.id}`, p);
+        replyTarget = null; input.value = ""; send.disabled = true; input.placeholder = "写评论…"; input.style.height = "";
+        page.render(page); toast("评论成功（用的他的号）");
+        replyToHim(p, c, tg);
+        return;
+      }
       const c = { id: uid("c"), parentId: replyTarget ? (replyTarget.parentId || replyTarget.id) : null, replyToName: replyTarget && replyTarget.parentId ? (replyTarget.authorType === "user" ? profOf(replyTarget).nickname : replyTarget.authorName) : "",
         authorType: "user", ...acctTag(), authorName: S.me.nickname, text, likes: 0, liked: false, isPostAuthor: isMe(p), createdAt: nowIso() };
       p.comments.push(c); p.counts.comments++; savePost(p);
@@ -3597,6 +3759,8 @@
 
   // ───────────────────────── 发微博 ─────────────────────────
   function openCompose(repostOf, init) {
+    if (isAs() && repostOf) { toast("用他的号暂时不能转发"); return; }
+    if (isAs() && !(init && init.asChar)) init = { ...init, asChar: asId(), ghostMode: "login" };
     const draft = { text: (init && init.text) || "", images: [], location: "", visibility: "public", superName: init && init.superName, asChar: init && init.asChar, ghostMode: init && init.ghostMode, invite: init && init.invite };
     if (repostOf) {
       const a = authorOf(repostOf);
@@ -3608,7 +3772,7 @@
       if (!pg.built) {
         pg.built = true;
         body.outerHTML = `<div class="compose-body">
-          ${draft.asChar ? `<div class="form-note" style="margin:0 0 8px">${draft.ghostMode === "secret" ? `🤫 正在偷偷用${esc(charById(draft.asChar)?.name || "")}的号发，他还不知道` : `🤝 帮${esc(charById(draft.asChar)?.name || "")}发，他知道`}</div>` : ""}
+          ${draft.asChar ? `<div class="form-note" style="margin:0 0 8px">${draft.ghostMode === "secret" ? `🤫 正在偷偷用${esc(charById(draft.asChar)?.name || "")}的号发，他还不知道` : draft.ghostMode === "login" ? `🔑 登着${esc(charById(draft.asChar)?.name || "")}的号，发的就是他的微博` : `🤝 帮${esc(charById(draft.asChar)?.name || "")}发，他知道`}</div>` : ""}
           <textarea class="compose-text" placeholder="${repostOf ? "说说分享心得…" : "分享新鲜事…"}" maxlength="2000"></textarea>
           <div class="compose-pics"></div>
           <div class="compose-quote"></div>
@@ -3661,7 +3825,8 @@
       S.posts.push(post); savePost(post); S.allPostRows++;
       if (draft.invite) { const th = S.threads.find(x => x.key === draft.invite.key); const m = th && th.messages.find(x => x.id === draft.invite.id); if (m) { m.used = true; saveThread(th); } }
       if (draft.ghostMode === "asked") { rememberOwnPost(post); remember(ch.id, `这条微博是我让${herName()}帮我发的`, `weibo_ghostask_${post.id}`, null, post); }
-      page.sent = true; closePage(); toast(draft.ghostMode === "secret" ? "发出去了…他还不知道🤫" : "帮他发好啦");
+      if (draft.ghostMode === "login") remember(ch.id, `${herName()}用我的微博号发了一条：「${post.text.slice(0, 80)}」`, `weibo_aspost_${post.id}`, null, post);
+      page.sent = true; closePage(); toast(draft.ghostMode === "secret" ? "发出去了…他还不知道🤫" : draft.ghostMode === "login" ? "用他的号发出去啦" : "帮他发好啦");
       if (S.meta.autoReact !== false) setTimeout(() => ensureComments(post), rand(2500, 6000));
       refreshAll(); return;
     }
@@ -3820,7 +3985,8 @@
     const rows = await dbList(COL.dms);
     S.threads = rows.filter(t => t.scope === S.identity.id && t.peer && acctOf(t) === S.acct).map(t => ({ ...t, messages: t.messages || [] }));
     while (pages.length) closePage();
-    renderTab(); toast(`已切换到${to === "alt" ? "小号" : "大号"}「${S.me.nickname}」`);
+    renderTab(); toast(isAs() ? `已登上${charById(asId()).name}的号「${S.me.nickname}」` : `已切换到${to === "alt" ? "小号" : "大号"}「${S.me.nickname}」`);
+    if (isAs()) seedHisDms(asId()).catch(e => console.error(e));
   }
   function newAlt() {
     const t = nowIso();
@@ -3991,7 +4157,9 @@
       case "open-npc": openNpcProfile(el.dataset.name); return;
       case "like": {
         if (!post) return;
-        const k = LK(); const on = post[k] = !post[k]; post.counts.likes += on ? 1 : -1; post[LKAT()] = on ? nowIso() : undefined; savePost(post);
+        const k = LK(); const on = post[k] = !post[k]; post.counts.likes += on ? 1 : -1; post[LKAT()] = on ? nowIso() : undefined;
+        if (isAs()) { post.likedBy = on ? [...new Set([...(post.likedBy || []), asId()])] : (post.likedBy || []).filter(x => x !== asId()); savePost(post); refreshVisible(post); return; }
+        savePost(post);
         const likeEvt = `weibo_like_${isAlt() ? "alt_" : ""}${post.id}`;
         if (on && post.authorType === "char" && (!isAlt() || knowsAlt(post.charId))) remember(post.charId, `${S.identity.name || S.meta.nickname}${isAlt() ? `用小号「${S.alt.nickname}」` : ""}在微博给我的「${post.text.slice(0, 30)}」点了赞`, likeEvt, null, post);
         if (!on && post.authorType === "char") forget([{ charId: post.charId, eventId: likeEvt }]);
@@ -4092,13 +4260,16 @@
       case "me-tab": meTab = el.dataset.tab; refreshAll(); return;
       case "edit-me": openEditMe(); return;
       case "switch-acct": {
-        const items = [{ label: `大号：${S.meta.nickname}`, value: "main", on: !isAlt() }];
+        const items = [{ label: `大号：${S.meta.nickname}`, value: "main", on: !isAlt() && !isAs() }];
         if (S.alt && S.alt.nickname) items.push({ label: `小号：${S.alt.nickname}`, value: "alt", on: isAlt() });
         else items.push({ label: "＋ 注册一个小号", value: "new" });
+        for (const id of Object.keys(S.meta.logins || {}).filter(granted)) items.push({ label: `🔑 ${charById(id).name}的号：${charNickname(id)}`, value: `c:${id}`, on: asId() === id });
+        if (isAs()) items.push({ label: `退出${charById(asId()).name}的号`, value: "logout", danger: true });
         const v = await sheet("切换账号", items); if (!v) return;
-        if (v === "new") newAlt(); else switchAcct(v);
+        if (v === "new") newAlt(); else if (v === "logout") logoutAs(asId()); else switchAcct(v);
         return;
       }
+      case "logout-as": logoutAs(el.dataset.char); return;
       case "toggle-alt-know": toggleAltKnow(el.dataset.char); { const pg = topPage(); pg && pg.render(pg); } return;
       case "open-raw": openRaw(); return;
       case "open-settings": openSettings(); return;
@@ -4118,6 +4289,7 @@
         saveMeta(); refreshAll(); return;
       }
       case "open-char-set": openCharSettings(el.dataset.char); return;
+      case "login-grant": grantLogin(el.dataset.char); return;
       case "ghost-invite": {
         const th = S.threads.find(x => x.key === el.dataset.key); const m = th && th.messages.find(x => x.id === el.dataset.id);
         if (!th || !m || m.used || th.peer.type !== "char" || !charById(th.peer.charId)) return;
@@ -4265,6 +4437,7 @@
       case "open-strangers": openStrangers(); return;
       case "open-thread": openThread(el.dataset.key); return;
       case "open-dm": {
+        if (isAs() && el.dataset.char === asId()) { toast("不能用他的号私信他自己"); return; }
         const peer = el.dataset.char ? { type: "char", charId: el.dataset.char } : { type: "npc", name: el.dataset.name };
         const t = getThread(peer); saveThread(t); openThread(t); return;
       }

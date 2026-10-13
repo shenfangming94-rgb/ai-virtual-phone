@@ -300,6 +300,15 @@
     return "【称呼】角色叫用户什么，按你们的关系和平时的叫法来，聊天记录和记忆里怎么叫就怎么叫：同学、朋友叫全名或外号都正常，照常就行；不要突然换成一个平时不用的叫法。"
       + (lovers.length ? `${lovers.map(c => c.name).join("、")} 和用户是恋人：私信里用你们平时的爱称、昵称（看聊天记录），不要连名带姓叫全名${lovers.some(c => loveOf(c.id).state === "secret") ? "；地下恋的在评论、发博这些公开场合不能用爱称露馅" : ""}。` : "");
   }
+  /** 恋人在微博上（发博、评论）怎么提到用户：按人设选叫法，日常不硬 @ */
+  function loverPostLine() {
+    const lovers = activeChars().filter(c => loveOf(c.id).state !== "none");
+    if (!lovers.length) return "";
+    return "【恋人怎么提到用户】" + lovers.map(c => loveOf(c.id).state === "open"
+      ? `${c.name} 和用户已公开：在微博上提到她怎么叫，完全按他的人设和你们平时的相处来，以他聊天记录里的叫法为准（比如少年感的可能大大方方叫「女朋友」「宝宝」，年上的可能叫「小乖」，只是举例）；他不避讳就大方叫。`
+      : `${c.name} 和用户是地下恋：提到她只能用不暴露身份的说法，按他的人设来选（比如爱把她当猫的会说「我家的猫」，也可能只说「她」，只是举例）；不 @ 她、不用你们私下的爱称。`).join("")
+      + "日常博照他平时聊天的口吻写（口癖、语气、黏不黏人都要像他）；会自然想到她，但不是每条都提。只有内容真和她有关（想她、你们一起做的事、要给她看的）才 @ 她的微博昵称，吃饭上课这种日常不在句尾硬加 @。";
+  }
   /** 告诉 AI 每个人和用户的恋情状态（只写不是「不是恋人」的） */
   function loveLine() {
     return S.chars.filter(c => loveOf(c.id).state !== "none" && c.id !== S._announcing).map(c => {
@@ -839,6 +848,7 @@
     ].join("\n\n") };
     else if (FORMAT_HINT[scene]) payload = { ...payload, instruction: [
       who, payload.instruction, PIC_SCENES.has(scene) ? `${PIC_LINE}\n${TIME_LINE}` : "",
+      ["feed", "profile", "super", "topic", "search", "comments", "reaction", "reply"].includes(scene) ? loverPostLine() : "",
       `【输出要求】这不是聊天回复：不要用聊天格式，不要写旁白、动作或心理描写，不要加任何解释，不要自创字段名或用【】标题，只输出 ${FORMAT_HINT[scene]} 格式的内容，字段名和分隔线照抄「微博」规则里的格式。${scene === "hot" ? "用户是公众人物、或剧情里真的发生了大事时，热搜词条可以和用户有关，但只写事件，不替用户说话。" : "用户本人不能出现在你生成的内容里。"}不要用「某人」「某些人」「有些人」暗指谁；不要对用户发号施令或叮嘱（「不准……」「记得……」），人设不是爹系就不能有家长口吻。`,
     ].filter(Boolean).join("\n\n") };
     try {
@@ -978,7 +988,7 @@
       `角色微博昵称（已注册的必须沿用）：\n${charsForPrompt(cast)}`,
       `角色是否发博、发什么，按他此刻的状态和心情决定；同一个角色本轮最多 2 条。`,
       "角色发的是个人微博：自己的生活、心情、吐槽、碎碎念。*绝对不发通知、提醒、注意事项、班级事务*（不写「各位同学」「同学们」「请大家」「记得带好…」），就算他是班长、班干部、老师也一样——这些在班级群里说，不在微博说。",
-      `${S.meta.nickname ? `用户的微博昵称是「${S.meta.nickname}」，角色如果在微博里提到用户要用这个昵称 @。` : ""}`,
+      `${S.meta.nickname ? `用户的微博昵称是「${S.meta.nickname}」：角色发的博只有内容真和用户有关时才 @ 这个昵称，日常博不硬加 @。` : ""}`,
       recent ? `首页最近已有的微博（不要重复类似内容）：\n${recent}` : "",
       dmPick ? `这次 ${dmPick.name} 如果发了博、又有话想单独跟用户说，可以顺便私信用户（1～3 条，一句一个块）；其他人都不私信。${charDmRecent(dmPick)}` : "这次没有人私信用户，不要输出 ===私信===。",
       reservedLine(),

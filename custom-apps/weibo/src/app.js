@@ -629,6 +629,15 @@
   /** 角色发的「班级通知」：规则管不住时代码兜底丢掉（官方 / 机构号的路人博不管） */
   const NOTICE_RE = /各位同学|同学们[，,！!：:\s]|全班同学|请大家|提醒大家|大家注意|注意事项|温馨提示|通知[：:]|收齐|按时(交|到|上交)|不要忘[了记]带|记得带好|班级(通知|事务)|通报|公告[：:]|紧急通知/;
   const isCharNotice = p => p.authorType === "char" && NOTICE_RE.test(p.text || "");
+  /** 兜底：一批 3 条以上的原创博全带图时，挑 1～2 条没有本人出镜、文字最长的拿掉配图 */
+  function thinPics(posts) {
+    const own = posts.filter(p => !p.repost);
+    if (own.length < 3 || own.some(p => !p.images.length)) return posts;
+    own.filter(p => !p.images.some(i => i.withFace) && (p.text || "").length >= 8)
+      .sort((a, b) => b.text.length - a.text.length).slice(0, own.length >= 5 ? 2 : 1)
+      .forEach(p => { p.images = []; });
+    return posts;
+  }
   function postFromBlock(b, extra) {
     const ch = charByName(b["角色"]) || charByName(b["作者"] || b["昵称"], true);
     const images = none(b["配图"]) ? [] : b["配图"].split(/\s*[|｜]\s*/).filter(Boolean).slice(0, 9).map(raw => {
@@ -806,6 +815,9 @@
   }
   function noteParsed(summary) { if (S.debug[0]) { S.debug[0].parsed = summary; dbUpsert(COL.meta, { id: "debug_log", entries: S.debug }).catch(() => {}); } }
 
+  // 带图不带图看内容，大约五五开（随请求发送，不靠预设）
+  const PIC_SCENES = new Set(["feed", "profile", "super", "topic", "search", "npc", "charalt"]);
+  const PIC_LINE = "【配图】带图不带图看内容，整体大约一半一半：晒美食、晒日常、出去玩、买了东西、看演出、自拍、秀恩爱这类要带图；吐槽、有感而发、碎碎念、深夜 emo、追星尖叫、纯转发这类一般不带图，「配图」写 无。不要每条都带图。";
   // 随请求发送的规则（build 时从 rules.json 打进来）：用户预设里没有这条也能生效
   const INLINE_RULES = "/*__INLINE_RULES__*/";
   async function generate(payload, label, opts = {}) {
@@ -819,9 +831,9 @@
       "【输出要求】只输出 ===私信=== 块，一句话一个块，字段名照抄「私信聊天」规则里的格式；不要写旁白、动作或心理描写，不要加任何解释，不能替用户说话。",
     ].join("\n\n") };
     else if (FORMAT_HINT[scene]) payload = { ...payload, instruction: [
-      who, payload.instruction,
+      who, payload.instruction, PIC_SCENES.has(scene) ? PIC_LINE : "",
       `【输出要求】这不是聊天回复：不要用聊天格式，不要写旁白、动作或心理描写，不要加任何解释，不要自创字段名或用【】标题，只输出 ${FORMAT_HINT[scene]} 格式的内容，字段名和分隔线照抄「微博」规则里的格式。${scene === "hot" ? "用户是公众人物、或剧情里真的发生了大事时，热搜词条可以和用户有关，但只写事件，不替用户说话。" : "用户本人不能出现在你生成的内容里。"}不要用「某人」「某些人」「有些人」暗指谁；不要对用户发号施令或叮嘱（「不准……」「记得……」），人设不是爹系就不能有家长口吻。`,
-    ].join("\n\n") };
+    ].filter(Boolean).join("\n\n") };
     try {
       const r = await api.ai.generate(payload);
       const text = (r && r.text) || "";
@@ -968,7 +980,7 @@
     const posts = fixAltAuthors(parseBlocks(text, "微博").filter(b => !isUserName(b["作者"])).map(b => postFromBlock(b, { origin: "feed", followFeed: followTab || undefined })), {})
       .filter(p => (p.text || p.images.length || p.repost) && !isCharNotice(p));
     if (!posts.length) { renderHome(); parseFailed("刷新"); return; }
-    for (const p of posts) { S.posts.push(p); savePost(p); S.allPostRows++; rememberOwnPost(p); }
+    thinPics(posts); for (const p of posts) { S.posts.push(p); savePost(p); S.allPostRows++; rememberOwnPost(p); }
     const feedDms = parseBlocks(text, "私信").filter(b => charByName(b["角色"]) || charByName(b["来自"], true));
     if (feedDms.length) deliverDms(feedDms, { acct: curAcct(), delay: rand(5000, 12000) });
     const charPosts = posts.filter(p => p.authorType === "char");
@@ -1064,6 +1076,29 @@
     if (changed) saveCalts();
   }
 
+  /** 发博后谁来私信：陌生人大号 30%（带热搜或公众人物 50%）、小号 20%；角色 15%，有特别关注的 25%，超话帖 10% */
+  function planPostDms(post, { alt, sup, cast }) {
+    if (post.visibility === "friends") return { line: "这次没有人私信用户，不要输出 ===私信===。" };
+    const hot = topicsIn(post.text).some(hotItem);
+    const stranger = Math.random() < (alt ? 0.2 : hot || S.meta.publicFigure ? 0.5 : 0.3);
+    const kinds = [
+      [sup ? "同一个超话的同好来搭话、找用户聊这个话题" : "看了这条博来搭话的同好（「姐妹你也去了吗」「求链接」「同款！」这种）", 4],
+      ["之前在用户微博评论区杠过、吵过的路人：继续吵或者来道歉（没有吵过的人就换成来搭话的同好）", alt ? 0 : 1],
+      ["求互粉、求回关的", 1], ["约稿、代购、小广告、刷粉这类营销号", 1],
+      ["粉丝：表白、求回关、问近况", !alt && S.meta.publicFigure ? 3 : 0], ["黑粉：阴阳怪气", !alt && S.meta.publicFigure ? 0.5 : 0],
+    ].filter(k => k[1] > 0);
+    let r = Math.random() * kinds.reduce((a, k) => a + k[1], 0); const kind = kinds.find(k => (r -= k[1]) < 0) || kinds[0];
+    const pool = cast.filter(c => !alt || knowsAlt(c.id));
+    const starred = pool.filter(c => isStarred(c.id));
+    const pick = pool.length && Math.random() < (sup ? 0.1 : starred.length ? 0.25 : 0.15) ? (starred.length ? shuffle(starred)[0] : shuffle(pool)[0]) : null;
+    const lines = [
+      stranger ? `这次要有 1 个陌生路人私信用户：${kind[0]}。1～3 条，一句一个块，短、口语，像真人。` : "",
+      pick ? `这次 ${pick.name} 想私信用户（他不在评论区评论这条，改成私信，内容比较私人、公开说不方便，语气按人设）。1～4 条，一句一个块。` : "",
+      !stranger && !pick ? "这次没有人私信用户，不要输出 ===私信===。" : !pick ? "角色这次都不私信。" : !stranger ? "路人这次都不私信。" : "",
+    ];
+    return { stranger, charId: pick && pick.id, line: lines.filter(Boolean).join("") };
+  }
+
   /** 用户发博后：角色和路人的反应 */
   async function reactToUserPost(post) {
     if (post.visibility === "self" || !activeChars().length || post._genComments || post.reacted) return;
@@ -1091,6 +1126,8 @@
       peekers.length ? `${peekers.map(c => c.name).join("、")} 特别关注用户，很少见地可能刷到这条（概率很低，大多数时候不来；来了就是意外撞见的语气，比如「你还玩这个？」）。` : "",
       "除此之外的角色都看不到这条帖子，绝对不会出现。大多数时候没有角色来评论，私信也一样。",
     ].filter(Boolean).join("") : "";
+    // 私信由代码掷骰子：掷中了明确要 AI 写，没掷中就不要
+    const dmPlan = planPostDms(post, { alt, sup, cast });
     const instruction = [
       `当前时间：${nowText()}`,
       superLine, altPostLine,
@@ -1104,6 +1141,7 @@
       `可能来互动的角色：\n${charsForPrompt(cast) || "无（没有角色会来）"}`,
       sup || alt ? "" : starredLine(cast),
       caltLine(cast, { post }),
+      dmPlan.line,
       reservedLine(),
     ].filter(Boolean).join("\n\n");
     const text = await generate({ characterIds: castIds, appTags: ["nox_weibo", "reaction"], instruction }, "获取互动");
@@ -1111,7 +1149,7 @@
     if (text == null) { post.reacted = false; savePost(post); return; }
     const list = fixAltAuthors(commentsFromBlocks(parseComments(text), post, {}), { post }).filter(c => !alt || !(c.charId || c.altOf) || cast.some(x => x.id === (c.charId || c.altOf)));
     const sum = parseBlocks(text, "互动")[0] || {};
-    const dms = parseBlocks(text, "私信");
+    const dms = parseBlocks(text, "私信").filter(b => { const ch = charByName(b["角色"]) || charByName(b["来自"], true); return ch ? dmPlan.charId === ch.id : dmPlan.stranger; });
     if (!list.length && !Object.keys(sum).length && !dms.length) { parseFailed("发博后的互动"); return; }
     noteParsed(`${list.length} 条评论，点赞角色：${sum["点赞角色"] || "无"}${dms.length ? `，私信 ${dms.length} 条` : ""}`);
     const castSet = new Set(cast.map(c => c.id));
@@ -1144,11 +1182,10 @@
       }, delay);
       delay += rand(1200, 3500);
     }
-    // 超话帖：char 私信只放行三成，免得每次一发帖就有人来
+    // 角色评论过就不再私信（谁来私信已经在 planPostDms 掷过骰子）
     const isCharDm = b => charByName(b["角色"]) || charByName(b["来自"], true);
     const commented = new Set(list.map(c => c.charId || c.altOf).filter(Boolean));
-    const dmsOk = alt ? dms.filter(b => { const ch = isCharDm(b); return !ch || (knowsAlt(ch.id) && !commented.has(ch.id)); })
-      : post.superName && Math.random() > 0.3 ? dms.filter(b => !isCharDm(b)) : dms.filter(b => { const ch = isCharDm(b); return !ch || !commented.has(ch.id); });
+    const dmsOk = dms.filter(b => { const ch = isCharDm(b); return !ch || ((!alt || knowsAlt(ch.id)) && !commented.has(ch.id)); });
     if (dmsOk.length) deliverDms(dmsOk, { acct: acctOf(post), about: `看到用户${post.superName ? `在「${post.superName}」超话` : ""}发的「${(post.text || "（图片）").slice(0, 50)}」后来私信`, delay: delay + rand(2000, 6000) });
     setTimeout(refreshMsgViews, delay + 500);
     savePost(fresh); refreshVisible(fresh);
@@ -1329,27 +1366,33 @@
    * 历史微博的时间挤在一起（模型写成「20分钟前」之类）时，按给出的顺序（近→远）往前铺开：
    * 第一条在 before 之前 0.5～3 天，之后每条再往前 1～40 天。
    */
+  /** 主页历史微博的时间全由代码排：AI 写的时间只用来定先后（经常好几条写成同一天），从 before 往前每条隔 1～40 天 */
   function spreadHistory(posts, before) {
-    const times = posts.map(p => new Date(p.createdAt).getTime());
-    const span = Math.max(...times) - Math.min(...times);
-    const tooRecent = times.some(t => t > before - 12 * 3600e3);
-    if (posts.length < 2 ? !tooRecent : span > 3 * 86400e3 && !tooRecent) return false;
+    if (!posts.length) return false;
+    const order = posts.map((p, i) => ({ p, i, t: new Date(p.createdAt).getTime() || 0 }))
+      .sort((a, b) => b.t - a.t || a.i - b.i);
     let t = before - (0.5 + Math.random() * 2.5) * 86400e3;
-    for (const p of posts) {
-      p.createdAt = new Date(t - rand(0, 12 * 3600) * 1000).toISOString();
+    for (const { p } of order) {
+      const d = new Date(t - rand(0, 12 * 3600) * 1000); d.setHours(rand(7, 23), rand(0, 59), rand(0, 59));
+      p.createdAt = new Date(Math.min(d.getTime(), before - 3600e3)).toISOString();
       t -= (1 + Math.random() * 39) * 86400e3;
     }
     return true;
   }
-  /** 修旧数据：主页历史微博时间都挤在一起的，重新铺开 */
-  function repairHistoryTimes(charId) {
-    const hist = S.posts.filter(p => p.charId === charId && p.origin === "profile");
-    if (hist.length < 2 || S.accounts[charId]?.historyFixed) return;
+  /** 修旧数据：主页历史微博有两条以上落在同一天的，整批重新铺开 */
+  const sameDayClash = list => new Set(list.map(p => new Date(p.createdAt).toDateString())).size < list.length;
+  function repairHistoryTimes(list, before) {
+    if (list.length < 2 || !sameDayClash(list)) return;
+    if (spreadHistory(list, before)) list.forEach(savePost);
+  }
+  function repairCharHistory(charId) {
     const feed = S.posts.filter(p => p.charId === charId && p.origin !== "profile").map(p => new Date(p.createdAt).getTime());
-    const before = feed.length ? Math.min(...feed) : Date.now();
-    const ordered = hist.slice().sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
-    if (spreadHistory(ordered, before)) ordered.forEach(savePost);
-    ensureAccount(charId, { historyFixed: true });
+    repairHistoryTimes(S.posts.filter(p => p.charId === charId && p.origin === "profile"), feed.length ? Math.min(...feed) : Date.now());
+  }
+  function repairNpcHistory(name) {
+    const mine = S.posts.filter(p => p.authorType === "npc" && p.authorName === name);
+    const feed = mine.filter(p => p.origin !== "profile").map(p => new Date(p.createdAt).getTime());
+    repairHistoryTimes(mine.filter(p => p.origin === "profile"), feed.length ? Math.min(...feed) : Date.now());
   }
 
   /** 角色主页：建号 + 历史微博 */
@@ -1383,7 +1426,7 @@
         .filter(p => p.text || p.images.length || p.repost)
         .map(p => { p.authorType = "char"; p.charId = charId; p.authorName = charNickname(charId); return p; }).filter(p => !isCharNotice(p));
       spreadHistory(posts, oldest);
-      for (const p of posts) { S.posts.push(p); savePost(p); S.allPostRows++; }
+      thinPics(posts); for (const p of posts) { S.posts.push(p); savePost(p); S.allPostRows++; }
       ensureAccount(charId, { profileGenerated: true, historyFixed: true });
       pruneIfNeeded();
     }
@@ -1882,7 +1925,7 @@
           reads, discussions: parseNum(tb && tb["讨论"]) || Math.round(reads / rand(60, 300)), at: nowIso() };
         saveTopics();
       }
-      for (const p of posts) {
+      thinPics(posts); for (const p of posts) {
         if (!p.section) p.section = more ? "live" : "hot";
         if (!p.text.includes(`#${title}#`)) p.text = `#${title}# ${p.text}`;
         S.posts.push(p); savePost(p); S.allPostRows++; rememberOwnPost(p);
@@ -1967,7 +2010,7 @@
     if (text != null) {
       const posts = fixAltAuthors(parseBlocks(text, "微博").filter(b => !isUserName(b["作者"])).map(b => postFromBlock(b, { origin: "search", searchQuery: q })), {})
         .filter(p => p.text || p.images.length || p.repost);
-      for (const p of posts) { S.posts.push(p); savePost(p); S.allPostRows++; rememberOwnPost(p); }
+      thinPics(posts); for (const p of posts) { S.posts.push(p); savePost(p); S.allPostRows++; rememberOwnPost(p); }
       if (posts.length) noteParsed(`${posts.length} 条搜索结果`); else parseFailed("搜索");
       pruneIfNeeded();
     }
@@ -2461,7 +2504,7 @@
       const lurkIds = new Set(lurkers.map(c => c.id));
       const posts = fixAltAuthors(parseBlocks(text, "微博").filter(b => !isUserName(b["作者"])).map(b => postFromBlock(b, { origin: "super", superName: name })), { super: true })
         .filter(p => (p.text || p.images.length) && (p.authorType !== "char" || lurkIds.has(p.charId)) && (!p.altOf || lurkIds.has(p.altOf)));
-      for (const p of posts) { S.posts.push(p); savePost(p); S.allPostRows++; rememberOwnPost(p); }
+      thinPics(posts); for (const p of posts) { S.posts.push(p); savePost(p); S.allPostRows++; rememberOwnPost(p); }
       getSuper(name).generated = true; saveSupers();
       if (posts.length || info) noteParsed(`${info ? "超话资料 + " : ""}${posts.length} 条帖子`); else parseFailed("加载超话");
       pruneIfNeeded();
@@ -2699,12 +2742,13 @@
       body.scrollTop = scroll; hydrateImages(body);
     }, { clearHead: true });
     page.setTab = t => { tab = t; page.render(page); };
-    repairHistoryTimes(charId);
+    repairCharHistory(charId);
     ensureCharProfile(charId);
   }
 
   function openNpcProfile(name) {
     noteVisit({ type: "npc", name });
+    repairNpcHistory(name);
     let tab = "posts";
     const page = openPage(`profile-npc:${name}`, pg => {
       const body = $(".page-body", pg.el); const scroll = body.scrollTop;
@@ -2775,7 +2819,7 @@
         .filter(p => p.text || p.images.length || p.repost)
         .map(p => { p.authorType = "npc"; p.charId = undefined; p.authorName = name; p.verified = (S.npcs.map[name] || {}).verified || p.verified; return p; });
       spreadHistory(posts, oldest ? new Date(oldest.createdAt).getTime() : Date.now());
-      for (const p of posts) { S.posts.push(p); savePost(p); S.allPostRows++; }
+      thinPics(posts); for (const p of posts) { S.posts.push(p); savePost(p); S.allPostRows++; }
       if (S.npcs.map[name]) { S.npcs.map[name].postCount = Math.max(S.npcs.map[name].postCount || 0, mine.length + posts.length + rand(20, 400)); saveNpcs(); }
       if (posts.length || pb) noteParsed(`${pb ? "主页资料 + " : ""}${posts.length} 条历史微博`); else parseFailed("生成路人主页");
       pruneIfNeeded();
@@ -2812,7 +2856,7 @@
     const posts = how !== "told" ? [] : parseBlocks(text, "微博").map(b => postFromBlock(b, { origin: "profile" })).filter(p => p.text || p.images.length || p.repost)
       .map(p => Object.assign(p, { authorType: "npc", charId: undefined, authorName: nick, altOf: charId, verified: "无", vip: S.npcs.map[nick].vip }));
     spreadHistory(posts, Date.now() - rand(2, 30) * 3600e3);
-    for (const p of posts) { S.posts.push(p); savePost(p); S.allPostRows++; }
+    thinPics(posts); for (const p of posts) { S.posts.push(p); savePost(p); S.allPostRows++; }
     S.npcs.map[nick].postCount = posts.length + rand(5, 60); saveNpcs();
     S.calts.map[charId] = { nick, state: how === "told" ? "open" : "hidden", wait: rand(1, 3), appeared: false, strangerDm: false, createdAt: nowIso() };
     if (how === "told") revealAlt(charId, "told"); else saveCalts();
@@ -2841,7 +2885,7 @@
       const posts = parseBlocks(text, "微博").map(b => postFromBlock(b, { origin: "profile" })).filter(p => p.text || p.images.length || p.repost)
         .map(p => Object.assign(p, { authorType: "npc", charId: undefined, authorName: a.nick, altOf: charId, verified: "无" }));
       spreadHistory(posts, oldest ? new Date(oldest.createdAt).getTime() : Date.now());
-      for (const p of posts) { S.posts.push(p); savePost(p); S.allPostRows++; }
+      thinPics(posts); for (const p of posts) { S.posts.push(p); savePost(p); S.allPostRows++; }
       const info = S.npcs.map[a.nick];
       if (posts.length && info && info.pending) { delete info.pending; info.postCount = mine.length + posts.length + rand(5, 60); saveNpcs(); }
       if (posts.length) noteParsed(altSeen(charId) ? `${posts.length} 条小号旧博` : `${mine.length ? "" : "主页资料 + "}${posts.length} 条历史微博`); else parseFailed(altSeen(charId) ? "加载小号微博" : "生成路人主页");

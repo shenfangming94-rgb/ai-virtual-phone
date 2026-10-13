@@ -19,11 +19,18 @@
     "memory.write",
     "ui.toast",
     "chat.sendCard",
-    "chat.sendMessage"
+    "chat.sendMessage",
+    "network.fetch"
   ],
   "resources": {
     "presets": [
       "presets.json"
+    ]
+  },
+  "network": {
+    "allowedDomains": [
+      "api.open-meteo.com",
+      "geocoding-api.open-meteo.com"
     ]
   }
 }

@@ -869,6 +869,41 @@
     const d = new Date(); const w = "日一二三四五六"[d.getDay()];
     return `${d.getFullYear()}年${d.getMonth() + 1}月${d.getDate()}日 星期${w} ${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
   }
+  // 天气：Open-Meteo 免费接口，不用 key；天气跟着人走（用户/每个角色的城市），路人不套用。真名只用来查，提示词里只出现「微博里叫」
+  const WX_NAME = c => c === 0 ? "晴" : c === 1 ? "晴间多云" : c === 2 ? "多云" : c === 3 ? "阴" : c <= 48 ? "雾" : c <= 57 ? "毛毛雨"
+    : c <= 67 ? (c === 61 ? "小雨" : c === 63 ? "中雨" : "大雨") : c <= 77 ? "雪" : c <= 82 ? "阵雨" : c <= 86 ? "阵雪" : "雷阵雨";
+  S.wx = {};
+  async function wxOf(q) {
+    const hit = S.wx[q];
+    if (hit && Date.now() - hit.at < (hit.v ? 3600e3 : 600e3)) return hit.v;
+    let v = null;
+    try {
+      const js = r => r && (r.json || (r.text ? JSON.parse(r.text) : null));
+      const g = (js(await api.network.fetch({ url: "https://geocoding-api.open-meteo.com/v1/search", query: { name: q, count: 1, language: "zh" }, timeoutMs: 8000 })) || {}).results?.[0];
+      if (g) {
+        const f = js(await api.network.fetch({ url: "https://api.open-meteo.com/v1/forecast", timeoutMs: 8000,
+          query: { latitude: g.latitude, longitude: g.longitude, current: "temperature_2m,weather_code", daily: "temperature_2m_max,temperature_2m_min", timezone: "auto", forecast_days: 1 } }));
+        if (f && f.current) v = `${WX_NAME(f.current.weather_code)}，今天 ${Math.round(f.daily.temperature_2m_min[0])}～${Math.round(f.daily.temperature_2m_max[0])}°C，现在 ${Math.round(f.current.temperature_2m)}°C`;
+      }
+    } catch (e) { console.warn("天气", e); }
+    S.wx[q] = { at: Date.now(), v }; return v;
+  }
+  const myCity = () => (S.meta.city && S.meta.city.q ? S.meta.city : null);
+  const charCityCfg = id => ((S.meta.charCity || {})[id]) || { mode: "same" };
+  function cityOf(id) {
+    const c = charCityCfg(id);
+    return c.mode === "none" ? null : c.mode === "custom" ? (c.q ? c : null) : myCity();
+  }
+  const cityLabel = c => c ? (c.name ? `${c.q}（微博里叫 ${c.name}）` : c.q) : "";
+  async function weatherLine(charIds) {
+    const people = [["用户那边", myCity()], ...charIds.map(id => [charById(id)?.name, cityOf(id)]).filter(x => x[0])];
+    const lines = await Promise.all(people.map(async ([who, c]) => {
+      const w = c && await wxOf(c.q);
+      return w ? `- ${who}：在${c.name || c.q}，${w}` : `- ${who}：不知道那边的天气`;
+    }));
+    if (lines.every(l => l.endsWith("不知道那边的天气"))) return "【天气】你不知道今天任何地方的天气和气温：不要写具体温度，也不要编下雪、零下、高温、暴雨这类天气事实。";
+    return `【天气】下面是今天的真实天气，只是背景，用来别写错（下雨别写晒太阳，热天别喊冷），不是要写的内容。没有理由就不提天气；提到也只说感受，不写具体度数。\n${lines.join("\n")}\n写「不知道」的人，不要写他那边的天气和温度。路人分散在全国各地，各地天气都不一样，不要套用上面的天气，也不要给路人编具体温度。`;
+  }
   // 规则和输出格式在预设条目里（presets.json，按 nox_weibo 标签命中）；这里只在末尾再提醒一次格式
   const FORMAT_HINT = {
     feed: "===微博===（需要时加 ===私信=== 和 ===互动===）", comments: "===评论===（本轮说明要求时，评论后面加 ===转发===）", reaction: "===评论=== 和 ===互动===（需要时加 ===私信===）", reply: "===评论===（需要时加 ===私信=== 和 ===互动===）", profile: "===主页=== 和 ===微博===",
@@ -910,12 +945,13 @@
     const inline = typeof INLINE_RULES === "object" && INLINE_RULES[scene];
     if (inline) payload = { ...payload, instruction: `【微博：${scene === "charalt" ? "角色小号" : scene}规则】\n${inline}\n\n${payload.instruction}` };
     const who = `用户的名字是「${S.identity.name || "用户"}」，微博昵称是「${S.meta.nickname}」。${scene === "hot" ? "" : `\n${nameLine()}`}` + (scene === "hot" ? "" : `\n${publicLine(false)}`) + (loveLine() ? `\n${loveLine()}` : "") + (scene === "hot" || !isAlt() ? "" : `\n${altLine()}`);
+    const wx = scene === "hot" ? "" : await weatherLine(payload.characterIds || (payload.characterId ? [payload.characterId] : []));
     if (scene === "dm") payload = { ...payload, instruction: [
-      who, payload.instruction,
+      who, payload.instruction, wx,
       "【输出要求】只输出 ===私信=== 块，一句话一个块，字段名照抄「私信聊天」规则里的格式；不要写旁白、动作或心理描写，不要加任何解释，不能替用户说话。",
     ].join("\n\n") };
     else if (FORMAT_HINT[scene]) payload = { ...payload, instruction: [
-      who, payload.instruction, PIC_SCENES.has(scene) ? `${PIC_LINE}\n${TIME_LINE}` : "", CHAR_POST_SCENES.has(scene) ? CHAR_POST_LINE : "",
+      who, payload.instruction, PIC_SCENES.has(scene) ? `${PIC_LINE}\n${TIME_LINE}` : "", wx, CHAR_POST_SCENES.has(scene) ? CHAR_POST_LINE : "",
       ["feed", "profile", "super", "topic", "search", "comments", "reaction", "reply"].includes(scene) ? loverPostLine() : "",
       scene === "comments" ? OTHERS_CMT_LINE : "",
       `【输出要求】这不是聊天回复：不要用聊天格式，不要写旁白、动作或心理描写，不要加任何解释，除了本轮说明要求的「口吻」「发博原因」，不要自创字段名或用【】标题，只输出 ${FORMAT_HINT[scene]} 格式的内容，字段名和分隔线照抄「微博」规则里的格式。${scene === "hot" ? "用户是公众人物、或剧情里真的发生了大事时，热搜词条可以和用户有关，但只写事件，不替用户说话。" : "用户本人不能出现在你生成的内容里。"}不要用「某人」「某些人」「有些人」暗指谁；不要对用户发号施令或叮嘱（「不准……」「记得……」），人设不是爹系就不能有家长口吻。`,
@@ -3397,6 +3433,7 @@
         <div class="cs-row cs-flex"><div><div class="cs-t">★ 特别关注</div><div class="cs-s">刷新和你发博时一定会叫到他</div></div><button class="switch ${isStarred(charId) ? "on" : ""}" data-act="toggle-star" data-char="${esc(charId)}"><span></span></button></div>
         <div class="cs-row"><div class="cs-t">身份</div>${seg("set-public", [["0", "普通人"], ["1", "公众人物"]], isPublic(charId) ? "1" : "0")}<div class="cs-s">公众人物才会上热搜、有粉丝控评</div></div>
         <div class="cs-row cs-flex" data-act="char-alt" data-char="${esc(charId)}"><div><div class="cs-t">微博小号</div><div class="cs-s">${esc(altSub)}</div></div><span class="set-chev">›</span></div>
+        <div class="cs-row"><div class="cs-t">所在城市</div>${seg("set-city", [["same", "跟我同城"], ["custom", "别的城市"], ["none", "不设置"]], charCityCfg(charId).mode)}<div class="cs-s">${(m => m === "none" ? "他的博不带天气，AI 也不会给他编温度" : m === "custom" ? (cityOf(charId) ? `${esc(cityLabel(cityOf(charId)))} · <button class="link" data-act="set-city" data-char="${esc(charId)}" data-v="custom">改</button>` : "还没填城市") : myCity() ? `跟你一样：${esc(cityLabel(myCity()))}` : "你还没填所在城市（编辑资料里填）")(charCityCfg(charId).mode)}</div></div>
         <div class="cs-row"><div class="cs-t">恋情状态</div>${seg("set-love", Object.entries(LOVE_LABEL), love)}<div class="cs-s">${love === "open" && loveFresh(charId) ? "刚官宣，前三天评论区沸腾，之后慢慢变成「公开很久了」" : LOVE_NOTE[love]}</div></div>
         ${love !== "none" ? `<div class="cs-row cs-flex"><div><div class="cs-t">刷新时单独写他的博</div><div class="cs-s">他出场的那次刷新多用 1 次 API，人设和聊天记录更完整，更像他本人</div></div><button class="switch ${loverSolo(charId) ? "on" : ""}" data-act="toggle-solo" data-char="${esc(charId)}"><span></span></button></div>` : ""}
         ${love === "secret" ? (pg.busy ? `<div class="gen-tip"><span class="spinner"></span>他正在写官宣微博…</div>` : `<button class="cs-btn" data-act="love-announce" data-char="${esc(charId)}">📢 让他发官宣微博（会用 1～2 次 API）</button>`) : ""}
@@ -3493,13 +3530,15 @@
     openPage("edit-me", pg => {
       // 重绘时保留还没保存的输入
       const keep = {};
-      for (const id of ["f-nick", "f-bio", "f-ip", "f-dev"]) { const el = $("#" + id, pg.el); if (el) keep[id] = el.value; }
+      for (const id of ["f-nick", "f-bio", "f-ip", "f-dev", "f-city", "f-cityname"]) { const el = $("#" + id, pg.el); if (el) keep[id] = el.value; }
       const vipEl = $("#f-vip", pg.el); const pubEl = $("#f-pub", pg.el);
       $(".page-body", pg.el).innerHTML = `<div class="form">
         ${isAlt() ? `<div class="form-note" style="margin:0">这是你的小号${S.alt.nickname ? "" : "：先给它起个名字吧"}。除了你在设置里打开的人，谁都不知道是你</div>` : ""}
         <div class="form-row"><label>昵称</label><input id="f-nick" maxlength="30" placeholder="${isAlt() ? "比如 今天也在嗑、不想起床的猫" : ""}" value="${esc(S.me.nickname || "")}"></div>
         <div class="form-row"><label>简介</label><textarea id="f-bio" maxlength="140" placeholder="介绍一下自己">${esc(S.me.bio)}</textarea></div>
         <div class="form-row"><label>IP属地</label><input id="f-ip" maxlength="20" placeholder="如 上海" value="${esc(S.me.ip)}"></div>
+        <div class="form-row"><label>所在城市</label><input id="f-city" maxlength="20" placeholder="真实城市，用来查天气，如 杭州" value="${esc((S.meta.city || {}).q || "")}"></div>
+        <div class="form-row"><label>微博里叫</label><input id="f-cityname" maxlength="20" placeholder="不填就用真名，如 临江市" value="${esc((S.meta.city || {}).name || "")}"></div>
         <div class="form-row"><label>发布设备</label><input id="f-dev" maxlength="30" placeholder="如 iPhone 16 Pro" value="${esc(S.me.device || "")}"></div>
         <div class="form-row"><label>会员</label><input type="checkbox" id="f-vip" ${S.me.vip ? "checked" : ""} style="flex:none;width:20px;height:20px"></div>
         ${isAlt() ? "" : `<div class="form-row"><label>公众人物</label><input type="checkbox" id="f-pub" ${S.meta.publicFigure ? "checked" : ""} style="flex:none;width:20px;height:20px"><span class="cell-sub" style="margin-left:8px">打开后会上热搜、有粉丝</span></div>`}
@@ -3507,7 +3546,7 @@
         <div class="form-row" style="display:block;padding-top:12px"><label>封面</label>
           <div class="profile-cover" style="height:90px;border-radius:8px;margin-top:8px;background:${COVERS[S.me.cover || 0]}" ${S.me.coverRef ? `data-bg-ref="${esc(S.me.coverRef)}"` : ""}></div>
           <div class="swatches"><button class="btn-ghost" data-act="upload-cover">上传图片</button>${COVERS.map((c, i) => `<button class="swatch ${!S.me.coverRef && S.me.cover === i ? "on" : ""}" style="background:${c}" data-act="pick-cover" data-idx="${i}"></button>`).join("")}</div></div>
-      </div><div class="form-note"><button class="link" data-act="open-raw" style="font-size:12px">调试记录：查看最近 10 次 AI 调用</button></div><div class="form-note">头像默认用小手机里的身份头像，也可以单独上传。昵称是你在微博上的名字，角色在微博里会用它称呼你。</div>`;
+      </div><div class="form-note"><button class="link" data-act="open-raw" style="font-size:12px">调试记录：查看最近 10 次 AI 调用</button></div><div class="form-note">头像默认用小手机里的身份头像，也可以单独上传。昵称是你在微博上的名字，角色在微博里会用它称呼你。</div><div class="form-note">所在城市用来查今天的真实天气，AI 只会看到「微博里叫」的名字。角色默认跟你同城，可以在每个角色的微博设置里改。</div>`;
       for (const id in keep) $("#" + id, pg.el).value = keep[id];
       if (vipEl) $("#f-vip", pg.el).checked = vipEl.checked;
       if (pubEl) $("#f-pub", pg.el).checked = pubEl.checked;
@@ -3751,6 +3790,19 @@
         saveMeta(); refreshAll(); return;
       }
       case "open-char-set": openCharSettings(el.dataset.char); return;
+      case "set-city": {
+        const id = el.dataset.char; const v = el.dataset.v; const ch = charById(id); if (!ch) return;
+        let cfg = { mode: v };
+        if (v === "custom") {
+          const old = charCityCfg(id);
+          const q = await inputSheet(`${ch.name}在哪个城市？（真实城市名，用来查天气）`, { placeholder: "如 北京", value: old.q || "", maxlength: 20 });
+          if (q == null || !q.trim()) return;
+          const name = await inputSheet("在微博里叫什么？（不填就用真名）", { placeholder: "如 北城", value: old.name || "", maxlength: 20, ok: "保存" });
+          if (name == null) return;
+          cfg = { mode: "custom", q: q.trim(), name: name.trim() };
+        }
+        S.meta.charCity = { ...(S.meta.charCity || {}), [id]: cfg }; saveMeta(); refreshAll(); return;
+      }
       case "set-public": {
         const id = el.dataset.char; const want = el.dataset.v === "1";
         if (want !== isPublic(id)) { S.meta.publicChars = want ? [...(S.meta.publicChars || []), id] : (S.meta.publicChars || []).filter(x => x !== id); saveMeta(); }
@@ -3845,6 +3897,7 @@
         S.me.nickname = nick || S.me.nickname; if (isNew) S.meta.acct = "alt";
         S.me.bio = $("#f-bio", pg.el).value.trim(); S.me.ip = $("#f-ip", pg.el).value.trim();
         S.me.device = $("#f-dev", pg.el).value.trim(); S.me.vip = $("#f-vip", pg.el).checked; if (!isAlt()) S.meta.publicFigure = $("#f-pub", pg.el).checked;
+        S.meta.city = { q: $("#f-city", pg.el).value.trim(), name: $("#f-cityname", pg.el).value.trim() };
         saveMeta(); toast(isNew ? "小号注册好啦，现在登录的是小号" : "已保存"); closePage(); return;
       }
       case "profile-tab": topPage().setTab(el.dataset.tab); return;

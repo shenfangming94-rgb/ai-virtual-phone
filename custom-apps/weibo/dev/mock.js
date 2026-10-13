@@ -234,6 +234,13 @@ IP属地：上海
     },
     user: { async getProfile() { return { id: "u1", name: "沈清仪", avatarUrl: "" }; } },
     characters: { async list() { return chars; }, async get(id) { return chars.find(c => c.id === id); } },
+    network: {
+      async fetch(p) {
+        const u = new URL(p.url); for (const [k, v] of Object.entries(p.query || {})) u.searchParams.set(k, String(v));
+        const r = await fetch(u); const text = await r.text(); let json; try { json = JSON.parse(text); } catch {}
+        return { ok: r.ok, status: r.status, text, json };
+      },
+    },
     ai: {
       async generate(p) {
         calls.push(p); await sleep(400);

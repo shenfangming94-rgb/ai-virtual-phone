@@ -826,7 +826,7 @@
     const scene = (payload.appTags || [])[1];
     const inline = typeof INLINE_RULES === "object" && INLINE_RULES[scene];
     if (inline) payload = { ...payload, instruction: `【微博：${scene === "charalt" ? "角色小号" : scene}规则】\n${inline}\n\n${payload.instruction}` };
-    const who = `用户的名字是「${S.identity.name || "用户"}」，微博昵称是「${S.meta.nickname}」。` + (scene === "hot" ? "" : `\n${publicLine(false)}`) + (loveLine() ? `\n${loveLine()}` : "") + (scene === "hot" || !isAlt() ? "" : `\n${altLine()}`);
+    const who = `用户的名字是「${S.identity.name || "用户"}」，微博昵称是「${S.meta.nickname}」。${scene === "hot" ? "" : "角色称呼用户按你们平时的叫法（看聊天记录和记忆里怎么叫）：熟人不会动不动连名带姓叫全名，私信里尤其不要。"}` + (scene === "hot" ? "" : `\n${publicLine(false)}`) + (loveLine() ? `\n${loveLine()}` : "") + (scene === "hot" || !isAlt() ? "" : `\n${altLine()}`);
     if (scene === "dm") payload = { ...payload, instruction: [
       who, payload.instruction,
       "【输出要求】只输出 ===私信=== 块，一句话一个块，字段名照抄「私信聊天」规则里的格式；不要写旁白、动作或心理描写，不要加任何解释，不能替用户说话。",
@@ -964,6 +964,8 @@
     const followNpc = (S.meta.followNpc || []).filter(n => !altOwner(n)).slice(0, 6);
     const recent = S.posts.filter(p => acctOf(p) !== "alt").sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)).slice(0, 8)
       .map(p => `- ${authorOf(p).name}：${p.text.slice(0, 40)}`).join("\n");
+    // 刷新时私信也掷骰子：没掷中就不来；上一条没回的不再追
+    const dmPick = isAlt() ? null : rollCharDm(cast);
     const instruction = [
       `当前时间：${nowText()}`,
       `本轮生成 ${charCount + npcCount} 条微博：角色本人发的约 ${charCount} 条，路人博主 ${npcCount} 条${followTab && followNpc.length ? `（路人里可以有用户关注的博主：${followNpc.join("、")}，昵称一字不差）` : ""}。`,
@@ -972,6 +974,7 @@
       "角色发的是个人微博：自己的生活、心情、吐槽、碎碎念。*绝对不发通知、提醒、注意事项、班级事务*（不写「各位同学」「同学们」「请大家」「记得带好…」），就算他是班长、班干部、老师也一样——这些在班级群里说，不在微博说。",
       `${S.meta.nickname ? `用户的微博昵称是「${S.meta.nickname}」，角色如果在微博里提到用户要用这个昵称 @。` : ""}`,
       recent ? `首页最近已有的微博（不要重复类似内容）：\n${recent}` : "",
+      dmPick ? `这次 ${dmPick.name} 如果发了博、又有话想单独跟用户说，可以顺便私信用户（1～3 条，一句一个块）；其他人都不私信。${charDmRecent(dmPick)}` : "这次没有人私信用户，不要输出 ===私信===。",
       reservedLine(),
     ].filter(Boolean).join("\n\n");
     const text = await generate({ characterIds: cast.map(c => c.id), appTags: ["nox_weibo", "feed"], instruction }, "刷新");
@@ -982,7 +985,7 @@
       .filter(p => (p.text || p.images.length || p.repost) && !isCharNotice(p));
     if (!posts.length) { renderHome(); parseFailed("刷新"); return; }
     thinPics(posts); for (const p of posts) { S.posts.push(p); savePost(p); S.allPostRows++; rememberOwnPost(p); }
-    const feedDms = parseBlocks(text, "私信").filter(b => charByName(b["角色"]) || charByName(b["来自"], true));
+    const feedDms = dmPick ? parseBlocks(text, "私信").filter(b => (charByName(b["角色"]) || charByName(b["来自"], true)) === dmPick) : [];
     if (feedDms.length) deliverDms(feedDms, { acct: curAcct(), delay: rand(5000, 12000) });
     const charPosts = posts.filter(p => p.authorType === "char");
     noteParsed(`${posts.length} 条微博（角色 ${charPosts.length} 条${charPosts.length ? "：" + charPosts.map(p => charById(p.charId)?.name).join("、") : ""}；路人 ${posts.length - charPosts.length} 条）`);
@@ -1077,6 +1080,26 @@
     if (changed) saveCalts();
   }
 
+  /** char 能不能主动私信：上一条是他发的、用户还没回，12 小时内不再来 */
+  function charDmOk(ch) {
+    const t = S.threads.find(x => x.peer.type === "char" && x.peer.charId === ch.id && (x.acct || "main") === curAcct());
+    const last = t && t.messages[t.messages.length - 1];
+    return !(last && last.from === "peer" && Date.now() - new Date(last.at || t.updatedAt).getTime() < 12 * 3600e3);
+  }
+  /** 他最近私信过的话：让 AI 别重复 */
+  function charDmRecent(ch) {
+    const t = S.threads.find(x => x.peer.type === "char" && x.peer.charId === ch.id && (x.acct || "main") === curAcct());
+    const mine = t ? t.messages.filter(m => m.from === "peer").slice(-6).map(m => m.text) : [];
+    return mine.length ? `${ch.name} 最近在微博私信里说过：「${mine.join(" / ").slice(0, 160)}」，这次换新的话题和说法，不要重复。` : "";
+  }
+  /** 掷骰子挑一个来私信的 char：15%，有特别关注的 25% 并优先挑他们 */
+  function rollCharDm(pool, rate) {
+    pool = pool.filter(charDmOk);
+    const starred = pool.filter(c => isStarred(c.id));
+    if (!pool.length || Math.random() >= (rate != null ? rate : starred.length ? 0.25 : 0.15)) return null;
+    return shuffle(starred.length ? starred : pool)[0];
+  }
+
   /** 发博后谁来私信：陌生人大号 30%（带热搜或公众人物 50%）、小号 20%；角色 15%，有特别关注的 25%，超话帖 10% */
   function planPostDms(post, { alt, sup, cast }) {
     if (post.visibility === "friends") return { line: "这次没有人私信用户，不要输出 ===私信===。" };
@@ -1089,12 +1112,10 @@
       ["粉丝：表白、求回关、问近况", !alt && S.meta.publicFigure ? 3 : 0], ["黑粉：阴阳怪气", !alt && S.meta.publicFigure ? 0.5 : 0],
     ].filter(k => k[1] > 0);
     let r = Math.random() * kinds.reduce((a, k) => a + k[1], 0); const kind = kinds.find(k => (r -= k[1]) < 0) || kinds[0];
-    const pool = cast.filter(c => !alt || knowsAlt(c.id));
-    const starred = pool.filter(c => isStarred(c.id));
-    const pick = pool.length && Math.random() < (sup ? 0.1 : starred.length ? 0.25 : 0.15) ? (starred.length ? shuffle(starred)[0] : shuffle(pool)[0]) : null;
+    const pick = rollCharDm(cast.filter(c => !alt || knowsAlt(c.id)), sup ? 0.1 : null);
     const lines = [
       stranger ? `这次要有 1 个陌生路人私信用户：${kind[0]}。1～3 条，一句一个块，短、口语，像真人。` : "",
-      pick ? `这次 ${pick.name} 想私信用户（他不在评论区评论这条，改成私信，内容比较私人、公开说不方便，语气按人设）。1～4 条，一句一个块。` : "",
+      pick ? `这次 ${pick.name} 想私信用户（他不在评论区评论这条，改成私信，内容比较私人、公开说不方便，语气按人设）。1～4 条，一句一个块。${charDmRecent(pick)}` : "",
       !stranger && !pick ? "这次没有人私信用户，不要输出 ===私信===。" : !pick ? "角色这次都不私信。" : !stranger ? "路人这次都不私信。" : "",
     ];
     return { stranger, charId: pick && pick.id, line: lines.filter(Boolean).join("") };

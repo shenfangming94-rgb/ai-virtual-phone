@@ -2748,7 +2748,7 @@
         const t0 = new Date(m.at).getTime(); const stamp = t0 - lastAt > 5 * 60e3 ? `<div class="dm-stamp">${fmtTime(m.at)}</div>` : ""; lastAt = t0;
         const who = m.from === "me" ? me : a;
         return `${stamp}<div class="dm-msg ${m.from === "me" ? "me" : ""}"><div ${profileAttrs(who)}>${avatarHtml(who, 36)}</div>${m.kind === "ghostInvite" && th.peer.type === "char"
-          ? `<div class="dm-bubble invite ${m.used ? "used" : ""}" ${m.used ? "" : `data-act="ghost-invite" data-key="${esc(th.key)}" data-id="${esc(m.id)}"`}><b>📝 代发邀请</b><span>${esc(charNickname(th.peer.charId))} 允许你用他的微博号发一条</span><em>${m.used ? "已经发过啦" : "点这里去发 ›"}</em></div>`
+          ? `<div class="dm-bubble invite ${m.used ? "used" : ""}" ${m.used ? "" : `data-act="ghost-invite" data-key="${esc(th.key)}" data-id="${esc(m.id)}"`}><div class="iv-main"><div class="iv-text"><b>${esc(charNickname(th.peer.charId))} 邀请你代发一条微博</b><span>${m.used ? "已经发过啦" : "以TA的身份发布，仅限一次"}</span></div><i>✎</i></div><div class="iv-foot">微博 · 账号授权</div></div>`
           : `<div class="dm-bubble" data-act="dm-msg" data-id="${esc(m.id)}">${richText(m.text)}</div>`}</div>`;
       }).join("")}${th._typing ? `<div class="dm-msg"><div>${avatarHtml(a, 36)}</div><div class="dm-bubble dm-dots"><i></i><i></i><i></i></div></div>` : ""}</div>`;
       body.scrollTop = body.scrollHeight; hydrateImages(body);

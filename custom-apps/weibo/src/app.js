@@ -283,6 +283,7 @@
   // ───────────────────────── 账号 / 头像 ─────────────────────────
   const charById = id => S.chars.find(c => c.id === id);
   const isStarred = id => (S.meta.starredChars || []).includes(id);
+  const loverSolo = id => !(S.meta.soloOff || []).includes(id);
   /** 公众人物：用户在编辑资料里开、角色在微博设置里开（按身份分开存） */
   const isPublic = id => id === "user" ? !!S.meta.publicFigure : (S.meta.publicChars || []).includes(id);
   // ── 恋情状态（按身份存 S.meta.love[charId] = { state: none|secret|open, announcedAt } ） ──
@@ -997,7 +998,7 @@
     const followed = activeChars().filter(c => isFollowingChar(c.id));
     const fullCast = pickCast(followed.length ? followed : activeChars(), followTab ? 4 : 2);
     // 恋人（恋情开关是地下恋/已公开）单独调用一次写他的博：像私信一样只有他，人设和聊天记录最完整
-    const lovers = isAlt() ? [] : fullCast.filter(c => loveOf(c.id).state !== "none");
+    const lovers = isAlt() ? [] : fullCast.filter(c => loveOf(c.id).state !== "none" && loverSolo(c.id));
     const cast = fullCast.filter(c => !lovers.includes(c));
     const charCount = Math.max(0, (followTab ? Math.min(fullCast.length + 1, rand(2, 4)) : 1) - lovers.length);
     const npcCount = followTab ? rand(2, 3) : rand(5, 7);
@@ -3291,6 +3292,7 @@
         <div class="cs-row"><div class="cs-t">身份</div>${seg("set-public", [["0", "普通人"], ["1", "公众人物"]], isPublic(charId) ? "1" : "0")}<div class="cs-s">公众人物才会上热搜、有粉丝控评</div></div>
         <div class="cs-row cs-flex" data-act="char-alt" data-char="${esc(charId)}"><div><div class="cs-t">微博小号</div><div class="cs-s">${esc(altSub)}</div></div><span class="set-chev">›</span></div>
         <div class="cs-row"><div class="cs-t">恋情状态</div>${seg("set-love", Object.entries(LOVE_LABEL), love)}<div class="cs-s">${love === "open" && loveFresh(charId) ? "刚官宣，前三天评论区沸腾，之后慢慢变成「公开很久了」" : LOVE_NOTE[love]}</div></div>
+        ${love !== "none" ? `<div class="cs-row cs-flex"><div><div class="cs-t">刷新时单独写他的博</div><div class="cs-s">他出场的那次刷新多用 1 次 API，人设和聊天记录更完整，更像他本人</div></div><button class="switch ${loverSolo(charId) ? "on" : ""}" data-act="toggle-solo" data-char="${esc(charId)}"><span></span></button></div>` : ""}
         ${love === "secret" ? (pg.busy ? `<div class="gen-tip"><span class="spinner"></span>他正在写官宣微博…</div>` : `<button class="cs-btn" data-act="love-announce" data-char="${esc(charId)}">📢 让他发官宣微博（会用 1～2 次 API）</button>`) : ""}
         <div class="form-note" style="text-align:center">选「已公开」= 公开很久了，大家早习惯了；点官宣 = 刚官宣，前三天评论区沸腾<br>切换恋情状态会写进他的记忆</div>`;
       body.scrollTop = sc; hydrateImages(body);
@@ -3624,6 +3626,11 @@
       case "toggle-alt-know": toggleAltKnow(el.dataset.char); { const pg = topPage(); pg && pg.render(pg); } return;
       case "open-raw": openRaw(); return;
       case "open-settings": openSettings(); return;
+      case "toggle-solo": {
+        const id = el.dataset.char; const on = loverSolo(id);
+        S.meta.soloOff = on ? [...(S.meta.soloOff || []), id] : (S.meta.soloOff || []).filter(x => x !== id);
+        saveMeta(); toast(on ? "已关闭：刷新时和大家一起写" : "已打开：刷新时单独写他的博"); refreshAll(); return;
+      }
       case "toggle-star": {
         const id = el.dataset.char; const on = isStarred(id);
         S.meta.starredChars = on ? S.meta.starredChars.filter(x => x !== id) : [...(S.meta.starredChars || []), id];

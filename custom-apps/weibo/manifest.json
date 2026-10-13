@@ -2,7 +2,7 @@
   "sdkVersion": "1.0",
   "id": "nox.weibo",
   "name": "微博",
-  "version": "0.9.10",
+  "version": "0.9.11",
   "author": "Nox for Flora",
   "description": "仿真微博：刷首页、看评论楼中楼、发微博等角色和路人来互动、逛角色主页。按用户身份分开，角色会记得你们在微博上的互动。",
   "icon": "icon.png",

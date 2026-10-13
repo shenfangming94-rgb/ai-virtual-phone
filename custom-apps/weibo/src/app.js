@@ -1057,6 +1057,9 @@
             ${r.ok ? `<pre style="margin:6px 0 0;white-space:pre-wrap;word-break:break-all;font-size:11px;line-height:1.5;max-height:320px;overflow:auto;color:var(--wb-text-2);user-select:text;-webkit-user-select:text">${esc(maskSecrets(r.text) || "（空的，AI 什么都没返回）")}</pre>` : ""}
           </div>`).join("")
         : `<div class="empty">还没有调用过 AI</div>`;
+      // 测试用：不想干等几个小时
+      $(".page-body", pg.el).insertAdjacentHTML("beforeend", `<div class="form-note" style="margin-top:12px">测试工具</div>
+        <div class="list-cell" data-act="away-try"><div class="cell-main"><div style="color:var(--wb-link)">${S.awayBusy ? "正在补…" : "「你不在的时候」现在试一次"}</div><div class="cell-sub">假装你离开了 6 小时，马上补一次（会用 1 次 API）</div></div></div>`);
     }, { title: "调试记录" });
   }
 
@@ -3718,8 +3721,7 @@
           <button class="switch ${S.meta.autoReact !== false ? "on" : ""}" data-act="toggle-auto-react" aria-label="发博后自动来互动"><span></span></button></div>
         <div class="list-cell"><div class="cell-main"><div>你不在的时候</div><div class="cell-sub">隔一阵再打开微博时，补上这段时间 char 发的博、改的简介、偷偷点的赞和谁来看过你（每次 1 次 API，恋人另算）</div></div>
           <button class="switch ${awayOn() ? "on" : ""}" data-act="toggle-away" aria-label="你不在的时候"><span></span></button></div>
-        ${awayOn() ? `<div class="list-cell"><div class="cell-main"><div>离开多久才补</div></div><div class="seg" style="width:180px;flex:none">${AWAY_HOURS.map(h => `<button class="${awayHours() === h ? "on" : ""}" data-act="set-away-h" data-v="${h}">${h} 小时</button>`).join("")}</div></div>
-        <div class="list-cell" data-act="away-try"><div class="cell-main"><div style="color:var(--wb-link)">${S.awayBusy ? "正在补…" : "现在试一次"}</div><div class="cell-sub">假装你离开了 6 小时，马上补一次（会用 1 次 API）</div></div></div>` : ""}
+        ${awayOn() ? `<div class="list-cell"><div class="cell-main"><div>离开多久才补</div></div><div class="seg" style="width:180px;flex:none">${AWAY_HOURS.map(h => `<button class="${awayHours() === h ? "on" : ""}" data-act="set-away-h" data-v="${h}">${h} 小时</button>`).join("")}</div></div>` : ""}
         <div class="form-note" style="margin-top:8px">路人头像库 · 路人从这里分头像，同一个路人一直是同一张。点图片可以删除</div>
         <div class="album avatar-pool">${pool.map((ref, i) => `<div class="pic" data-act="pool-rm" data-idx="${i}"><img data-ref="${esc(ref)}" alt=""></div>`).join("")}
           <button class="compose-add" data-act="pool-add">＋</button></div>

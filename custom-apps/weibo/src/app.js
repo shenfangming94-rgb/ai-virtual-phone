@@ -1274,7 +1274,7 @@
       reservedLine(),
     ].filter(Boolean).join("\n\n");
   }
-  async function awayCatchUp() {
+  async function awayCatchUp(force) {
     if (!S.meta || isAlt() || !awayOn() || S.awayBusy) return;
     const now = Date.now(); const last = S.meta.lastOpenAt ? new Date(S.meta.lastOpenAt).getTime() : 0;
     S.meta.lastOpenAt = nowIso(); saveMeta();
@@ -1284,7 +1284,9 @@
     const k = (now - from) / 3600e3 > 24 ? 1.6 : 1;
     const plans = chars.map(c => { const r = Math.random(); const n = r < 0.55 / k ? 0 : r < 0.9 ? 1 : 2;
       return { c, n, del: n > 0 && Math.random() < 0.12, bio: Math.random() < 0.12, liked: Math.random() < 0.4 ? rand(1, 2) : 0 }; });
-    const newsBefore = (S.meta.news || []).length;
+    // 「现在试一次」：保证至少有一个人发博，不白花 API
+    if (force && !plans.some(p => p.n)) plans[Math.floor(Math.random() * plans.length)].n = 1;
+    const newsBefore = (S.meta.news || []).length; const likedBefore = S.posts.filter(p => p.origin === "liked").length;
     awaySilent(chars, from, now);
     const busy = plans.filter(p => p.n || p.bio || p.liked);
     if (busy.length) {
@@ -1300,7 +1302,7 @@
       texts.forEach((t, i) => t != null && takeAway(t, groups[i], from, now));
     }
     saveMeta(); refreshAll();
-    const n = (S.meta.news || []).length - newsBefore;
+    const n = (S.meta.news || []).length - newsBefore + S.posts.filter(p => p.origin === "liked").length - likedBefore;
     if (n > 0) toast("你不在的时候大家有新动态，去消息页「通知」看看");
     return n;
   }
@@ -4126,7 +4128,7 @@
         if (isAlt()) { toast("切回大号再试"); return; }
         S.meta.lastOpenAt = new Date(Date.now() - 6 * 3600e3).toISOString();
         toast("假装你离开了 6 小时，大家在补这段时间的动态…");
-        awayCatchUp().then(n => { if (!n) toast("这 6 小时大家都挺安静的，没什么动静，再试一次看看"); }).catch(e => console.error(e)); refreshAll(); return;
+        awayCatchUp(true).then(n => { if (!n) toast("AI 这次没写出能用的内容，去调试记录看看它写了什么"); }).catch(e => console.error(e)); refreshAll(); return;
       case "char-more": ensureCharProfile(el.dataset.char, true); return;
       case "compose": openCompose(null); return;
       case "hot-refresh": refreshHot(); return;

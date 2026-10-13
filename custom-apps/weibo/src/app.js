@@ -357,6 +357,37 @@
   const vClass = v => (/黄|橙|个人/.test(v) ? "yellow" : /蓝|机构|官方/.test(v) ? "blue" : /金/.test(v) ? "gold" : "");
   const isFollowingChar = id => !(S.meta.unfollowChars || []).includes(id);
   const isFollowingNpc = name => (S.meta.followNpc || []).includes(name);
+  // ── 路人和用户（大号）的关系：粉丝 meta.fans、互关、回关待定 meta.followAsk、小本子 meta.npcLog ──
+  const isFanNpc = name => (S.meta.fans || []).some(f => f.name === name);
+  const isMutualNpc = name => isFanNpc(name) && isFollowingNpc(name);
+  /** 关注了的 / 关注用户的路人：记最近几次和用户的来往 */
+  function logNpc(name, line) {
+    if (!name || altOwner(name) || !(isFollowingNpc(name) || isFanNpc(name))) return;
+    const log = S.meta.npcLog || (S.meta.npcLog = {}); const d = new Date();
+    log[name] = [...(log[name] || []), `${d.getMonth() + 1}月${d.getDate()}日 ${line}`].slice(-6); saveMeta();
+  }
+  /** 给 AI 的路人资料卡：关系、简介、最近的博、小本子 */
+  function npcCard(name) {
+    const info = S.npcs.map[name] && !S.npcs.map[name].pending ? S.npcs.map[name] : null;
+    const posts = S.posts.filter(p => p.authorType === "npc" && p.authorName === name && !p.altOf).sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)).slice(0, 2).map(p => `「${p.text.slice(0, 30)}」`);
+    const rel = isMutualNpc(name) ? "和用户互关" : isFanNpc(name) ? "关注了用户，用户没回关" : isFollowingNpc(name) ? "用户关注了 TA，TA 没关注用户" : "";
+    const log = (S.meta.npcLog || {})[name] || [];
+    return `「${name}」${rel ? `（${rel}）` : ""}${info && info.bio ? `；简介：${info.bio}` : ""}${info && info.gender ? `；${info.gender}` : ""}${info && !none(info.verified) ? `；认证：${info.verified}` : ""}${posts.length ? `；最近发过：${posts.join(" ")}` : ""}${log.length ? `；跟用户的来往：${log.join(" / ")}` : ""}`;
+  }
+  function addFanNpc(name) {
+    if (!name || isFanNpc(name)) return;
+    S.meta.fans = [{ name, at: nowIso() }, ...(S.meta.fans || [])].slice(0, 200); S.meta.followers = (S.meta.followers || 0) + 1;
+    saveMeta(); setTimeout(refreshMsgViews, 0);
+  }
+  function removeFanNpc(name) {
+    if (!isFanNpc(name)) return;
+    S.meta.fans = S.meta.fans.filter(f => f.name !== name); S.meta.followers = Math.max(0, (S.meta.followers || 0) - 1); saveMeta();
+  }
+  /** 用户关注了一个路人：TA 不是粉丝的话，下次刷新时按人设决定回不回关 */
+  function onFollowNpc(name, on) {
+    S.meta.followAsk = (S.meta.followAsk || []).filter(n => n !== name);
+    if (on && !isAlt() && !altOwner(name) && !isFanNpc(name)) S.meta.followAsk.push(name);
+  }
 
   /** 统一的作者信息：{ type, charId, name, verified, vip, avatar } */
   function authorOf(x) {
@@ -552,7 +583,7 @@
   }
 
   // ───────────────────────── AI 输出解析 ─────────────────────────
-  const KEYS = ["转发语", "口吻", "发博原因", "角色", "作者", "认证", "认证说明", "会员", "来源", "时间", "配图", "转评赞", "转发自", "原文", "转发链", "正文", "编号", "回复", "赞", "内容",
+  const KEYS = ["回关", "取关", "转发语", "口吻", "发博原因", "角色", "作者", "认证", "认证说明", "会员", "来源", "时间", "配图", "转评赞", "转发自", "原文", "转发链", "正文", "编号", "回复", "赞", "内容",
     "性别", "点赞角色", "转发", "路人点赞", "新增粉丝", "昵称", "简介", "IP属地", "粉丝", "关注",
     "热搜词", "热度", "标签", "相关", "来自", "新粉丝", "名称", "分类", "帖子数", "粉丝数", "导语", "主持人", "阅读", "讨论", "分区", "词条", "热搜", "阅读量", "讨论量",
     // 模型常换的叫法
@@ -610,7 +641,7 @@
       if (mk) { label = mk[1]; continue; }
       if (label === kind || label === null || label === "结束") out.push(...recordsOf(seg));
     }
-    if (kind === "互动") return out.filter(f => "点赞角色" in f || "新增粉丝" in f || "转发" in f || "路人点赞" in f).slice(0, 1);
+    if (kind === "互动") return out.filter(f => "点赞角色" in f || "新增粉丝" in f || "转发" in f || "路人点赞" in f || "回关" in f || "取关" in f).slice(0, 1);
     if (kind === "主页") return out.filter(f => "昵称" in f && ("粉丝" in f || "简介" in f)).slice(0, 1);
     if (kind === "话题") return out.filter(f => f["导语"] && !f["正文"]).slice(0, 1);
     if (kind === "私信") return out.filter(f => f["内容"] && f["来自"]);
@@ -826,7 +857,7 @@
   }
   // 规则和输出格式在预设条目里（presets.json，按 nox_weibo 标签命中）；这里只在末尾再提醒一次格式
   const FORMAT_HINT = {
-    feed: "===微博===（需要时加 ===私信===）", comments: "===评论===（本轮说明要求时，评论后面加 ===转发===）", reaction: "===评论=== 和 ===互动===（需要时加 ===私信===）", reply: "===评论===（需要时加 ===私信=== 和 ===互动===）", profile: "===主页=== 和 ===微博===",
+    feed: "===微博===（需要时加 ===私信=== 和 ===互动===）", comments: "===评论===（本轮说明要求时，评论后面加 ===转发===）", reaction: "===评论=== 和 ===互动===（需要时加 ===私信===）", reply: "===评论===（需要时加 ===私信=== 和 ===互动===）", profile: "===主页=== 和 ===微博===",
     dm: "===私信===", super: "===超话=== 或 ===微博===（按本轮说明要的输出）",
     hot: "===热搜===", topic: "===话题=== 和 ===微博===", search: "===微博===", npc: "===主页=== 和 ===微博===", charalt: "===主页=== 和 ===微博===（主页按本轮说明决定要不要）",
   };
@@ -1004,6 +1035,7 @@
     const charCount = Math.max(0, (followTab ? Math.min(fullCast.length + 1, rand(2, 4)) : 1) - lovers.length);
     const npcCount = followTab ? rand(2, 3) : rand(5, 7);
     const followNpc = (S.meta.followNpc || []).filter(n => !altOwner(n)).slice(0, 6);
+    const asks = isAlt() ? [] : (S.meta.followAsk || []).filter(n => isFollowingNpc(n) && !isFanNpc(n)).slice(0, 4);
     const recent = S.posts.filter(p => acctOf(p) !== "alt").sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)).slice(0, 8)
       .map(p => `- ${authorOf(p).name}：${p.text.slice(0, 40)}`).join("\n");
     // 刷新时私信也掷骰子：没掷中就不来；上一条没回的不再追
@@ -1011,7 +1043,9 @@
     const dmLine = c => dmPick === c ? `如果你有话想单独跟用户说，可以顺便私信用户（1～3 条，一句一个块）。${charDmRecent(c)}` : "这次不私信用户，不要输出 ===私信===。";
     const instruction = [
       `当前时间：${nowText()}`,
-      `本轮生成 ${charCount + npcCount} 条微博：角色本人发的约 ${charCount} 条，路人博主 ${npcCount} 条${followTab && followNpc.length ? `（路人里可以有用户关注的博主：${followNpc.join("、")}，昵称一字不差）` : ""}。`,
+      `本轮生成 ${charCount + npcCount} 条微博：角色本人发的约 ${charCount} 条，路人博主 ${npcCount} 条。`,
+      followTab && followNpc.length ? `路人里可以有用户关注的博主（昵称一字不差，发的内容接着 TA 的人设和最近的博，跟用户有来往的可以自然带出来）：\n${followNpc.map(n => `- ${npcCard(n)}`).join("\n")}` : "",
+      asks.length ? `用户最近关注了这些路人：\n${asks.map(n => `- ${npcCard(n)}`).join("\n")}\n按 TA 们各自的人设决定回不回关用户：营销号、bot、官方号、大 V 基本不回关；普通网友看心情和缘分，也可以不回。在最后输出：\n===互动===\n回关：回关了的昵称，用、分隔（都没回关写 无）\n===结束===` : "",
       `角色微博昵称（已注册的必须沿用）：\n${charsForPrompt(cast) || "无（本轮不写角色的微博）"}`,
       lovers.length ? `${lovers.map(c => c.name).join("、")} 的微博这次另外写，本轮不要写他们发的博。` : "",
       `角色是否发博、发什么，看他此刻有没有想分享的情绪；同一个角色本轮最多 2 条。`,
@@ -1044,6 +1078,13 @@
       ...toPosts(text).filter(p => !lovers.some(c => c.id === p.charId)),
       ...lovers.flatMap((c, i) => toPosts(loverTexts[i], c).filter(p => p.charId === c.id).slice(0, 1)),
     ];
+    // 回关：AI 给了答案才算定了，没写 ===互动=== 就留到下次
+    const fb = asks.length ? parseBlocks(text || "", "互动")[0] : null;
+    if (fb && "回关" in fb) {
+      const back = none(fb["回关"]) ? [] : fb["回关"].split(/[、,，\s]+/).map(x => x.replace(/^@/, "").trim());
+      for (const n of asks) if (back.includes(n)) addFanNpc(n);
+      S.meta.followAsk = (S.meta.followAsk || []).filter(n => !asks.includes(n)); saveMeta();
+    }
     if (!posts.length) { renderHome(); parseFailed("刷新"); return; }
     thinPics(posts); for (const p of posts) { S.posts.push(p); savePost(p); S.allPostRows++; rememberOwnPost(p); }
     const dmText = dmPick && lovers.includes(dmPick) ? loverTexts[lovers.indexOf(dmPick)] : text;
@@ -1265,6 +1306,10 @@
     ].filter(Boolean).join("") : "";
     // 私信由代码掷骰子：掷中了明确要 AI 写，没掷中就不要
     const dmPlan = planPostDms(post, { alt, sup, cast });
+    // 粉丝刷到：互关的一半概率来 1 个，单向粉丝四分之一概率来 1 个
+    const myFans = alt || sup || post.visibility === "friends" ? [] : (S.meta.fans || []).map(f => f.name).filter(n => n && !altOwner(n) && !isUserName(n));
+    const mutualFans = myFans.filter(isFollowingNpc), oneWayFans = myFans.filter(n => !isFollowingNpc(n));
+    const fanPick = [...(mutualFans.length && Math.random() < 0.5 ? [shuffle(mutualFans)[0]] : []), ...(oneWayFans.length && Math.random() < 0.25 ? [shuffle(oneWayFans)[0]] : [])];
     const instruction = [
       `当前时间：${nowText()}`,
       superLine, altPostLine,
@@ -1279,12 +1324,14 @@
       sup || alt ? "" : starredLine(cast),
       caltLine(cast, { post }),
       dmPlan.line,
+      fanPick.length ? `用户的粉丝刷到了这条：\n${fanPick.map(n => `- ${npcCard(n)}`).join("\n")}\n符合 TA 的人设和兴趣就来评论（「作者」一字不差、「角色」写 无，算在路人评论里），不感兴趣也可以不来。` : "",
       reservedLine(),
     ].filter(Boolean).join("\n\n");
     const text = await generate({ characterIds: castIds, appTags: ["nox_weibo", "reaction"], instruction }, "获取互动");
     post._genComments = false; rerenderDetail(post);
     if (text == null) { post.reacted = false; savePost(post); return; }
     const list = fixAltAuthors(commentsFromBlocks(parseComments(text), post, {}), { post }).filter(c => !alt || !(c.charId || c.altOf) || cast.some(x => x.id === (c.charId || c.altOf)));
+    for (const c of list) if (c.authorType === "npc" && !c.parentId) logNpc(c.authorName, `在用户的博「${(post.text || "（图片）").slice(0, 20)}」下评论：${c.text.slice(0, 40)}`);
     const sum = parseBlocks(text, "互动")[0] || {};
     const dms = parseBlocks(text, "私信").filter(b => { const ch = charByName(b["角色"]) || charByName(b["来自"], true); return ch ? dmPlan.charId === ch.id : dmPlan.stranger; });
     if (!list.length && !Object.keys(sum).length && !dms.length) { parseFailed("发博后的互动"); return; }
@@ -1425,6 +1472,8 @@
       `用户本人的性别：${S.identity.gender || "未知（用 ta 称呼）"}`,
       `微博正文：${post.text.slice(0, 300)}`,
       targetComment ? `这层评论楼的完整对话（按时间）：\n${floorLines(post, userComment)}` : "",
+      isFollowingNpc(targetName) || isFanNpc(targetName) ? `关于「${targetName}」：${npcCard(targetName)}` : "",
+      isFanNpc(targetName) && sameAcct(userComment) && !isAlt() ? `「${targetName}」是用户的粉丝。只有这次真的吵翻了、TA 实在受不了时才会取关用户（很少发生，大多数时候不会）：取关的话在最后的 ===互动=== 里加一行「取关：是」。` : "",
       `用户（微博昵称「${nick}」）刚刚${targetComment ? `回复了「${targetName}」` : `评论了博主「${targetName}」的微博`}：「${userComment.text}」，编号 ${uCode}。`,
       `生成 1~3 条回复：「${targetName}」一定要回（昵称必须一字不差是「${targetName}」），其他路人可以看热闹插嘴。回复用户的「回复」字段填 ${uCode}，回复本次新评论的填本次编号。`,
       reservedLine(),
@@ -1445,7 +1494,11 @@
     const dms = parseBlocks(text, "私信").filter(b => !charByName(b["角色"]) && !charByName(b["来自"], true));
     if (!list.length && !dms.length) { parseFailed("路人回复"); return; }
     noteParsed(`${list.length} 条回复${dms.length ? `，私信 ${dms.length} 条` : ""}`);
-    likeUserComment(fresh, userComment, parseBlocks(text, "互动")[0]);
+    const npcSum = parseBlocks(text, "互动")[0];
+    likeUserComment(fresh, userComment, npcSum);
+    const said = list.filter(c => c.authorName === targetName).map(c => c.text).join(" / ");
+    if (said) logNpc(targetName, `评论区里用户说「${userComment.text.slice(0, 30)}」，TA 回「${said.slice(0, 40)}」`);
+    if (npcSum && yes(npcSum["取关"]) && isFanNpc(targetName) && !isAlt()) { removeFanNpc(targetName); logNpc(targetName, "吵完取关了用户"); }
     let delay = rand(1500, 4000);
     for (const c of list) {
       if (!c.parentId) { c.parentId = userComment.parentId || userComment.id; c.replyToName = nick; c.replyToId = userComment.id; }
@@ -2445,6 +2498,8 @@
     } else {
       const prompt = [
         `你是微博用户「${th.peer.name}」。${th.about ? `你和用户的交集：${th.about}` : "你是用户的一个陌生网友。"}`,
+        isFollowingNpc(th.peer.name) || isFanNpc(th.peer.name) ? `关于你：${npcCard(th.peer.name)}` : "",
+        !altDm && isFollowingNpc(th.peer.name) && !isFanNpc(th.peer.name) ? "用户关注了你，你还没有回关。按你的人设决定要不要回关：如果这次聊天里你决定回关（被说动了、聊得投缘），在私信后面多写：\n===互动===\n回关：是\n===结束===\n不回关就不写。" : "",
         `用户的微博昵称：${S.me.nickname}，性别：${S.identity.gender || "未知（用 ta 称呼）"}`,
         history ? `你们的私信记录：\n${history}` : "",
         lastIsMine ? `用户刚刚${pending.length > 1 ? "连着" : ""}私信你：${pendText}` : "用户还没有回你：你接着刚才的话往下说，不要重复说过的话。",
@@ -2461,9 +2516,14 @@
     if (!text || !fresh) { refreshMsgViews(); return; }
     if (lastIsMine && !fresh.messages.some(m => m.id === msg.id)) { noteParsed("用户已删除这条私信，回复作废"); refreshMsgViews(); return; }
     let lines = parseBlocks(text, "私信").map(b => b["内容"].trim());
-    if (!lines.length) lines = normalizeOutput(text).replace(/===[^=\n]+===/g, "").split(/\n+/).map(x => x.replace(/^(来自|角色|内容)\s*[：:].*$/, "").trim()).filter(Boolean).slice(0, 4);
+    if (!lines.length) lines = normalizeOutput(text).replace(/===[^=\n]+===/g, "").split(/\n+/).map(x => x.replace(/^(来自|角色|内容|回关|取关)\s*[：:].*$/, "").trim()).filter(Boolean).slice(0, 4);
     if (!lines.length) { refreshMsgViews(); parseFailed("私信"); return; }
     noteParsed(`${lines.length} 条私信`);
+    if (!pc) {
+      logNpc(th.peer.name, `私信里用户说${pendText.slice(0, 30) || "（没说话）"}，TA 回「${lines.join(" / ").slice(0, 40)}」`);
+      const fb = parseBlocks(text, "互动")[0];
+      if (fb && yes(fb["回关"]) && !altDm && isFollowingNpc(th.peer.name) && !isFanNpc(th.peer.name)) { addFanNpc(th.peer.name); logNpc(th.peer.name, "私信聊完回关了用户"); }
+    }
     fresh._typing = true; refreshMsgViews();
     const replies = lines.slice(0, 5).map(text => ({ id: uid("m"), from: "peer", text, at: null }));
     if (pc && knows && (!aOwner || altOpen(aOwner))) {
@@ -3573,7 +3633,7 @@
       case "follow": {
         if (!post) return; const a = authorOf(post);
         if (a.type === "char") S.meta.unfollowChars = (S.meta.unfollowChars || []).filter(x => x !== a.charId);
-        else S.meta.followNpc = Array.from(new Set([...(S.meta.followNpc || []), a.name]));
+        else { S.meta.followNpc = Array.from(new Set([...(S.meta.followNpc || []), a.name])); onFollowNpc(a.name, true); }
         saveMeta(); toast("关注成功"); refreshAll(); return;
       }
       case "toggle-follow-char": {
@@ -3583,7 +3643,7 @@
       }
       case "toggle-follow-npc": {
         const n = el.dataset.name; const on = isFollowingNpc(n);
-        S.meta.followNpc = on ? S.meta.followNpc.filter(x => x !== n) : [...(S.meta.followNpc || []), n];
+        S.meta.followNpc = on ? S.meta.followNpc.filter(x => x !== n) : [...(S.meta.followNpc || []), n]; onFollowNpc(n, !on);
         saveMeta(); toast(on ? "已取消关注" : "关注成功"); refreshAll(); return;
       }
       case "post-menu": {

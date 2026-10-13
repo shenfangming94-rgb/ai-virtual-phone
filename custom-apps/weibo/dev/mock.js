@@ -228,7 +228,7 @@ IP属地：上海
     db: {
       async list(c) { return col(c).slice(0, 500); },
       async get(c, id) { return col(c).find(r => r.id === id) || null; },
-      async create(c, data) { const row = { ...data, id: data.id || "r" + Math.random(), createdAt: data.createdAt || new Date().toISOString() }; col(c).unshift(row); return row; },
+      async create(c, data) { const row = { ...data, id: data.id || "r" + Math.random(), createdAt: new Date().toISOString() }; /* 和真宿主一样：create 时间改成写入那一刻 */ col(c).unshift(row); return row; },
       async update(c, id, patch) { const i = col(c).findIndex(r => r.id === id); if (i < 0) return null; col(c)[i] = { ...col(c)[i], ...patch }; return col(c)[i]; },
       async delete(c, id) { db[c] = col(c).filter(r => r.id !== id); return true; },
     },

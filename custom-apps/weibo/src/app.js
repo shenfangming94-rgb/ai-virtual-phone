@@ -193,7 +193,12 @@
       const updated = await api.db.update(c, row.id, row);
       if (updated) return updated;
     } catch (e) { /* 不存在时 update 可能报错，走 create */ }
-    return api.db.create(c, row);
+    const created = await api.db.create(c, row);
+    // 宿主 create 会把 createdAt 改成写入那一刻：再 update 一次写回我们自己的时间（主页历史博、刷新时间都靠它）
+    if (row.createdAt && created && created.createdAt !== row.createdAt) {
+      try { return (await api.db.update(c, row.id, { createdAt: row.createdAt })) || created; } catch (e) { console.warn(e); }
+    }
+    return created;
   }
 
   function serializePost(p) { const { _media, ...rest } = p; return rest; }
@@ -1172,6 +1177,8 @@
       S.meta.followAsk = (S.meta.followAsk || []).filter(n => !asks.includes(n)); saveMeta();
     }
     if (!posts.length) { renderHome(); parseFailed("刷新"); return; }
+    const newest = Math.max(0, ...feedPosts().map(p => new Date(p.createdAt).getTime()).filter(t => t <= Date.now()));
+    for (const p of posts) if (new Date(p.createdAt).getTime() <= newest) p.createdAt = new Date(newest + Math.random() * Math.max(1000, Date.now() - newest)).toISOString();
     thinPics(posts); for (const p of posts) { S.posts.push(p); savePost(p); S.allPostRows++; rememberOwnPost(p); }
     const dmText = dmPick && lovers.includes(dmPick) ? loverTexts[lovers.indexOf(dmPick)] : text;
     const feedDms = dmPick ? parseBlocks(dmText || "", "私信").filter(b => (charByName(b["角色"]) || charByName(b["来自"], true)) === dmPick) : [];

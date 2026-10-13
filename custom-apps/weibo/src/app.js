@@ -310,6 +310,12 @@
       : `${c.name} 和用户是地下恋：提到她只能用不暴露身份的说法：从你们的相处里找只有她看得懂的代称或细节，按他的人设来选；不 @ 她、不用你们私下的爱称。`).join("")
       + "日常博的语气和性格要像他平时和用户聊天时的样子（黏不黏人、嘴硬还是直球都要像他）；会自然想到她，但不是每条都提。只有内容真和她有关（想她、你们一起做的事、要给她看的）才 @ 她的微博昵称，吃饭上课这种日常不在句尾硬加 @。";
   }
+  /** 别人的微博下面，角色不 @ 用户、不跟她约事情：大多数丢掉，偶尔留一条 */
+  function dropCharAtUser(list, post) {
+    if (post.authorType === "user" || !S.meta.nickname) return list;
+    return list.filter(c => !(c.charId && (c.text || "").includes(`@${S.meta.nickname}`)) || Math.random() < 0.2);
+  }
+  const OTHERS_CMT_LINE = "【别人的微博下面】角色是在评论这条微博本身：不 @ 用户，不在评论里跟用户说悄悄话、约时间、交代事情（那是私信和微信里说的），除非这条微博本身就和用户有关。";
   /** 告诉 AI 每个人和用户的恋情状态（只写不是「不是恋人」的） */
   function loveLine() {
     return S.chars.filter(c => loveOf(c.id).state !== "none" && c.id !== S._announcing).map(c => {
@@ -610,10 +616,17 @@
   }
 
   /** 一段文字里可能挤着好几条（模型漏了分隔标记）：同一个字段名再次出现就算下一条 */
+  /** 模型写歪的格式：单独一行的 ===、句尾挂着的 ===、混进来的「转发平：无」这种空字段行，都清掉 */
+  function cleanField(v) {
+    return String(v || "").split("\n")
+      .filter(l => !/^\s*=+\s*(结束)?\s*=*\s*$/.test(l) && !/^\s*[\u4e00-\u9fa5]{2,5}\s*[：:]\s*(无|没有)\s*$/.test(l))
+      .map(l => l.replace(/\s*=+\s*(结束)?\s*=*\s*$/, ""))
+      .join("\n").replace(/^\n+|\s+$/g, "");
+  }
   function recordsOf(chunk) {
     const list = []; let fields = {}; let cur = null;
     const push = () => {
-      for (const k in fields) fields[k] = fields[k].replace(/^\n+|\s+$/g, "");
+      for (const k in fields) fields[k] = cleanField(fields[k]);
       if (Object.keys(fields).length) list.push(fields);
       fields = {}; cur = null;
     };
@@ -903,6 +916,7 @@
     else if (FORMAT_HINT[scene]) payload = { ...payload, instruction: [
       who, payload.instruction, PIC_SCENES.has(scene) ? `${PIC_LINE}\n${TIME_LINE}` : "", CHAR_POST_SCENES.has(scene) ? CHAR_POST_LINE : "",
       ["feed", "profile", "super", "topic", "search", "comments", "reaction", "reply"].includes(scene) ? loverPostLine() : "",
+      scene === "comments" ? OTHERS_CMT_LINE : "",
       `【输出要求】这不是聊天回复：不要用聊天格式，不要写旁白、动作或心理描写，不要加任何解释，除了本轮说明要求的「口吻」「发博原因」，不要自创字段名或用【】标题，只输出 ${FORMAT_HINT[scene]} 格式的内容，字段名和分隔线照抄「微博」规则里的格式。${scene === "hot" ? "用户是公众人物、或剧情里真的发生了大事时，热搜词条可以和用户有关，但只写事件，不替用户说话。" : "用户本人不能出现在你生成的内容里。"}不要用「某人」「某些人」「有些人」暗指谁；不要对用户发号施令或叮嘱（「不准……」「记得……」），人设不是爹系就不能有家长口吻。`,
     ].filter(Boolean).join("\n\n") };
     try {
@@ -1161,7 +1175,7 @@
     const text = await generate({ characterIds: cast.map(c => c.id), appTags: ["nox_weibo", "comments"], instruction }, "加载评论");
     post._genComments = false;
     if (text != null) {
-      const list = fixAltAuthors(commentsFromBlocks(parseComments(text), post, {}), { post });
+      const list = dropCharAtUser(fixAltAuthors(commentsFromBlocks(parseComments(text), post, {}), { post }), post);
       const rk = rpN ? takeReposts(post, text) : 0;
       if (list.length) noteParsed(`${list.length} 条评论${rk ? `，${rk} 条转发` : ""}`); else parseFailed("加载评论");
       post.comments = [...list, ...post.comments];
@@ -1538,7 +1552,7 @@
     const text = await generate({ characterIds: cast.map(c => c.id), appTags: ["nox_weibo", "comments"], instruction }, "加载评论");
     post._genComments = false;
     if (text != null) {
-      const list = fixAltAuthors(commentsFromBlocks(parseComments(text), post, {}), { post }).filter(c => !altPost || !(c.charId || c.altOf) || others.some(x => x.id === (c.charId || c.altOf)));
+      const list = dropCharAtUser(fixAltAuthors(commentsFromBlocks(parseComments(text), post, {}), { post }), post).filter(c => !altPost || !(c.charId || c.altOf) || others.some(x => x.id === (c.charId || c.altOf)));
       if (list.length) noteParsed(`${list.length} 条评论`); else parseFailed("加载评论");
       if (post.authorType === "user" && list.length) {
         // 自己的博：新评论算刚到的，顺便来几个赞，通知里能看到

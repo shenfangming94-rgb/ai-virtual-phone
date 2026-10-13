@@ -431,6 +431,13 @@
     if (a.type === "char") return `data-act="open-profile" data-char="${esc(a.charId)}"`;
     return `data-act="open-npc" data-name="${esc(a.name)}"`;
   }
+  /** 只知道昵称时（转发原博主、转发链、正文里的 @）：按名字找是用户、角色还是路人，点进对应主页 */
+  function nameAttrs(name) {
+    const n = String(name || "").replace(/^@/, "").trim(); if (!n) return "";
+    if (isUserName(n)) return `data-act="open-me"`;
+    const ch = !altOwner(n) && charByName(n, true); // 只认本名和微博昵称，「xx的粉丝」这种不算他
+    return ch ? `data-act="open-profile" data-char="${esc(ch.id)}"` : `data-act="open-npc" data-name="${esc(n)}"`;
+  }
 
   // ───────────────────────── 表情 ─────────────────────────
   const EMOJI = {
@@ -451,7 +458,7 @@
   function richText(t) {
     return esc(t)
       .replace(/#([^#\n]{1,40})#/g, (m0, t) => `<span class="link" data-act="open-topic" data-topic="${t}">#${t}#</span>`)
-      .replace(/@([一-龥\w\-·]{1,24})/g, '<span class="link">@$1</span>')
+      .replace(/@([一-龥\w\-·]{1,24})/g, (m, n) => `<span class="link" ${nameAttrs(n)}>@${n}</span>`)
       .replace(/\[([一-龥a-zA-Z]{1,8})\]/g, (m0, k) => EMOJI[k] ? `<span class="emoji" title="[${k}]">${EMOJI[k]}</span>` : `<span class="emo">[${k}]</span>`)
       .replace(/(https?:\/\/[^\s<]+)/g, '<span class="link">🔗网页链接</span>');
   }
@@ -1723,10 +1730,10 @@
     const meta = [fmtTime(p.createdAt), p.source ? `来自 ${esc(p.source)}` : "", p.visibility === "friends" ? "好友圈" : p.visibility === "self" ? "仅自己可见" : ""].filter(Boolean).join(" ");
     let quote = "";
     if (p.repost) {
-      const chain = (p.repost.chain || []).map(c => `//<span class="link">@${esc(c.name)}</span>:${richText(c.text)}`).join("");
+      const chain = (p.repost.chain || []).map(c => `//<span class="link" ${nameAttrs(c.name)}>@${esc(c.name)}</span>:${richText(c.text)}`).join("");
       const orig = p.repost.postId ? S.posts.find(x => x.id === p.repost.postId) : null;
       quote = `<div class="quote" ${orig ? `data-act="open-detail" data-post="${esc(orig.id)}"` : ""}>
-        ${p.repost.deleted ? '<div class="deleted">抱歉，此微博已被作者删除。</div>' : `<div class="text"><span class="link">@${esc(p.repost.author)}</span>:${richText(p.repost.text)}</div>
+        ${p.repost.deleted ? '<div class="deleted">抱歉，此微博已被作者删除。</div>' : `<div class="text"><span class="link" ${nameAttrs(p.repost.author)}>@${esc(p.repost.author)}</span>:${richText(p.repost.text)}</div>
         ${picsHtml(p.repost.images, orig ? orig.id : p.id)}
         ${orig ? `<div class="quote-stats">转发 ${fmtNum(orig.counts.reposts)} · 评论 ${fmtNum(orig.counts.comments)} · 赞 ${fmtNum(orig.counts.likes)}</div>` : ""}`}
       </div>`;

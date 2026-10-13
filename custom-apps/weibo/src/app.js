@@ -995,34 +995,57 @@
     S.feedBusy = true; renderHome();
     const followTab = S.homeTab === "follow";
     const followed = activeChars().filter(c => isFollowingChar(c.id));
-    const cast = pickCast(followed.length ? followed : activeChars(), followTab ? 4 : 2);
-    const charCount = followTab ? Math.min(cast.length + 1, rand(2, 4)) : 1;
+    const fullCast = pickCast(followed.length ? followed : activeChars(), followTab ? 4 : 2);
+    // 恋人（恋情开关是地下恋/已公开）单独调用一次写他的博：像私信一样只有他，人设和聊天记录最完整
+    const lovers = isAlt() ? [] : fullCast.filter(c => loveOf(c.id).state !== "none");
+    const cast = fullCast.filter(c => !lovers.includes(c));
+    const charCount = Math.max(0, (followTab ? Math.min(fullCast.length + 1, rand(2, 4)) : 1) - lovers.length);
     const npcCount = followTab ? rand(2, 3) : rand(5, 7);
     const followNpc = (S.meta.followNpc || []).filter(n => !altOwner(n)).slice(0, 6);
     const recent = S.posts.filter(p => acctOf(p) !== "alt").sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)).slice(0, 8)
       .map(p => `- ${authorOf(p).name}：${p.text.slice(0, 40)}`).join("\n");
     // 刷新时私信也掷骰子：没掷中就不来；上一条没回的不再追
-    const dmPick = isAlt() ? null : rollCharDm(cast);
+    const dmPick = isAlt() ? null : rollCharDm(fullCast);
+    const dmLine = c => dmPick === c ? `如果你有话想单独跟用户说，可以顺便私信用户（1～3 条，一句一个块）。${charDmRecent(c)}` : "这次不私信用户，不要输出 ===私信===。";
     const instruction = [
       `当前时间：${nowText()}`,
       `本轮生成 ${charCount + npcCount} 条微博：角色本人发的约 ${charCount} 条，路人博主 ${npcCount} 条${followTab && followNpc.length ? `（路人里可以有用户关注的博主：${followNpc.join("、")}，昵称一字不差）` : ""}。`,
-      `角色微博昵称（已注册的必须沿用）：\n${charsForPrompt(cast)}`,
+      `角色微博昵称（已注册的必须沿用）：\n${charsForPrompt(cast) || "无（本轮不写角色的微博）"}`,
+      lovers.length ? `${lovers.map(c => c.name).join("、")} 的微博这次另外写，本轮不要写他们发的博。` : "",
       `角色是否发博、发什么，看他此刻有没有想分享的情绪；同一个角色本轮最多 2 条。`,
       "角色发的是个人微博：自己的心情、吐槽、碎碎念、想分享的东西。*绝对不发通知、提醒、注意事项、班级事务*（不写「各位同学」「同学们」「请大家」「记得带好…」），就算他是班长、班干部、老师也一样——这些在班级群里说，不在微博说。",
       `${S.meta.nickname ? `用户的微博昵称是「${S.meta.nickname}」：角色发的博只有内容真和用户有关时才 @ 这个昵称，日常博不硬加 @。` : ""}`,
       recent ? `首页最近已有的微博（不要重复类似内容）：\n${recent}` : "",
-      dmPick ? `这次 ${dmPick.name} 如果发了博、又有话想单独跟用户说，可以顺便私信用户（1～3 条，一句一个块）；其他人都不私信。${charDmRecent(dmPick)}` : "这次没有人私信用户，不要输出 ===私信===。",
+      dmPick && !lovers.includes(dmPick) ? `这次 ${dmPick.name} 如果发了博、又有话想单独跟用户说，可以顺便私信用户（1～3 条，一句一个块）；其他人都不私信。${charDmRecent(dmPick)}` : "这次没有人私信用户，不要输出 ===私信===。",
       reservedLine(),
     ].filter(Boolean).join("\n\n");
-    const text = await generate({ characterIds: cast.map(c => c.id), appTags: ["nox_weibo", "feed"], instruction }, "刷新");
+    const loverInstr = c => [
+      `当前时间：${nowText()}`,
+      `这次只写你自己（${c.name}）此刻想发的 1 条微博，不写别人和路人的。${(S.accounts[c.id] || {}).nickname ? `你的微博昵称是「${S.accounts[c.id].nickname}」，必须沿用。` : "你还没有微博账号，自取一个昵称。"}`,
+      (m => m.length ? `你最近发过的微博（不要重复类似内容）：\n${m.map(p => `- ${p.text.slice(0, 40)}`).join("\n")}` : "")(S.posts.filter(p => p.charId === c.id && p.origin !== "profile").sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)).slice(0, 5)),
+      recent ? `首页最近别人发的微博（不要和它们撞同一类事）：\n${recent}` : "",
+      "发的是个人微博：*绝对不发通知、提醒、注意事项、班级事务*。",
+      `${S.meta.nickname ? `用户的微博昵称是「${S.meta.nickname}」：只有内容真和用户有关时才 @ 这个昵称，日常博不硬加 @。` : ""}`,
+      dmLine(c),
+    ].filter(Boolean).join("\n\n");
+    // 大调用和恋人的单独调用同时发
+    const [text, ...loverTexts] = await Promise.all([
+      generate({ characterIds: (cast.length ? cast : fullCast).map(c => c.id), appTags: ["nox_weibo", "feed"], instruction }, "刷新"),
+      ...lovers.map(c => generate({ characterId: c.id, appTags: ["nox_weibo", "feed"], instruction: loverInstr(c) }, `刷新·${c.name}`)),
+    ]);
     S.feedBusy = false;
-    if (text == null) { renderHome(); return; }
+    if (text == null && loverTexts.every(t => t == null)) { renderHome(); return; }
     // 在「关注」页刷出来的路人微博也留在关注页（像关注页里混进来的推荐）
-    const posts = fixAltAuthors(parseBlocks(text, "微博").filter(b => !isUserName(b["作者"])).map(b => postFromBlock(b, { origin: "feed", followFeed: followTab || undefined })), {})
+    const toPosts = (t, as) => fixAltAuthors(parseBlocks(t || "", "微博").filter(b => !isUserName(b["作者"])).map(b => postFromBlock(as ? { ...b, 角色: as.name } : b, { origin: "feed", followFeed: followTab || undefined })), {})
       .filter(p => (p.text || p.images.length || p.repost) && !isCharNotice(p));
+    const posts = [
+      ...toPosts(text).filter(p => !lovers.some(c => c.id === p.charId)),
+      ...lovers.flatMap((c, i) => toPosts(loverTexts[i], c).filter(p => p.charId === c.id).slice(0, 1)),
+    ];
     if (!posts.length) { renderHome(); parseFailed("刷新"); return; }
     thinPics(posts); for (const p of posts) { S.posts.push(p); savePost(p); S.allPostRows++; rememberOwnPost(p); }
-    const feedDms = dmPick ? parseBlocks(text, "私信").filter(b => (charByName(b["角色"]) || charByName(b["来自"], true)) === dmPick) : [];
+    const dmText = dmPick && lovers.includes(dmPick) ? loverTexts[lovers.indexOf(dmPick)] : text;
+    const feedDms = dmPick ? parseBlocks(dmText || "", "私信").filter(b => (charByName(b["角色"]) || charByName(b["来自"], true)) === dmPick) : [];
     if (feedDms.length) deliverDms(feedDms, { acct: curAcct(), delay: rand(5000, 12000) });
     const charPosts = posts.filter(p => p.authorType === "char");
     noteParsed(`${posts.length} 条微博（角色 ${charPosts.length} 条${charPosts.length ? "：" + charPosts.map(p => charById(p.charId)?.name).join("、") : ""}；路人 ${posts.length - charPosts.length} 条）`);

@@ -310,12 +310,13 @@
       : `${c.name} 和用户是地下恋：提到她只能用不暴露身份的说法：从你们的相处里找只有她看得懂的代称或细节，按他的人设来选；不 @ 她、不用你们私下的爱称。`).join("")
       + "日常博的语气和性格要像他平时和用户聊天时的样子（黏不黏人、嘴硬还是直球都要像他）；会自然想到她，但不是每条都提。只有内容真和她有关（想她、你们一起做的事、要给她看的）才 @ 她的微博昵称，吃饭上课这种日常不在句尾硬加 @。";
   }
-  /** 别人的微博下面，角色不 @ 用户、不跟她约事情：大多数丢掉，偶尔留一条 */
+  /** 别人的微博下面，角色 @ 用户：每批评论约 30% 留 1 条，其余丢掉 */
   function dropCharAtUser(list, post) {
     if (post.authorType === "user" || !S.meta.nickname) return list;
-    return list.filter(c => !(c.charId && (c.text || "").includes(`@${S.meta.nickname}`)) || Math.random() < 0.2);
+    let quota = Math.random() < 0.3 ? 1 : 0;
+    return list.filter(c => !(c.charId && (c.text || "").includes(`@${S.meta.nickname}`)) || quota-- > 0);
   }
-  const OTHERS_CMT_LINE = "【别人的微博下面】角色是在评论这条微博本身：不 @ 用户，不在评论里跟用户说悄悄话、约时间、交代事情（那是私信和微信里说的），除非这条微博本身就和用户有关。";
+  const OTHERS_CMT_LINE = "【别人的微博下面】角色主要是在评论这条微博本身；偶尔看到想跟用户分享的，可以 @ 她一下，但不是每次都 @，也不在别人的评论区里跟她交代事情。";
   /** 告诉 AI 每个人和用户的恋情状态（只写不是「不是恋人」的） */
   function loveLine() {
     return S.chars.filter(c => loveOf(c.id).state !== "none" && c.id !== S._announcing).map(c => {

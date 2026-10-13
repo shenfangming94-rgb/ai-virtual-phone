@@ -32,7 +32,7 @@
     if (sameDay) return `今天 ${hm}`;
     const y = new Date(now); y.setDate(now.getDate() - 1);
     if (t.toDateString() === y.toDateString()) return `昨天 ${hm}`;
-    if (t.getFullYear() === now.getFullYear()) return `${pad(t.getMonth() + 1)}-${pad(t.getDate())}`;
+    if (t.getFullYear() === now.getFullYear()) return `${pad(t.getMonth() + 1)}-${pad(t.getDate())} ${hm}`;
     return `${t.getFullYear()}-${pad(t.getMonth() + 1)}-${pad(t.getDate())}`;
   }
 
@@ -818,6 +818,7 @@
   // 带图不带图看内容，大约五五开（随请求发送，不靠预设）
   const PIC_SCENES = new Set(["feed", "profile", "super", "topic", "search", "npc", "charalt"]);
   const PIC_LINE = "【配图】带图不带图看内容，整体大约一半一半：晒美食、晒日常、出去玩、买了东西、看演出、自拍、秀恩爱这类要带图；吐槽、有感而发、碎碎念、深夜 emo、追星尖叫、纯转发这类一般不带图，「配图」写 无。不要每条都带图。";
+  const TIME_LINE = "【时间要对得上】每条微博的内容必须和它的发布时间吻合：季节和天气、节日、学期节奏（九月开学、一月和六七月期末、寒暑假）、星期几（工作日白天在上课上班，周末才休息）、几点发的（凌晨是失眠熬夜，早上是起床通勤）、事情的先后（先有考试才有出成绩，先在一起才有纪念日）。写历史微博时先定好日期，再按那一天的情况写，日期从近到远，不要两条写在同一天。";
   // 随请求发送的规则（build 时从 rules.json 打进来）：用户预设里没有这条也能生效
   const INLINE_RULES = "/*__INLINE_RULES__*/";
   async function generate(payload, label, opts = {}) {
@@ -831,7 +832,7 @@
       "【输出要求】只输出 ===私信=== 块，一句话一个块，字段名照抄「私信聊天」规则里的格式；不要写旁白、动作或心理描写，不要加任何解释，不能替用户说话。",
     ].join("\n\n") };
     else if (FORMAT_HINT[scene]) payload = { ...payload, instruction: [
-      who, payload.instruction, PIC_SCENES.has(scene) ? PIC_LINE : "",
+      who, payload.instruction, PIC_SCENES.has(scene) ? `${PIC_LINE}\n${TIME_LINE}` : "",
       `【输出要求】这不是聊天回复：不要用聊天格式，不要写旁白、动作或心理描写，不要加任何解释，不要自创字段名或用【】标题，只输出 ${FORMAT_HINT[scene]} 格式的内容，字段名和分隔线照抄「微博」规则里的格式。${scene === "hot" ? "用户是公众人物、或剧情里真的发生了大事时，热搜词条可以和用户有关，但只写事件，不替用户说话。" : "用户本人不能出现在你生成的内容里。"}不要用「某人」「某些人」「有些人」暗指谁；不要对用户发号施令或叮嘱（「不准……」「记得……」），人设不是爹系就不能有家长口吻。`,
     ].filter(Boolean).join("\n\n") };
     try {
@@ -1366,21 +1367,26 @@
    * 历史微博的时间挤在一起（模型写成「20分钟前」之类）时，按给出的顺序（近→远）往前铺开：
    * 第一条在 before 之前 0.5～3 天，之后每条再往前 1～40 天。
    */
-  /** 主页历史微博的时间全由代码排：AI 写的时间只用来定先后（经常好几条写成同一天），从 before 往前每条隔 1～40 天 */
+  /** 主页历史微博的时间：AI 写的日期照用（内容是按那天写的）。没写、写成未来或太近的往前挪 1～4 天；和后一条挤在一小时内的，同一天里错开几个小时 */
   function spreadHistory(posts, before) {
     if (!posts.length) return false;
-    const order = posts.map((p, i) => ({ p, i, t: new Date(p.createdAt).getTime() || 0 }))
-      .sort((a, b) => b.t - a.t || a.i - b.i);
-    let t = before - (0.5 + Math.random() * 2.5) * 86400e3;
-    for (const { p } of order) {
-      const d = new Date(t - rand(0, 12 * 3600) * 1000); d.setHours(rand(7, 23), rand(0, 59), rand(0, 59));
-      p.createdAt = new Date(Math.min(d.getTime(), before - 3600e3)).toISOString();
-      t -= (1 + Math.random() * 39) * 86400e3;
+    const order = posts.map((p, i) => ({ p, i, t: new Date(p.createdAt).getTime() }))
+      .sort((a, b) => (b.t || 0) - (a.t || 0) || a.i - b.i);
+    let prev = before; let moved = false;
+    for (const o of order) {
+      let t = o.t;
+      if (!t || t > before - 12 * 3600e3 || t > prev) {
+        const d = new Date(prev - (prev === before ? 0.5 + Math.random() * 2.5 : 1 + Math.random() * 3) * 86400e3);
+        d.setHours(rand(7, 23), rand(0, 59), rand(0, 59));
+        t = Math.min(d.getTime(), prev - 12 * 3600e3);
+      } else if (t > prev - 3600e3) t = prev - rand(2 * 3600, 6 * 3600) * 1000;
+      if (t !== o.t) { o.p.createdAt = new Date(t).toISOString(); moved = true; }
+      prev = t;
     }
-    return true;
+    return moved;
   }
-  /** 修旧数据：主页历史微博有两条以上落在同一天的，整批重新铺开 */
-  const sameDayClash = list => new Set(list.map(p => new Date(p.createdAt).toDateString())).size < list.length;
+  /** 修旧数据：主页历史微博有两条挤在一小时内的，错开 */
+  const sameDayClash = list => { const ts = list.map(p => new Date(p.createdAt).getTime()).sort((a, b) => a - b); return ts.some((t, i) => i && t - ts[i - 1] < 3600e3); };
   function repairHistoryTimes(list, before) {
     if (list.length < 2 || !sameDayClash(list)) return;
     if (spreadHistory(list, before)) list.forEach(savePost);

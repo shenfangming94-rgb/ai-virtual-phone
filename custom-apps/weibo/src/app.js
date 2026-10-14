@@ -1583,7 +1583,8 @@
         `${me.name}刚刚${pending.length > 1 ? "连着" : ""}发来：${pendText}`,
         `「来自」写 ${pc.name}，「角色」写 ${pc.name}。`,
       ].join("\n\n");
-      text = await generate({ characterId: pc.id, appTags: ["nox_weibo", "dm"], instruction }, `${pc.name}私信`);
+      const vision = await dmVisionMsgs(pending, me.name);
+      text = await generate({ characterId: pc.id, appTags: ["nox_weibo", "dm"], instruction, ...(vision ? { appMessages: vision } : {}) }, `${pc.name}私信`);
     } else {
       const prompt = [`你是微博用户「${th.peer.name}」。给你发私信的是博主「${charNickname(me.id)}」${isPublic(me.id) ? "（公众人物，你是 TA 的粉丝或路人）" : ""}。`,
         history ? `你们的私信记录：\n${history}` : "", `「${charNickname(me.id)}」刚刚${pending.length > 1 ? "连着" : ""}私信你：${pendText}`,
@@ -2765,8 +2766,20 @@
   /** 一条私信给 AI 看的样子：图片写成 [图片：描述]，引用写在后面 */
   function dmText(m) {
     const img = (m.images || [])[0];
-    const body = img ? `[图片${img.desc ? `：${img.desc}` : "（看不到内容）"}]${m.text && m.text !== "[图片]" ? m.text : ""}` : m.text;
+    const body = img ? `[${img.ref ? `照片（见附图）${img.desc ? `，配的话：${img.desc}` : ""}` : `图片：${img.desc || "看不到内容"}`}]${m.text && m.text !== "[图片]" ? m.text : ""}` : m.text;
     return m.quote ? `${body}（引用了「${String(m.quote.text || "").slice(0, 40)}」）` : body;
+  }
+  /** 私信里的真图直接给 AI 看（宿主 appMessages 视觉通道：每次最多 4 张、每张 ≤2MB；模型没开识图会自动降级成 [图片]） */
+  async function dmVisionMsgs(msgs, who) {
+    const withPic = msgs.filter(m => (m.images || []).some(i => i.ref)).slice(-4);
+    const out = [];
+    for (const m of withPic) {
+      const img = m.images.find(i => i.ref);
+      let url = await mediaUrl(img.ref); if (!url) continue;
+      if (url.length > 1900000) url = await compressImage(url, 1024);
+      out.push({ role: "user", content: `（微博私信里${who}发来的图片${img.desc ? `，配的话：${img.desc}` : ""}）`, image: url });
+    }
+    return out.length ? out : null;
   }
   /** AI 回的私信块 → 消息（引用找原话，图片存描述） */
   function dmFromBlock(b, th) {
@@ -3006,7 +3019,7 @@
     let img = null;
     if (how === "pick") {
       const [ref] = await pickImages(1, 1280).catch(e => { toast(`选图失败：${(e && e.message) || e}`.slice(0, 60)); return []; }); if (!ref) return;
-      const desc = await inputSheet("给这张图写一句说明（对方 AI 看不到图片，靠这句知道是什么；可以不填）", { placeholder: "比如：刚买的奶茶，杯子上画了只猫", maxlength: 120, ok: "发送" });
+      const desc = await inputSheet("配句话一起发（可以不填）", { placeholder: "直接点发送就只发图", maxlength: 120, ok: "发送" });
       if (desc === null) { api.media.delete({ ref }).catch(() => {}); return; }
       img = { ref, desc };
     } else if (how === "desc") {
@@ -3137,7 +3150,8 @@
         a ? `「来自」写「${a.nick}」，「角色」写 无。` : `「来自」写 ${ch.name}，「角色」写 ${ch.name}。`,
         !a && !altDm ? "她可能会问你借微博号，有两种，分量完全不同：\n- 代发：她帮你发*一条*微博，发完就结束（「帮你发一条」「替你发个东西」）。\n- 登录：把你整个微博号交给她，她可以*一直*用你的身份发博、回评论、私信别人，直到她自己退出（「把号给我」「让我登你的号」「借我用你的微博」）。\n听她问的是哪一种；听不出来就先问她。按你的人设和你们的关系决定（可以爽快答应、问她要干嘛、讨价还价、拒绝），可以只答应一种。答应了就在私信后面多写：\n===授权===\n代发：是（答应代发才写这行）\n登录：是（答应登录才写这行）\n===结束===\n没答应、或者她没提这件事就不写。" : "",
       ].filter(Boolean).join("\n\n");
-      text = await generate({ characterId: ch.id, appTags: ["nox_weibo", "dm"], instruction }, `${a && !altSeen(aOwner) ? "路人" : ch.name}私信`);
+      const vision = await dmVisionMsgs(pending, knows ? "用户" : "对方");
+      text = await generate({ characterId: ch.id, appTags: ["nox_weibo", "dm"], instruction, ...(vision ? { appMessages: vision } : {}) }, `${a && !altSeen(aOwner) ? "路人" : ch.name}私信`);
     } else {
       const prompt = [
         `你是微博用户「${th.peer.name}」。${th.about ? `你和用户的交集：${th.about}` : "你是用户的一个陌生网友。"}`,

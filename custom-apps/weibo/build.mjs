@@ -31,7 +31,9 @@ writeFileSync(join(root, "dev/test.html"), fill(`<script>${read("dev/mock.js")}<
 
 const version = JSON.parse(read("manifest.json")).version;
 const zip = join(root, `weibo-${version}.zip`);
-if (existsSync(zip)) rmSync(zip);
+// 同版本的包已经发出去过：拒绝覆盖（先改 manifest 版本号）。只想看测试页就加 --test
+if (existsSync(zip) && !process.argv.includes("--test")) { console.error(`${zip} 已经存在：先改 manifest 版本号，别覆盖发出去的包（只要测试页就用 node build.mjs --test）`); process.exit(1); }
+if (process.argv.includes("--test")) { console.log("test page only"); process.exit(0); }
 execSync(`cd "${join(root, "dist")}" && zip -q -r "${zip}" manifest.json presets.json index.html icon.png`);
 // 随站点发布：小手机启动时会按 bundled.json 自动安装/更新
 const pub = join(root, "../../public/apps");

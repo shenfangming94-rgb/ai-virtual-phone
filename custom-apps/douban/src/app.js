@@ -221,6 +221,17 @@
 - 现实里真有的明星、名人、作品、比赛、游戏、新闻都可以用真名聊：内容要和现实一致，拿不准的细节就别说。真实的人只聊真报道过、搜得到的事；没报道过的绯闻、黑料、塌房不往真人身上编。
 - 帖子里被讨论、被八卦的人（瓜主）只能是这三种：你本来就知道的真实明星名人、联网搜到的真实新闻里的人、本轮说明里列出的这个世界的公众人物。*不要编一个有名有姓的明星、网红、名人出来当瓜主*。豆友讲自己生活里的普通人（室友、同事、楼下大爷）可以，那不算瓜。
 - 豆友可以用缩写、代号说人（豆瓣味），但有人问「说的是谁」时，总有人会好心解释清楚（直接说名字，或者「就是演《xx》那个」），不要一直打太极。
+【豆友打字的样子】
+- 很多豆友（不是所有人）用连续句号代替逗号和省略号：「。。」「。。。」，有的人一整段都这样打；也有人正常用标点，或者几乎不打标点。同一个帖子里要有几种不同的习惯。
+- 敏感词、平台名、容易被和谐的词，常用 emoji 或谐音代替（拿水果、动物、数字 emoji 指代），懂的人自然懂。
+- 常见缩写：lz（楼主）、kswl、懂的都懂；给不方便直说的人起代号（拿特征、身高、外号当代号），但有人问的时候要有人说清楚。
+- 楼主写帖子常带碎碎念：开头「写在前面」、中间「跑题了」、括号里补一句自嘲或说明。
+【楼层的样子】
+- 回应长度两极分化：大部分是几个字的反应（惊叹、一句吐槽、一个表情），少数是认真分析的长段落，中间长度的反而少。
+- 楼主经常在楼里连发好几层补充新情况，主帖只说一部分。
+- 赞最高的往往是一句话的神回复，不是最长的那层。
+- 偶尔有人甩一张截图当证据（写在配图里）。
+- 不少豆友叫「momo」（新用户的默认名），同一个帖子里可以有好几个 momo。
 - 用户本人绝不能出现在你写的内容里，除非下面明确写了她发的楼；不能替用户说话，也不能编造她做过的事。`;
   /** 被讨论时对用户的底线（公众人物、熟人组都适用） */
   const USER_LINE = `角色可以聊他们没跟用户提过的新鲜事（他们有自己的生活），合人设就行；*用户（${"${herName()}"}）做过的事只能来自聊天记录和记忆，不能编*。万一一定要提到她，也绝不能贬低、矮化她，不能把她写成衬托角色的工具人、陪衬或笑料。`;
@@ -249,7 +260,7 @@
     } finally { S.jobs.delete(job); refreshAll(); }
   }
   /** ===块=== 解析：字段「名：值」，值可以多行（接到上一个字段） */
-  const KEYS = ["熟人圈", "说的是", "来源", "IP", "组长", "成员称呼", "分区", "发言规则", "配图", "精华", "名称", "成员", "简介", "标题", "作者", "角色", "匿名", "时间", "回应数", "正文", "楼主", "赞", "引用", "内容", "层"];
+  const KEYS = ["楼主赞过", "头衔", "熟人圈", "说的是", "来源", "IP", "组长", "成员称呼", "分区", "发言规则", "配图", "精华", "名称", "成员", "简介", "标题", "作者", "角色", "匿名", "时间", "回应数", "正文", "楼主", "赞", "引用", "内容", "层"];
   function parseBlocks(raw, kind) {
     const text = String(raw || "").replace(/```[a-z]*\n?/g, "").replace(/\r/g, "");
     const out = []; let label = null;
@@ -297,7 +308,7 @@
       have.length ? `这些已经有了，不要重复：${have.join("、")}` : "",
       "名字和简介要像真豆瓣：大多数组名简单直白，简介很短很平实（一句话介绍，或者几条组规：禁广告、禁人身攻击、标题加 tag……），只有少数组有点个性。不要文艺抒情、不要排比、不要「这里只存放……」这种句子；也不要写网上烂大街的梗（比如食堂阿姨手抖、颠勺）。",
       bgLine([]),
-      "每个小组：\n===小组===\n名称：小组名\n成员：成员数（纯数字，大组几十万，小众组几百几千）\n成员称呼：这个组对成员的叫法（豆瓣特色，像「小不知道」「组员」「豆友」「病友」，很多组就叫「成员」）\n组长：组长的豆瓣昵称\n简介：一句小组介绍\n发言规则：一两条组规（没有写 无）\n分区：3～4 个讨论分区的名字，用、分隔（像「求助」「吐槽」「分享」或者有组内梗的名字）\n熟人圈：是 / 否（这是不是世界书里角色们所在的学校、城市、公司这种本地组，组里的人现实中可能认识他们）\n===结束===",
+      "每个小组：\n===小组===\n名称：小组名\n成员：成员数（纯数字，大组几十万，小众组几百几千）\n成员称呼：这个组对成员的叫法（豆瓣特色，像「小不知道」「组员」「豆友」「病友」，很多组就叫「成员」）\n组长：组长的豆瓣昵称\n简介：一句小组介绍\n发言规则：一两条组规（没有写 无）\n分区：3～4 个讨论分区的名字，用、分隔（像「求助」「吐槽」「分享」或者有组内梗的名字）\n熟人圈：是 / 否（这是不是世界书里角色们所在的学校、城市、公司这种本地组，组里的人现实中可能认识他们）\n头衔：2～3 个这个组发给成员的头衔，用、分隔（豆瓣特色，像组内梗，五到八个字）\n===结束===",
     ].filter(Boolean).join("\n\n"), `搜小组「${term}」`);
     if (text == null) return cached ? cached.map(groupById).filter(Boolean) : [];
     const made = [];
@@ -333,6 +344,7 @@
     if (!g.leader && nick && !none(nick) && !isUserName(nick)) g.leader = nick.slice(0, 20);
     if (!g.memberNoun && !none(b["成员称呼"])) g.memberNoun = String(b["成员称呼"]).trim().slice(0, 8);
     if (!g.rules && !none(b["发言规则"])) g.rules = String(b["发言规则"]).trim().slice(0, 200);
+    if (!(g.titles || []).length && !none(b["头衔"])) g.titles = String(b["头衔"]).split(/[、,，/｜|]+/).map(x => x.trim()).filter(Boolean).slice(0, 4);
     if (!(g.sections || []).length && !none(b["分区"])) g.sections = String(b["分区"]).split(/[、,，/｜|]+/).map(x => x.trim()).filter(Boolean).slice(0, 5);
   }
   /**
@@ -344,7 +356,7 @@
     const cast = pickCast(activeChars(), 3);
     const hit = cast.length && Math.random() < 0.3 ? cast[0] : null;
     const anon = hit && Math.random() < 0.6;
-    const needInfo = !g.memberNoun || !(g.sections || []).length || (!g.leader && !(g.mine && g.admin));
+    const needInfo = !g.memberNoun || !(g.sections || []).length || !(g.titles || []).length || (!g.leader && !(g.mine && g.admin));
     const recent = S.topics.filter(t => t.groupId === g.id).sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)).slice(0, 10).map(t => `- ${t.title}`).join("\n");
     const text = await generate((hit ? [hit] : cast.slice(0, 2)).map(c => c.id), "topics", [
       `当前时间：${new Date().toLocaleString("zh-CN", { hour12: false })}`,
@@ -360,7 +372,7 @@
       publicLine(),
       "如果你能联网搜索：按这个小组聊的话题，去搜最近现实里真的在讨论的事（娱乐圈、体育、游戏、社会新闻、新剧新书……看小组是干什么的），把其中 1～2 个帖子写成在聊这些真事，用真名；和世界观冲突的不要。不能联网就按这个世界写。",
       "大约四分之一的帖子带图（晒东西、现场、截图这类才带），写在「配图」里；最多 1 个帖子是组长加精的（内容特别好、特别有用的才加，没有就都写 否）。",
-      needInfo ? `先补全这个小组的信息（只写一次）：\n===小组信息===\n组长：组长的豆瓣昵称${g.mine && g.admin ? "（组长是用户本人，这行写 无）" : ""}\n成员称呼：这个组对成员的叫法（像「小不知道」「组员」「病友」，很多组就叫「成员」）\n发言规则：一两条组规（没有写 无）\n分区：3～4 个讨论分区的名字，用、分隔\n===结束===` : "",
+      needInfo ? `先补全这个小组的信息（只写一次）：\n===小组信息===\n组长：组长的豆瓣昵称${g.mine && g.admin ? "（组长是用户本人，这行写 无）" : ""}\n成员称呼：这个组对成员的叫法（像「小不知道」「组员」「病友」，很多组就叫「成员」）\n发言规则：一两条组规（没有写 无）\n分区：3～4 个讨论分区的名字，用、分隔\n头衔：2～3 个这个组发给成员的头衔，用、分隔（像组内梗，五到八个字）\n===结束===` : "",
       "每个帖子：\n===帖子===\n标题：帖子标题（不用自己加分区前缀）\n作者：豆友昵称（匿名发的写 匿名）\n角色：角色本名（路人写 无）\n匿名：是 / 否\n分区：分区名（没有写 无）\n时间：发帖时间（如 3小时前、昨天 21:30、2天前）\nIP：这个人的 IP 属地（省份或城市，按他在哪写；同校同城的组大多一样）\n回应数：目前有多少条回应（纯数字）\n配图：图片描述，多张用 | 分隔（不带图写 无）\n精华：是 / 否\n说的是：这帖在讨论谁（真名；不涉及具体的人写 无）\n来源：现实新闻 / 联网搜到的 / 这个世界的事 / 无\n正文：\n楼主的首帖正文\n===结束===",
     ].filter(Boolean).join("\n\n"), `「${g.name}」的帖子`);
     g._busy = false;
@@ -425,13 +437,14 @@
       passer ? `${passer.name} 刷到了这个帖子，可能会顺手回一层（按人设决定实名还是匿名，不来也行）。` : "",
       bgLine(cast, g), localLine(g),
       `从 ${next} 楼开始，往下写 ${n} 层回应。${t.floors.length ? "接着已有的话题自然往下聊，楼主可以更新进展或下场回复。" : "楼主可以下场回复几层。"}`,
-      `每层：\n===楼===\n层：楼层号\n作者：豆友昵称（楼主就写楼主${t.author.anon ? "；匿名的写 匿名" : ""}）\n角色：角色本名（路人写 无）\n匿名：是 / 否\n楼主：是 / 否\n引用：引用了第几楼（没引用写 无）\nIP：这个人的 IP 属地（省份或城市；楼主的和帖子一致）\n赞：点赞数（纯数字）\n内容：\n这层的内容\n===结束===`,
+      `每层：\n===楼===\n层：楼层号\n作者：豆友昵称（楼主就写楼主${t.author.anon ? "；匿名的写 匿名" : ""}）\n角色：角色本名（路人写 无）\n匿名：是 / 否\n楼主：是 / 否\n引用：引用了第几楼（没引用写 无）\nIP：这个人的 IP 属地（省份或城市；楼主的和帖子一致）\n头衔：${(g.titles || []).length ? `这个组的头衔之一（${g.titles.join("、")}），只有一部分人有，没有写 无` : "无"}\n楼主赞过：是 / 否（楼主给这层点了赞，一批最多一两层，大多是 否）\n赞：点赞数（纯数字）\n内容：\n这层的内容\n===结束===`,
     ].filter(Boolean).join("\n\n"), `《${t.title.slice(0, 12)}》的回应`);
     t._busy = false;
     if (text == null) { refreshAll(); return; }
     let at = Math.max(new Date(t.lastReplyAt || t.createdAt).getTime(), new Date(t.createdAt).getTime());
     const span = Math.max(60e3, Date.now() - at);
     let made = 0, num = next;
+    let opLikes = 0;
     const aiMap = {}; const dropped = new Set(); // AI 写的楼层号 → 实际楼层号；被删掉的楼（不许出场的 char）
     for (const b of parseBlocks(text, "楼")) {
       const aiN = clampInt(b["层"], 0);
@@ -449,7 +462,8 @@
       const fn = num++; if (aiN) aiMap[aiN] = fn;
       const q = q0 >= next ? aiMap[q0] || 0 : q0; // 本批的楼按实际楼层号换算；只能引用前面已有的楼，不能引用自己
       const fip = claimsOp ? t.ip : none(b["IP"]) ? "" : String(b["IP"]).trim().slice(0, 8);
-      const f = { n: fn, author, ip: fip || undefined, text: txt, likes: clampInt(b["赞"], rand(0, 20)), quote: q > 0 && q < fn ? q : null, createdAt: new Date(Math.min(Date.now(), at)).toISOString() };
+      const ttl = String(b["头衔"] || "").trim();
+      const f = { n: fn, author, ip: fip || undefined, title: !none(ttl) && (g.titles || []).includes(ttl) ? ttl : undefined, opLiked: yes(b["楼主赞过"]) && !claimsOp && opLikes++ < 2 ? true : undefined, text: txt, likes: clampInt(b["赞"], rand(0, 20)), quote: q > 0 && q < fn ? q : null, createdAt: new Date(Math.min(Date.now(), at)).toISOString() };
       t.floors.push(f); made++;
       if (author.type === "char" && mine && !mine.author.anon) remember(author.charId, `${herName()}在豆瓣小组「${g.name}」的帖子《${t.title}》里回复：「${mine.text.slice(0, 60)}」，我回：「${txt.slice(0, 60)}」`, `douban_floor_${t.id}_${f.n}`);
       else if (author.type === "char" && !sameAuthor(author, t.author)) remember(author.charId, `我在豆瓣小组「${g.name}」的帖子《${t.title}》里${author.anon ? "匿名" : ""}回了一层：「${txt.slice(0, 60)}」`, `douban_floor_${t.id}_${f.n}`);
@@ -572,7 +586,7 @@
         <div class="me-follow"><span>关注 ${activeChars().length}</span><span>被关注 ${activeChars().length + (S.meta.fansExtra || 0)}</span></div>
       </div>
       <div class="me-sheet">
-        <div class="me-tabs"><button class="on">主页</button><button data-act="coming" data-what="feed">动态</button><button data-act="coming" data-what="album">相册</button></div>
+        <div class="me-tabs"><button class="on">主页</button><button data-act="coming" data-what="feed">动态</button><button data-act="coming" data-what="album">相册</button><button data-act="my-favs">收藏</button></div>
         <div class="mcard"><div class="mcard-h" data-act="coming" data-what="book">书影音<span class="soon">第二期</span><i>›</i></div>${slots("book", 6, "想看")}</div>
         <div class="mcard"><div class="mcard-h" data-act="all-groups">我的小组 ${mine.length}<i>›</i></div>
           ${mine.length ? `<div class="hscroll">${mine.map(g => `<button class="gtile" data-act="open-group" data-id="${esc(g.id)}">${groupAvaHtml(g)}<span>${esc(g.name)}</span></button>`).join("")}</div>` : `<div class="mcard-empty">还没有加入小组</div>`}</div>
@@ -668,6 +682,7 @@
         ${g.admin ? "" : `<div class="form-row"><label>组长</label><input id="eg-leader" maxlength="20" placeholder="组长的豆瓣昵称" value="${esc(g.leader || "")}"></div>`}
         <div class="form-row"><label>发言规则</label><textarea id="eg-rules" maxlength="200">${esc(g.rules || "")}</textarea></div>
         <div class="list-cell"><div class="cell-main"><div>熟人组</div><div class="cell-sub">组里的人现实中认识你和 char（同校、同城），不是公众人物也会被聊到</div></div><button class="switch ${g.local ? "on" : ""}" data-act="eg-local" data-id="${esc(id)}"><span></span></button></div>
+        <div class="form-row"><label>头衔</label><input id="eg-titles" maxlength="60" placeholder="用顿号隔开，比如：极其幽默我喜欢" value="${esc((g.titles || []).join("、"))}"></div>
         <div class="form-row"><label>分区</label><input id="eg-secs" maxlength="60" placeholder="用顿号隔开，比如：求助、吐槽、分享" value="${esc((g.sections || []).join("、"))}"></div>
         <div class="list-cell"><div class="cell-main"><div>我当组长</div></div><button class="switch ${g.admin ? "on" : ""}" data-act="eg-admin" data-id="${esc(id)}"><span></span></button></div></div>
         <div style="padding:20px 16px;display:grid;gap:10px"><button class="btn-primary" style="height:42px;border-radius:21px;background:var(--wb-orange);color:#fff" data-act="eg-save" data-id="${esc(id)}">保存</button>
@@ -698,15 +713,15 @@
             <div class="post-from">${fmtTime(t.createdAt)}${ipOf(t.author, t.ip) ? ` · ${esc(ipOf(t.author, t.ip))}` : ""}</div></div>${follow}</div>
           <h1>${t.section ? `${esc(t.section)}<span class="sep">|</span>` : ""}${esc(t.title)}${t.elite ? '<span class="elite after">精</span>' : ""}</h1>
           ${t.about ? `<button class="about-chip" data-act="topic-about">ⓘ 这帖说的是：${esc(t.about)}${t.source ? ` · ${esc(t.source)}` : ""}</button>` : ""}</div>
-        <div class="post-body">${esc(t.body)}</div>
+        <div class="post-body">${richText(t.body)}</div>
         ${(t.images || []).length ? `<div class="post-pics">${t.images.map((im, k) => `<div class="post-pic" data-act="topic-pic" data-idx="${k}">${im.ref ? `<img data-ref="${esc(im.ref)}" alt="">` : placeholderImg()}${!im.ref && im.desc ? `<span>${esc(im.desc)}</span>` : ""}</div>`).join("")}</div>` : ""}
         <div class="post-stats"><span class="on">回复 ${fmtNum(n)}</span><span>赞 ${fmtNum(t.likes || 0)}</span><span>转发 ${fmtNum(t.reposts || 0)}</span><span>收藏 ${fmtNum(t.favs || 0)}</span></div>
         <div class="list-head">全部回复<button class="op-filter ${onlyOp ? "on" : ""}" data-act="only-op">楼主</button></div>
         ${floors.map(f => { const fw = whoOf(f.author); const q = f.quote ? t.floors.find(x => x.n === f.quote) : null;
-          return `<div class="floor" data-act="floor" data-n="${f.n}">${avatarHtml(fw)}<div class="cell-main"><div class="floor-top"><span class="nm">${esc(fw.name)}</span>${roleTags(t, f.author)}<span class="fl-t">${fmtTime(f.createdAt)}${ipOf(f.author, f.ip) ? ` · ${esc(ipOf(f.author, f.ip))}` : ""} · ${f.n}楼</span>
+          return `<div class="floor" data-act="floor" data-n="${f.n}">${avatarHtml(fw)}<div class="cell-main"><div class="floor-top"><span class="nm">${esc(fw.name)}</span>${f.title ? `<span class="g-title">${esc(f.title)}</span>` : ""}${roleTags(t, f.author)}<span class="fl-t">${fmtTime(f.createdAt)}${ipOf(f.author, f.ip) ? ` · ${esc(ipOf(f.author, f.ip))}` : ""} · ${f.n}楼</span>
               <button class="fl-like ${f.liked ? "on" : ""}" data-act="floor-like" data-n="${f.n}">${f.likes ? fmtNum(f.likes) : ""}${f.liked ? I.liked : I.like}</button></div>
             ${q ? `<div class="floor-quote">${esc(whoOf(q.author).name)}：${esc(q.text)}</div>` : f.quote === 1 ? `<div class="floor-quote">${esc(w.name)}：${esc(t.body.slice(0, 80))}</div>` : ""}
-            <div class="floor-text">${esc(f.text)}</div></div></div>`; }).join("")}
+            <div class="floor-text">${richText(f.text)}</div>${f.opLiked ? `<div class="op-liked">楼主赞过</div>` : ""}</div></div>`; }).join("")}
         ${t._busy ? `<div class="gen-tip"><span class="spinner"></span>${t.floors.length ? "楼下有人在打字…" : "正在加载回应…"}</div>` : t.floors.length ? `<button class="load-more" data-act="more-floors">加载更多回应（会用 1 次 API）</button>` : ""}`);
       const qb = $(".reply-quote", pg.el); qb.classList.toggle("hidden", !quote);
       if (quote) { const f = t.floors.find(x => x.n === quote); qb.innerHTML = `<div class="cell-main">回复 ${esc(f ? whoOf(f.author).name : "")}：${esc(f ? f.text : "")}</div><button data-act="unquote">✕</button>`; }
@@ -736,6 +751,8 @@
     });
     if (!t0.floors.length) genFloors(t0);
   }
+  /** 正文：《书名号》显示成豆瓣绿（第二期书影音做了再接成能点开） */
+  const richText = s => esc(s).replace(/《([^《》\n]{1,40})》/g, '<span class="work">《$1》</span>');
   /** IP 属地：AI 写的优先；她自己用资料里填的；老数据按名字固定分一个省 */
   const PROVS = ["北京", "上海", "广东", "浙江", "江苏", "四川", "湖北", "湖南", "山东", "河南", "福建", "陕西", "重庆", "天津", "安徽", "辽宁"];
   function ipOf(a, ip) {
@@ -858,6 +875,7 @@
         const v = id => { const e = $(`#${id}`, pg.el); return e ? e.value.trim() : null; };
         const nm = clampInt(v("eg-members"), g.members) || g.members; if (nm !== g.members) { g.members = nm; g.grownAt = nowIso(); } g.memberNoun = v("eg-noun") || ""; g.rules = v("eg-rules") || "";
         if (v("eg-leader") != null) g.leader = v("eg-leader") || "";
+        g.titles = (v("eg-titles") || "").split(/[、,，/｜|]+/).map(x => x.trim()).filter(Boolean).slice(0, 6);
         g.sections = (v("eg-secs") || "").split(/[、,，/｜|]+/).map(x => x.trim()).filter(Boolean).slice(0, 6);
         saveGroup(g); closePage(); toast("保存了"); return; }
       case "del-group": {
@@ -874,7 +892,7 @@
       case "topic-menu": {
         const t = topicById(pg.key.split(":")[1]); if (!t) return;
         const v = await sheet("", [{ label: t.faved ? "取消收藏" : "收藏", value: "fav" }, { label: "删除这条帖子（相关记忆一起删）", value: "del", danger: true }]);
-        if (v === "fav") { t.faved = !t.faved; t.favs = Math.max(0, (t.favs || 0) + (t.faved ? 1 : -1)); saveTopic(t); pg.render(pg); toast(t.faved ? "已收藏" : "已取消收藏"); }
+        if (v === "fav") { t.faved = !t.faved; t.favAt = t.faved ? nowIso() : undefined; t.favs = Math.max(0, (t.favs || 0) + (t.faved ? 1 : -1)); saveTopic(t); pg.render(pg); toast(t.faved ? "已收藏" : "已取消收藏"); }
         if (v === "del") {
           if (await sheet(`删除《${t.title.slice(0, 20)}》？楼层和相关记忆会一起删掉`, [{ label: "删除", value: "yes", danger: true }]) !== "yes") return;
           await deleteTopic(t); closePage(); toast("已删除");
@@ -923,7 +941,7 @@
       case "topic-like": case "topic-fav": case "topic-repost": {
         const t = topicById(pg.key.split(":")[1]); if (!t) return;
         if (act === "topic-like") { t.liked = !t.liked; t.likes = Math.max(0, (t.likes || 0) + (t.liked ? 1 : -1)); }
-        if (act === "topic-fav") { t.faved = !t.faved; t.favs = Math.max(0, (t.favs || 0) + (t.faved ? 1 : -1)); toast(t.faved ? "已收藏" : "已取消收藏"); }
+        if (act === "topic-fav") { t.faved = !t.faved; t.favAt = t.faved ? nowIso() : undefined; t.favs = Math.max(0, (t.favs || 0) + (t.faved ? 1 : -1)); toast(t.faved ? "已收藏" : "已取消收藏"); }
         if (act === "topic-repost") { t.reposts = (t.reposts || 0) + 1; toast("转发到广播的功能第三期上线，先帮你记一笔转发数"); }
         saveTopic(t); pg.render(pg); return;
       }
@@ -960,6 +978,8 @@
       }
       case "more-floors": { const t = topicById(pg.key.split(":")[1]); if (t) genFloors(t); return; }
       case "my-posts": openMyPosts(); return;
+      case "my-favs": openPage("my-favs", p2 => { const list = S.topics.filter(t => t.faved).sort((a, b) => new Date(b.favAt || b.lastReplyAt) - new Date(a.favAt || a.lastReplyAt));
+        body(p2, list.length ? `<div class="db-white">${list.map(t => topicCard(t, "feed")).join("")}</div>` : `<div class="empty">还没有收藏的帖子<br>帖子底下的书签图标、或者右上角 ··· 都能收藏</div>`); }, { title: "我的收藏" }); return;
       case "edit-me": openEditMe(); return;
       case "em-save": { S.meta.nickname = $("#em-nick", pg.el).value.trim() || S.meta.nickname; S.meta.sign = $("#em-sign", pg.el).value.trim(); S.meta.ip = $("#em-ip", pg.el).value.trim(); saveMeta(); closePage(); toast("保存了"); return; }
       case "me-avatar": { try { const [ref] = await pickImages(1, 400); if (ref) { S.meta.avatarRef = ref; saveMeta(); refreshAll(); } } catch (err) { toast("上传失败"); } return; }

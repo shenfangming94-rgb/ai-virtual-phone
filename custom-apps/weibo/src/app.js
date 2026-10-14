@@ -1437,12 +1437,14 @@
     const how = g.mode === "login" ? `这条其实是${who}登着你的微博号发的：号是你自己给她的，你知道她在用，不是偷拿你手机。`
       : g.mode === "asked" ? `这条是你让${who}帮你发的，内容你知道。`
       : g.found ? `这条是${who}偷偷拿你手机发的，你已经发现了${g.react ? `（你当时的反应：${g.react}）` : ""}。` : `这条不是你发的，是${who}偷偷用你的号发的：你刚刚才发现。`;
-    return `${how}要不要在评论区承认是她发的、怎么接，按你的人设和你们的关系来（可以替她打掩护、装作就是自己发的、宠着认下来、逗她）。对她的语气就是你平时对她的语气：平时宠就宠、黏人就黏人，别无缘无故凶她、阴阳她。她做了什么只照上面写的来，不要编她没做过的事（比如她在旁边偷笑、以为你没看见）。`;
+    return `${how}要不要在评论区承认是她发的、怎么接，按你的人设和你们的关系来（可以替她打掩护、装作就是自己发的、宠着认下来、逗她）。对她的语气就是你平时对她的语气：平时宠就宠、黏人就黏人，别无缘无故凶她、阴阳她；人设里没有傲娇、嘴硬就不要口是心非。她做了什么只照上面写的来，不要编她没做过的事（比如她在旁边偷笑、以为你没看见），也不要替她预设反应。`;
   }
   /** 评论区提示：这条其实是她发的 */
-  function ghostLine(post) {
+  function ghostLine(post, later) {
     const g = post.ghost; if (!g) return "";
     const ch = charById(post.charId); const who = ch ? ch.name : "博主";
+    // 第二轮起（加载更多评论）：他知道的话可以出来，怎么接他自己按人设定
+    if (later && (g.mode === "login" || g.mode === "asked" || g.found)) return `这条其实是用户（${herName()}）${g.mode === "login" ? `登着${who}的号发的（号是他自己给她的）` : g.mode === "asked" ? `帮${who}发的（他让她发的）` : `拿${who}的手机偷偷发的，他已经发现了`}。评论的人只当是${who}本人发的。${spotLine(post, who)}这一轮${who}本人可以出来回评论（不是一定要来），怎么接由他按人设决定：可以就当是自己发的（比如说今天心情好换个风格），也可以大方说是${herName()}发的，或者别的他会有的反应。但一定要符合他的人设和他平时对她的态度：人设里没有傲娇、嘴硬就不能莫名其妙口是心非；不要替她预设反应（不写她会怎么想、怎么做、在旁边干嘛）。`;
     if (g.mode === "login") return `这条是用户（${herName()}）登着${who}的号发的（他把号给她了，他知道）。评论的人只当是${who}本人。${spotLine(post, who)}${who}本人这次不出现在评论区。`;
     if (g.mode === "asked") return `这条是${who}让用户（${herName()}）帮他发的，他知道内容，可以像回自己的博一样回复评论。评论的人只当是他本人发的。${spotLine(post, who)}有人调侃（代发？谁帮你发的？）他就按人设回应。`;
     if (!g.found) return `这条其实是用户（${herName()}）拿${who}的手机偷偷发的，${who}本人还不知道：他这次*不出现在评论区*（不回复）。评论的人只看得到是他的号发的。${spotLine(post, who)}路人不知道是谁发的，不要直接说出是用户。`;
@@ -2095,7 +2097,7 @@
       `博主：${authorOf(post).name}${post.authorType === "user" ? (altPost ? "（用户的小号：粉丝很少，来的大多是陌生网友；除了下面列出的角色，没人知道这是用户。用户不要出现在新评论里）" : "（就是用户本人，用户不要出现在新评论里）") : altBloggerNote(post)}`,
       `微博正文：\n${post.text}`,
       genderLine(post),
-      ghostLine(post),
+      ghostLine(post, true),
       `已有评论（方括号里是编号）：\n${existing || "无"}`,
       `继续生成 ${altPost ? rand(4, 7) : rand(5, 8)} 条新评论：可以是新的一级评论，也可以回复已有评论（「回复」字段填已有编号）或本次新评论（填本次编号）。新评论的编号用 n1、n2……`,
       `可能来评论的其他角色（符合关系才来）：\n${charsForPrompt(others) || "无"}`,
@@ -2106,7 +2108,7 @@
     post._genComments = false;
     if (text != null) {
       let list = dropCharAtUser(fixAltAuthors(commentsFromBlocks(parseComments(text), post, {}), { post }), post).filter(c => !altPost || !(c.charId || c.altOf) || others.some(x => x.id === (c.charId || c.altOf)));
-      if (post.ghost && (post.ghost.mode === "login" || (post.ghost.mode === "secret" && !post.ghost.found))) list = list.filter(c => !(c.authorType === "char" && c.charId === post.charId)); // 和第一轮一样：他不出来
+      if (post.ghost && post.ghost.mode === "secret" && !post.ghost.found) list = list.filter(c => !(c.authorType === "char" && c.charId === post.charId)); // 偷偷发的他还不知道，不会来
       if (list.length) noteParsed(`${list.length} 条评论`); else parseFailed("加载评论");
       if (post.authorType === "user" && list.length) {
         // 自己的博：新评论算刚到的，顺便来几个赞，通知里能看到

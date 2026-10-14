@@ -160,8 +160,13 @@
     const ch = charById(charId); if (!ch) return;
     if (isBanned(charId)) { toast(`${ch.name}的账号已停用`); return; }
     const recent = S.convs.filter(c => c.charId === charId).sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt)).slice(0, 8).map(c => `- ${c.title}`).join("\n");
+    // 问什么：代码掷骰子定方向（她更想看无厘头的，发生过的事少一点）
+    const r = Math.random();
+    const kind = r < 0.6 ? "这次问一个莫名其妙、无厘头的问题：和剧情、记忆、用户都没关系，是你这种人某个瞬间会冒出来的怪念头。比如冷知识（为什么猫会踩奶）、离谱假设（如果人类有尾巴，裤子怎么设计）、生活小怪事（为什么袜子总是丢一只）、让 AI 干奇怪的活（给你的拖鞋写一首诗、帮你的绿萝起名字）、测试或者抬杠（你是不是在敷衍我）、深夜哲学（我上辈子是不是一只鸭子）。要有你自己的性格和口吻，别直接用这些例子。"
+      : r < 0.85 ? "这次问一个你自己生活里的问题：学习工作、爱好、身体、吃什么、买什么、人际小烦恼。和用户无关。"
+      : "这次问一个和最近发生的事、或者和用户有关的问题（按聊天记录和记忆来，不编她的事）。";
     const text = await generate(charId, "ask", [
-      `你（${ch.name}）打开 Claude，开了一个新对话。你想问什么？`,
+      `你（${ch.name}）打开 Claude，开了一个新对话。你想问什么？`, kind,
       recent ? `你最近问过这些（换个新问题）：\n${recent}` : "",
       `===提问===\n标题：这个对话的标题（像 Claude 自动起的，四到十个字概括你问的事）\n模型：你选的模型（${MODELS.map(m => m[0]).join(" / ")}：按你的性格和问题选，急的、简单的用快的，纠结的、难的用聪明的）\n思考强度：${EFFORTS.join(" / ")}\n内容：\n你发给 Claude 的第一条消息\n===结束===`,
     ].filter(Boolean).join("\n\n"), `${ch.name}来提问`);

@@ -639,6 +639,22 @@
       body(pg, list.length ? `<div class="db-white">${list.map(t => topicCard(t, kind === "posts" ? "group" : "feed")).join("")}</div>` : `<div class="empty">${kind === "posts" ? `${who}还没发过帖子` : `${who}还没回应过别人的帖子`}</div>`);
     }, { title: kind === "posts" ? `${who}发的帖子` : `${who}的回应` });
   }
+  /** 她的关注 / 被关注；最上面「你认识的人」列出所有 char，没出场过也能从这里进他主页 */
+  function openFollowList(tab) {
+    const page = openPage("follow-list", pg => {
+      const keyToAuthor = k => k.startsWith("c:") ? { type: "char", charId: k.slice(2) } : { type: "npc", name: k.slice(2) };
+      const row = (a, k) => { const w = whoOf(a); const on = (S.meta.follows || []).includes(followKey(a)); const c = a.type === "char" ? charById(a.charId) : null;
+        return `<div class="list-cell" ${personAttrs(a)}>${avatarHtml(w)}<div class="cell-main"><div>${esc(w.name)}</div>${c ? `<div class="cell-sub">${esc(c.name)}${(personInfo(k) || {}).followsMe ? " · 关注了你" : ""}</div>` : ""}</div>
+          <button class="g-join ${on ? "on" : ""}" data-act="person-follow" data-k="${esc(k)}">${on ? "已关注" : "关注"}</button></div>`; };
+      const follows = (S.meta.follows || []).filter(k => !k.startsWith("c:") || charById(k.slice(2)));
+      const fans = Object.entries(S.meta.people || {}).filter(([k, v]) => k.startsWith("c:") && v.followsMe && charById(k.slice(2))).map(([k]) => k);
+      const list = tab === "fans" ? fans : follows;
+      body(pg, `<div class="sec-tabs db-white"><button class="${tab === "following" ? "on" : ""}" data-act="profile-tab2" data-v="following">关注 ${follows.length}</button><button class="${tab === "fans" ? "on" : ""}" data-act="profile-tab2" data-v="fans">被关注 ${fans.length}</button></div>
+        ${tab === "following" ? `<div class="db-sec2">你认识的人</div><div class="db-white">${activeChars().map(c => row({ type: "char", charId: c.id }, `c:${c.id}`)).join("") || `<div class="empty" style="padding:20px">还没有角色好友</div>`}</div>` : ""}
+        <div class="db-sec2">${tab === "fans" ? "关注你的人" : "你关注的人"}</div><div class="db-white">${list.length ? list.map(k => row(keyToAuthor(k), k)).join("") : `<div class="empty" style="padding:20px">${tab === "fans" ? "还没有人关注你（点开 char 的主页，他会决定关不关注你）" : "还没有关注任何人"}</div>`}</div>`);
+    }, { title: "关注" });
+    page.setTab = t => { tab = t; page.render(page); };
+  }
   // ───────────────────────── 页面栈 ─────────────────────────
   const pages = [];
   function openPage(key, render, opts = {}) {
@@ -753,7 +769,7 @@
         <h2>${esc(w.name)}</h2>
         <div class="me-id" data-act="edit-me">IP：${esc(S.meta.ip || "未填写（编辑资料里填）")}</div>
         <div class="me-sign" data-act="edit-me">${I.pen}${esc(S.meta.sign || "介绍下自己")}</div>
-        <div class="me-follow"><span>关注 ${(S.meta.follows || []).length}</span><span>被关注 ${Object.entries(S.meta.people || {}).filter(([k, v]) => k.startsWith("c:") && v.followsMe).length + (S.meta.fansExtra || 0)}</span></div>
+        <div class="me-follow"><span data-act="follow-list" data-tab="following">关注 ${(S.meta.follows || []).length}</span><span data-act="follow-list" data-tab="fans">被关注 ${Object.entries(S.meta.people || {}).filter(([k, v]) => k.startsWith("c:") && v.followsMe).length + (S.meta.fansExtra || 0)}</span></div>
       </div>
       <div class="me-sheet">
         <div class="me-tabs"><button class="on">主页</button><button data-act="coming" data-what="feed">动态</button><button data-act="coming" data-what="album">相册</button><button data-act="my-favs">收藏</button></div>
@@ -768,18 +784,21 @@
   function openSearch() {
     let term = "", results = null, busy = false;
     const page = openPage("search", pg => {
-      body(pg, `<div style="padding:10px 16px;background:var(--wb-card)"><form class="db-search" id="sform" style="height:38px">${I.search}<input id="sq" placeholder="搜索小组，比如：足球、考研、平南一高" value="${esc(term)}" enterkeyhint="search"></form></div>`
+      body(pg, `<div style="padding:10px 16px;background:var(--wb-card)"><form class="db-search" id="sform" style="height:38px">${I.search}<input id="sq" placeholder="搜索小组或用户，比如：足球、考研、平南一高" value="${esc(term)}" enterkeyhint="search"></form></div>`
         + (busy ? `<div class="gen-tip"><span class="spinner"></span>正在找「${esc(term)}」相关的小组…</div>` : "")
-        + (results ? (results.length ? results.map(g => `<div class="g-row" data-act="open-group" data-id="${esc(g.id)}">${groupAva(g)}<div class="cell-main"><b>${esc(g.name)}</b><div class="cell-sub">${fmtNum(g.members)} 个成员 · ${esc(g.intro)}</div></div>
+        + (term && !busy ? (m => m.length ? `<div class="db-sec2">用户</div><div class="db-white">${m.map(c => { const a = { type: "char", charId: c.id }; return `<div class="g-row" ${personAttrs(a)}>${avatarHtml(whoOf(a))}<div class="cell-main"><b>${esc(charNick(c.id))}</b><div class="cell-sub">${esc(c.name)}</div></div></div>`; }).join("")}</div><div class="db-sec2">小组</div>` : "")(activeChars().filter(c => c.name.includes(term) || charNick(c.id).includes(term))) : "")
+        + (results === "people" ? `<button class="load-more" data-act="search-groups-anyway">搜「${esc(term)}」相关的小组（会用 1 次 API）</button>` : results ? (results.length ? results.map(g => `<div class="g-row" data-act="open-group" data-id="${esc(g.id)}">${groupAva(g)}<div class="cell-main"><b>${esc(g.name)}</b><div class="cell-sub">${fmtNum(g.members)} 个成员 · ${esc(g.intro)}</div></div>
             <button class="g-join ${isJoined(g) ? "on" : ""}" data-act="toggle-join" data-id="${esc(g.id)}">${isJoined(g) ? "已加入" : "加入"}</button></div>`).join("")
           + (busy ? "" : `<button class="load-more" data-act="search-again">换一批（会用 1 次 API）</button>`) : `<div class="empty">没找到</div>`) : "")
         + (!results && !busy && Object.keys(S.meta.searches).length ? `<div class="db-sec">搜过的</div><div style="padding:0 16px 16px;display:flex;flex-wrap:wrap;gap:8px">${Object.keys(S.meta.searches).slice(-12).reverse().map(k => `<button class="anon-chip" data-act="search-term" data-term="${esc(k)}">${esc(k)}</button>`).join("")}</div>` : ""));
       const f = $("#sform", pg.el); const q = $("#sq", pg.el);
       f.onsubmit = e => { e.preventDefault(); pg.run(q.value); };
       if (!results && !busy) setTimeout(() => q.focus(), 60);
-    }, { title: "搜索小组" });
-    page.run = async (v, again) => {
+    }, { title: "搜索" });
+    page.run = async (v, again, force) => {
       term = String(v || "").trim(); if (!term || busy) return;
+      // 搜的是 char 的名字或昵称：只显示人，不自动花 API 生成小组（想搜小组再点按钮）
+      if (!again && !force && !S.meta.searches[term] && activeChars().some(c => c.name.includes(term) || charNick(c.id).includes(term))) { results = "people"; page.render(page); return; }
       busy = true; results = again ? results : null; page.render(page);
       results = await searchGroups(term, again); busy = false; page.render(page);
     };
@@ -1024,6 +1043,7 @@
       case "coming": openComing(el.dataset.what === "_posts" ? "book" : el.dataset.what); return;
       case "open-search": openSearch(); return;
       case "search-term": if (pg && pg.run) pg.run(el.dataset.term); return;
+      case "search-groups-anyway": { const q = pg && $("#sq", pg.el); if (pg && pg.run && q) pg.run(q.value, false, true); return; }
       case "search-again": { const q = pg && $("#sq", pg.el); if (pg && pg.run && q) pg.run(q.value, true); return; }
       case "create-group": createGroup(); return;
       case "cg-admin": if (pg && pg.toggleAdmin) pg.toggleAdmin(); return;
@@ -1057,6 +1077,8 @@
       case "noop": return;
       case "open-person": openPerson(el.dataset.k); return;
       case "person-gen": genPerson(el.dataset.k); return;
+      case "follow-list": openFollowList(el.dataset.tab); return;
+      case "profile-tab2": if (pg && pg.setTab) pg.setTab(el.dataset.v); return;
       case "person-list": openPersonList(el.dataset.k, el.dataset.kind); return;
       case "person-follow": {
         const k = el.dataset.k; const a = k.startsWith("c:") ? { type: "char", charId: k.slice(2) } : { type: "npc", name: k.slice(2) };

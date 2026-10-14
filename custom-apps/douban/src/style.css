@@ -817,3 +817,4 @@ img { display: block; }
 .floor-top .nm, .floor-top .role-tag, .floor-top .fl-t { white-space: nowrap; flex: none; }
 .floor-top .fl-like { flex: none; }
 .trow-meta .role-tag { flex: none; white-space: nowrap; }
+.about-chip { margin-top: 10px; padding: 4px 10px; border-radius: 6px; background: #eef2ff; color: #5b6fd6; font-size: 12.5px; text-align: left; line-height: 1.5; }

@@ -218,7 +218,11 @@
 - 一次不要把事讲完，留点让人想蹲后续的地方。
 - 豆友的昵称像真豆瓣：有中文有英文有颜文字、有的很文艺有的很随便（「一只不想上班的猫」「Lemon」「已注销的豆友」「今天也要早睡」），同一个帖子里不要撞名。
 - 现实里真有的明星、名人、作品、比赛、游戏、新闻都可以用真名聊：内容要和现实一致，拿不准的细节就别说。真实的人只聊真报道过、搜得到的事；没报道过的绯闻、黑料、塌房不往真人身上编。
+- 帖子里被讨论、被八卦的人（瓜主）只能是这三种：你本来就知道的真实明星名人、联网搜到的真实新闻里的人、本轮说明里列出的这个世界的公众人物。*不要编一个有名有姓的明星、网红、名人出来当瓜主*。豆友讲自己生活里的普通人（室友、同事、楼下大爷）可以，那不算瓜。
+- 豆友可以用缩写、代号说人（豆瓣味），但有人问「说的是谁」时，总有人会好心解释清楚（直接说名字，或者「就是演《xx》那个」），不要一直打太极。
 - 用户本人绝不能出现在你写的内容里，除非下面明确写了她发的楼；不能替用户说话，也不能编造她做过的事。`;
+  const publicLine = () => { const list = [...activeChars().filter(c => (S.meta.publicChars || []).includes(c.id)).map(c => `${c.name}（角色，豆瓣昵称「${charNick(c.id)}」）`), ...(S.meta.publicMe ? [`用户本人（${herName()}）`] : [])];
+    return list.length ? `这个世界的公众人物（可以被大家讨论，只聊聊天记录、记忆、世界书里真发生过的事；用户本人尤其不能编她没做过的事）：${list.join("、")}。` : "这个世界里没有公众人物：角色和用户都是普通人，不会被当成明星讨论。"; };
   const WHO_LINE = () => `用户的豆瓣昵称是「${S.meta.nickname}」，真名「${herName()}」：你写的豆友不能用这两个名字。${activeChars().length ? `认识的角色（他们的豆瓣昵称）：${activeChars().map(c => `${c.name}「${charNick(c.id)}」`).join("、")}，豆友不能撞这些名字。` : ""}`;
 
   /** 借来的角色资料只是世界背景（宿主规定调用必须带一个角色）：没轮到出场的人不许出现，也不许被提起 */
@@ -239,7 +243,7 @@
     } finally { S.jobs.delete(job); refreshAll(); }
   }
   /** ===块=== 解析：字段「名：值」，值可以多行（接到上一个字段） */
-  const KEYS = ["IP", "组长", "成员称呼", "分区", "发言规则", "配图", "精华", "名称", "成员", "简介", "标题", "作者", "角色", "匿名", "时间", "回应数", "正文", "楼主", "赞", "引用", "内容", "层"];
+  const KEYS = ["说的是", "来源", "IP", "组长", "成员称呼", "分区", "发言规则", "配图", "精华", "名称", "成员", "简介", "标题", "作者", "角色", "匿名", "时间", "回应数", "正文", "楼主", "赞", "引用", "内容", "层"];
   function parseBlocks(raw, kind) {
     const text = String(raw || "").replace(/```[a-z]*\n?/g, "").replace(/\r/g, "");
     const out = []; let label = null;
@@ -347,10 +351,11 @@
       recent ? `组里已经有这些帖子，不要重复：\n${recent}` : "",
       bgLine(hit ? [hit] : []),
       (g.sections || []).length ? `组里的分区：${g.sections.join("、")}。每个帖子归到一个分区（闲聊的可以不归，写 无）。` : "",
+      publicLine(),
       "如果你能联网搜索：按这个小组聊的话题，去搜最近现实里真的在讨论的事（娱乐圈、体育、游戏、社会新闻、新剧新书……看小组是干什么的），把其中 1～2 个帖子写成在聊这些真事，用真名；和世界观冲突的不要。不能联网就按这个世界写。",
       "大约四分之一的帖子带图（晒东西、现场、截图这类才带），写在「配图」里；最多 1 个帖子是组长加精的（内容特别好、特别有用的才加，没有就都写 否）。",
       needInfo ? `先补全这个小组的信息（只写一次）：\n===小组信息===\n组长：组长的豆瓣昵称${g.mine && g.admin ? "（组长是用户本人，这行写 无）" : ""}\n成员称呼：这个组对成员的叫法（像「小不知道」「组员」「病友」，很多组就叫「成员」）\n发言规则：一两条组规（没有写 无）\n分区：3～4 个讨论分区的名字，用、分隔\n===结束===` : "",
-      "每个帖子：\n===帖子===\n标题：帖子标题（不用自己加分区前缀）\n作者：豆友昵称（匿名发的写 匿名）\n角色：角色本名（路人写 无）\n匿名：是 / 否\n分区：分区名（没有写 无）\n时间：发帖时间（如 3小时前、昨天 21:30、2天前）\nIP：这个人的 IP 属地（省份或城市，按他在哪写；同校同城的组大多一样）\n回应数：目前有多少条回应（纯数字）\n配图：图片描述，多张用 | 分隔（不带图写 无）\n精华：是 / 否\n正文：\n楼主的首帖正文\n===结束===",
+      "每个帖子：\n===帖子===\n标题：帖子标题（不用自己加分区前缀）\n作者：豆友昵称（匿名发的写 匿名）\n角色：角色本名（路人写 无）\n匿名：是 / 否\n分区：分区名（没有写 无）\n时间：发帖时间（如 3小时前、昨天 21:30、2天前）\nIP：这个人的 IP 属地（省份或城市，按他在哪写；同校同城的组大多一样）\n回应数：目前有多少条回应（纯数字）\n配图：图片描述，多张用 | 分隔（不带图写 无）\n精华：是 / 否\n说的是：这帖在讨论谁（真名；不涉及具体的人写 无）\n来源：现实新闻 / 联网搜到的 / 这个世界的事 / 无\n正文：\n楼主的首帖正文\n===结束===",
     ].filter(Boolean).join("\n\n"), `「${g.name}」的帖子`);
     g._busy = false;
     if (text == null) { refreshAll(); return; }
@@ -365,7 +370,8 @@
       const sec = String(b["分区"] || "").trim(); const replyCount = clampInt(b["回应数"], rand(3, 80));
       const isElite = yes(b["精华"]) && elite < 1; if (isElite) elite++;
       const t = { id: uid("t"), scope: S.identity.id, groupId: g.id, title: title.replace(/^[^|｜]{1,8}\s*[|｜]\s*/, ""), author, body, createdAt, lastReplyAt: createdAt, replyCount, floors: [], liked: false,
-        section: !none(sec) && (g.sections || []).includes(sec) ? sec : "", elite: isElite || undefined, ip: none(b["IP"]) ? "" : String(b["IP"]).trim().slice(0, 8),
+        section: !none(sec) && (g.sections || []).includes(sec) ? sec : "", elite: isElite || undefined,
+        about: none(b["说的是"]) ? "" : String(b["说的是"]).trim().slice(0, 60), source: none(b["来源"]) ? "" : String(b["来源"]).trim().slice(0, 12), ip: none(b["IP"]) ? "" : String(b["IP"]).trim().slice(0, 8),
         images: none(b["配图"]) ? [] : String(b["配图"]).split(/[|｜]/).map(x => x.trim()).filter(Boolean).slice(0, 4).map(desc => ({ desc })),
         likes: Math.round(replyCount * (0.2 + Math.random() * 0.8)), favs: Math.round(replyCount * Math.random() * 0.4), reposts: Math.round(replyCount * Math.random() * 0.15) };
       S.topics.push(t); saveTopic(t); n++;
@@ -405,6 +411,8 @@
       `当前时间：${new Date().toLocaleString("zh-CN", { hour12: false })}`,
       `小组「${g.name}」里的帖子《${t.title}》（${fmtTime(t.createdAt)} 发的）`,
       opDesc(t),
+      t.about ? `这帖讨论的是：${t.about}${t.source ? `（${t.source}）` : ""}。豆友可以用缩写代号，但有人问起要有人说清楚。` : "",
+      publicLine(),
       `楼主首帖（1楼）：\n${t.body}${(t.images || []).length ? `\n（配图：${t.images.map(im => im.desc || "一张照片").join(" | ")}）` : ""}`,
       history ? `已有的楼层：\n${history}` : "",
       mine ? `用户刚刚${mine.author.anon ? "匿名" : ""}回了 ${mine.n} 楼${mine.quote ? `（引用了 ${mine.quote} 楼）` : ""}：「${mine.text}」。接下来 ${n} 层里要有人回应她这层（引用 ${mine.n}），${askChar ? `${charById(askChar).name} 一定会回${mine.author.anon ? "（他不知道这是用户，当陌生豆友回）" : "（他知道这是用户）"}，按他的人设和你们的关系；` : ""}其他豆友可以接着聊。` : "",
@@ -681,7 +689,8 @@
       const follow = t.author.type === "user" || t.author.anon ? "" : `<button class="follow-mini ${isFollowing(t.author) ? "on" : ""}" data-act="follow-author">${isFollowing(t.author) ? "已关注" : "＋关注"}</button>`;
       body(pg, `<div class="post-head"><div class="post-author">${avatarHtml(w)}<div class="cell-main"><div class="pa-name">${esc(w.name)}${roleTags(t, t.author).replace('<span class="role-tag op">楼主</span>', "")}</div>
             <div class="post-from">${fmtTime(t.createdAt)}${ipOf(t.author, t.ip) ? ` · ${esc(ipOf(t.author, t.ip))}` : ""}</div></div>${follow}</div>
-          <h1>${t.section ? `${esc(t.section)}<span class="sep">|</span>` : ""}${esc(t.title)}${t.elite ? '<span class="elite after">精</span>' : ""}</h1></div>
+          <h1>${t.section ? `${esc(t.section)}<span class="sep">|</span>` : ""}${esc(t.title)}${t.elite ? '<span class="elite after">精</span>' : ""}</h1>
+          ${t.about ? `<button class="about-chip" data-act="topic-about">ⓘ 这帖说的是：${esc(t.about)}${t.source ? ` · ${esc(t.source)}` : ""}</button>` : ""}</div>
         <div class="post-body">${esc(t.body)}</div>
         ${(t.images || []).length ? `<div class="post-pics">${t.images.map((im, k) => `<div class="post-pic" data-act="topic-pic" data-idx="${k}">${im.ref ? `<img data-ref="${esc(im.ref)}" alt="">` : placeholderImg()}${!im.ref && im.desc ? `<span>${esc(im.desc)}</span>` : ""}</div>`).join("")}</div>` : ""}
         <div class="post-stats"><span class="on">回复 ${fmtNum(n)}</span><span>赞 ${fmtNum(t.likes || 0)}</span><span>转发 ${fmtNum(t.reposts || 0)}</span><span>收藏 ${fmtNum(t.favs || 0)}</span></div>
@@ -797,6 +806,9 @@
         ${S.chars.map(c => { const on = !(S.meta.excludedChars || []).includes(c.id);
           return `<div class="list-cell">${avatarHtml({ name: c.name, seed: c.id, avatar: c.avatar })}<div class="cell-main"><div>${esc(c.name)}</div><div class="cell-sub">豆瓣昵称：${esc(S.meta.charNicks[c.id] || "还没有（第一次实名出场时起）")}</div></div>
             <button class="btn-ghost" data-act="set-char-nick" data-id="${esc(c.id)}" style="height:28px;padding:0 10px;font-size:12px">改昵称</button><button class="switch ${on ? "on" : ""}" data-act="toggle-char" data-id="${esc(c.id)}"><span></span></button></div>`; }).join("") || `<div class="empty" style="padding:24px">这个身份还没有角色好友</div>`}
+        <div class="form-note" style="margin-top:8px">公众人物 · 打开的人会被豆友当成明星、名人讨论（只聊真发生过的事）；都不打开就没人被八卦</div>
+        <div class="list-cell"><div class="cell-main"><div>我（${esc(S.meta.nickname)}）</div></div><button class="switch ${S.meta.publicMe ? "on" : ""}" data-act="toggle-public-me"><span></span></button></div>
+        ${S.chars.map(c => `<div class="list-cell"><div class="cell-main"><div>${esc(c.name)}</div></div><button class="switch ${(S.meta.publicChars || []).includes(c.id) ? "on" : ""}" data-act="toggle-public" data-id="${esc(c.id)}"><span></span></button></div>`).join("")}
         <div class="form-note" style="margin-top:8px">匿名头像 · 所有匿名豆友都用这一张</div>
         <div class="list-cell">${avatarHtml(whoOf({ type: "npc", anon: true }))}<div class="cell-main"></div><button class="btn-ghost" data-act="anon-ava">换一张</button>${S.meta.anonRef ? `<button class="btn-ghost" data-act="anon-ava-reset">用默认</button>` : ""}</div>
         <div class="form-note" style="margin-top:8px">豆友头像库 · 豆友从这里分头像，同一个人一直是同一张。点图片可以删除</div>
@@ -848,6 +860,9 @@
       }
       case "new-topic": newTopic(el.dataset.id); return;
       case "noop": return;
+      case "topic-about": toast("这条只有你看得到，豆友们照样打哑谜"); return;
+      case "toggle-public": { const id = el.dataset.id; const l = S.meta.publicChars || []; S.meta.publicChars = l.includes(id) ? l.filter(x => x !== id) : [...l, id]; saveMeta(); refreshAll(); return; }
+      case "toggle-public-me": S.meta.publicMe = !S.meta.publicMe; saveMeta(); refreshAll(); return;
       case "topic-menu": {
         const t = topicById(pg.key.split(":")[1]); if (!t) return;
         const v = await sheet("", [{ label: t.faved ? "取消收藏" : "收藏", value: "fav" }, { label: "删除这条帖子（相关记忆一起删）", value: "del", danger: true }]);

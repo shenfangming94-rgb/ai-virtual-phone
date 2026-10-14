@@ -481,8 +481,14 @@ img { display: block; }
 .super-actions .cell-sub { flex: 1; }
 .super-lv { flex: none; padding: 0 6px; border-radius: 4px; background: linear-gradient(90deg, #ff9a3c, #ff5f5f); color: #fff; font-size: 12px; font-weight: 700; line-height: 18px; }
 .char-super-link { cursor: pointer; margin-top: 8px; }
-.ghost-row { display: flex; justify-content: flex-end; padding: 6px 16px 8px; background: var(--wb-card); }
-.ghost-mini { border: 1px solid var(--wb-line); background: transparent; color: var(--wb-text-3); border-radius: 14px; height: 26px; padding: 0 10px; font-size: 12px; cursor: pointer; }
+.cover-btn.cover-more { right: 96px; width: 28px; padding: 0; justify-content: center; font-size: 14px; letter-spacing: 1px; }
+/* 私信加号面板（参考微博的样式：浅底方块 + 灰色实心图标） */
+:root { --pv-panel: #f5f5f5; --pv-tile: #fafafa; --pv-tile-line: #cfcfcf; --pv-icon: #8e8e8e; }
+@media (prefers-color-scheme: dark) { :root { --pv-panel: #1b1b1b; --pv-tile: #262626; --pv-tile-line: #3a3a3a; --pv-icon: #9a9a9a; } }
+.dm-more { flex: none; display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px 0; padding: 18px 8px calc(18px + var(--safe-bottom)); background: var(--pv-panel); border-top: 1px solid var(--wb-line); }
+.dm-more button { display: flex; flex-direction: column; align-items: center; gap: 8px; border: 0; background: transparent; color: var(--wb-text-2); font-size: 12.5px; cursor: pointer; }
+.dm-more i { width: 60px; height: 60px; border-radius: 12px; border: 1px solid var(--pv-tile-line); background: var(--pv-tile); color: var(--pv-icon); display: grid; place-items: center; }
+.dm-more i svg { width: 30px; height: 30px; }
 .super-icon img { width: 100%; height: 100%; object-fit: cover; border-radius: inherit; display: block; }
 .super-top { position: relative; padding: calc(var(--top-h) * 0 + 34px) 16px 18px; background-size: cover !important; background-position: center !important; color: #fff; }
 .super-shade { position: absolute; inset: 0; background: linear-gradient(180deg, rgba(0,0,0,.15), rgba(0,0,0,.45)); }

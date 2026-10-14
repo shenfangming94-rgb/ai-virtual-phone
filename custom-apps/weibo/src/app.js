@@ -82,6 +82,9 @@
     image: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"><rect x="3.5" y="4.5" width="17" height="15" rx="2"/><circle cx="9" cy="10" r="1.8"/><path d="m4 18 5-5 4 4 3-3 4 4"/></svg>',
     at: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="12" cy="12" r="3.6"/><path d="M15.6 12v1.4a2.6 2.6 0 0 0 5.2 0V12A8.8 8.8 0 1 0 17 19.3" stroke-linecap="round"/></svg>',
     topic: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M9.5 4 7.5 20M16.5 4l-2 16M4.5 9h16M3.5 15h16"/></svg>',
+    plus: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><circle cx="12" cy="12" r="8.5"/><path d="M12 8v8M8 12h8"/></svg>',
+    picFill: '<svg viewBox="0 0 24 24"><rect x="2.5" y="4.5" width="19" height="15" rx="1.6" fill="currentColor"/><path d="M4.5 17.5 9.5 11l3.6 4.4 2.4-2.9 4 5z" fill="var(--pv-tile)"/><circle cx="16.6" cy="8.6" r="1.6" fill="var(--pv-tile)"/></svg>',
+    descFill: '<svg viewBox="0 0 24 24"><rect x="2.5" y="4.5" width="19" height="15" rx="1.6" fill="currentColor"/><path d="M6 8.6h12M6 12h12M6 15.4h7.5" stroke="var(--pv-tile)" stroke-width="1.7" stroke-linecap="round"/></svg>',
     emoji: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><circle cx="12" cy="12" r="8.5"/><path d="M8.5 14.5c.9 1.3 2 2 3.5 2s2.6-.7 3.5-2"/><path d="M9 9.8h.01M15 9.8h.01" stroke-width="2.6"/></svg>',
     loc: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M12 21s-6.5-6.2-6.5-11a6.5 6.5 0 0 1 13 0c0 4.8-6.5 11-6.5 11z"/><circle cx="12" cy="10" r="2.3"/></svg>',
     edit: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M4 20h4L19 9l-4-4L4 16z"/></svg>',
@@ -3047,9 +3050,9 @@
     }
   }
   /** 私信发图：从相册传真图（可以写一句说明给 AI 看），或者写一段描述当图 */
-  async function dmSendImage(pg) {
+  async function dmSendImage(pg, how) {
     const th = S.threads.find(x => x.key === pg.thread); if (!th) return;
-    const how = await sheet("发图片", [{ label: "📷 从相册选", value: "pick" }, { label: "✍️ 写一段描述当图片", value: "desc" }]);
+    const more = $(".dm-more", pg.el); if (more) more.classList.add("hidden");
     let img = null;
     if (how === "pick") {
       const [ref] = await pickImages(1, 1280).catch(e => { toast(`选图失败：${(e && e.message) || e}`.slice(0, 60)); return []; }); if (!ref) return;
@@ -3097,7 +3100,8 @@
     }, {
       title: peerAuthor(t).name,
       action: `<button class="top-icon" data-act="thread-menu" aria-label="更多">${I.more}</button>`,
-      footer: `<div class="dm-quote-bar hidden"></div><div class="reply-bar"><textarea class="reply-input dm-input" rows="1" placeholder="发私信…" maxlength="500"></textarea><button class="tool" data-act="dm-image" aria-label="发图片" style="width:32px;height:32px">${I.image}</button><button class="tool" data-act="toggle-emoji" style="width:32px;height:32px">${I.emoji}</button><button class="tool dm-regen" data-act="dm-regen" aria-label="让对方回复" style="width:32px;height:32px">✨</button><button class="reply-send" disabled>发送</button></div><div class="emoji-wrap hidden">${emojiPanelHtml()}</div>`,
+      footer: `<div class="dm-quote-bar hidden"></div><div class="reply-bar"><button class="tool" data-act="dm-plus" aria-label="更多" style="width:32px;height:32px">${I.plus}</button><textarea class="reply-input dm-input" rows="1" placeholder="发私信…" maxlength="500"></textarea><button class="tool" data-act="toggle-emoji" style="width:32px;height:32px">${I.emoji}</button><button class="tool dm-regen" data-act="dm-regen" aria-label="让对方回复" style="width:32px;height:32px">✨</button><button class="reply-send" disabled>发送</button></div><div class="emoji-wrap hidden">${emojiPanelHtml()}</div>
+        <div class="dm-more hidden"><button data-act="dm-image" data-how="pick"><i>${I.picFill}</i><span>相册</span></button><button data-act="dm-image" data-how="desc"><i>${I.descFill}</i><span>描述图</span></button></div>`,
     });
     page.thread = key;
     // 点了「戳穿他」又没发：当没发生
@@ -3650,13 +3654,12 @@
         realName: `${acc.gender === "女" ? "她" : acc.gender === "男" ? "他" : "TA"}是${charById(charId)?.name || ""}`,
         cover: gradientFor(charId + "cover"), coverRef: acc.coverRef, bio: acc.bio,
         bioExtra: (acc.bioLog || []).length ? ` <span class="link" data-act="bio-log" data-char="${esc(charId)}">${acc.bioAt && Date.now() - new Date(acc.bioAt) < 86400e3 ? "刚改过" : "改过"} ›</span>` : "",
-        coverAction: `<button class="cover-btn" data-act="char-cover" data-char="${esc(charId)}">${I.camera}换背景</button>`, ip: acc.ip, verifiedNote: acc.verifiedNote, posts: Math.max(posts.length, acc.postCount || 0),
+        coverAction: `<button class="cover-btn" data-act="char-cover" data-char="${esc(charId)}">${I.camera}换背景</button>${isAs() && asId() === charId ? "" : `<button class="cover-btn cover-more" data-act="char-more" data-char="${esc(charId)}" aria-label="更多">···</button>`}`, ip: acc.ip, verifiedNote: acc.verifiedNote, posts: Math.max(posts.length, acc.postCount || 0),
         following: acc.following || 0, followers: acc.followers || 0,
         actions: `<button class="follow-btn ${isStarred(charId) ? "star-on" : "on"}" style="height:32px;padding:0 12px;font-size:14px" data-act="toggle-star" data-char="${esc(charId)}">${isStarred(charId) ? "★ 特别关注" : "☆ 特别关注"}</button>
           <button class="follow-btn on" style="height:32px;padding:0 12px;font-size:14px" data-act="open-dm" data-char="${esc(charId)}">私信</button>
           <button class="follow-btn ${following ? "on" : ""}" style="height:32px;padding:0 16px;font-size:14px" data-act="toggle-follow-char" data-char="${esc(charId)}">${following ? "已关注" : "+ 关注"}</button>`,
       }) + `<div class="list-cell char-super-link" data-act="open-char-supers" data-char="${esc(charId)}"><div class="cell-main">⭐ ${acc.gender === "女" ? "她" : acc.gender === "男" ? "他" : "TA"}的超话</div><span class="cell-sub">›</span></div>
-        ${isAs() && asId() === charId ? "" : `<div class="ghost-row"><button class="ghost-mini" data-act="ghost-compose" data-char="${esc(charId)}">✍️ 用${acc.gender === "女" ? "她" : acc.gender === "男" ? "他" : "TA"}的号发</button></div>`}
         <div class="profile-tabs"><button class="${tab === "posts" ? "on" : ""}" data-act="profile-tab" data-tab="posts">微博</button>
           <button class="${tab === "album" ? "on" : ""}" data-act="profile-tab" data-tab="album">相册</button>
           <button class="${tab === "liked" ? "on" : ""}" data-act="profile-tab" data-tab="liked">赞过</button></div>${list}`;
@@ -4545,6 +4548,14 @@
         openCompose(null, { asChar: th.peer.charId, ghostMode: "asked", invite: { key: th.key, id: m.id } });
         return;
       }
+      case "char-more": {
+        const ch = charById(el.dataset.char); if (!ch) return;
+        const acc = S.accounts[ch.id] || {}; const he = acc.gender === "女" ? "她" : acc.gender === "男" ? "他" : "TA";
+        const v = await sheet("", [{ label: `用${he}的号偷偷发一条`, value: "ghost" }]);
+        if (v !== "ghost") return;
+        if (isAlt()) { toast(`切回大号再用${he}的号发`); return; }
+        openCompose(null, { asChar: ch.id, ghostMode: "secret" }); return;
+      }
       case "ghost-compose": {
         const ch = charById(el.dataset.char); if (!ch) return;
         if (isAlt()) { toast("切回大号再用他的号发"); return; }
@@ -4692,7 +4703,8 @@
       }
       case "dm-msg": if (Date.now() < (S._lpUntil || 0)) return; dmMsgMenu(el.dataset.id); return;
       case "dm-pic": if (Date.now() < (S._lpUntil || 0)) return; dmViewPic(el.dataset.id); return;
-      case "dm-image": { const pg = topPage(); if (pg && pg.thread) dmSendImage(pg); return; }
+      case "dm-image": { const pg = topPage(); if (pg && pg.thread) dmSendImage(pg, el.dataset.how); return; }
+      case "dm-plus": { const pg = topPage(); if (!pg) return; const m = $(".dm-more", pg.el); const w = $(".emoji-wrap", pg.el); if (m) { m.classList.toggle("hidden"); if (w && !m.classList.contains("hidden")) w.classList.add("hidden"); } return; }
       case "dm-unquote": { const pg = topPage(); if (pg && pg.showQuote) { pg.quote = null; pg.showQuote(); } return; }
       case "dm-regen": {
         const pg = topPage(); const th = pg && S.threads.find(x => x.key === pg.thread); if (!th || th._typing) return;
@@ -4735,7 +4747,7 @@
       case "open-search": openSearch(); return;
       case "do-search": { const pg = topPage(); if (pg && pg.search) pg.search(); return; }
       case "search-more": searchMore(topPage()); return;
-      case "toggle-emoji": { const pg = topPage(); const w = pg && $(".emoji-wrap", pg.el); if (w) w.classList.toggle("hidden"); return; }
+      case "toggle-emoji": { const pg = topPage(); const w = pg && $(".emoji-wrap", pg.el); if (w) w.classList.toggle("hidden"); const m = pg && $(".dm-more", pg.el); if (m && w && !w.classList.contains("hidden")) m.classList.add("hidden"); return; }
       case "insert-emoji": {
         const pg = topPage(); const ta = pg && ($(".compose-text", pg.el) || $(".reply-input", pg.el)); if (!ta) return;
         const ins = `[${el.dataset.name}]`; const pos = ta.selectionStart ?? ta.value.length;

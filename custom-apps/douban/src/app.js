@@ -194,6 +194,8 @@
 - 用户本人绝不能出现在你写的内容里，除非下面明确写了她发的楼；不能替用户说话，也不能编造她做过的事。`;
   const WHO_LINE = () => `用户的豆瓣昵称是「${S.meta.nickname}」，真名「${herName()}」：你写的豆友不能用这两个名字。${activeChars().length ? `认识的角色（他们的豆瓣昵称）：${activeChars().map(c => `${c.name}「${charNick(c.id)}」`).join("、")}，豆友不能撞这些名字。` : ""}`;
 
+  /** 借来的角色资料只是世界背景（宿主规定调用必须带一个角色）：没轮到出场的人不许出现，也不许被提起 */
+  const bgLine = appear => `【这次谁出场】${appear.length ? `只有 ${appear.map(c => c.name).join("、")} 可以出场（按下面说的方式）。` : "这次没有任何角色出场。"}你拿到的角色人设、世界书、记忆只是这个世界的背景：其他角色本人不出现，豆友也不认识他们，不要提他们的名字、外号、身份（比如「X姐」「班长」），也不要编和他们有关的人和事。豆友都是普通路人，聊的是自己的事。`;
   function logAi(entry) {
     S.debug = [{ at: nowIso(), ...entry, text: String(entry.text || "").slice(0, 6000) }, ...S.debug].slice(0, 10);
     dbUpsert(COL.meta, { id: "debug_log", entries: S.debug }).catch(() => {});
@@ -256,6 +258,8 @@
       `用户在豆瓣搜索小组：「${term}」。写 ${rand(5, 8)} 个搜得出来的小组。`,
       "名字要五花八门、像真豆瓣：有大组也有小众组，有正经讨论组也有玩梗组、吐槽组、互助组；名字不用都带搜索词，但都和它有关（比如搜「足球」可以有「皇马死忠团」「凌晨三点看球的人」「我们这些踢野球的」）。如果搜的词是世界书或剧情里的地名、学校、圈子，就按剧情写那里的组。",
       have.length ? `这些已经有了，不要重复：${have.join("、")}` : "",
+      "名字和简介要像真豆瓣：大多数组名简单直白，简介很短很平实（一句话介绍，或者几条组规：禁广告、禁人身攻击、标题加 tag……），只有少数组有点个性。不要文艺抒情、不要排比、不要「这里只存放……」这种句子；也不要写网上烂大街的梗（比如食堂阿姨手抖、颠勺）。",
+      bgLine([]),
       "每个小组：\n===小组===\n名称：小组名\n成员：成员数（纯数字，大组几十万，小众组几百几千）\n简介：一两句小组介绍，像组长写的（可以带组规）\n===结束===",
     ].filter(Boolean).join("\n\n"), `搜小组「${term}」`);
     if (text == null) return cached ? cached.map(groupById).filter(Boolean) : [];
@@ -288,6 +292,7 @@
         : `其中 1 个帖子是 ${hit.name} 本人用自己的豆瓣号发的（作者写他的豆瓣昵称${S.meta.charNicks[hit.id] ? `「${S.meta.charNicks[hit.id]}」` : "，自己起一个像豆瓣的"}，角色写 ${hit.name}，匿名写 否）：按他的人设写。`)
         : "这批帖子全是路人发的，角色都不出现。",
       recent ? `组里已经有这些帖子，不要重复：\n${recent}` : "",
+      bgLine(hit ? [hit] : []),
       "每个帖子：\n===帖子===\n标题：帖子标题\n作者：豆友昵称（匿名发的写 匿名）\n角色：角色本名（路人写 无）\n匿名：是 / 否\n时间：发帖时间（如 3小时前、昨天 21:30、2天前）\n回应数：目前有多少条回应（纯数字）\n正文：\n楼主的首帖正文\n===结束===",
     ].filter(Boolean).join("\n\n"), `「${g.name}」的帖子`);
     g._busy = false;
@@ -341,6 +346,7 @@
       history ? `已有的楼层：\n${history}` : "",
       mine ? `用户刚刚${mine.author.anon ? "匿名" : ""}回了 ${mine.n} 楼${mine.quote ? `（引用了 ${mine.quote} 楼）` : ""}：「${mine.text}」。接下来 ${n} 层里要有人回应她这层（引用 ${mine.n}），${askChar ? `${charById(askChar).name} 一定会回${mine.author.anon ? "（他不知道这是用户，当陌生豆友回）" : "（他知道这是用户）"}，按他的人设和你们的关系；` : ""}其他豆友可以接着聊。` : "",
       passer ? `${passer.name} 刷到了这个帖子，可能会顺手回一层（按人设决定实名还是匿名，不来也行）。` : "",
+      bgLine(cast),
       `从 ${next} 楼开始，往下写 ${n} 层回应。${t.floors.length ? "接着已有的话题自然往下聊，楼主可以更新进展或下场回复。" : "楼主可以下场回复几层。"}`,
       `每层：\n===楼===\n层：楼层号\n作者：豆友昵称（楼主就写楼主${t.author.anon ? "；匿名的写 匿名" : ""}）\n角色：角色本名（路人写 无）\n匿名：是 / 否\n楼主：是 / 否\n引用：引用了第几楼（没引用写 无）\n赞：点赞数（纯数字）\n内容：\n这层的内容\n===结束===`,
     ].filter(Boolean).join("\n\n"), `《${t.title.slice(0, 12)}》的回应`);
@@ -349,16 +355,20 @@
     let at = Math.max(new Date(t.lastReplyAt || t.createdAt).getTime(), new Date(t.createdAt).getTime());
     const span = Math.max(60e3, Date.now() - at);
     let made = 0, num = next;
+    const aiMap = {}; const dropped = new Set(); // AI 写的楼层号 → 实际楼层号；被删掉的楼（不许出场的 char）
     for (const b of parseBlocks(text, "楼")) {
-      const txt = String(b["内容"] || "").trim(); if (!txt) continue;
+      const aiN = clampInt(b["层"], 0);
+      const txt = String(b["内容"] || "").trim(); if (!txt) { if (aiN) dropped.add(aiN); continue; }
+      const q0 = clampInt(b["引用"], 0);
+      if (q0 && dropped.has(q0)) { if (aiN) dropped.add(aiN); continue; } // 在回被删掉的楼：一起删，不留对着空气说话的楼
       const claimsOp = yes(b["楼主"]) || String(b["作者"] || "").trim() === "楼主";
-      if (claimsOp && t.author.type === "user") continue; // 她自己的帖子：楼主的楼只能她自己发，AI 不能替她说
+      if (claimsOp && t.author.type === "user") { if (aiN) dropped.add(aiN); continue; } // 她自己的帖子：楼主的楼只能她自己发，AI 不能替她说
       let author = claimsOp ? { ...t.author } : authorFrom(b);
-      if (author.type === "user") continue;
-      if (author.type === "char" && !cast.some(c => c.id === author.charId)) continue;
+      if (author.type === "user" || (author.type === "char" && !cast.some(c => c.id === author.charId))) { if (aiN) dropped.add(aiN); continue; }
       at = mine ? Date.now() - (n - made) * rand(20, 90) * 1000 : at + Math.random() * span / n;
-      const q = clampInt(b["引用"], 0);
-      const f = { n: num++, author, text: txt, likes: clampInt(b["赞"], rand(0, 20)), quote: q > 0 && q < num ? q : null, createdAt: new Date(Math.min(Date.now(), at)).toISOString() };
+      const fn = num++; if (aiN) aiMap[aiN] = fn;
+      const q = q0 >= next ? aiMap[q0] || 0 : q0; // 本批的楼按实际楼层号换算；只能引用前面已有的楼，不能引用自己
+      const f = { n: fn, author, text: txt, likes: clampInt(b["赞"], rand(0, 20)), quote: q > 0 && q < fn ? q : null, createdAt: new Date(Math.min(Date.now(), at)).toISOString() };
       t.floors.push(f); made++;
       if (author.type === "char" && mine && !mine.author.anon) remember(author.charId, `${herName()}在豆瓣小组「${g.name}」的帖子《${t.title}》里回复：「${mine.text.slice(0, 60)}」，我回：「${txt.slice(0, 60)}」`, `douban_floor_${t.id}_${f.n}`);
       else if (author.type === "char" && !sameAuthor(author, t.author)) remember(author.charId, `我在豆瓣小组「${g.name}」的帖子《${t.title}》里${author.anon ? "匿名" : ""}回了一层：「${txt.slice(0, 60)}」`, `douban_floor_${t.id}_${f.n}`);

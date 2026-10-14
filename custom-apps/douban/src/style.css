@@ -249,7 +249,7 @@ img { display: block; }
 @keyframes fade { from { opacity: 0; } }
 .sheet { width: 100%; background: var(--wb-card); border-radius: 14px 14px 0 0; padding-bottom: var(--safe-bottom); animation: up .2s ease-out; }
 @keyframes up { from { transform: translateY(100%); } }
-.sheet-title { padding: 14px 16px 6px; font-size: 13px; color: var(--wb-text-3); text-align: center; }
+.sheet-title { padding: 14px 16px 6px; font-size: 13px; color: var(--wb-text-3); text-align: center; white-space: pre-line; line-height: 1.6; }
 .sheet-item { display: block; width: 100%; height: 52px; font-size: 16px; border-bottom: 1px solid var(--wb-line); }
 .sheet-item.danger { color: var(--wb-red); }
 .sheet-item.on { color: var(--wb-orange); font-weight: 600; }
@@ -847,3 +847,10 @@ img { display: block; }
 .topbar.clear.solid .top-icon { color: var(--wb-text); }
 .topbar.clear { transition: background .15s; }
 .mcard-h:only-child { padding-bottom: 0; }
+/* 标题后面的小「注」：点开看这帖说的是谁（只她看得到） */
+.about-note { display: inline-block; vertical-align: super; margin-left: 4px; padding: 0 4px; height: 16px; line-height: 16px; border-radius: 3px; background: #eef2ff; color: #5b6fd6; font-size: 10.5px; font-weight: 400; }
+@media (prefers-color-scheme: dark) { .about-note { background: #262c45; color: #9aa8f0; } }
+/* 帖子来自哪个组 */
+.post-group { display: inline-flex; align-items: center; gap: 6px; margin-top: 10px; padding: 4px 10px 4px 4px; border-radius: 14px; background: var(--wb-bg); color: var(--wb-text-2); font-size: 12.5px; }
+.post-group .g-ava.xs { width: 20px; height: 20px; font-size: 11px; border-radius: 5px; }
+.post-group i { font-style: normal; color: var(--wb-text-3); }

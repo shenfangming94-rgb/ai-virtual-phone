@@ -143,18 +143,29 @@
     const pool = S.meta.avatarPool || [];
     return { name: a.name, seed: a.name, avatarRef: pool.length ? pool[hashHue(a.name) % pool.length] : null };
   }
+  /** 已经取过的图直接带 src（重绘时不闪回默认色块）；没取过的先 data-ref，hydrateImages 再补 */
+  const refSrc = ref => typeof S.mediaCache.get(ref) === "string" ? `src="${esc(S.mediaCache.get(ref))}"` : `data-ref="${esc(ref)}"`;
   function avatarHtml(w) {
-    const face = w.avatarRef ? `<img class="face" data-ref="${esc(w.avatarRef)}" alt="" style="background:${gradientFor(w.seed)}">`
+    const face = w.avatarRef ? `<img class="face" ${refSrc(w.avatarRef)} alt="" style="background:${gradientFor(w.seed)}">`
       : w.avatar ? `<img class="face" src="${esc(w.avatar)}" alt="">`
       : `<div class="face" style="background:${gradientFor(w.seed)}">${esc((w.name || "?").slice(0, 1))}</div>`;
     return `<div class="avatar">${face}</div>`;
   }
+  // 同一张图（头像库里的图一页会出现几十次）只发一次请求；失败的不缓存，下次重绘再取
+  const mediaPending = new Map();
   async function mediaUrl(ref) {
-    if (!ref) return ""; if (S.mediaCache.has(ref)) return S.mediaCache.get(ref);
-    try { const r = await api.media.get({ ref }); S.mediaCache.set(ref, r.dataUrl); return r.dataUrl; } catch (e) { return ""; }
+    if (!ref) return ""; if (typeof S.mediaCache.get(ref) === "string") return S.mediaCache.get(ref);
+    if (mediaPending.has(ref)) return mediaPending.get(ref);
+    const p = (async () => {
+      for (let i = 0; i < 2; i++) {
+        try { const r = await api.media.get({ ref }); if (r && r.dataUrl) { S.mediaCache.set(ref, r.dataUrl); return r.dataUrl; } } catch (e) { /* 再试一次 */ }
+      }
+      return "";
+    })();
+    mediaPending.set(ref, p); const url = await p; mediaPending.delete(ref); return url;
   }
   function hydrateImages(root) {
-    root.querySelectorAll("img[data-ref]").forEach(async img => { const url = await mediaUrl(img.dataset.ref); if (url) img.src = url; img.removeAttribute("data-ref"); });
+    root.querySelectorAll("img[data-ref]").forEach(async img => { const url = await mediaUrl(img.dataset.ref); if (url) { img.src = url; img.removeAttribute("data-ref"); } });
   }
   async function pickImages(max, size) {
     const r = await api.media.pick({ accept: "image/*", multiple: max > 1, limit: max });
@@ -180,6 +191,7 @@
     const ev = [];
     if (t.author.type === "char") ev.push({ charId: t.author.charId, eventId: `douban_topic_${t.id}` });
     for (const f of t.floors || []) if (f.author.type === "char") ev.push({ charId: f.author.charId, eventId: `douban_floor_${t.id}_${f.n}` });
+    if (t.author.type !== "char" && /^c:/.test(t.fromProfile || "")) ev.push({ charId: t.fromProfile.slice(2), eventId: `douban_topic_${t.id}` }); // 主页生成的「他回过的帖」
     return ev;
   }
   async function deleteTopic(t) {
@@ -212,6 +224,7 @@
   const DOUBAN_RULE = `【豆瓣小组】这是仿真的豆瓣 App 小组。写法手感（是参考，不是公式，好看比合规更重要）：
 - 豆友说话很少夹英文单词（比如不说 mark）。
 - 豆瓣是文艺青年和吃瓜群众的地盘：比微博安静、比小红书话多。帖子标题像真人随手起的（求助、吐槽、分享、讨论、碎碎念、「有没有人和我一样……」），正文口语，长短不一。
+- 帖子要让人想点进去看：有情绪、有故事、有八卦、有笑点、有共鸣。少写干巴巴的技术问答、产品参数、专业名词堆砌；就算是兴趣组、技术组，也用大白话讲自己的经历和感受，外行一眼能看懂。
 - 回应的是一群各有性格的豆友：蹲后续的、接梗玩梗的、一针见血锐评的、认真分析给建议的、跑题的、站队吵起来的。每层都像真人随手打的字，短句为主，不写小作文。常见的豆瓣味：dd、蹲、码住、沙发、楼主好人、哈哈哈哈哈哈、这个组真的笑死、楼主更新了吗。
 - 楼层之间要有来往：引用楼上、楼主下场回复、豆友互相接梗，笑点靠一来一回打出来。引用写在「引用」字段里就行，正文开头不要再写「回3楼：」「回复@xx：」。
 - 赞数是隐形叙事：最好笑或最扎心的那层赞最高。
@@ -223,6 +236,7 @@
 - 豆友可以用缩写、代号说人（豆瓣味），但有人问「说的是谁」时，总有人会好心解释清楚（直接说名字，或者「就是演《xx》那个」），不要一直打太极。
 【豆友打字的样子】
 - 很多豆友（不是所有人）用连续句号代替逗号和省略号：「。。」「。。。」，有的人一整段都这样打；也有人正常用标点，或者几乎不打标点。同一个帖子里要有几种不同的习惯。
+- 豆友常用 emoji：🥹😭🤣😅🥰🙏🏻👍🏻😇 这类放句尾或单独当一层回应，大约三分之一的楼带。
 - 敏感词、平台名、容易被和谐的词，常用 emoji 或谐音代替（拿水果、动物、数字 emoji 指代），懂的人自然懂。
 - 常见缩写：lz（楼主）、kswl、懂的都懂；给不方便直说的人起代号（拿特征、身高、外号当代号），但有人问的时候要有人说清楚。
 - 楼主写帖子常带碎碎念：开头「写在前面」、中间「跑题了」、括号里补一句自嘲或说明。
@@ -232,6 +246,8 @@
 - 赞最高的往往是一句话的神回复，不是最长的那层。
 - 偶尔有人甩一张截图当证据（写在配图里）。
 - 不少豆友叫「momo」（新用户的默认名），同一个帖子里可以有好几个 momo。
+- 不要写「看到xx楼的话……」「xx楼说的……」这种句式：要回应哪层就写在「引用」里，正文直接说话。
+- 角色人设里没写的身份、成绩、头衔、外号（年级第一、学霸、校草、某某担当……）不要安给任何角色；不知道的就别提。
 - 用户本人绝不能出现在你写的内容里，除非下面明确写了她发的楼；不能替用户说话，也不能编造她做过的事。`;
   /** 被讨论时对用户的底线（公众人物、熟人组都适用） */
   const USER_LINE = `角色可以聊他们没跟用户提过的新鲜事（他们有自己的生活），合人设就行；*用户（${"${herName()}"}）做过的事只能来自聊天记录和记忆，不能编*。万一一定要提到她，也绝不能贬低、矮化她，不能把她写成衬托角色的工具人、陪衬或笑料。`;
@@ -239,8 +255,50 @@
   const publicLine = () => { const list = [...activeChars().filter(c => (S.meta.publicChars || []).includes(c.id)).map(c => `${c.name}（角色，豆瓣昵称「${charNick(c.id)}」）`), ...(S.meta.publicMe ? [`用户本人（${herName()}）`] : [])];
     return list.length ? `这个世界的公众人物（可以被大家当明星名人讨论）：${list.join("、")}。${userLine()}` : "这个世界里没有公众人物：角色和用户都不会被当成明星讨论。"; };
   /** 熟人组：组里的人现实中认识角色和用户（同校、同城、同公司），不是公众人物也会被聊到 */
-  const localLine = g => g && g.local ? `这是熟人组：组里的人现实中认识这些人（同校、同城、同事），会聊到他们、八卦他们（「高二那个打篮球的」「年级第一」）：${[...activeChars().map(c => c.name), `用户（${herName()}）`].join("、")}。他们本人这次不一定出场。${userLine()}` : "";
-  const WHO_LINE = () => `用户的豆瓣昵称是「${S.meta.nickname}」，真名「${herName()}」：你写的豆友不能用这两个名字。${activeChars().length ? `认识的角色（他们的豆瓣昵称）：${activeChars().map(c => `${c.name}「${charNick(c.id)}」`).join("、")}，豆友不能撞这些名字。` : ""}`;
+  const localLine = g => g && g.local ? `这是熟人组：组里的人现实中认识这些人（同校、同城、同事），会聊到他们、八卦他们：${[...activeChars().map(c => c.name), `用户（${herName()}）`].join("、")}。他们本人这次不一定出场。组里的人认识用户：知道她叫${herName()}、豆瓣昵称「${S.meta.nickname}」，她实名发帖回帖时大家知道就是她本人；聊到她就用名字或大家平时对她的叫法，不用「那个学姐」「某人」这种代称。${userLine()}` : "";
+  /**
+   * 小组自己的设定：成员称呼（她起的「小气球」要用上）、组长是谁（她当组长时大家都知道，只有她能加精、发头衔）
+   */
+  const groupLine = g => {
+    if (!g || !g.name) return "";
+    const lead = g.mine && g.admin;
+    return [g.memberNoun && g.memberNoun !== "成员" ? `这个组的成员叫「${g.memberNoun}」：组员自称、互相称呼、组长喊人都用这个叫法（「各位${g.memberNoun}」「我们${g.memberNoun}」）。` : "",
+      lead ? `组长是用户本人（豆瓣昵称「${S.meta.nickname}」），组员都知道她是组长。加精、发头衔只有她能做：你写的帖子精华都写 否，头衔都写 无。` : g.leader ? `组长是「${g.leader}」。` : ""].filter(Boolean).join("");
+  };
+  /** 角色跟用户说话时的底线（豆瓣里她回了角色、角色回她） */
+  const CHAR_TALK_LINE = "角色跟用户说话：按人设和你们真实的关系、平时聊天的语气来；人设里没写的性格（嘴硬心软、毒舌、傲娇、爱说教）不要加。不要替她安排接下来做什么、不要编谁在等她、她要去哪（「某人在楼下等你」「赶紧去写作业」这种都不行），也不要预设她会有什么反应；不凶她、不训她。";
+  /** 季节和天气：模型老爱写「大冷天」，按日期给季节 + 能查到的话给她那边的真实天气 */
+  function seasonText() {
+    const d = new Date(); const m = d.getMonth() + 1; const day = d.getDate();
+    const part = day <= 10 ? "上旬" : day <= 20 ? "中旬" : "下旬";
+    const s = m >= 3 && m <= 5 ? "春天" : m >= 6 && m <= 8 ? "夏天" : m >= 9 && m <= 11 ? (m === 11 ? "深秋" : "初秋") : "冬天";
+    return `${m}月${part}，${s}`;
+  }
+  const WX_NAME = c => c === 0 ? "晴" : c === 1 ? "晴间多云" : c === 2 ? "多云" : c === 3 ? "阴" : c <= 48 ? "雾" : c <= 57 ? "毛毛雨"
+    : c <= 67 ? (c === 61 ? "小雨" : c === 63 ? "中雨" : "大雨") : c <= 77 ? "雪" : c <= 82 ? "阵雨" : c <= 86 ? "阵雪" : "雷阵雨";
+  const WX = {};
+  async function wxOf(q) {
+    const hit = WX[q]; if (hit && Date.now() - hit.at < (hit.v ? 3600e3 : 600e3)) return hit.v;
+    let v = null;
+    try {
+      if (api.network && api.network.fetch) {
+        const js = r => r && (r.json || (r.text ? JSON.parse(r.text) : null));
+        const g = (js(await api.network.fetch({ url: "https://geocoding-api.open-meteo.com/v1/search", query: { name: q, count: 1, language: "zh" }, timeoutMs: 8000 })) || {}).results?.[0];
+        if (g) {
+          const f = js(await api.network.fetch({ url: "https://api.open-meteo.com/v1/forecast", timeoutMs: 8000,
+            query: { latitude: g.latitude, longitude: g.longitude, current: "temperature_2m,weather_code", daily: "temperature_2m_max,temperature_2m_min", timezone: "auto", forecast_days: 1 } }));
+          if (f && f.current) v = `${WX_NAME(f.current.weather_code)}，今天 ${Math.round(f.daily.temperature_2m_min[0])}～${Math.round(f.daily.temperature_2m_max[0])}°C`;
+        }
+      }
+    } catch (e) { console.warn("天气", e); }
+    WX[q] = { at: Date.now(), v }; return v;
+  }
+  async function weatherLine() {
+    const q = (S.meta.city || "").trim() || (S.meta.ip || "").trim();
+    const w = q ? await wxOf(q) : null;
+    return `【季节和天气】现在是${seasonText()}。季节只是背景，不能写错：不是冬天就不要写大冷天、冻手、哈白气、结冰、冰水、裹羽绒服。没有理由就不提天气。${w ? `用户和同城的人那边今天${w}（只是背景，提到也只说感受，不写度数）。` : "你不知道今天具体的天气和气温，不要编。"}路人分散在各地，不要给路人编具体温度。`;
+  }
+  const WHO_LINE = () => `用户的豆瓣昵称是「${S.meta.nickname}」，真名「${herName()}」${S.meta.ip ? `，IP 属地 ${S.meta.ip}` : ""}：你写的豆友不能用这两个名字。${activeChars().length ? `认识的角色（他们的豆瓣昵称${activeChars().some(c => charIp(c.id)) ? "、IP 属地" : ""}）：${activeChars().map(c => `${c.name}「${charNick(c.id)}」${charIp(c.id) ? ` ${charIp(c.id)}` : ""}`).join("、")}，豆友不能撞这些名字；角色出场时 IP 照这里写。` : ""}`;
 
   /** 借来的角色资料只是世界背景（宿主规定调用必须带一个角色）：没轮到出场的人不许出现，也不许被提起 */
   const bgLine = (appear, g) => `【这次谁出场】${appear.length ? `只有 ${appear.map(c => c.name).join("、")} 可以出场（按下面说的方式）。` : "这次没有任何角色出场。"}${g && g.local ? "其他角色本人不出现（不发帖不回帖），但这是熟人组，豆友可以聊到、八卦他们（见下面）。" : "你拿到的角色人设、世界书、记忆只是这个世界的背景：其他角色本人不出现，豆友也不认识他们，不要提他们的名字、外号、身份（比如「X姐」「班长」），也不要编和他们有关的人和事。豆友都是普通路人，聊的是自己的事。"}`;
@@ -252,7 +310,8 @@
     if (!charIds.length) { toast("没有参与的角色：先去微信加个好友，或者在设置里打开"); return null; }
     const job = uid("job"); S.jobs.add(job); refreshAll();
     try {
-      const payload = { appTags: ["nox_douban", scene], instruction: [DOUBAN_RULE, WHO_LINE(), instruction, "【输出要求】只输出本轮说明要求的块，字段名照抄，不要解释、不要旁白、不要 markdown。"].join("\n\n") };
+      const wx = scene === "groupsearch" ? "" : await weatherLine();
+      const payload = { appTags: ["nox_douban", scene], instruction: [DOUBAN_RULE, WHO_LINE(), wx, instruction, "【输出要求】只输出本轮说明要求的块，字段名照抄，不要解释、不要旁白、不要 markdown。"].join("\n\n") };
       const r = await api.ai.generate(charIds.length === 1 ? { ...payload, characterId: charIds[0] } : { ...payload, characterIds: charIds });
       const text = (r && r.text) || ""; logAi({ label, ok: true, text }); return text;
     } catch (e) {
@@ -260,7 +319,7 @@
     } finally { S.jobs.delete(job); refreshAll(); }
   }
   /** ===块=== 解析：字段「名：值」，值可以多行（接到上一个字段） */
-  const KEYS = ["昵称", "关注用户", "签名", "关注数", "被关注数", "小组", "会逛的角色", "楼主赞过", "头衔", "熟人圈", "说的是", "来源", "IP", "组长", "成员称呼", "分区", "发言规则", "配图", "精华", "名称", "成员", "简介", "标题", "作者", "角色", "匿名", "时间", "回应数", "正文", "楼主", "赞", "引用", "内容", "层"];
+  const KEYS = ["豆瓣ID", "豆瓣昵称", "昵称", "关注用户", "签名", "关注数", "被关注数", "小组", "会逛的角色", "楼主赞过", "头衔", "熟人圈", "说的是", "来源", "IP", "组长", "成员称呼", "分区", "发言规则", "配图", "精华", "名称", "成员", "简介", "标题", "作者", "角色", "匿名", "时间", "回应数", "正文", "楼主", "赞", "引用", "内容", "层"];
   function parseBlocks(raw, kind) {
     const text = String(raw || "").replace(/```[a-z]*\n?/g, "").replace(/\r/g, "");
     const out = []; let label = null;
@@ -332,7 +391,7 @@
     const m = g.members || 1;
     const rate = m < 100 ? 0.25 : m < 1000 ? 0.08 : m < 10000 ? 0.02 : m < 100000 ? 0.004 : 0.001; // 每天涨百分之几
     const age = (now - new Date(g.createdAt || now).getTime()) / 86400e3;
-    const boost = (g.mine && age < 5 ? 2.5 : 1) * (S.topics.some(t => t.groupId === g.id && (t.elite || (t.author.type === "user" && t.floors.length >= 8)) && now - new Date(t.lastReplyAt || t.createdAt) < 3 * 86400e3) ? 1.8 : 1);
+    const boost = (g.mine && age < 5 ? 2.5 : 1) * (S.topics.some(t => t.groupId === g.id && (showElite(t) || (t.author.type === "user" && t.floors.length >= 8)) && now - new Date(t.lastReplyAt || t.createdAt) < 3 * 86400e3) ? 1.8 : 1);
     const add = Math.round(m * rate * Math.min(days, 30) * boost * (0.6 + Math.random() * 0.8)) + (m < 100 && days > 0.2 ? rand(0, 2) : 0);
     g.grownAt = new Date(now).toISOString();
     if (add > 0) g.members = m + add;
@@ -342,7 +401,7 @@
    * char 在这个组的出场率：她单独调过就按她的；否则 熟人组 发帖30%/回帖40%，兴趣相关 20%/25%，无关 10%/15%。
    * pool = 可能出场的 char：熟人组谁都可能来，兴趣组是会逛这个组的那几个，无关组随便一个
    */
-  const RATE_DEF = { local: [30, 40], interest: [20, 25], none: [10, 15] };
+  const RATE_DEF = { local: [40, 50], interest: [25, 30], none: [10, 15] };
   function charRates(g) {
     const act = activeChars();
     const fans = act.filter(c => (g.charsHere || []).includes(c.id));
@@ -375,7 +434,7 @@
     if (!g.leader && nick && !none(nick) && !isUserName(nick)) g.leader = nick.slice(0, 20);
     if (!g.memberNoun && !none(b["成员称呼"])) g.memberNoun = String(b["成员称呼"]).trim().slice(0, 8);
     if (!g.rules && !none(b["发言规则"])) g.rules = String(b["发言规则"]).trim().slice(0, 200);
-    if (!(g.titles || []).length && !none(b["头衔"])) g.titles = String(b["头衔"]).split(/[、,，/｜|]+/).map(x => x.trim()).filter(Boolean).slice(0, 4);
+    if (!(g.mine && g.admin) && !(g.titles || []).length && !none(b["头衔"])) g.titles = String(b["头衔"]).split(/[、,，/｜|]+/).map(x => x.trim()).filter(Boolean).slice(0, 4);
     if (!(g.sections || []).length && !none(b["分区"])) g.sections = String(b["分区"]).split(/[、,，/｜|]+/).map(x => x.trim()).filter(Boolean).slice(0, 5);
   }
   /**
@@ -388,23 +447,27 @@
     const cast = pickCast(rates.pool.length ? rates.pool : activeChars(), 3);
     const hit = cast.length && Math.random() < rates.post ? cast[0] : null;
     const anon = hit && Math.random() < 0.6;
-    const needInfo = !g.charsChecked || !g.memberNoun || !(g.sections || []).length || !(g.titles || []).length || (!g.leader && !(g.mine && g.admin));
+    const lead = g.mine && g.admin;
+    const needInfo = !g.charsChecked || !g.memberNoun || !(g.sections || []).length || (!lead && !(g.titles || []).length) || (!g.leader && !lead);
+    // 现实新闻别每个组都聊同一件：别的组最近 5 天聊过的真事列出来
+    const newsSeen = [...new Set(S.topics.filter(t => t.groupId !== g.id && t.about && /现实|联网/.test(t.source || "") && Date.now() - new Date(t.createdAt) < 5 * 86400e3).map(t => t.about))].slice(0, 12).join("、");
     const recent = S.topics.filter(t => t.groupId === g.id).sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)).slice(0, 10).map(t => `- ${t.title}`).join("\n");
     const text = await generate((hit ? [hit] : cast.slice(0, 2)).map(c => c.id), "topics", [
       `当前时间：${new Date().toLocaleString("zh-CN", { hour12: false })}`,
       `小组：「${g.name}」（${fmtNum(g.members)} 个成员）\n小组介绍：${g.intro || "无"}${g.topicsHint ? `\n组里讨论：${g.topicsHint}` : ""}`,
       `写这个组里最近的 ${rand(5, 7)} 个帖子，大部分是路人豆友发的，话题贴着小组主题，五花八门。`,
       hit ? (anon
-        ? `其中 1 个帖子是 ${hit.name} 本人用匿名发的（作者写 匿名，角色写 ${hit.name}，匿名写 是）：按他的人设、近况和心事写，可以是关于用户的事（不点名）。他可以是不可靠叙述者，嘴上一套心里一套。`
-        : `其中 1 个帖子是 ${hit.name} 本人用自己的豆瓣号发的（作者写他的豆瓣昵称${S.meta.charNicks[hit.id] ? `「${S.meta.charNicks[hit.id]}」` : "，自己起一个像豆瓣的"}，角色写 ${hit.name}，匿名写 否）：按他的人设写。`)
+        ? `其中 1 个帖子是 ${hit.name} 本人用匿名发的（作者写 匿名，角色写 ${hit.name}，匿名写 是）：按他的人设、近况和心事写，可以是关于用户的事（不点名；她的事只能来自聊天记录和记忆，只写他自己的心情、纠结和打算）。他可以是不可靠叙述者，嘴上一套心里一套。`
+        : `其中 1 个帖子是 ${hit.name} 本人用自己的豆瓣号发的（作者写他的豆瓣昵称${S.meta.charNicks[hit.id] ? `「${S.meta.charNicks[hit.id]}」` : "，自己起一个像豆瓣的"}，角色写 ${hit.name}，匿名写 否）：写他生活里真正在意、有情绪的事（开心的、烦的、想炫耀的、想求助的），和他在意的人有关更好（用户的事只能来自聊天记录和记忆）；不要写成干巴巴的技术问答。`)
         : "这批帖子全是路人发的，角色都不出现。",
       recent ? `组里已经有这些帖子，不要重复：\n${recent}` : "",
-      bgLine(hit ? [hit] : [], g), localLine(g),
+      bgLine(hit ? [hit] : [], g), localLine(g), groupLine(g),
+      newsSeen ? `别的组最近已经聊过这些现实里的事，这次不要再写：${newsSeen}` : "",
       (g.sections || []).length ? `组里的分区：${g.sections.join("、")}。每个帖子归到一个分区（闲聊的可以不归，写 无）。` : "",
       publicLine(),
       "如果你能联网搜索：按这个小组聊的话题，去搜最近现实里真的在讨论的事（娱乐圈、体育、游戏、社会新闻、新剧新书……看小组是干什么的），把其中 1～2 个帖子写成在聊这些真事，用真名；和世界观冲突的不要。不能联网就按这个世界写。",
-      "大约四分之一的帖子带图（晒东西、现场、截图这类才带），写在「配图」里；最多 1 个帖子是组长加精的（内容特别好、特别有用的才加，没有就都写 否）。",
-      needInfo ? `先补全这个小组的信息（只写一次）：\n===小组信息===\n组长：组长的豆瓣昵称${g.mine && g.admin ? "（组长是用户本人，这行写 无）" : ""}\n成员称呼：这个组对成员的叫法（像「小不知道」「组员」「病友」，很多组就叫「成员」）\n发言规则：一两条组规（没有写 无）\n分区：3～4 个讨论分区的名字，用、分隔\n头衔：2～3 个这个组发给成员的头衔，用、分隔（像组内梗，五到八个字）${g.charsChecked ? "" : charsLine()}\n===结束===` : "",
+      `大约四分之一的帖子带图（晒东西、现场、截图这类才带），写在「配图」里，一张图写一段画面描述（不要写「1张」这种数量）；${g.mine && g.admin ? "精华都写 否（只有组长本人能加精）。" : "最多 1 个帖子是组长加精的（内容特别好、特别有用的才加，没有就都写 否）。"}`,
+      needInfo ? `先补全这个小组的信息（只写一次）：\n===小组信息===\n组长：组长的豆瓣昵称${g.mine && g.admin ? "（组长是用户本人，这行写 无）" : ""}\n成员称呼：这个组对成员的叫法（像「小不知道」「组员」「病友」，很多组就叫「成员」）\n发言规则：一两条组规（没有写 无）\n分区：3～4 个讨论分区的名字，用、分隔${lead ? "" : "\n头衔：2～3 个这个组发给成员的头衔，用、分隔（像组内梗，五到八个字）"}${g.charsChecked ? "" : charsLine()}\n===结束===` : "",
       "每个帖子：\n===帖子===\n标题：帖子标题（不用自己加分区前缀）\n作者：豆友昵称（匿名发的写 匿名）\n角色：角色本名（路人写 无）\n匿名：是 / 否\n分区：分区名（没有写 无）\n时间：发帖时间（如 3小时前、昨天 21:30、2天前）\nIP：这个人的 IP 属地（省份或城市，按他在哪写；同校同城的组大多一样）\n回应数：目前有多少条回应（纯数字）\n配图：图片描述，多张用 | 分隔（不带图写 无）\n精华：是 / 否\n说的是：这帖在讨论谁（真名；不涉及具体的人写 无）\n来源：现实新闻 / 联网搜到的 / 这个世界的事 / 无\n正文：\n楼主的首帖正文\n===结束===",
     ].filter(Boolean).join("\n\n"), `「${g.name}」的帖子`);
     g._busy = false;
@@ -418,18 +481,31 @@
       if (author.type === "char" && (!hit || author.charId !== hit.id)) continue; // 只让掷中的那个出场
       const createdAt = parseRelTime(b["时间"], 600);
       const sec = String(b["分区"] || "").trim(); const replyCount = clampInt(b["回应数"], rand(3, 80));
-      const isElite = yes(b["精华"]) && elite < 1; if (isElite) elite++;
+      const isElite = !lead && yes(b["精华"]) && elite < 1; if (isElite) elite++;
       const t = { id: uid("t"), scope: S.identity.id, groupId: g.id, title: title.replace(/^[^|｜]{1,8}\s*[|｜]\s*/, ""), author, body, createdAt, lastReplyAt: createdAt, replyCount, floors: [], liked: false,
         section: !none(sec) && (g.sections || []).includes(sec) ? sec : "", elite: isElite || undefined,
         about: none(b["说的是"]) ? "" : String(b["说的是"]).trim().slice(0, 60), source: none(b["来源"]) ? "" : String(b["来源"]).trim().slice(0, 12), ip: none(b["IP"]) ? "" : String(b["IP"]).trim().slice(0, 8),
-        images: none(b["配图"]) ? [] : String(b["配图"]).split(/[|｜]/).map(x => x.trim()).filter(Boolean).slice(0, 4).map(desc => ({ desc })),
+        images: picDescs(b["配图"]),
         likes: Math.round(replyCount * (0.2 + Math.random() * 0.8)), favs: Math.round(replyCount * Math.random() * 0.4), reposts: Math.round(replyCount * Math.random() * 0.15) };
       S.topics.push(t); saveTopic(t); n++;
+      if (author.type === "char") noteCharIp(author.charId, t.ip);
       if (author.type === "char") remember(author.charId, `我在豆瓣小组「${g.name}」${author.anon ? "匿名" : ""}发了个帖子《${title}》：${body.slice(0, 80)}`, `douban_topic_${t.id}`);
     }
     g.refreshedAt = nowIso(); saveGroup(g);
     if (!n) toast("这次没写出能用的帖子，去「我的 → 调试记录」看看");
     refreshAll();
+  }
+
+  /** AI 写的配图 → [{desc}]：去掉「1张」「图片」这种不是画面的碎片 */
+  const picDescs = v => none(v) ? [] : String(v).split(/[|｜]/).map(x => x.trim().replace(/[（(]\s*\d+\s*张\s*[)）]$/, "").trim())
+    .filter(x => x.length >= 4 && !/^(共|一共)?\s*[\d一二三四五六七八九十]+\s*张(图|照片)?$/.test(x) && !/^(图片?|照片|截图|配图)\s*\d*$/.test(x)).slice(0, 4).map(desc => ({ desc }));
+  /** 她当组长的组：精华和头衔只能她给（AI 以前给的不算） */
+  const isLeadGroup = g => !!(g && g.mine && g.admin);
+  const showElite = t => !!t.elite && (!isLeadGroup(groupById(t.groupId)) || !!t.eliteMine);
+  function floorTitle(t, f) {
+    const g = groupById(t.groupId);
+    if (isLeadGroup(g)) return ((g.memberTitles || {})[personKey(f.author)] || "");
+    return f.title || "";
   }
 
   // ───────────────────────── 帖子：楼层 ─────────────────────────
@@ -438,7 +514,7 @@
   const floorLine = (t, f) => `${f.n}楼 ${f.author.type === "user" ? (f.author.anon ? "匿名豆友（其实是用户本人，大家不知道）" : `${S.meta.nickname}（用户本人）`) : sameAuthor(f.author, t.author) ? `${whoOf(f.author).name}（楼主）` : f.author.type === "char" ? `${whoOf(f.author).name}（${f.author.anon ? `匿名，其实是角色 ${charById(f.author.charId)?.name}` : `角色 ${charById(f.author.charId)?.name}`}）` : whoOf(f.author).name}${f.quote ? ` 引用${f.quote}楼` : ""}：${f.text.slice(0, 120)}`;
   function opDesc(t) {
     const a = t.author;
-    if (a.type === "user") return a.anon ? "楼主是用户本人用匿名发的：除了作者自己，谁都不知道是她。" : `楼主是用户本人（豆瓣昵称「${S.meta.nickname}」）：她的楼只能是下面已有的，不能替她写新的楼。`;
+    if (a.type === "user") return a.anon ? "楼主是用户本人用匿名发的：除了作者自己，谁都不知道是她。" : `楼主是用户本人（豆瓣昵称「${S.meta.nickname}」）：她的楼只能是下面已有的，不能替她写新的楼。${(groupById(t.groupId) || {}).local ? `这是熟人组，大家都知道楼主就是${herName()}，跟她说话、聊她都直接当她本人。` : ""}`;
     if (a.type === "char") { const c = charById(a.charId); return a.anon ? `楼主是角色 ${c.name} 本人匿名发的：豆友们不知道是谁（可以随口猜，但永远不会坐实）。楼主下场回复时就是他本人在说话，按他的人设。` : `楼主是角色 ${c.name}（豆瓣昵称「${charNick(a.charId)}」）本人。`; }
     return `楼主是路人豆友「${a.name.startsWith("anon_") ? "匿名豆友" : a.name}」。`;
   }
@@ -453,8 +529,23 @@
     const target = mine && mine.quote ? t.floors.find(f => f.n === mine.quote) : null;
     const askChar = target && target.author.type === "char" ? target.author.charId : mine && t.author.type === "char" ? t.author.charId : null;
     const fr = charRates(g);
-    const passer = !askChar && !mine && Math.random() < fr.floor ? pickCast(fr.pool.filter(c => !charsInFloor.has(c.id)), 1)[0] : null;
-    const cast = [...new Set([...charsInFloor, askChar, passer && passer.id].filter(Boolean))].map(charById).filter(Boolean);
+    // 她点名的 char（她的楼里写了他的名字或豆瓣昵称；她自己的新帖正文里提到的）一定来
+    const mentionIn = txt => activeChars().filter(c => txt && (txt.includes(c.name) || (S.meta.charNicks[c.id] && txt.includes(S.meta.charNicks[c.id]))));
+    const cued = (mine ? mentionIn(mine.text) : !t.floors.length && t.author.type === "user" ? mentionIn(`${t.title}\n${t.body}`) : []).filter(c => c.id !== askChar);
+    const taken = new Set([...charsInFloor, askChar, ...cued.map(c => c.id)].filter(Boolean));
+    // 帖子、楼里被聊到的 char：一半机会自己刷到下场（熟人组八卦到本人头上）
+    const talked = mentionIn(`${t.title}\n${t.body}\n${t.floors.slice(-20).map(f => f.text).join("\n")}`).filter(c => !taken.has(c.id) && Math.random() < 0.5).slice(0, 2);
+    talked.forEach(c => taken.add(c.id));
+    // 路过：她发的帖、她回过的帖概率翻倍（熟人组至少 60%）
+    const herTopic = t.author.type === "user" || t.floors.some(f => f.author.type === "user");
+    const pFloor = herTopic ? Math.min(0.85, Math.max(fr.floor * 1.8, g.local ? 0.6 : 0)) : fr.floor;
+    const passer = Math.random() < pFloor ? pickCast(fr.pool.filter(c => !taken.has(c.id)), 1)[0] : null;
+    // 主页生成时写好的「他回过这帖」：第一次打开时把那层放进去
+    const pr = !t.floors.length && t.pendingReply && (t.pendingReply.npc || charById(t.pendingReply.charId)) ? t.pendingReply : null;
+    const prChar = pr && pr.charId ? charById(pr.charId) : null;
+    const prAuthor = pr ? (prChar ? { type: "char", charId: prChar.id } : { type: "npc", name: pr.npc }) : null;
+    const lead = [askChar && charById(askChar), ...cued, prChar, passer, ...talked].filter(Boolean);
+    const cast = [...new Map([...lead, ...[...charsInFloor].map(charById)].filter(Boolean).map(c => [c.id, c])).values()];
     const castIds = (cast.length ? cast : pickCast(activeChars(), 1)).map(c => c.id).slice(0, 3);
     const n = mine ? rand(2, 4) : t.floors.length ? rand(6, 10) : Math.min(Math.max(t.replyCount, 6), rand(10, 15));
     const history = t.floors.slice(-30).map(f => floorLine(t, f)).join("\n");
@@ -467,11 +558,15 @@
       `楼主首帖（1楼）：\n${t.body}${(t.images || []).length ? `\n（配图：${t.images.map(im => im.desc || "一张照片").join(" | ")}）` : ""}`,
       history ? `已有的楼层：\n${history}` : "",
       mine ? `用户刚刚${mine.author.anon ? "匿名" : ""}回了 ${mine.n} 楼${mine.quote ? `（引用了 ${mine.quote} 楼）` : ""}：「${mine.text}」。接下来 ${n} 层里要有人回应她这层（引用 ${mine.n}），${askChar ? `${charById(askChar).name} 一定会回${mine.author.anon ? "（他不知道这是用户，当陌生豆友回）" : "（他知道这是用户）"}，按他的人设和你们的关系；` : ""}其他豆友可以接着聊。` : "",
-      passer ? `${passer.name} 刷到了这个帖子，可能会顺手回一层（按人设决定实名还是匿名，不来也行）。` : "",
-      bgLine(cast, g), localLine(g),
+      cued.length ? `用户在楼里提到了 ${cued.map(c => c.name).join("、")}：${cued.length > 1 ? "他们" : "他"}这次一定会来回一层${mine ? `（引用 ${mine.n} 楼）` : ""}，按人设和你们的关系。` : "",
+      passer ? `${passer.name} 刷到了这个帖子，会顺手回一层（按人设决定实名还是匿名）。` : "",
+      talked.length ? `${talked.map(c => c.name).join("、")} 刷到了这个聊到自己的帖子，会下场回一层（按人设决定实名还是匿名，可以澄清、接梗、或者装没看见只回别的）。` : "",
+      pr ? `这批楼里要有 ${prChar ? `${prChar.name}（用他的豆瓣号「${charNick(prChar.id)}」，角色写 ${prChar.name}）` : `豆友「${pr.npc}」（作者照写这个昵称）`} 回的一层，内容原样照抄：「${pr.text}」，前后的楼和它接得上。` : "",
+      (mine && !mine.author.anon) || (t.author.type === "user" && !t.author.anon) || cued.length ? CHAR_TALK_LINE : "",
+      bgLine(cast, g), localLine(g), groupLine(g),
       `时间线：帖子是 ${fmtTime(t.createdAt)} 发的，${t.floors.length ? `最后一层是 ${fmtTime(t.lastReplyAt || t.createdAt)}，` : ""}现在是 ${new Date().toLocaleString("zh-CN", { hour12: false })}。每层的时间按内容排：楼层越往后越晚，都在现在之前；楼主更新的进展要在那件事发生之后（白天的事白天之后更、晚自习的事当晚之后更），还没到时候的事不能更，让大家先蹲着；深夜、凌晨大多是熬夜的人在聊。`,
       `从 ${next} 楼开始，往下写 ${n} 层回应。${t.floors.length ? "接着已有的话题自然往下聊，楼主可以更新进展或下场回复。" : "楼主可以下场回复几层。"}`,
-      `每层：\n===楼===\n层：楼层号\n作者：豆友昵称（楼主就写楼主${t.author.anon ? "；匿名的写 匿名" : ""}）\n角色：角色本名（路人写 无）\n匿名：是 / 否\n楼主：是 / 否\n引用：引用了第几楼（没引用写 无）\n时间：这层是什么时候回的（如 昨天 23:40、今天 01:15、2天前 20:10）\nIP：这个人的 IP 属地（省份或城市；楼主的和帖子一致）\n头衔：${(g.titles || []).length ? `这个组的头衔之一（${g.titles.join("、")}），只有一部分人有，没有写 无` : "无"}\n楼主赞过：是 / 否（楼主给这层点了赞，一批最多一两层，大多是 否）\n赞：点赞数（纯数字）\n内容：\n这层的内容\n===结束===`,
+      `每层：\n===楼===\n层：楼层号\n作者：豆友昵称（楼主就写楼主${t.author.anon ? "；匿名的写 匿名" : ""}）\n角色：角色本名（路人写 无）\n匿名：是 / 否\n楼主：是 / 否\n引用：引用了第几楼（没引用写 无）\n时间：这层是什么时候回的（如 昨天 23:40、今天 01:15、2天前 20:10）\nIP：这个人的 IP 属地（省份或城市；楼主的和帖子一致）\n头衔：${!isLeadGroup(g) && (g.titles || []).length ? `这个组的头衔之一（${g.titles.join("、")}），只有一部分人有，没有写 无` : "无"}\n楼主赞过：${t.author.type === "user" ? "否（楼主是用户，她自己点）" : "是 / 否（楼主给这层点了赞，一批最多一两层，大多是 否）"}\n赞：点赞数（纯数字）\n内容：\n这层的内容\n===结束===`,
     ].filter(Boolean).join("\n\n"), `《${t.title.slice(0, 12)}》的回应`);
     t._busy = false;
     if (text == null) { refreshAll(); return; }
@@ -500,10 +595,19 @@
       const q = q0 >= next ? aiMap[q0] || 0 : q0; // 本批的楼按实际楼层号换算；只能引用前面已有的楼，不能引用自己
       const fip = claimsOp ? t.ip : none(b["IP"]) ? "" : String(b["IP"]).trim().slice(0, 8);
       const ttl = String(b["头衔"] || "").trim();
-      const f = { n: fn, author, ip: fip || undefined, title: !none(ttl) && (g.titles || []).includes(ttl) ? ttl : undefined, opLiked: yes(b["楼主赞过"]) && !claimsOp && opLikes++ < 2 ? true : undefined, text: txt, likes: clampInt(b["赞"], rand(0, 20)), quote: q > 0 && q < fn ? q : null, createdAt: new Date(Math.min(Date.now(), at)).toISOString() };
+      const f = { n: fn, author, ip: fip || undefined, title: !none(ttl) && (g.titles || []).includes(ttl) ? ttl : undefined, opLiked: t.author.type !== "user" && yes(b["楼主赞过"]) && !claimsOp && opLikes++ < 2 ? true : undefined, text: txt, likes: clampInt(b["赞"], rand(0, 20)), quote: q > 0 && q < fn ? q : null, createdAt: new Date(Math.min(Date.now(), at)).toISOString() };
       t.floors.push(f); made++;
+      if (author.type === "char") noteCharIp(author.charId, f.ip);
       if (author.type === "char" && mine && !mine.author.anon) remember(author.charId, `${herName()}在豆瓣小组「${g.name}」的帖子《${t.title}》里回复：「${mine.text.slice(0, 60)}」，我回：「${txt.slice(0, 60)}」`, `douban_floor_${t.id}_${f.n}`);
       else if (author.type === "char" && !sameAuthor(author, t.author)) remember(author.charId, `我在豆瓣小组「${g.name}」的帖子《${t.title}》里${author.anon ? "匿名" : ""}回了一层：「${txt.slice(0, 60)}」`, `douban_floor_${t.id}_${f.n}`);
+    }
+    if (pr) {
+      if (!t.floors.some(f => sameAuthor(f.author, prAuthor))) {
+        const last = t.floors[t.floors.length - 1]; const fn = last ? last.n + 1 : next;
+        t.floors.push({ n: fn, author: prAuthor, text: pr.text, likes: rand(1, 30), quote: null, createdAt: new Date(Math.min(Date.now(), (last ? new Date(last.createdAt).getTime() : at) + rand(5, 90) * 60e3)).toISOString() });
+        made++;
+      }
+      delete t.pendingReply;
     }
     if (made) { t.lastReplyAt = t.floors[t.floors.length - 1].createdAt; t.replyCount = Math.max(t.replyCount, t.floors.length); likeHers(t, made); }
     else toast("这次没写出能用的回应，去「我的 → 调试记录」看看");
@@ -520,10 +624,12 @@
       const quoted = t.floors.filter(x => x.quote === f.n && x.author.type !== "user").length;
       const fresh = Date.now() - new Date(f.createdAt) < 3 * 86400e3;
       const newQuotes = Math.max(0, quoted - (f.likedQuoted || 0)); // 只按新增的引用算
-      f.likes = (f.likes || 0) + (fresh ? rand(0, 3) + newQuotes * rand(2, 6) : rand(0, 1));
+      // 第一次有人来时先给一波（别人的楼平均两位数，她的不能老是个位数）
+      const first = !f.likedQuoted && !f.likeSeeded; f.likeSeeded = true;
+      f.likes = (f.likes || 0) + (fresh ? (first ? rand(4, 16) : rand(1, 5)) + newQuotes * rand(4, 10) : rand(0, 2));
       f.likedQuoted = quoted;
     }
-    if (t.author.type === "user") t.likes = (t.likes || 0) + rand(1, 3) * made;
+    if (t.author.type === "user") t.likes = (t.likes || 0) + rand(2, 5) * made;
   }
   // ───────────────────────── 豆友主页（char / 路人） ─────────────────────────
   // S.meta.people[key] = { sign, following, followers, followsMe, coverRef, genAt }；生成时顺便写几个他以前在别的组发的帖子（topic.fromProfile）
@@ -542,33 +648,57 @@
     const old = personInfo(k);
     const mine = S.topics.filter(t => sameAuthor(t.author, author)).slice(0, 8).map(t => `- 《${t.title}》（${(groupById(t.groupId) || {}).name || ""}）`).join("\n");
     const followed = (S.meta.follows || []).includes(followKey(author));
+    const needNick = isChar && !S.meta.charNicks[id];
     const instruction = [
       `当前时间：${new Date().toLocaleString("zh-CN", { hour12: false })}`,
-      isChar ? `写你（${ch.name}）的豆瓣个人主页，你的豆瓣昵称是「${charNick(id)}」。按你的人设、爱好和生活来写。` : `写豆友「${id}」的豆瓣个人主页：按 TA 在帖子里的样子想象 TA 是个什么样的人。`,
-      mine ? `${isChar ? "你" : "TA"}已经实名发过这些帖子（不要重复）：\n${mine}` : "",
-      `再写 ${rand(3, 5)} 个${isChar ? "你" : "TA"}以前实名在豆瓣小组发过的帖子（发在${isChar ? "你会逛的" : "TA 会逛的"}组里，组名像真豆瓣小组；时间分布在过去几天到几个月）。${isChar ? "不要写和用户有关的事。" : ""}`,
+      isChar ? `写你（${ch.name}）的豆瓣个人主页${needNick ? "" : `，你的豆瓣昵称是「${charNick(id)}」`}。按你的人设、爱好和生活来写。` : `写豆友「${id}」的豆瓣个人主页：按 TA 在帖子里的样子想象 TA 是个什么样的人。`,
+      mine ? `${isChar ? "你" : "TA"}已经发过这些帖子（不要重复）：\n${mine}` : "",
+      isChar
+        ? `再写 ${rand(3, 5)} 个你以前在豆瓣小组发过的帖子（发在你会逛的组里，组名像真豆瓣小组；时间分布在过去几天到几个月）。帖子要好看、像人话：生活碎碎念、开心的事、烦心事、求助、吐槽、分享，有情绪有故事，不要写成专业术语堆起来的技术问答。其中 1～2 个和你生活里最在意的人有关（如果是用户，按你们真实的关系和聊天记忆写：分享、炫耀、心事、请教别人怎么对她好；她的事只能来自聊天记录和记忆，只写你自己的心情和打算），这种可以匿名发（匿名写 是，别人看不出是你）。`
+        : `再写 ${rand(3, 5)} 个 TA 以前实名在豆瓣小组发过的帖子（发在 TA 会逛的组里，组名像真豆瓣小组；时间分布在过去几天到几个月），有情绪有故事，像人话。`,
+      `再写 ${rand(2, 3)} 条${isChar ? "你" : "TA"}在别人帖子底下回过的话（别人的帖子：组名、标题、楼主昵称、楼主正文；${isChar ? "你" : "TA"}回的那层：一两句）。`,
       isChar ? `你关不关注用户的豆瓣（她的豆瓣昵称「${S.meta.nickname}」）：按你们的关系和你的性格决定${followed ? "（她已经关注你了）" : ""}。` : "",
-      `先写：\n===主页===${isChar && !S.meta.charNicks[id] ? "\n昵称：你的豆瓣昵称（像真豆瓣用户随手起的，不用真名）" : ""}\n签名：豆瓣个人签名（一句话，像真人随手写的，可以空着写 无）\n关注数：纯数字\n被关注数：纯数字${isChar ? "\n关注用户：是 / 否" : ""}\n===结束===`,
-      "每个帖子：\n===帖子===\n小组：小组名\n标题：帖子标题\n时间：如 3天前、2个月前\n回应数：纯数字\nIP：IP 属地\n正文：\n首帖正文\n===结束===",
+      isChar ? CHAR_TALK_LINE : "",
+      `先写：\n===主页===${needNick ? `\n昵称：你的豆瓣昵称（像真豆瓣用户随手起的网名，不能用真名「${ch.name}」）` : ""}\n豆瓣ID：个人主页的 ID（豆瓣用户自己设的英文、拼音或数字，像 sunny0412、xiaoyu_、cat1998）\nIP：${isChar ? `你的 IP 属地（${charIp(id) ? `写 ${charIp(id)}` : "省份或城市"}）` : "IP 属地（省份或城市）"}\n签名：豆瓣个人签名（一句话，像真人随手写的，可以空着写 无）\n关注数：纯数字\n被关注数：纯数字${isChar ? "\n关注用户：是 / 否" : ""}\n===结束===`,
+      `每个帖子：\n===帖子===\n小组：小组名\n标题：帖子标题\n${isChar ? "匿名：是 / 否\n" : ""}时间：如 3天前、2个月前\n回应数：纯数字\n正文：\n首帖正文\n===结束===`,
+      `每条回过的话：\n===回应===\n小组：小组名\n标题：别人的帖子标题\n楼主：楼主的豆瓣昵称\n时间：如 3天前\n回应数：那个帖子有多少回应（纯数字）\n正文：\n楼主的首帖正文（两三句）\n内容：\n${isChar ? "你" : "TA"}回的那一层\n===结束===`,
     ].filter(Boolean).join("\n\n");
     const text = await generate(isChar ? [id] : pickCast(activeChars(), 1).map(c => c.id), "person", instruction, `${isChar ? ch.name : id}的主页`);
     S[`_gp_${k}`] = false;
     if (text == null) { refreshAll(); return; }
     const b = parseBlocks(text, "主页")[0] || {};
-    const nick = String(b["昵称"] || "").replace(/^@/, "").trim().slice(0, 20);
-    if (isChar && !S.meta.charNicks[id] && nick && !none(nick) && !isUserName(nick)) S.meta.charNicks[id] = nick;
+    // 昵称：AI 有时写成「豆瓣昵称：」，也认；不能是真名
+    const nick = String(b["昵称"] || b["豆瓣昵称"] || "").replace(/^@/, "").trim().slice(0, 20);
+    if (needNick && nick && !none(nick) && !isUserName(nick) && nick !== ch.name) S.meta.charNicks[id] = nick;
     if (again) { for (const t of S.topics.filter(t => t.fromProfile === k)) await deleteTopic(t); }
+    const ip = none(b["IP"]) ? "" : String(b["IP"]).trim().slice(0, 8);
+    if (isChar) noteCharIp(id, ip);
+    const did = String(b["豆瓣ID"] || "").replace(/^@/, "").replace(/\s+/g, "").slice(0, 20);
     S.meta.people[k] = { ...(old || {}), sign: none(b["签名"]) ? "" : String(b["签名"]).trim().slice(0, 60), following: clampInt(b["关注数"], rand(20, 300)), followers: clampInt(b["被关注数"], rand(10, 500)),
+      uid: (old && old.uid) || (did && !none(did) ? did : `${rand(1000, 9999)}${rand(1000, 9999)}`), ip: isChar ? (old && old.ip) || "" : (old && old.ip) || ip,
       followsMe: isChar ? yes(b["关注用户"]) : (old && old.followsMe) || false, genAt: nowIso() };
     let n = 0;
     for (const x of parseBlocks(text, "帖子")) {
       const title = String(x["标题"] || "").trim(); const bodyT = String(x["正文"] || "").trim(); if (!title || !bodyT) continue;
-      const g = ensureGroupByName(x["小组"], author); if (!g) continue;
+      const anon = isChar && yes(x["匿名"]);
+      const g = ensureGroupByName(x["小组"], anon ? null : author); if (!g) continue;
       const createdAt = parseRelTime(x["时间"], 60 * 24 * 30);
-      const t = { id: uid("t"), scope: S.identity.id, groupId: g.id, title, author: { ...author }, body: bodyT, createdAt, lastReplyAt: createdAt, replyCount: clampInt(x["回应数"], rand(3, 60)), floors: [],
-        ip: none(x["IP"]) ? "" : String(x["IP"]).trim().slice(0, 8), likes: rand(2, 80), favs: rand(0, 20), reposts: rand(0, 5), fromProfile: k };
+      const t = { id: uid("t"), scope: S.identity.id, groupId: g.id, title, author: { ...author, ...(anon ? { anon: true } : {}) }, body: bodyT, createdAt, lastReplyAt: createdAt, replyCount: clampInt(x["回应数"], rand(3, 60)), floors: [],
+        ip: isChar ? charIp(id) : ip, likes: rand(2, 80), favs: rand(0, 20), reposts: rand(0, 5), fromProfile: k };
       S.topics.push(t); saveTopic(t); n++;
-      if (isChar) remember(id, `我以前在豆瓣小组「${g.name}」发过一个帖子《${title}》：${bodyT.slice(0, 60)}`, `douban_topic_${t.id}`);
+      if (isChar) remember(id, `我以前在豆瓣小组「${g.name}」${anon ? "匿名" : ""}发过一个帖子《${title}》：${bodyT.slice(0, 60)}`, `douban_topic_${t.id}`);
+    }
+    // 他回过的帖子：帖子是别人的，他那层第一次打开时放进楼里（pendingReply），所以「他的回应」一开始就有
+    for (const x of parseBlocks(text, "回应")) {
+      const title = String(x["标题"] || "").trim(); const bodyT = String(x["正文"] || "").trim(); const said = String(x["内容"] || "").trim(); if (!title || !said) continue;
+      const g = ensureGroupByName(x["小组"], author); if (!g) continue;
+      const op = String(x["楼主"] || "").replace(/^@/, "").trim().slice(0, 24);
+      const createdAt = parseRelTime(x["时间"], 60 * 24 * 30);
+      const t = { id: uid("t"), scope: S.identity.id, groupId: g.id, title, author: { type: "npc", name: op && !none(op) && !isUserName(op) && !charByName(op) ? op : `豆友${rand(100, 999)}` }, body: bodyT || title, createdAt, lastReplyAt: new Date(Math.min(Date.now(), new Date(createdAt).getTime() + rand(1, 30) * 3600e3)).toISOString(),
+        replyCount: clampInt(x["回应数"], rand(5, 60)), floors: [], likes: rand(2, 80), favs: rand(0, 20), reposts: rand(0, 5), fromProfile: k,
+        pendingReply: isChar ? { charId: id, text: said } : { npc: id, text: said } };
+      S.topics.push(t); saveTopic(t); n++;
+      if (isChar) remember(id, `我以前在豆瓣小组「${g.name}」的帖子《${title}》里回过：「${said.slice(0, 60)}」`, `douban_topic_${t.id}`);
     }
     if (isChar && S.meta.people[k].followsMe && !(old && old.followsMe)) toast(`${charNick(id)} 关注了你`);
     saveMeta(); refreshAll();
@@ -591,7 +721,7 @@
       body(pg, `<div class="me-hero" ${info && info.coverRef ? `data-bg-ref="${esc(info.coverRef)}"` : ""}>
           <div class="me-ava">${avatarHtml(w)}</div>
           <div class="ph-row"><div class="cell-main"><h2>${esc(w.name)}</h2>
-            <div class="me-id">IP：${esc(ipOf(author, "") || "未知")}${isChar && info && info.followsMe ? ` · <span class="fo-me">关注了你</span>` : ""}</div></div>
+            <div class="me-id">${info && info.uid ? `ID：${esc(info.uid)} · ` : ""}IP：${esc(ipOf(author, "") || "未知")}${isChar && info && info.followsMe ? ` · <span class="fo-me">关注了你</span>` : ""}</div></div>
             <button class="ph-follow ${followed ? "on" : ""}" data-act="person-follow" data-k="${esc(k)}">${followed ? "已关注" : "＋关注"}</button></div>
           ${info && info.sign ? `<div class="me-sign">${esc(info.sign)}</div>` : ""}
           <div class="me-follow"><span>关注 ${info ? fmtNum(info.following) : "-"}</span><span>被关注 ${info ? fmtNum(info.followers + (followed ? 1 : 0)) : "-"}</span></div>
@@ -605,6 +735,7 @@
       const hero = $(".me-hero", pg.el); if (hero && hero.dataset.bgRef) mediaUrl(hero.dataset.bgRef).then(u => { if (u) hero.style.backgroundImage = `linear-gradient(rgba(0,0,0,.25),rgba(0,0,0,.35)),url("${u}")`; });
     }, { title: "", cls: "gpage ppage", corner: `<button class="top-icon" data-act="person-menu" data-k="${esc(k)}" aria-label="更多">${I.more}</button>` });
     if (isChar && !personInfo(k)) genPerson(k);
+    { const inf0 = personInfo(k); if (inf0 && !inf0.uid) { inf0.uid = `${rand(1000, 9999)}${rand(1000, 9999)}`; saveMeta(); page.render(page); } } // 老主页补一个 ID
     // 回关：她关注了他、他还没关注她 → 之后每天第一次打开他主页掷一次骰子（不花 API，主页不变）
     const inf = personInfo(k); const day = new Date().toDateString();
     if (isChar && inf && !inf.followsMe && (S.meta.follows || []).includes(followKey(author)) && inf.fbDay !== day && inf.followedAt && new Date(inf.followedAt).toDateString() !== day) {
@@ -615,7 +746,8 @@
   /** 主页下面那一串卡片（我的、char、路人都一样）：书影音 / 小组 / 帖子 / 回应 / 日记 / 豆列；帖子和回应只显示个数，点进去才列 */
   function topicsOfAuthor(a) {
     const posts = S.topics.filter(t => a.type === "user" ? t.author.type === "user" : t.author.type === a.type && (a.type === "char" ? t.author.charId === a.charId : t.author.name === a.name && !t.author.anon));
-    const replied = S.topics.filter(t => !posts.includes(t) && t.floors.some(f => a.type === "user" ? f.author.type === "user" : f.author.type === a.type && (a.type === "char" ? f.author.charId === a.charId : f.author.name === a.name && !f.author.anon)));
+    const pend = t => t.pendingReply && (a.type === "char" ? t.pendingReply.charId === a.charId : a.type === "npc" && t.pendingReply.npc === a.name);
+    const replied = S.topics.filter(t => !posts.includes(t) && pend(t) || !posts.includes(t) && t.floors.some(f => a.type === "user" ? f.author.type === "user" : f.author.type === a.type && (a.type === "char" ? f.author.charId === a.charId : f.author.name === a.name && !f.author.anon)));
     return { posts: posts.sort((x, y) => new Date(y.createdAt) - new Date(x.createdAt)), replied: replied.sort((x, y) => new Date(y.lastReplyAt) - new Date(x.lastReplyAt)) };
   }
   function profileCards(k, a, groups) {
@@ -707,7 +839,7 @@
 
   /** 小组头像：她换过就用图，没换就是色块 + 首字 */
   function groupAvaHtml(g, cls) {
-    return g.avatarRef ? `<img class="g-ava ${cls || ""} img" data-ref="${esc(g.avatarRef)}" alt="">` : groupAva(g, cls);
+    return g.avatarRef ? `<img class="g-ava ${cls || ""} img" ${refSrc(g.avatarRef)} alt="">` : groupAva(g, cls);
   }
   const heatColor = n => n >= 300 ? "#f05a4a" : n >= 100 ? "#f7884f" : n >= 30 ? "#f9a46a" : "#f6c66b";
   /**
@@ -720,9 +852,9 @@
     const meta = where === "group" ? (w => `${avatarHtml(w)}<span>${esc(w.name)}</span>${mask}`)(whoOf(t.author)) : `${groupAvaHtml(g, "xs")}<span>${esc(g.name)}</span>${mask}`;
     const img = (t.images || [])[0];
     return `<div class="trow" data-act="open-topic" data-id="${esc(t.id)}"><div class="trow-n"><i style="color:${heatColor(n)}">${I.bubble}</i><span>${fmtNum(n)}</span></div>
-      <div class="trow-main"><div class="trow-title">${t.elite ? '<span class="elite">精</span>' : ""}${t.section ? `${esc(t.section)}<span class="sep">|</span>` : ""}${esc(t.title)}</div>
+      <div class="trow-main"><div class="trow-title">${showElite(t) ? '<span class="elite">精</span>' : ""}${t.section ? `${esc(t.section)}<span class="sep">|</span>` : ""}${esc(t.title)}</div>
         <div class="trow-meta">${meta}<span class="upd">${fmtTime(t.lastReplyAt || t.createdAt)}更新</span></div></div>
-      ${img ? `<div class="trow-pic">${img.ref ? `<img data-ref="${esc(img.ref)}" alt="">` : placeholderImg()}</div>` : ""}</div>`;
+      ${img ? `<div class="trow-pic">${img.ref ? `<img ${refSrc(img.ref)} alt="">` : placeholderImg()}</div>` : ""}</div>`;
   }
   const DEFAULT_PLACEHOLDER = "/*__PLACEHOLDER__*/";
   const ANON_AVATAR = "/*__ANON__*/";
@@ -832,7 +964,7 @@
     const page = openPage(`group:${id}`, pg => {
       const all = S.topics.filter(t => t.groupId === id);
       let list = all.filter(t => sec === "all" || t.section === sec);
-      if (sort === "elite") list = list.filter(t => t.elite);
+      if (sort === "elite") list = list.filter(showElite);
       list.sort(sort === "hot" ? (a, b) => Math.max(b.replyCount, b.floors.length) - Math.max(a.replyCount, a.floors.length) : (a, b) => new Date(b.lastReplyAt || b.createdAt) - new Date(a.lastReplyAt || a.createdAt));
       const leader = g.mine && g.admin ? `${S.meta.nickname}（你）` : g.leader || "";
       body(pg, `<div class="g-hero" style="background:${g.coverRef ? "#333" : `linear-gradient(160deg, ${groupColor(g)}, ${groupColor(g)}cc)`}" ${g.coverRef ? `data-bg-ref="${esc(g.coverRef)}"` : ""}>
@@ -895,14 +1027,14 @@
       const follow = t.author.type === "user" || t.author.anon ? "" : `<button class="follow-mini ${isFollowing(t.author) ? "on" : ""}" data-act="follow-author">${isFollowing(t.author) ? "已关注" : "＋关注"}</button>`;
       body(pg, `<div class="post-head"><div class="post-author"><div ${personAttrs(t.author)}>${avatarHtml(w)}</div><div class="cell-main"><div class="pa-name" ${personAttrs(t.author)}>${esc(w.name)}${roleTags(t, t.author).replace('<span class="role-tag op">楼主</span>', "")}</div>
             <div class="post-from">${fmtTime(t.createdAt)}${ipOf(t.author, t.ip) ? ` · ${esc(ipOf(t.author, t.ip))}` : ""}</div></div>${follow}</div>
-          <h1>${t.section ? `${esc(t.section)}<span class="sep">|</span>` : ""}${esc(t.title)}${t.elite ? '<span class="elite after">精</span>' : ""}</h1>
-          ${t.about ? `<button class="about-chip" data-act="topic-about">ⓘ 这帖说的是：${esc(t.about)}${t.source ? ` · ${esc(t.source)}` : ""}</button>` : ""}</div>
+          <h1>${t.section ? `${esc(t.section)}<span class="sep">|</span>` : ""}${esc(t.title)}${showElite(t) ? '<span class="elite after">精</span>' : ""}${t.about ? `<button class="about-note" data-act="topic-about" aria-label="这帖说的是">注</button>` : ""}</h1>
+          <div class="post-group" data-act="open-group" data-id="${esc(t.groupId)}">${groupAvaHtml(g, "xs")}<span>来自 ${esc(g.name || "小组")}</span><i>›</i></div></div>
         <div class="post-body">${richText(t.body)}</div>
-        ${(t.images || []).length ? `<div class="post-pics">${t.images.map((im, k) => `<div class="post-pic" data-act="topic-pic" data-idx="${k}">${im.ref ? `<img data-ref="${esc(im.ref)}" alt="">` : placeholderImg()}${!im.ref && im.desc ? `<span>${esc(im.desc)}</span>` : ""}</div>`).join("")}</div>` : ""}
+        ${(t.images || []).length ? `<div class="post-pics">${t.images.map((im, k) => `<div class="post-pic" data-act="topic-pic" data-idx="${k}">${im.ref ? `<img ${refSrc(im.ref)} alt="">` : placeholderImg()}${!im.ref && im.desc ? `<span>${esc(im.desc)}</span>` : ""}</div>`).join("")}</div>` : ""}
         <div class="post-stats"><span class="on">回复 ${fmtNum(n)}</span><span>赞 ${fmtNum(t.likes || 0)}</span><span>转发 ${fmtNum(t.reposts || 0)}</span><span>收藏 ${fmtNum(t.favs || 0)}</span></div>
         <div class="list-head">全部回复<button class="op-filter ${onlyOp ? "on" : ""}" data-act="only-op">楼主</button></div>
         ${floors.map(f => { const fw = whoOf(f.author); const q = f.quote ? t.floors.find(x => x.n === f.quote) : null;
-          return `<div class="floor" data-act="floor" data-n="${f.n}"><div ${personAttrs(f.author)}>${avatarHtml(fw)}</div><div class="cell-main"><div class="floor-top"><span class="nm" ${personAttrs(f.author)}>${esc(fw.name)}</span>${f.title ? `<span class="g-title">${esc(f.title)}</span>` : ""}${roleTags(t, f.author)}<span class="fl-t">${fmtTime(f.createdAt)}${ipOf(f.author, f.ip) ? ` · ${esc(ipOf(f.author, f.ip))}` : ""} · ${f.n}楼</span>
+          return `<div class="floor" data-act="floor" data-n="${f.n}"><div ${personAttrs(f.author)}>${avatarHtml(fw)}</div><div class="cell-main"><div class="floor-top"><span class="nm" ${personAttrs(f.author)}>${esc(fw.name)}</span>${floorTitle(t, f) ? `<span class="g-title">${esc(floorTitle(t, f))}</span>` : ""}${roleTags(t, f.author)}<span class="fl-t">${fmtTime(f.createdAt)}${ipOf(f.author, f.ip) ? ` · ${esc(ipOf(f.author, f.ip))}` : ""} · ${f.n}楼</span>
               <button class="fl-like ${f.liked ? "on" : ""}" data-act="floor-like" data-n="${f.n}">${f.likes ? fmtNum(f.likes) : ""}${f.liked ? I.liked : I.like}</button></div>
             ${q ? `<div class="floor-quote"><span>${esc(whoOf(q.author).name)}：${esc(q.text)}</span></div>` : f.quote === 1 ? `<div class="floor-quote"><span>${esc(w.name)}：${esc(t.body.slice(0, 80))}</span></div>` : ""}
             <div class="floor-text">${richText(f.text)}</div>${f.opLiked ? `<div class="op-liked">楼主赞过</div>` : ""}</div></div>`; }).join("")}
@@ -939,10 +1071,24 @@
   const richText = s => esc(s).replace(/《([^《》\n]{1,40})》/g, '<span class="work">《$1》</span>');
   /** IP 属地：AI 写的优先；她自己用资料里填的；老数据按名字固定分一个省 */
   const PROVS = ["北京", "上海", "广东", "浙江", "江苏", "四川", "湖北", "湖南", "山东", "河南", "福建", "陕西", "重庆", "天津", "安徽", "辽宁"];
+  /** 这个人最近一次在帖子 / 楼层里被写上的 IP */
+  function latestIp(match) {
+    let best = null;
+    for (const t of S.topics) {
+      if (t.ip && match(t.author) && (!best || t.createdAt > best.at)) best = { ip: t.ip, at: t.createdAt };
+      for (const f of t.floors) if (f.ip && match(f.author) && (!best || f.createdAt > best.at)) best = { ip: f.ip, at: f.createdAt };
+    }
+    return best ? best.ip : "";
+  }
+  /** char 的 IP 固定一个：她在设置里改过的 / 第一次写上的（存 charIps）> 以前帖子里的 > 跟她同城 */
+  function charIp(id) { return (S.meta.charIps || {})[id] || latestIp(a => a.type === "char" && a.charId === id) || S.meta.ip || ""; }
+  function noteCharIp(id, ip) { if (!ip || (S.meta.charIps || {})[id]) return; (S.meta.charIps || (S.meta.charIps = {}))[id] = ip; saveMeta(); }
   function ipOf(a, ip) {
     if (a.type === "user") return S.meta.ip || "";
-    if (ip) return ip;
-    return PROVS[hashHue(a.type === "char" ? a.charId : a.name) % PROVS.length];
+    if (a.type === "char") return charIp(a.charId) || ip || "";
+    if (a.anon) return ip || PROVS[hashHue(a.name) % PROVS.length];
+    // 路人：主页上写的 > 这条自己的 > 他别处最近的 > 按名字固定一个省
+    return (personInfo(`n:${a.name}`) || {}).ip || ip || latestIp(x => x.type === "npc" && x.name === a.name) || PROVS[hashHue(a.name) % PROVS.length];
   }
   /** 点头像去主页：char → c:id，路人 → n:昵称，她 → me；匿名的没有主页 */
   const personKey = a => a.anon ? "anon" : a.type === "user" ? "me" : a.type === "char" ? `c:${a.charId}` : `n:${a.name}`;
@@ -978,7 +1124,7 @@
         ${(g.sections || []).length ? `<div class="chips" style="padding:10px 16px;background:var(--wb-card)"><button class="${!d.section ? "on" : ""}" data-act="nt-sec" data-v="">不选分区</button>${g.sections.map(x => `<button class="${d.section === x ? "on" : ""}" data-act="nt-sec" data-v="${esc(x)}">${esc(x)}</button>`).join("")}</div>` : ""}
         <div class="form-row"><label>标题</label><input id="nt-title" maxlength="60" placeholder="帖子标题" value="${esc(d.title)}"></div>
         <div class="form-row" style="align-items:flex-start"><label style="padding-top:14px">正文</label><textarea id="nt-body" style="min-height:160px" maxlength="3000" placeholder="说点什么……">${esc(d.body)}</textarea></div>
-        <div class="nt-pics">${d.images.map((im, k) => `<div class="post-pic sm" data-act="nt-pic-rm" data-idx="${k}">${im.ref ? `<img data-ref="${esc(im.ref)}" alt="">` : placeholderImg()}${!im.ref ? `<span>${esc(im.desc)}</span>` : ""}</div>`).join("")}
+        <div class="nt-pics">${d.images.map((im, k) => `<div class="post-pic sm" data-act="nt-pic-rm" data-idx="${k}">${im.ref ? `<img ${refSrc(im.ref)} alt="">` : placeholderImg()}${!im.ref ? `<span>${esc(im.desc)}</span>` : ""}</div>`).join("")}
           ${d.images.length < 4 ? `<button class="nt-add" data-act="nt-pic">＋<span>配图</span></button>` : ""}</div>
         <div class="list-cell"><div class="cell-main"><div>匿名发帖</div><div class="cell-sub">显示成「匿名豆友」，char 和豆友都不知道是你</div></div><button class="switch ${d.anon ? "on" : ""}" data-act="nt-anon"><span></span></button></div></div>`);
       $("#nt-title", pg.el).oninput = e => { d.title = e.target.value; }; $("#nt-body", pg.el).oninput = e => { d.body = e.target.value; };
@@ -1006,7 +1152,8 @@
       body(pg, `<div class="form"><div class="form-row"><label>头像</label>${avatarHtml(whoOf({ type: "user" }))}<button class="btn-ghost" data-act="me-avatar">上传</button>${S.meta.avatarRef ? `<button class="btn-ghost" data-act="me-avatar-reset">用身份头像</button>` : ""}</div>
         <div class="form-row"><label>昵称</label><input id="em-nick" maxlength="20" value="${esc(S.meta.nickname)}"></div>
         <div class="form-row"><label>签名</label><input id="em-sign" maxlength="60" value="${esc(S.meta.sign || "")}"></div>
-        <div class="form-row"><label>IP属地</label><input id="em-ip" maxlength="12" placeholder="比如 平南" value="${esc(S.meta.ip || "")}"></div></div>
+        <div class="form-row"><label>IP属地</label><input id="em-ip" maxlength="12" placeholder="比如 平南" value="${esc(S.meta.ip || "")}"></div>
+        <div class="form-row"><label>所在城市</label><input id="em-city" maxlength="20" placeholder="查天气用的真实城市名，不填就按 IP 查" value="${esc(S.meta.city || "")}"></div></div>
         <div style="padding:20px 16px"><button class="btn-primary" style="width:100%;height:42px;border-radius:21px;background:var(--wb-orange);color:#fff" data-act="em-save">保存</button></div>`);
     }, { title: "编辑资料" });
   }
@@ -1015,15 +1162,15 @@
       const pool = S.meta.avatarPool || [];
       body(pg, `<div class="form-note">参与豆瓣的角色 · 关掉的人不会出现在小组里</div>
         ${S.chars.map(c => { const on = !(S.meta.excludedChars || []).includes(c.id);
-          return `<div class="list-cell">${avatarHtml({ name: c.name, seed: c.id, avatar: c.avatar })}<div class="cell-main"><div>${esc(c.name)}</div><div class="cell-sub">豆瓣昵称：${esc(S.meta.charNicks[c.id] || "还没有（第一次实名出场时起）")}</div></div>
-            <button class="btn-ghost" data-act="set-char-nick" data-id="${esc(c.id)}" style="height:28px;padding:0 10px;font-size:12px">改昵称</button><button class="switch ${on ? "on" : ""}" data-act="toggle-char" data-id="${esc(c.id)}"><span></span></button></div>`; }).join("") || `<div class="empty" style="padding:24px">这个身份还没有角色好友</div>`}
+          return `<div class="list-cell">${avatarHtml({ name: c.name, seed: c.id, avatar: c.avatar })}<div class="cell-main"><div>${esc(c.name)}</div><div class="cell-sub">豆瓣昵称：${esc(S.meta.charNicks[c.id] || "还没有（第一次实名出场时起）")} · IP：${esc(charIp(c.id) || "未定")}</div></div>
+            <button class="btn-ghost" data-act="set-char-nick" data-id="${esc(c.id)}" style="height:28px;padding:0 10px;font-size:12px">改昵称</button><button class="btn-ghost" data-act="set-char-ip" data-id="${esc(c.id)}" style="height:28px;padding:0 10px;font-size:12px">IP</button><button class="switch ${on ? "on" : ""}" data-act="toggle-char" data-id="${esc(c.id)}"><span></span></button></div>`; }).join("") || `<div class="empty" style="padding:24px">这个身份还没有角色好友</div>`}
         <div class="form-note" style="margin-top:8px">公众人物 · 打开的人会被豆友当成明星、名人讨论（只聊真发生过的事）；都不打开就没人被八卦</div>
         <div class="list-cell"><div class="cell-main"><div>我（${esc(S.meta.nickname)}）</div></div><button class="switch ${S.meta.publicMe ? "on" : ""}" data-act="toggle-public-me"><span></span></button></div>
         ${S.chars.map(c => `<div class="list-cell"><div class="cell-main"><div>${esc(c.name)}</div></div><button class="switch ${(S.meta.publicChars || []).includes(c.id) ? "on" : ""}" data-act="toggle-public" data-id="${esc(c.id)}"><span></span></button></div>`).join("")}
         <div class="form-note" style="margin-top:8px">匿名头像 · 所有匿名豆友都用这一张</div>
         <div class="list-cell">${avatarHtml(whoOf({ type: "npc", anon: true }))}<div class="cell-main"></div><button class="btn-ghost" data-act="anon-ava">换一张</button>${S.meta.anonRef ? `<button class="btn-ghost" data-act="anon-ava-reset">用默认</button>` : ""}</div>
         <div class="form-note" style="margin-top:8px">豆友头像库 · 豆友从这里分头像，同一个人一直是同一张。点图片可以删除</div>
-        <div class="album avatar-pool">${pool.map((ref, i) => `<div class="pic" data-act="pool-rm" data-idx="${i}"><img data-ref="${esc(ref)}" alt=""></div>`).join("")}<button class="compose-add" data-act="pool-add">＋</button></div>`);
+        <div class="album avatar-pool">${pool.map((ref, i) => `<div class="pic" data-act="pool-rm" data-idx="${i}"><img ${refSrc(ref)} alt=""></div>`).join("")}<button class="compose-add" data-act="pool-add">＋</button></div>`);
     }, { title: "设置" });
   }
   function openDebug() {
@@ -1095,12 +1242,14 @@
         if (v === "regen") { if (await sheet("重新生成会换掉签名和之前生成的旧帖子（实名在组里发的帖子不受影响）", [{ label: "重新生成", value: "yes" }]) === "yes") genPerson(k, true); }
         return;
       }
-      case "topic-about": toast("这条只有你看得到，豆友们照样打哑谜"); return;
+      case "topic-about": { const t = topicById(pg.key.split(":")[1]); if (t && t.about) sheet(`这帖说的是：${t.about}${t.source ? `（${t.source}）` : ""}\n只有你看得到，豆友们照样打哑谜`, []); return; }
       case "toggle-public": { const id = el.dataset.id; const l = S.meta.publicChars || []; S.meta.publicChars = l.includes(id) ? l.filter(x => x !== id) : [...l, id]; saveMeta(); refreshAll(); return; }
       case "toggle-public-me": S.meta.publicMe = !S.meta.publicMe; saveMeta(); refreshAll(); return;
       case "topic-menu": {
         const t = topicById(pg.key.split(":")[1]); if (!t) return;
-        const v = await sheet("", [{ label: t.faved ? "取消收藏" : "收藏", value: "fav" }, { label: "删除这条帖子（相关记忆一起删）", value: "del", danger: true }]);
+        const lead = isLeadGroup(groupById(t.groupId));
+        const v = await sheet("", [...(lead ? [{ label: showElite(t) ? "取消精华" : "加精（组长）", value: "elite" }] : []), { label: t.faved ? "取消收藏" : "收藏", value: "fav" }, { label: "删除这条帖子（相关记忆一起删）", value: "del", danger: true }]);
+        if (v === "elite") { const on = !showElite(t); t.elite = on || undefined; t.eliteMine = on || undefined; saveTopic(t); pg.render(pg); toast(on ? "加精了" : "取消精华了"); }
         if (v === "fav") { t.faved = !t.faved; t.favAt = t.faved ? nowIso() : undefined; t.favs = Math.max(0, (t.favs || 0) + (t.faved ? 1 : -1)); saveTopic(t); pg.render(pg); toast(t.faved ? "已收藏" : "已取消收藏"); }
         if (v === "del") {
           if (await sheet(`删除《${t.title.slice(0, 20)}》？楼层和相关记忆会一起删掉`, [{ label: "删除", value: "yes", danger: true }]) !== "yes") return;
@@ -1180,24 +1329,41 @@
       case "floor-quote": if (pg && pg.setQuote) pg.setQuote(+el.dataset.n); return;
       case "floor": {
         if (!pg || !pg.setQuote) return;
-        const v = await sheet("", [{ label: "回应这一楼", value: "q" }]); if (v === "q") pg.setQuote(+el.dataset.n); return;
+        const t = topicById(pg.key.split(":")[1]); const f = t && t.floors.find(x => x.n === +el.dataset.n); const g = t && groupById(t.groupId);
+        const canTitle = f && isLeadGroup(g) && f.author.type !== "user" && !f.author.anon;
+        const v = await sheet("", [{ label: "回应这一楼", value: "q" }, ...(canTitle ? [{ label: floorTitle(t, f) ? `换头衔（现在：${floorTitle(t, f)}）` : "给 TA 发头衔（组长）", value: "title" }] : [])]);
+        if (v === "q") pg.setQuote(+el.dataset.n);
+        if (v === "title") {
+          const k = personKey(f.author); const cur = (g.memberTitles || {})[k];
+          const pick = await sheet("发哪个头衔", [...(g.titles || []).map(x => ({ label: x, value: x })), { label: "自己写一个", value: "_new" }, ...(cur ? [{ label: "收回头衔", value: "_rm", danger: true }] : [])]);
+          if (pick == null) return;
+          let ttl = pick;
+          if (pick === "_new") { ttl = await inputSheet("新头衔", { placeholder: "五到八个字，组内梗", maxlength: 12 }); if (!ttl) return; g.titles = [...new Set([...(g.titles || []), ttl])]; }
+          g.memberTitles = { ...(g.memberTitles || {}) };
+          if (pick === "_rm") delete g.memberTitles[k]; else g.memberTitles[k] = ttl;
+          saveGroup(g); pg.render(pg); toast(pick === "_rm" ? "收回了" : `发了头衔「${ttl}」`);
+        }
+        return;
       }
       case "floor-like": {
         const t = topicById(pg.key.split(":")[1]); const f = t && t.floors.find(x => x.n === +el.dataset.n); if (!f) return;
-        f.liked = !f.liked; f.likes = Math.max(0, (f.likes || 0) + (f.liked ? 1 : -1)); saveTopic(t); pg.render(pg); return;
+        f.liked = !f.liked; f.likes = Math.max(0, (f.likes || 0) + (f.liked ? 1 : -1));
+        if (t.author.type === "user" && f.author.type !== "user") f.opLiked = f.liked || undefined; // 她是楼主：她点的赞就是「楼主赞过」
+        saveTopic(t); pg.render(pg); return;
       }
       case "more-floors": { const t = topicById(pg.key.split(":")[1]); if (t) genFloors(t); return; }
       case "my-posts": openMyPosts(); return;
       case "my-favs": openPage("my-favs", p2 => { const list = S.topics.filter(t => t.faved).sort((a, b) => new Date(b.favAt || b.lastReplyAt) - new Date(a.favAt || a.lastReplyAt));
         body(p2, list.length ? `<div class="db-white">${list.map(t => topicCard(t, "feed")).join("")}</div>` : `<div class="empty">还没有收藏的帖子<br>帖子底下的书签图标、或者右上角 ··· 都能收藏</div>`); }, { title: "我的收藏" }); return;
       case "edit-me": openEditMe(); return;
-      case "em-save": { S.meta.nickname = $("#em-nick", pg.el).value.trim() || S.meta.nickname; S.meta.sign = $("#em-sign", pg.el).value.trim(); S.meta.ip = $("#em-ip", pg.el).value.trim(); saveMeta(); closePage(); toast("保存了"); return; }
+      case "em-save": { S.meta.nickname = $("#em-nick", pg.el).value.trim() || S.meta.nickname; S.meta.sign = $("#em-sign", pg.el).value.trim(); S.meta.ip = $("#em-ip", pg.el).value.trim(); S.meta.city = $("#em-city", pg.el).value.trim(); saveMeta(); closePage(); toast("保存了"); return; }
       case "me-avatar": { try { const [ref] = await pickImages(1, 400); if (ref) { S.meta.avatarRef = ref; saveMeta(); refreshAll(); } } catch (err) { toast("上传失败"); } return; }
       case "me-avatar-reset": S.meta.avatarRef = null; saveMeta(); refreshAll(); return;
       case "open-settings": openSettings(); return;
       case "open-debug": openDebug(); return;
       case "toggle-char": { const id = el.dataset.id; const ex = S.meta.excludedChars || []; S.meta.excludedChars = ex.includes(id) ? ex.filter(x => x !== id) : [...ex, id]; saveMeta(); refreshAll(); return; }
       case "set-char-nick": { const id = el.dataset.id; const v = await inputSheet(`${charById(id)?.name || ""}的豆瓣昵称`, { value: S.meta.charNicks[id] || "", maxlength: 20 }); if (v != null) { if (v) S.meta.charNicks[id] = v; else delete S.meta.charNicks[id]; saveMeta(); refreshAll(); } return; }
+      case "set-char-ip": { const id = el.dataset.id; const v = await inputSheet(`${charById(id)?.name || ""}的 IP 属地（清空 = 跟你同城）`, { value: (S.meta.charIps || {})[id] || "", maxlength: 12 }); if (v != null) { S.meta.charIps = { ...(S.meta.charIps || {}) }; if (v) S.meta.charIps[id] = v; else delete S.meta.charIps[id]; saveMeta(); refreshAll(); } return; }
       case "anon-ava": { try { const [ref] = await pickImages(1, 300); if (ref) { S.meta.anonRef = ref; saveMeta(); refreshAll(); } } catch (err) { toast("上传失败"); } return; }
       case "anon-ava-reset": S.meta.anonRef = null; saveMeta(); refreshAll(); return;
       case "pool-add": { try { const refs = await pickImages(20, 300); if (refs.length) { S.meta.avatarPool = [...S.meta.avatarPool, ...refs]; saveMeta(); toast(`加了 ${refs.length} 张`); refreshAll(); } } catch (err) { toast("上传失败"); } return; }

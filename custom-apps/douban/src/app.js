@@ -255,7 +255,7 @@
   const publicLine = () => { const list = [...activeChars().filter(c => (S.meta.publicChars || []).includes(c.id)).map(c => `${c.name}（角色，豆瓣昵称「${charNick(c.id)}」）`), ...(S.meta.publicMe ? [`用户本人（${herName()}）`] : [])];
     return list.length ? `这个世界的公众人物（可以被大家当明星名人讨论）：${list.join("、")}。${userLine()}` : "这个世界里没有公众人物：角色和用户都不会被当成明星讨论。"; };
   /** 熟人组：组里的人现实中认识角色和用户（同校、同城、同公司），不是公众人物也会被聊到 */
-  const localLine = g => g && g.local ? `这是熟人组：组里的人现实中认识这些人（同校、同城、同事），会聊到他们、八卦他们：${[...activeChars().map(c => c.name), `用户（${herName()}）`].join("、")}。他们本人这次不一定出场。组里的人认识用户：知道她叫${herName()}、豆瓣昵称「${S.meta.nickname}」，她实名发帖回帖时大家知道就是她本人；聊到她就用名字或大家平时对她的叫法，不用「那个学姐」「某人」这种代称。${userLine()}` : "";
+  const localLine = g => g && g.local ? `这是熟人组：组里的人现实中认识这些人（同校、同城、同事），会聊到他们、八卦他们：${[...activeChars().map(c => c.name), `用户（${herName()}）`].join("、")}。他们本人这次不一定出场。组里的人认识用户（${herName()}，豆瓣昵称「${S.meta.nickname}」），聊到她可以用名字，也可以用大家平时对她的叫法（学姐、xx班那个……）。${userLine()}` : "";
   /**
    * 小组自己的设定：成员称呼（她起的「小气球」要用上）、组长是谁（她当组长时大家都知道，只有她能加精、发头衔）
    */
@@ -514,7 +514,7 @@
   const floorLine = (t, f) => `${f.n}楼 ${f.author.type === "user" ? (f.author.anon ? "匿名豆友（其实是用户本人，大家不知道）" : `${S.meta.nickname}（用户本人）`) : sameAuthor(f.author, t.author) ? `${whoOf(f.author).name}（楼主）` : f.author.type === "char" ? `${whoOf(f.author).name}（${f.author.anon ? `匿名，其实是角色 ${charById(f.author.charId)?.name}` : `角色 ${charById(f.author.charId)?.name}`}）` : whoOf(f.author).name}${f.quote ? ` 引用${f.quote}楼` : ""}：${f.text.slice(0, 120)}`;
   function opDesc(t) {
     const a = t.author;
-    if (a.type === "user") return a.anon ? "楼主是用户本人用匿名发的：除了作者自己，谁都不知道是她。" : `楼主是用户本人（豆瓣昵称「${S.meta.nickname}」）：她的楼只能是下面已有的，不能替她写新的楼。${(groupById(t.groupId) || {}).local ? `这是熟人组，大家都知道楼主就是${herName()}，跟她说话、聊她都直接当她本人。` : ""}`;
+    if (a.type === "user") return a.anon ? "楼主是用户本人用匿名发的：除了作者自己，谁都不知道是她。" : `楼主是用户本人（豆瓣昵称「${S.meta.nickname}」）：她的楼只能是下面已有的，不能替她写新的楼。${(groupById(t.groupId) || {}).local ? `这是熟人组，大家都知道楼主就是${herName()}：在这个帖子里聊到她的事、八卦她，大家都清楚说的就是楼主本人（直接说楼主、lz，或者当面问她），不会当成在聊一个不在场的人。` : ""}`;
     if (a.type === "char") { const c = charById(a.charId); return a.anon ? `楼主是角色 ${c.name} 本人匿名发的：豆友们不知道是谁（可以随口猜，但永远不会坐实）。楼主下场回复时就是他本人在说话，按他的人设。` : `楼主是角色 ${c.name}（豆瓣昵称「${charNick(a.charId)}」）本人。`; }
     return `楼主是路人豆友「${a.name.startsWith("anon_") ? "匿名豆友" : a.name}」。`;
   }
@@ -768,7 +768,7 @@
     const who = a.type === "user" ? "我" : a.type === "char" ? "他" : "TA";
     openPage(`plist:${k}:${kind}`, pg => {
       const { posts, replied } = topicsOfAuthor(a); const list = kind === "posts" ? posts : replied;
-      body(pg, list.length ? `<div class="db-white">${list.map(t => topicCard(t, kind === "posts" ? "group" : "feed")).join("")}</div>` : `<div class="empty">${kind === "posts" ? `${who}还没发过帖子` : `${who}还没回应过别人的帖子`}</div>`);
+      body(pg, list.length ? `<div class="db-white" data-from-person>${list.map(t => topicCard(t, kind === "posts" ? "group" : "feed")).join("")}</div>` : `<div class="empty">${kind === "posts" ? `${who}还没发过帖子` : `${who}还没回应过别人的帖子`}</div>`);
     }, { title: kind === "posts" ? `${who}发的帖子` : `${who}的回应` });
   }
   /** 她的关注 / 被关注；最上面「你认识的人」列出所有 char，没出场过也能从这里进他主页 */
@@ -1015,7 +1015,7 @@
       a.type === "char" && a.anon ? `<span class="role-tag mask">${esc(charById(a.charId)?.name || "")}的马甲</span>` : ""].join("");
   }
   /** 帖子页（照真豆瓣）：顶部作者 + 关注；标题、正文、配图；回复/赞/转发/收藏；全部回复 + 「楼主」筛选；底部 实名匿名 + 写回复 + 赞转发收藏 */
-  function openTopic(id) {
+  function openTopic(id, fromPerson) {
     const t0 = topicById(id); if (!t0) return;
     let onlyOp = false; let quote = null; let anon = false;
     const w0 = whoOf(t0.author);
@@ -1028,7 +1028,7 @@
       body(pg, `<div class="post-head"><div class="post-author"><div ${personAttrs(t.author)}>${avatarHtml(w)}</div><div class="cell-main"><div class="pa-name" ${personAttrs(t.author)}>${esc(w.name)}${roleTags(t, t.author).replace('<span class="role-tag op">楼主</span>', "")}</div>
             <div class="post-from">${fmtTime(t.createdAt)}${ipOf(t.author, t.ip) ? ` · ${esc(ipOf(t.author, t.ip))}` : ""}</div></div>${follow}</div>
           <h1>${t.section ? `${esc(t.section)}<span class="sep">|</span>` : ""}${esc(t.title)}${showElite(t) ? '<span class="elite after">精</span>' : ""}${t.about ? `<button class="about-note" data-act="topic-about" aria-label="这帖说的是">注</button>` : ""}</h1>
-          <div class="post-group" data-act="open-group" data-id="${esc(t.groupId)}">${groupAvaHtml(g, "xs")}<span>来自 ${esc(g.name || "小组")}</span><i>›</i></div></div>
+          ${fromPerson ? `<div class="post-group" data-act="open-group" data-id="${esc(t.groupId)}">${groupAvaHtml(g, "xs")}<span>来自 ${esc(g.name || "小组")}</span><i>›</i></div>` : ""}</div>
         <div class="post-body">${richText(t.body)}</div>
         ${(t.images || []).length ? `<div class="post-pics">${t.images.map((im, k) => `<div class="post-pic" data-act="topic-pic" data-idx="${k}">${im.ref ? `<img ${refSrc(im.ref)} alt="">` : placeholderImg()}${!im.ref && im.desc ? `<span>${esc(im.desc)}</span>` : ""}</div>`).join("")}</div>` : ""}
         <div class="post-stats"><span class="on">回复 ${fmtNum(n)}</span><span>赞 ${fmtNum(t.likes || 0)}</span><span>转发 ${fmtNum(t.reposts || 0)}</span><span>收藏 ${fmtNum(t.favs || 0)}</span></div>
@@ -1322,7 +1322,7 @@
       case "nt-pic-rm": if (pg && pg.draft) { pg.draft.images.splice(+el.dataset.idx, 1); pg.render(pg); } return;
       case "nt-anon": if (pg && pg.draft) { pg.draft.anon = !pg.draft.anon; pg.render(pg); } return;
       case "nt-send": if (pg && pg.draft) sendTopic(pg); return;
-      case "open-topic": openTopic(el.dataset.id); return;
+      case "open-topic": openTopic(el.dataset.id, !!el.closest("[data-from-person]")); return;
       case "only-op": if (pg && pg.setOnlyOp) pg.setOnlyOp(); return;
       case "toggle-anon": if (pg && pg.toggleAnon) pg.toggleAnon(); return;
       case "unquote": if (pg && pg.setQuote) pg.setQuote(null); return;

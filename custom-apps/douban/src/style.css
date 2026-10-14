@@ -822,3 +822,6 @@ img { display: block; }
 @media (prefers-color-scheme: dark) { .g-title { background: #3a2a14; } }
 .op-liked { display: inline-block; margin-top: 6px; padding: 2px 8px; border-radius: 4px; background: var(--wb-bg); color: var(--wb-text-3); font-size: 12px; }
 .work { color: var(--wb-orange); }
+/* 引用条：在里面那层截断，框的留白不会漏出半行 */
+.floor-quote { display: block; -webkit-line-clamp: unset; }
+.floor-quote span { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }

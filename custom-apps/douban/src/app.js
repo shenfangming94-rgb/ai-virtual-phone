@@ -468,11 +468,26 @@
       if (author.type === "char" && mine && !mine.author.anon) remember(author.charId, `${herName()}在豆瓣小组「${g.name}」的帖子《${t.title}》里回复：「${mine.text.slice(0, 60)}」，我回：「${txt.slice(0, 60)}」`, `douban_floor_${t.id}_${f.n}`);
       else if (author.type === "char" && !sameAuthor(author, t.author)) remember(author.charId, `我在豆瓣小组「${g.name}」的帖子《${t.title}》里${author.anon ? "匿名" : ""}回了一层：「${txt.slice(0, 60)}」`, `douban_floor_${t.id}_${f.n}`);
     }
-    if (made) { t.lastReplyAt = t.floors[t.floors.length - 1].createdAt; t.replyCount = Math.max(t.replyCount, t.floors.length); }
+    if (made) { t.lastReplyAt = t.floors[t.floors.length - 1].createdAt; t.replyCount = Math.max(t.replyCount, t.floors.length); likeHers(t, made); }
     else toast("这次没写出能用的回应，去「我的 → 调试记录」看看");
     saveTopic(t); refreshAll();
   }
 
+  /**
+   * 她的楼和她的帖子也会被点赞（别人的赞数是 AI 写的，她的从 0 开始）：
+   * 每来一批回应，她的每一层按「被引用几次」+ 随机涨一点；她的帖子按这批来了多少人涨
+   */
+  function likeHers(t, made) {
+    for (const f of t.floors) {
+      if (f.author.type !== "user") continue;
+      const quoted = t.floors.filter(x => x.quote === f.n && x.author.type !== "user").length;
+      const fresh = Date.now() - new Date(f.createdAt) < 3 * 86400e3;
+      const newQuotes = Math.max(0, quoted - (f.likedQuoted || 0)); // 只按新增的引用算
+      f.likes = (f.likes || 0) + (fresh ? rand(0, 3) + newQuotes * rand(2, 6) : rand(0, 1));
+      f.likedQuoted = quoted;
+    }
+    if (t.author.type === "user") t.likes = (t.likes || 0) + rand(1, 3) * made;
+  }
   // ───────────────────────── 页面栈 ─────────────────────────
   const pages = [];
   function openPage(key, render, opts = {}) {
@@ -720,7 +735,7 @@
         ${floors.map(f => { const fw = whoOf(f.author); const q = f.quote ? t.floors.find(x => x.n === f.quote) : null;
           return `<div class="floor" data-act="floor" data-n="${f.n}">${avatarHtml(fw)}<div class="cell-main"><div class="floor-top"><span class="nm">${esc(fw.name)}</span>${f.title ? `<span class="g-title">${esc(f.title)}</span>` : ""}${roleTags(t, f.author)}<span class="fl-t">${fmtTime(f.createdAt)}${ipOf(f.author, f.ip) ? ` · ${esc(ipOf(f.author, f.ip))}` : ""} · ${f.n}楼</span>
               <button class="fl-like ${f.liked ? "on" : ""}" data-act="floor-like" data-n="${f.n}">${f.likes ? fmtNum(f.likes) : ""}${f.liked ? I.liked : I.like}</button></div>
-            ${q ? `<div class="floor-quote">${esc(whoOf(q.author).name)}：${esc(q.text)}</div>` : f.quote === 1 ? `<div class="floor-quote">${esc(w.name)}：${esc(t.body.slice(0, 80))}</div>` : ""}
+            ${q ? `<div class="floor-quote"><span>${esc(whoOf(q.author).name)}：${esc(q.text)}</span></div>` : f.quote === 1 ? `<div class="floor-quote"><span>${esc(w.name)}：${esc(t.body.slice(0, 80))}</span></div>` : ""}
             <div class="floor-text">${richText(f.text)}</div>${f.opLiked ? `<div class="op-liked">楼主赞过</div>` : ""}</div></div>`; }).join("")}
         ${t._busy ? `<div class="gen-tip"><span class="spinner"></span>${t.floors.length ? "楼下有人在打字…" : "正在加载回应…"}</div>` : t.floors.length ? `<button class="load-more" data-act="more-floors">加载更多回应（会用 1 次 API）</button>` : ""}`);
       const qb = $(".reply-quote", pg.el); qb.classList.toggle("hidden", !quote);

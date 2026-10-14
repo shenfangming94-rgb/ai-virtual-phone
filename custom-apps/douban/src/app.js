@@ -260,7 +260,7 @@
     } finally { S.jobs.delete(job); refreshAll(); }
   }
   /** ===块=== 解析：字段「名：值」，值可以多行（接到上一个字段） */
-  const KEYS = ["楼主赞过", "头衔", "熟人圈", "说的是", "来源", "IP", "组长", "成员称呼", "分区", "发言规则", "配图", "精华", "名称", "成员", "简介", "标题", "作者", "角色", "匿名", "时间", "回应数", "正文", "楼主", "赞", "引用", "内容", "层"];
+  const KEYS = ["会逛的角色", "楼主赞过", "头衔", "熟人圈", "说的是", "来源", "IP", "组长", "成员称呼", "分区", "发言规则", "配图", "精华", "名称", "成员", "简介", "标题", "作者", "角色", "匿名", "时间", "回应数", "正文", "楼主", "赞", "引用", "内容", "层"];
   function parseBlocks(raw, kind) {
     const text = String(raw || "").replace(/```[a-z]*\n?/g, "").replace(/\r/g, "");
     const out = []; let label = null;
@@ -308,14 +308,14 @@
       have.length ? `这些已经有了，不要重复：${have.join("、")}` : "",
       "名字和简介要像真豆瓣：大多数组名简单直白，简介很短很平实（一句话介绍，或者几条组规：禁广告、禁人身攻击、标题加 tag……），只有少数组有点个性。不要文艺抒情、不要排比、不要「这里只存放……」这种句子；也不要写网上烂大街的梗（比如食堂阿姨手抖、颠勺）。",
       bgLine([]),
-      "每个小组：\n===小组===\n名称：小组名\n成员：成员数（纯数字，大组几十万，小众组几百几千）\n成员称呼：这个组对成员的叫法（豆瓣特色，像「小不知道」「组员」「豆友」「病友」，很多组就叫「成员」）\n组长：组长的豆瓣昵称\n简介：一句小组介绍\n发言规则：一两条组规（没有写 无）\n分区：3～4 个讨论分区的名字，用、分隔（像「求助」「吐槽」「分享」或者有组内梗的名字）\n熟人圈：是 / 否（这是不是世界书里角色们所在的学校、城市、公司这种本地组，组里的人现实中可能认识他们）\n头衔：2～3 个这个组发给成员的头衔，用、分隔（豆瓣特色，像组内梗，五到八个字）\n===结束===",
+      "每个小组：\n===小组===\n名称：小组名\n成员：成员数（纯数字，大组几十万，小众组几百几千）\n成员称呼：这个组对成员的叫法（豆瓣特色，像「小不知道」「组员」「豆友」「病友」，很多组就叫「成员」）\n组长：组长的豆瓣昵称\n简介：一句小组介绍\n发言规则：一两条组规（没有写 无）\n分区：3～4 个讨论分区的名字，用、分隔（像「求助」「吐槽」「分享」或者有组内梗的名字）\n熟人圈：是 / 否（这是不是世界书里角色们所在的学校、城市、公司这种本地组，组里的人现实中可能认识他们）\n头衔：2～3 个这个组发给成员的头衔，用、分隔（豆瓣特色，像组内梗，五到八个字）${charsLine()}\n===结束===",
     ].filter(Boolean).join("\n\n"), `搜小组「${term}」`);
     if (text == null) return cached ? cached.map(groupById).filter(Boolean) : [];
     const made = [];
     for (const b of parseBlocks(text, "小组")) {
       const name = String(b["名称"] || "").trim().slice(0, 30); if (!name || S.groups.some(g => g.name === name)) continue;
       const g = { id: uid("g"), scope: S.identity.id, name, members: clampInt(b["成员"], rand(800, 90000)), intro: b["简介"] || "", topicsHint: "", mine: false, admin: false, createdAt: nowIso(), from: term };
-      fillGroupInfo(g, b); if (yes(b["熟人圈"])) g.local = true;
+      fillGroupInfo(g, b); fillCharsHere(g, b); if (yes(b["熟人圈"])) g.local = true;
       S.groups.push(g); saveGroup(g); made.push(g);
     }
     const local = S.groups.filter(g => g.name.includes(term) && !made.includes(g));
@@ -338,6 +338,37 @@
     if (add > 0) g.members = m + add;
     saveGroup(g);
   }
+  /**
+   * char 在这个组的出场率：她单独调过就按她的；否则 熟人组 发帖30%/回帖40%，兴趣相关 20%/25%，无关 10%/15%。
+   * pool = 可能出场的 char：熟人组谁都可能来，兴趣组是会逛这个组的那几个，无关组随便一个
+   */
+  const RATE_DEF = { local: [30, 40], interest: [20, 25], none: [10, 15] };
+  function charRates(g) {
+    const act = activeChars();
+    const fans = act.filter(c => (g.charsHere || []).includes(c.id));
+    const kind = g.local ? "local" : fans.length ? "interest" : "none";
+    const [p, f] = RATE_DEF[kind];
+    return { kind, post: (g.rate && g.rate.post != null ? g.rate.post : p) / 100, floor: (g.rate && g.rate.floor != null ? g.rate.floor : f) / 100,
+      custom: !!(g.rate && (g.rate.post != null || g.rate.floor != null)), pool: kind === "interest" ? fans : act };
+  }
+  const charsLine = () => activeChars().length ? `\n会逛的角色：按人设和兴趣，这些角色里谁平时会逛这个组：${activeChars().map(c => c.name).join("、")}（写本名，用、分隔；都不会写 无）` : "";
+  function fillCharsHere(g, b) {
+    if (!("会逛的角色" in b)) return;
+    g.charsHere = none(b["会逛的角色"]) ? [] : String(b["会逛的角色"]).split(/[、,，\s]+/).map(n => charByName(n.trim())).filter(Boolean).map(c => c.id);
+    g.charsChecked = true;
+  }
+  const KIND_LABEL = { local: "熟人组", interest: "有 char 会逛的组", none: "跟 char 无关的组" };
+  /** 她单独调 char 出场率：先选发帖，再选回帖；选「默认」就跟着组的类型走 */
+  async function adjustRates(g) {
+    const r = charRates(g); const [dp, df] = RATE_DEF[r.kind];
+    const opts = (cur, def) => [{ label: `默认（${KIND_LABEL[r.kind]} ${def}%）`, value: "def" }, ...[0, 5, 10, 20, 30, 40, 50, 70, 100].map(v => ({ label: `${v}%${Math.round(cur * 100) === v && r.custom ? "（现在）" : ""}`, value: String(v) }))];
+    const p = await sheet("char 发帖的概率（每刷一批帖子）", opts(r.post, dp)); if (p == null) return;
+    const f = await sheet("char 回帖的概率（每加载一批回应）", opts(r.floor, df)); if (f == null) return;
+    g.rate = { post: p === "def" ? null : +p, floor: f === "def" ? null : +f };
+    saveGroup(g); refreshAll();
+    const n = charRates(g); toast(`发帖 ${Math.round(n.post * 100)}% · 回帖 ${Math.round(n.floor * 100)}%`);
+  }
+  const rateText = g => { const r = charRates(g); return `发帖 ${Math.round(r.post * 100)}% · 回帖 ${Math.round(r.floor * 100)}%${r.custom ? "（你调过）" : `（默认：${KIND_LABEL[r.kind]}）`}${r.kind === "interest" ? ` · 会逛的：${r.pool.map(c => c.name).join("、")}` : ""}`; };
   /** AI 写的组长、成员称呼、发言规则、分区 → 存到小组上（已经有的不覆盖） */
   function fillGroupInfo(g, b) {
     const nick = String(b["组长"] || "").replace(/^@/, "").trim();
@@ -353,10 +384,11 @@
    */
   async function genTopics(g) {
     if (g._busy) return; g._busy = true; refreshAll();
-    const cast = pickCast(activeChars(), 3);
-    const hit = cast.length && Math.random() < 0.3 ? cast[0] : null;
+    const rates = charRates(g);
+    const cast = pickCast(rates.pool.length ? rates.pool : activeChars(), 3);
+    const hit = cast.length && Math.random() < rates.post ? cast[0] : null;
     const anon = hit && Math.random() < 0.6;
-    const needInfo = !g.memberNoun || !(g.sections || []).length || !(g.titles || []).length || (!g.leader && !(g.mine && g.admin));
+    const needInfo = !g.charsChecked || !g.memberNoun || !(g.sections || []).length || !(g.titles || []).length || (!g.leader && !(g.mine && g.admin));
     const recent = S.topics.filter(t => t.groupId === g.id).sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)).slice(0, 10).map(t => `- ${t.title}`).join("\n");
     const text = await generate((hit ? [hit] : cast.slice(0, 2)).map(c => c.id), "topics", [
       `当前时间：${new Date().toLocaleString("zh-CN", { hour12: false })}`,
@@ -372,12 +404,12 @@
       publicLine(),
       "如果你能联网搜索：按这个小组聊的话题，去搜最近现实里真的在讨论的事（娱乐圈、体育、游戏、社会新闻、新剧新书……看小组是干什么的），把其中 1～2 个帖子写成在聊这些真事，用真名；和世界观冲突的不要。不能联网就按这个世界写。",
       "大约四分之一的帖子带图（晒东西、现场、截图这类才带），写在「配图」里；最多 1 个帖子是组长加精的（内容特别好、特别有用的才加，没有就都写 否）。",
-      needInfo ? `先补全这个小组的信息（只写一次）：\n===小组信息===\n组长：组长的豆瓣昵称${g.mine && g.admin ? "（组长是用户本人，这行写 无）" : ""}\n成员称呼：这个组对成员的叫法（像「小不知道」「组员」「病友」，很多组就叫「成员」）\n发言规则：一两条组规（没有写 无）\n分区：3～4 个讨论分区的名字，用、分隔\n头衔：2～3 个这个组发给成员的头衔，用、分隔（像组内梗，五到八个字）\n===结束===` : "",
+      needInfo ? `先补全这个小组的信息（只写一次）：\n===小组信息===\n组长：组长的豆瓣昵称${g.mine && g.admin ? "（组长是用户本人，这行写 无）" : ""}\n成员称呼：这个组对成员的叫法（像「小不知道」「组员」「病友」，很多组就叫「成员」）\n发言规则：一两条组规（没有写 无）\n分区：3～4 个讨论分区的名字，用、分隔\n头衔：2～3 个这个组发给成员的头衔，用、分隔（像组内梗，五到八个字）${g.charsChecked ? "" : charsLine()}\n===结束===` : "",
       "每个帖子：\n===帖子===\n标题：帖子标题（不用自己加分区前缀）\n作者：豆友昵称（匿名发的写 匿名）\n角色：角色本名（路人写 无）\n匿名：是 / 否\n分区：分区名（没有写 无）\n时间：发帖时间（如 3小时前、昨天 21:30、2天前）\nIP：这个人的 IP 属地（省份或城市，按他在哪写；同校同城的组大多一样）\n回应数：目前有多少条回应（纯数字）\n配图：图片描述，多张用 | 分隔（不带图写 无）\n精华：是 / 否\n说的是：这帖在讨论谁（真名；不涉及具体的人写 无）\n来源：现实新闻 / 联网搜到的 / 这个世界的事 / 无\n正文：\n楼主的首帖正文\n===结束===",
     ].filter(Boolean).join("\n\n"), `「${g.name}」的帖子`);
     g._busy = false;
     if (text == null) { refreshAll(); return; }
-    const info = parseBlocks(text, "小组信息")[0]; if (info) fillGroupInfo(g, info);
+    const info = parseBlocks(text, "小组信息")[0]; if (info) { fillGroupInfo(g, info); fillCharsHere(g, info); }
     let n = 0, elite = 0;
     for (const b of parseBlocks(text, "帖子")) {
       const title = String(b["标题"] || "").trim().slice(0, 60); const body = String(b["正文"] || "").trim();
@@ -420,7 +452,8 @@
     // 她回的是 char 的楼 / char 的帖子：叫那个 char 来；否则偶尔有一个 char 路过（实名或匿名）
     const target = mine && mine.quote ? t.floors.find(f => f.n === mine.quote) : null;
     const askChar = target && target.author.type === "char" ? target.author.charId : mine && t.author.type === "char" ? t.author.charId : null;
-    const passer = !askChar && !mine && Math.random() < 0.15 ? pickCast(activeChars().filter(c => !charsInFloor.has(c.id)), 1)[0] : null;
+    const fr = charRates(g);
+    const passer = !askChar && !mine && Math.random() < fr.floor ? pickCast(fr.pool.filter(c => !charsInFloor.has(c.id)), 1)[0] : null;
     const cast = [...new Set([...charsInFloor, askChar, passer && passer.id].filter(Boolean))].map(charById).filter(Boolean);
     const castIds = (cast.length ? cast : pickCast(activeChars(), 1)).map(c => c.id).slice(0, 3);
     const n = mine ? rand(2, 4) : t.floors.length ? rand(6, 10) : Math.min(Math.max(t.replyCount, 6), rand(10, 15));
@@ -697,6 +730,7 @@
         ${g.admin ? "" : `<div class="form-row"><label>组长</label><input id="eg-leader" maxlength="20" placeholder="组长的豆瓣昵称" value="${esc(g.leader || "")}"></div>`}
         <div class="form-row"><label>发言规则</label><textarea id="eg-rules" maxlength="200">${esc(g.rules || "")}</textarea></div>
         <div class="list-cell"><div class="cell-main"><div>熟人组</div><div class="cell-sub">组里的人现实中认识你和 char（同校、同城），不是公众人物也会被聊到</div></div><button class="switch ${g.local ? "on" : ""}" data-act="eg-local" data-id="${esc(id)}"><span></span></button></div>
+        <div class="list-cell" data-act="g-rates" data-id="${esc(id)}"><div class="cell-main"><div>char 出场率</div><div class="cell-sub">${esc(rateText(g))}</div></div><span class="cell-sub">改 ›</span></div>
         <div class="form-row"><label>头衔</label><input id="eg-titles" maxlength="60" placeholder="用顿号隔开，比如：极其幽默我喜欢" value="${esc((g.titles || []).join("、"))}"></div>
         <div class="form-row"><label>分区</label><input id="eg-secs" maxlength="60" placeholder="用顿号隔开，比如：求助、吐槽、分享" value="${esc((g.sections || []).join("、"))}"></div>
         <div class="list-cell"><div class="cell-main"><div>我当组长</div></div><button class="switch ${g.admin ? "on" : ""}" data-act="eg-admin" data-id="${esc(id)}"><span></span></button></div></div>
@@ -884,6 +918,7 @@
         toast(on ? "已退出小组" : "加入成功"); refreshAll(); return;
       }
       case "edit-group": editGroup(el.dataset.id); return;
+      case "g-rates": { const g = groupById(el.dataset.id); if (g) adjustRates(g); return; }
       case "eg-local": { const g = groupById(el.dataset.id); if (g) { g.local = !g.local; saveGroup(g); refreshAll(); } return; }
       case "eg-admin": { const g = groupById(el.dataset.id); if (g) { g.admin = !g.admin; saveGroup(g); refreshAll(); } return; }
       case "eg-save": { const g = groupById(el.dataset.id); if (!g) return; g.intro = $("#eg-intro", pg.el).value.trim(); g.topicsHint = $("#eg-topics", pg.el).value.trim();
@@ -933,10 +968,11 @@
       case "group-menu": {
         const g = groupById(el.dataset.id); if (!g) return;
         const v = await sheet(g.name, [{ label: "换小组头像", value: "ava" }, { label: "换背景", value: "cover" }, ...(g.avatarRef || g.coverRef ? [{ label: "恢复默认头像和背景", value: "reset" }] : []),
-          { label: "看看有没有新帖（1 次 API）", value: "refresh" }, ...(g.mine ? [] : [{ label: g.local ? "设成普通组（组里的人不认识你们）" : "设成熟人组（组里的人认识你们）", value: "local" }]), ...(g.mine ? [{ label: "编辑小组", value: "edit" }] : isJoined(g) ? [{ label: "退出小组", value: "quit", danger: true }] : [])]);
+          { label: "看看有没有新帖（1 次 API）", value: "refresh" }, ...(g.mine ? [] : [{ label: `char 出场率：${rateText(g)}`, value: "rates" }]), ...(g.mine ? [] : [{ label: g.local ? "设成普通组（组里的人不认识你们）" : "设成熟人组（组里的人认识你们）", value: "local" }]), ...(g.mine ? [{ label: "编辑小组", value: "edit" }] : isJoined(g) ? [{ label: "退出小组", value: "quit", danger: true }] : [])]);
         if (v === "ava" || v === "cover") { try { const [ref] = await pickImages(1, v === "ava" ? 400 : 1200); if (ref) { g[v === "ava" ? "avatarRef" : "coverRef"] = ref; saveGroup(g); refreshAll(); } } catch (err) { toast("上传失败"); } }
         if (v === "reset") { g.avatarRef = null; g.coverRef = null; saveGroup(g); refreshAll(); }
         if (v === "refresh") genTopics(g);
+        if (v === "rates") adjustRates(g);
         if (v === "local") { g.local = !g.local; saveGroup(g); toast(g.local ? "这个组的人认识你们啦" : "改成普通组了"); refreshAll(); }
         if (v === "edit") editGroup(g.id);
         if (v === "quit") { S.meta.joined = S.meta.joined.filter(x => x !== g.id); saveMeta(); toast("已退出小组"); refreshAll(); }

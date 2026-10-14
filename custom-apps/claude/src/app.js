@@ -124,6 +124,7 @@
   /** 这个 app 的设定（随请求发）：他在用 AI 助手，不知道背后是用户 */
   const APP_RULE = () => `【Claude 是什么】你（角色）手机上装了 AI 助手 Claude（Anthropic 做的，和 ChatGPT、豆包差不多），平时有问题会问它。你不知道、也不会怀疑 Claude 背后有真人——在你眼里它就是 AI。
 【怎么提问】按你的人设、年龄、最近的生活、和用户（${herName()}）的关系、记忆里的事来问：可以是真困扰（感情、学习工作、人际、怎么对她好）、生活小事（菜谱、选礼物、写段文字）、好奇心（「天空为什么是蓝的」），也可以是按你性格会问的无厘头问题。问法像真人用 AI：口语、有时打错字、有时一次问一大串、有时就一句话。
+【不许用专业名词】不管问什么都用大白话，像外行随口问：不写型号、品牌术语、行业黑话、英文缩写、技术参数（不说「AMS」「PLA+」「公差」这种，说「那种自动换颜色的配件」「普通的耗材」）。宁可问得笼统、问得傻一点。
 【跟 AI 说话】你对 AI 的态度按你的性格来：有人很客气说谢谢，有人当工具人直接下命令，有人会跟它抬杠、嫌它啰嗦。
 【底线】用户的事只能来自聊天记录和记忆，不能编她没做过的事、没说过的话。你问 AI 时提到她，是你自己的视角和心事。`;
   async function generate(charId, scene, instruction, label) {
@@ -156,7 +157,7 @@
   const historyText = c => c.msgs.slice(-16).map(m => m.role === "char" ? `我：${m.text}` : m.role === "me" ? (m.blocked ? "Claude：（这条回复被拦截了，显示「违反使用政策，无法回复」）" : `Claude：${m.text}${m.redo ? "（我点了重新生成）" : ""}`) : `（系统：${m.text}）`).join("\n");
 
   /** 来一个新问题：他自己挑模型和思考强度 */
-  async function newQuestion(charId) {
+  async function newQuestion(charId, skip) {
     const ch = charById(charId); if (!ch) return;
     if (isBanned(charId)) { toast(`${ch.name}的账号已停用`); return; }
     const recent = S.convs.filter(c => c.charId === charId).sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt)).slice(0, 8).map(c => `- ${c.title}`).join("\n");
@@ -168,6 +169,7 @@
     const text = await generate(charId, "ask", [
       `你（${ch.name}）打开 Claude，开了一个新对话。你想问什么？`, kind,
       recent ? `你最近问过这些（换个新问题）：\n${recent}` : "",
+      skip ? `刚才想问「${skip}」，算了，换一个完全不同的问题。` : "",
       `===提问===\n标题：这个对话的标题（像 Claude 自动起的，四到十个字概括你问的事）\n模型：你选的模型（${MODELS.map(m => m[0]).join(" / ")}：按你的性格和问题选，急的、简单的用快的，纠结的、难的用聪明的）\n思考强度：${EFFORTS.join(" / ")}\n内容：\n你发给 Claude 的第一条消息\n===结束===`,
     ].filter(Boolean).join("\n\n"), `${ch.name}来提问`);
     if (text == null) return null;
@@ -359,8 +361,13 @@
       }
       case "conv-menu": {
         const c = conv(el.dataset.id); if (!c) return; const ch = charById(c.charId);
-        const v = await sheet("", [{ label: `让${ch ? ch.name : "他"}继续问`, value: "ask", icon: I.ask }, { label: "展示思考过程", value: "think", icon: I.bulb, on: !!S.meta.showThink },
+        const fresh = !c.msgs.some(m => m.role === "me");
+        const v = await sheet("", [...(fresh && !isBanned(c.charId) ? [{ label: "换一个问题", sub: "这个不想答，让他重新问一个", value: "reroll", icon: I.retry }] : []), { label: `让${ch ? ch.name : "他"}继续问`, value: "ask", icon: I.ask }, { label: "展示思考过程", value: "think", icon: I.bulb, on: !!S.meta.showThink },
           { label: "重命名对话", value: "rename", icon: I.pen }, ...(isBanned(c.charId) ? [{ label: "解封", value: "unban", icon: I.unban }] : []), { label: "删除对话", value: "del", icon: I.trash, danger: true }]);
+        if (v === "reroll") {
+          const n = await newQuestion(c.charId, c.title); if (!n) return;
+          S.convs = S.convs.filter(x => x !== c); dbDelete(COL.convs, c.id); closePage(); openConv(n.id); return;
+        }
         if (v === "ask") { if (isBanned(c.charId)) toast("他的账号已停用"); else if (!c.msgs.some(m => m.role === "me")) toast("先回答他一次吧"); else followUp(c, true); }
         if (v === "think") { S.meta.showThink = !S.meta.showThink; saveMeta(); refresh(); toast(S.meta.showThink ? "输入框上面可以写思考过程了" : "关掉了"); }
         if (v === "rename") { const t = await inputSheet("重命名对话", c.title, 24); if (t) { c.title = t; saveConv(c); refresh(); } }

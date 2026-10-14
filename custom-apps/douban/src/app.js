@@ -599,24 +599,51 @@
           <div class="me-tabs"><button class="on">主页</button><button data-act="coming" data-what="feed">动态</button><button data-act="coming" data-what="album">相册</button></div>
           ${!info ? (busy ? `<div class="gen-tip"><span class="spinner"></span>正在打开${he}的主页…</div>` : `<div class="mcard"><div class="mcard-empty" style="padding:10px 14px">${isChar ? "" : "还没生成 TA 的主页"}</div><button class="load-more" data-act="person-gen" data-k="${esc(k)}">✨ 生成主页（会用 1 次 API）</button></div>`) : ""}
           ${busy && info ? `<div class="gen-tip"><span class="spinner"></span>重新生成中…</div>` : ""}
-          ${isChar && masks.length ? `<div class="mcard mask-card"><div class="mcard-h">🤫 ${he}的马甲帖<span class="soon mk">只有你看得到</span></div>${masks.slice(0, 6).map(t => line(t, t.author.anon && t.author.charId === id ? "发帖" : "回帖")).join("")}</div>` : ""}
-          <div class="mcard"><div class="mcard-h">${he}发的帖子 ${posts.length}</div>${posts.length ? posts.slice(0, 8).map(t => line(t)).join("") : `<div class="mcard-empty">还没有实名发过帖子</div>`}</div>
-          <div class="mcard"><div class="mcard-h">${he}的回应 ${replied.length}</div>${replied.length ? replied.slice(0, 6).map(t => line(t, "回应过")).join("") : `<div class="mcard-empty">还没有实名回应过</div>`}</div>
-          <div class="mcard"><div class="mcard-h">${he}加入的小组 ${groups.length}</div>${groups.length ? `<div class="hscroll">${groups.map(g => `<button class="gtile" data-act="open-group" data-id="${esc(g.id)}">${groupAvaHtml(g)}<span>${esc(g.name)}</span></button>`).join("")}</div>` : `<div class="mcard-empty">还看不出${he}在哪些组</div>`}</div>
-          <div class="mcard"><div class="mcard-h" data-act="coming" data-what="charbook">书影音<span class="soon">第二期</span><i>›</i></div></div>
-          <div class="mcard"><div class="mcard-h" data-act="coming" data-what="diary">日记<span class="soon">第三期</span><i>›</i></div></div>
+          ${profileCards(k, author, groups)}
         </div>`);
       const hero = $(".me-hero", pg.el); if (hero && hero.dataset.bgRef) mediaUrl(hero.dataset.bgRef).then(u => { if (u) hero.style.backgroundImage = `linear-gradient(rgba(0,0,0,.25),rgba(0,0,0,.35)),url("${u}")`; });
-    }, { title: "", cls: "gpage ppage", action: `<button class="top-icon" data-act="person-menu" data-k="${esc(k)}" aria-label="更多">${I.more}</button>` });
+    }, { title: "", cls: "gpage ppage", corner: `<button class="top-icon" data-act="person-menu" data-k="${esc(k)}" aria-label="更多">${I.more}</button>` });
     if (isChar && !personInfo(k)) genPerson(k);
+    // 回关：她关注了他、他还没关注她 → 之后每天第一次打开他主页掷一次骰子（不花 API，主页不变）
+    const inf = personInfo(k); const day = new Date().toDateString();
+    if (isChar && inf && !inf.followsMe && (S.meta.follows || []).includes(followKey(author)) && inf.fbDay !== day && inf.followedAt && new Date(inf.followedAt).toDateString() !== day) {
+      inf.fbDay = day; if (Math.random() < 0.45) { inf.followsMe = true; toast(`${whoOf(author).name} 回关了你`); } saveMeta(); page.render(page);
+    }
     return page;
+  }
+  /** 主页下面那一串卡片（我的、char、路人都一样）：书影音 / 小组 / 帖子 / 回应 / 日记 / 豆列；帖子和回应只显示个数，点进去才列 */
+  function topicsOfAuthor(a) {
+    const posts = S.topics.filter(t => a.type === "user" ? t.author.type === "user" : t.author.type === a.type && (a.type === "char" ? t.author.charId === a.charId : t.author.name === a.name && !t.author.anon));
+    const replied = S.topics.filter(t => !posts.includes(t) && t.floors.some(f => a.type === "user" ? f.author.type === "user" : f.author.type === a.type && (a.type === "char" ? f.author.charId === a.charId : f.author.name === a.name && !f.author.anon)));
+    return { posts: posts.sort((x, y) => new Date(y.createdAt) - new Date(x.createdAt)), replied: replied.sort((x, y) => new Date(y.lastReplyAt) - new Date(x.lastReplyAt)) };
+  }
+  function profileCards(k, a, groups) {
+    const who = a.type === "user" ? "我" : a.type === "char" ? "他" : "TA";
+    const { posts, replied } = topicsOfAuthor(a);
+    const slots = (w, n, label) => `<div class="hscroll">${Array.from({ length: n }, () => `<div class="slot" data-act="coming" data-what="${w}"><div class="slot-cover"></div><span>${label}</span></div>`).join("")}</div>`;
+    return `<div class="mcard"><div class="mcard-h" data-act="coming" data-what="${a.type === "user" ? "book" : "charbook"}">书影音<span class="soon">第二期</span><i>›</i></div>${slots("book", 6, "想看")}</div>
+      <div class="mcard"><div class="mcard-h" ${a.type === "user" ? 'data-act="all-groups"' : ""}>${who === "我" ? "我的" : who + "加入的"}小组 ${groups.length}${a.type === "user" ? "<i>›</i>" : ""}</div>
+        ${groups.length ? `<div class="hscroll">${groups.map(g => `<button class="gtile" data-act="open-group" data-id="${esc(g.id)}">${groupAvaHtml(g)}<span>${esc(g.name)}</span></button>`).join("")}</div>` : `<div class="mcard-empty">${a.type === "user" ? "还没有加入小组" : `还看不出${who}在哪些组`}</div>`}</div>
+      <div class="mcard"><div class="mcard-h" data-act="person-list" data-k="${esc(k)}" data-kind="posts">${who}发的帖子 ${posts.length}<i>›</i></div></div>
+      <div class="mcard"><div class="mcard-h" data-act="person-list" data-k="${esc(k)}" data-kind="replied">${who}的回应 ${replied.length}<i>›</i></div></div>
+      <div class="mcard"><div class="mcard-h" data-act="coming" data-what="diary">日记<span class="soon">第三期</span><i>›</i></div>${slots("diary", 4, "日记")}</div>
+      <div class="mcard"><div class="mcard-h" data-act="coming" data-what="doulist">豆列<span class="soon">第二期</span><i>›</i></div>${slots("doulist", 4, "豆列")}</div>`;
+  }
+  /** 帖子 / 回应列表：匿名发的显示匿名头像（char 的带「他的马甲」、她的带「我」，只她看得到） */
+  function openPersonList(k, kind) {
+    const a = k === "me" ? { type: "user" } : k.startsWith("c:") ? { type: "char", charId: k.slice(2) } : { type: "npc", name: k.slice(2) };
+    const who = a.type === "user" ? "我" : a.type === "char" ? "他" : "TA";
+    openPage(`plist:${k}:${kind}`, pg => {
+      const { posts, replied } = topicsOfAuthor(a); const list = kind === "posts" ? posts : replied;
+      body(pg, list.length ? `<div class="db-white">${list.map(t => topicCard(t, kind === "posts" ? "group" : "feed")).join("")}</div>` : `<div class="empty">${kind === "posts" ? `${who}还没发过帖子` : `${who}还没回应过别人的帖子`}</div>`);
+    }, { title: kind === "posts" ? `${who}发的帖子` : `${who}的回应` });
   }
   // ───────────────────────── 页面栈 ─────────────────────────
   const pages = [];
   function openPage(key, render, opts = {}) {
     const old = pages.find(p => p.key === key); if (old && pages[pages.length - 1] === old) { old.render(old); return old; }
     const el = document.createElement("section"); el.className = `page ${opts.cls || ""}`; el.dataset.key = key;
-    el.innerHTML = `<header class="page-head"><div class="page-head-inner"><button class="back" data-act="back">${I.back}</button><div class="page-title">${opts.head || esc(opts.title || "")}</div>${opts.action || ""}</div></header><div class="page-body"></div>${opts.footer || ""}${opts.after || ""}`;
+    el.innerHTML = `<header class="page-head"><div class="page-head-inner"><button class="back" data-act="back">${I.back}</button><div class="page-title">${opts.head || esc(opts.title || "")}</div>${opts.action || ""}</div></header><div class="page-body"></div>${opts.footer || ""}${opts.after || ""}${opts.corner ? `<div class="corner-act">${opts.corner}</div>` : ""}`;
     document.body.appendChild(el);
     const page = { key, el, render, opts }; pages.push(page); render(page);
     // 有大背景头的页面（小组、豆友主页）：往下滑后顶栏变白底深色图标
@@ -637,6 +664,7 @@
     if (!S.meta) return;
     renderTabbar();
     $("#topbar").className = `topbar ${S.tab === "me" ? "clear" : ""}`; $("#view").className = `view ${S.tab === "me" ? "under-top" : ""}`;
+    $("#view").onscroll = S.tab === "me" ? () => $("#topbar").classList.toggle("solid", $("#view").scrollTop > 160) : null;
     ({ home: renderHome, book: renderBook, group: renderGroupTab, market: renderMarket, me: renderMe })[S.tab]();
     hydrateImages($("#view"));
   }
@@ -728,13 +756,7 @@
       </div>
       <div class="me-sheet">
         <div class="me-tabs"><button class="on">主页</button><button data-act="coming" data-what="feed">动态</button><button data-act="coming" data-what="album">相册</button><button data-act="my-favs">收藏</button></div>
-        <div class="mcard"><div class="mcard-h" data-act="coming" data-what="book">书影音<span class="soon">第二期</span><i>›</i></div>${slots("book", 6, "想看")}</div>
-        <div class="mcard"><div class="mcard-h" data-act="all-groups">我的小组 ${mine.length}<i>›</i></div>
-          ${mine.length ? `<div class="hscroll">${mine.map(g => `<button class="gtile" data-act="open-group" data-id="${esc(g.id)}">${groupAvaHtml(g)}<span>${esc(g.name)}</span></button>`).join("")}</div>` : `<div class="mcard-empty">还没有加入小组</div>`}</div>
-        <div class="mcard"><div class="mcard-h" data-act="my-posts">我的帖子 ${myTopics.length}<i>›</i></div>
-          ${myTopics.length ? myTopics.slice(0, 3).map(t => `<div class="mline" data-act="open-topic" data-id="${esc(t.id)}">${esc(t.title)}<span>${fmtTime(t.createdAt)}</span></div>`).join("") : `<div class="mcard-empty">还没发过帖子</div>`}</div>
-        <div class="mcard"><div class="mcard-h" data-act="coming" data-what="diary">日记<span class="soon">第三期</span><i>›</i></div>${slots("diary", 4, "日记")}</div>
-        <div class="mcard"><div class="mcard-h" data-act="coming" data-what="doulist">豆列<span class="soon">第二期</span><i>›</i></div>${slots("doulist", 4, "豆列")}</div>
+        ${profileCards("me", { type: "user" }, mine)}
         <div class="form-note" style="text-align:center">豆瓣 v${VERSION} · 第一期：小组</div>
       </div>
       <button class="fab" data-act="fab-me" aria-label="发帖">${I.pen}</button>`;
@@ -808,7 +830,7 @@
         ${all.length ? (g._busy ? `<div class="gen-tip"><span class="spinner"></span>刷新中…</div>` : `<button class="load-more" data-act="g-refresh" data-id="${esc(id)}">看看有没有新帖（会用 1 次 API）</button>`) : ""}
         </div>`);
       const hero = $(".g-hero", pg.el); if (hero && hero.dataset.bgRef) mediaUrl(hero.dataset.bgRef).then(u => { if (u) hero.style.background = `linear-gradient(rgba(0,0,0,.3),rgba(0,0,0,.45)),center/cover url("${u}")`; });
-    }, { title: "", cls: "gpage", action: `<button class="top-icon" data-act="group-menu" data-id="${esc(id)}" aria-label="更多">${I.more}</button>`, after: `<button class="fab" data-act="new-topic" data-id="${esc(id)}" aria-label="发帖">${I.pen}</button>` });
+    }, { title: "", cls: "gpage", corner: `<button class="top-icon" data-act="group-menu" data-id="${esc(id)}" aria-label="更多">${I.more}</button>`, after: `<button class="fab" data-act="new-topic" data-id="${esc(id)}" aria-label="发帖">${I.pen}</button>` });
     page.setSec = v => { sec = v; page.render(page); };
     page.setSort = v => { sort = v; page.render(page); };
     if (!S.topics.some(t => t.groupId === id)) genTopics(g);
@@ -1034,10 +1056,12 @@
       case "noop": return;
       case "open-person": openPerson(el.dataset.k); return;
       case "person-gen": genPerson(el.dataset.k); return;
+      case "person-list": openPersonList(el.dataset.k, el.dataset.kind); return;
       case "person-follow": {
         const k = el.dataset.k; const a = k.startsWith("c:") ? { type: "char", charId: k.slice(2) } : { type: "npc", name: k.slice(2) };
         const fk = followKey(a); const on = (S.meta.follows || []).includes(fk);
-        S.meta.follows = on ? S.meta.follows.filter(x => x !== fk) : [...(S.meta.follows || []), fk]; saveMeta();
+        S.meta.follows = on ? S.meta.follows.filter(x => x !== fk) : [...(S.meta.follows || []), fk];
+        if (!on) S.meta.people[k] = { ...(personInfo(k) || {}), followedAt: nowIso() }; saveMeta();
         toast(on ? "已取消关注" : "关注成功"); refreshAll(); return;
       }
       case "person-menu": {

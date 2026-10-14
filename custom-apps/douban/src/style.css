@@ -839,3 +839,11 @@ img { display: block; }
 .page.gpage.solid .page-head { background: var(--wb-card); border-bottom: 1px solid var(--wb-line); color: var(--wb-text); }
 .page.gpage.solid .page-head .back, .page.gpage.solid .page-head .top-icon { color: var(--wb-text); }
 .page.gpage .page-head { transition: background .15s; }
+/* 大背景页的「···」：放在小手机胶囊正下方、贴右边 */
+.corner-act { position: absolute; z-index: 5; right: 10px; top: calc(var(--bar-top) + var(--bar-h) + 6px); }
+.corner-act .top-icon { color: #fff; margin: 0; }
+.page.gpage.solid .corner-act .top-icon { color: var(--wb-text); }
+.topbar.clear.solid { background: var(--wb-card); border-bottom: 1px solid var(--wb-line); }
+.topbar.clear.solid .top-icon { color: var(--wb-text); }
+.topbar.clear { transition: background .15s; }
+.mcard-h:only-child { padding-bottom: 0; }

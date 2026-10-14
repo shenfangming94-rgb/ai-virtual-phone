@@ -495,7 +495,7 @@
     }
     g.refreshedAt = nowIso(); saveGroup(g);
     if (!n) toast("这次没写出能用的帖子，去「我的 → 调试记录」看看");
-    refreshAll(); return made;
+    refreshAll(); pruneTopics().catch(e => console.warn(e)); return made;
   }
   /** 组内搜：先搜组里已有的帖子（标题、正文、回应）；想看更多就让 AI 按这个词写 2～3 个 */
   function openGroupSearch(id) {
@@ -528,6 +528,26 @@
     const g = groupById(t.groupId);
     if (isLeadGroup(g)) return ((g.memberTitles || {})[personKey(f.author)] || "");
     return f.title || "";
+  }
+
+  /**
+   * 自动清理旧帖：宿主每个集合最多只读得出 500 条（新建的在前，超出的最旧的直接读不到，收藏的也会丢），所以帖子要控制在 500 以内。
+   * 永远不删：她收藏的、她发的或回过的、char 发的或回过的（连着 char 的记忆）、char 主页生成的。
+   * 其他的：每个组只留最近有人回复的 30 个，超出的、3 天没人回的删掉；全部加起来还超过 350 个，就从最久没人回的开始删
+   */
+  const KEEP_PER_GROUP = 30, KEEP_TOTAL = 350;
+  const isProtected = t => t.faved || t.author.type === "user" || t.author.type === "char" || /^c:/.test(t.fromProfile || "")
+    || t.floors.some(f => f.author.type === "user" || f.author.type === "char");
+  async function pruneTopics() {
+    const last = t => new Date(t.lastReplyAt || t.createdAt).getTime();
+    const free = S.topics.filter(t => !isProtected(t)).sort((a, b) => last(b) - last(a));
+    const drop = new Set(); const perGroup = {};
+    for (const t of free) { const n = perGroup[t.groupId] = (perGroup[t.groupId] || 0) + 1; if (n > KEEP_PER_GROUP && Date.now() - last(t) > 3 * 86400e3) drop.add(t); }
+    let over = S.topics.length - drop.size - KEEP_TOTAL;
+    for (let i = free.length - 1; i >= 0 && over > 0; i--) if (!drop.has(free[i])) { drop.add(free[i]); over--; }
+    if (!drop.size) return;
+    S.topics = S.topics.filter(t => !drop.has(t));
+    for (const t of drop) await dbDelete(COL.topics, t.id);
   }
 
   // ───────────────────────── 帖子：楼层 ─────────────────────────
@@ -1399,7 +1419,7 @@
   async function boot() {
     document.body.insertAdjacentHTML("afterbegin", `<header class="topbar" id="topbar"></header><main class="view" id="view"><div class="gen-tip"><span class="spinner"></span>加载中…</div></main><nav class="tabbar" id="tabbar"></nav>`);
     if (!api) { $("#view").innerHTML = `<div class="empty">请在小手机里打开这个 APP</div>`; return; }
-    try { await loadAll(); } catch (e) { console.error(e); $("#view").innerHTML = `<div class="empty">加载失败：${esc(e.message || e)}</div>`; return; }
+    try { await loadAll(); pruneTopics().catch(e => console.warn(e)); } catch (e) { console.error(e); $("#view").innerHTML = `<div class="empty">加载失败：${esc(e.message || e)}</div>`; return; }
     renderTab();
   }
   boot();

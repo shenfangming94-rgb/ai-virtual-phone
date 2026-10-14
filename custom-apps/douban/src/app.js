@@ -7,7 +7,8 @@
   // ───────────────────────── 工具 ─────────────────────────
   const $ = (sel, root) => (root || document).querySelector(sel);
   const esc = s => String(s == null ? "" : s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
-  const uid = p => `${p}_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 7)}`;
+  let uidN = 0; // 同一毫秒里也不会撞号
+  const uid = p => `${p}_${Date.now().toString(36)}${(uidN++).toString(36)}${Math.random().toString(36).slice(2, 6)}`;
   const rand = (a, b) => Math.floor(a + Math.random() * (b - a + 1));
   const shuffle = arr => arr.map(v => [Math.random(), v]).sort((a, b) => a[0] - b[0]).map(x => x[1]);
   const nowIso = () => new Date().toISOString();
@@ -61,6 +62,7 @@
     camera: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linejoin="round"><path d="M4 8h3.2l1.6-2.5h6.4L16.8 8H20v11H4z"/><circle cx="12" cy="13.3" r="3.3"/></svg>',
     pen: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 19.5l1.2-4.6L15.9 4.7a1.8 1.8 0 0 1 2.6 0l.8.8a1.8 1.8 0 0 1 0 2.6L9.1 18.3z"/></svg>',
     more: '<svg viewBox="0 0 24 24" fill="currentColor"><circle cx="6" cy="12" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="18" cy="12" r="1.7"/></svg>',
+    trash: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 6.5h15M9.5 6.5V4.5h5v2M6.5 6.5l1 13h9l1-13M10 10.5v6M14 10.5v6"/></svg>',
     repost: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3.5 20.5 7 17 10.5"/><path d="M4 11V9.5A2.5 2.5 0 0 1 6.5 7h14M7 20.5 3.5 17 7 13.5"/><path d="M20 13v1.5a2.5 2.5 0 0 1-2.5 2.5h-14"/></svg>',
     fav: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"><path d="M6 3.5h12v17l-6-4-6 4z"/></svg>',
     favOn: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M6 3.5h12v17l-6-4-6 4z"/></svg>',
@@ -168,6 +170,21 @@
     api.memory.addTimeline({ characterId: charId, appLabel: "豆瓣", detail: "douban", summary, appEventId: eventId }).catch(e => console.warn(e));
   }
 
+  function forget(events) {
+    if (!api.memory || !api.memory.deleteTimeline) return;
+    for (const e of events) api.memory.deleteTimeline({ characterId: e.charId, appEventId: e.eventId }).catch(() => {});
+  }
+  /** 一条帖子写过的全部记忆：char 发的帖子、char 回的楼 */
+  function memEventsOfTopic(t) {
+    const ev = [];
+    if (t.author.type === "char") ev.push({ charId: t.author.charId, eventId: `douban_topic_${t.id}` });
+    for (const f of t.floors || []) if (f.author.type === "char") ev.push({ charId: f.author.charId, eventId: `douban_floor_${t.id}_${f.n}` });
+    return ev;
+  }
+  async function deleteTopic(t) {
+    forget(memEventsOfTopic(t));
+    S.topics = S.topics.filter(x => x !== t); await dbDelete(COL.topics, t.id);
+  }
   // ───────────────────────── 提示 ─────────────────────────
   function toast(msg) { const el = document.createElement("div"); el.className = "toast"; el.textContent = msg; document.body.appendChild(el); setTimeout(() => el.remove(), 1800); }
   function sheet(title, items) {
@@ -432,7 +449,9 @@
     ({ home: renderHome, book: renderBook, group: renderGroupTab, market: renderMarket, me: renderMe })[S.tab]();
     hydrateImages($("#view"));
   }
-  const topSearch = (ph, act) => `<div class="topbar-inner"><button class="db-search" data-act="${act}">${I.search}<span>${esc(ph)}</span></button><button class="top-icon" data-act="coming" data-what="mail" aria-label="豆邮" style="margin-left:0">${I.mail}</button></div>`;
+  const topSearch = (ph, act, right) => `<div class="topbar-inner"><button class="db-search" data-act="${act}">${I.search}<span>${esc(ph)}</span></button>${right === "trash"
+    ? `<button class="top-icon" data-act="wipe-all" aria-label="清空豆瓣" style="margin-left:0">${I.trash}</button>`
+    : `<button class="top-icon" data-act="coming" data-what="mail" aria-label="豆邮" style="margin-left:0">${I.mail}</button>`}</div>`;
   /** 还没做的：写清楚第几期上线 */
   const COMING = {
     feed: ["关注的人的动态（广播）", "第三期", "豆瓣式的动态：char 发广播、转发你的标记、给你点赞，比微博安静"],
@@ -474,7 +493,7 @@
   const feedTopics = () => S.topics.filter(t => { const g = groupById(t.groupId); return g && isJoined(g); }).sort((a, b) => new Date(b.lastReplyAt || b.createdAt) - new Date(a.lastReplyAt || a.createdAt));
 
   function renderHome() {
-    $("#topbar").innerHTML = topSearch("搜索书影音、小组", "open-search");
+    $("#topbar").innerHTML = topSearch("搜索书影音、小组", "open-search", "trash");
     const list = feedTopics().slice(0, 30);
     $("#view").innerHTML = `<div class="db-sec">动态</div>${comingHtml(["feed"])}
       <div class="db-sec">我的小组新帖<button data-act="tab" data-tab="group">全部 ›</button></div>
@@ -503,7 +522,7 @@
   }
   /** 「我」：背景图 + 居中头像 + 昵称签名；下面白色大卡片里一栏一栏的模块（书影音、日记、豆列可以左右划，我的小组） */
   function renderMe() {
-    $("#topbar").innerHTML = `<div class="topbar-inner me-bar"><button class="top-icon" data-act="me-menu" aria-label="菜单" style="margin-left:0">${I.menu}</button><button class="top-icon" data-act="coming" data-what="mail" aria-label="豆邮">${I.mail}</button></div>`;
+    $("#topbar").innerHTML = `<div class="topbar-inner me-bar"><button class="top-icon" data-act="me-menu" aria-label="菜单" style="margin-left:0">${I.menu}</button></div>`;
     const w = whoOf({ type: "user" });
     const mine = myGroups();
     const myTopics = S.topics.filter(t => t.author.type === "user").sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
@@ -650,7 +669,7 @@
       $(".bb-fav", pg.el).classList.toggle("on", !!t.faved); $(".bb-fav", pg.el).innerHTML = t.faved ? I.favOn : I.fav;
       // 滑过发帖人那一行后，顶栏才出现头像、名字和关注（关注在最右）
       const th = $(".topic-head", pg.el); if (th) { const fb = th.querySelector(".follow-mini"); if (fb) { fb.classList.toggle("on", isFollowing(t.author)); fb.textContent = isFollowing(t.author) ? "已关注" : "＋关注"; } }
-    }, { cls: "tpage", head: `<div class="topic-head" data-act="noop">${avatarHtml(w0)}<span>${esc(w0.name)}</span>${t0.author.type === "user" || t0.author.anon ? "" : `<button class="follow-mini ${isFollowing(t0.author) ? "on" : ""}" data-act="follow-author">${isFollowing(t0.author) ? "已关注" : "＋关注"}</button>`}</div>`,
+    }, { cls: "tpage", action: `<button class="top-icon" data-act="topic-menu" aria-label="更多">${I.more}</button>`, head: `<div class="topic-head" data-act="noop">${avatarHtml(w0)}<span>${esc(w0.name)}</span>${t0.author.type === "user" || t0.author.anon ? "" : `<button class="follow-mini ${isFollowing(t0.author) ? "on" : ""}" data-act="follow-author">${isFollowing(t0.author) ? "已关注" : "＋关注"}</button>`}</div>`,
       footer: `<div class="reply-quote hidden"></div><div class="reply-bar bb"><button class="anon-chip" data-act="toggle-anon">实名</button><textarea class="reply-input" rows="1" placeholder="写回复" maxlength="500"></textarea><button class="reply-send hidden">发送</button>
         <span class="bb-icons"><button class="bb-like" data-act="topic-like">${I.like}</button><button data-act="topic-repost">${I.repost}</button><button class="bb-fav" data-act="topic-fav">${I.fav}</button></span></div>` });
     page.setOnlyOp = () => { onlyOp = !onlyOp; page.render(page); };
@@ -787,12 +806,29 @@
       case "del-group": {
         const g = groupById(el.dataset.id); if (!g) return;
         if (await sheet(`解散「${g.name}」？组里的帖子会一起删掉`, [{ label: "解散", value: "yes", danger: true }]) !== "yes") return;
-        for (const t of S.topics.filter(x => x.groupId === g.id)) dbDelete(COL.topics, t.id);
-        S.topics = S.topics.filter(x => x.groupId !== g.id); S.groups = S.groups.filter(x => x !== g); dbDelete(COL.groups, g.id);
+        for (const t of S.topics.filter(x => x.groupId === g.id)) await deleteTopic(t); S.groups = S.groups.filter(x => x !== g); dbDelete(COL.groups, g.id);
         while (pages.length) { const p = pages.pop(); p.el.remove(); } renderTab(); toast("已解散"); return;
       }
       case "new-topic": newTopic(el.dataset.id); return;
       case "noop": return;
+      case "topic-menu": {
+        const t = topicById(pg.key.split(":")[1]); if (!t) return;
+        const v = await sheet("", [{ label: t.faved ? "取消收藏" : "收藏", value: "fav" }, { label: "删除这条帖子（相关记忆一起删）", value: "del", danger: true }]);
+        if (v === "fav") { t.faved = !t.faved; t.favs = Math.max(0, (t.favs || 0) + (t.faved ? 1 : -1)); saveTopic(t); pg.render(pg); toast(t.faved ? "已收藏" : "已取消收藏"); }
+        if (v === "del") {
+          if (await sheet(`删除《${t.title.slice(0, 20)}》？楼层和相关记忆会一起删掉`, [{ label: "删除", value: "yes", danger: true }]) !== "yes") return;
+          await deleteTopic(t); closePage(); toast("已删除");
+        }
+        return;
+      }
+      case "wipe-all": {
+        if (await sheet("清空豆瓣的全部内容？小组、帖子、回应、搜索记录和相关记忆都会删掉，删了不能恢复（你的昵称、头像、IP 和设置会留着）", [{ label: "全部删除", value: "yes", danger: true }]) !== "yes") return;
+        for (const t of S.topics) forget(memEventsOfTopic(t));
+        await Promise.all([...S.topics.map(t => dbDelete(COL.topics, t.id)), ...S.groups.map(g => dbDelete(COL.groups, g.id))]);
+        S.topics = []; S.groups = []; S.groupChip = null;
+        Object.assign(S.meta, { joined: [], searches: {}, follows: [], charNicks: {} }); saveMeta();
+        renderTab(); toast("豆瓣已清空"); return;
+      }
       case "all-groups": {
         const mine = myGroups(); if (!mine.length) { toast("还没有加入小组"); return; }
         openPage("all-groups", p2 => body(p2, `<div class="db-white">${mine.map(g => `<div class="g-row" data-act="open-group" data-id="${esc(g.id)}">${groupAvaHtml(g)}<div class="cell-main"><b>${esc(g.name)}</b><div class="cell-sub">${fmtNum(g.members)} ${esc(g.memberNoun || "成员")}${g.mine ? " · 你创建的" : ""}</div></div></div>`).join("")}</div>`), { title: `我的小组 ${mine.length}` });

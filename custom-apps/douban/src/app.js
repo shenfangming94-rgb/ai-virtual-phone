@@ -255,7 +255,7 @@
   const publicLine = () => { const list = [...activeChars().filter(c => (S.meta.publicChars || []).includes(c.id)).map(c => `${c.name}（角色，豆瓣昵称「${charNick(c.id)}」）`), ...(S.meta.publicMe ? [`用户本人（${herName()}）`] : [])];
     return list.length ? `这个世界的公众人物（可以被大家当明星名人讨论）：${list.join("、")}。${userLine()}` : "这个世界里没有公众人物：角色和用户都不会被当成明星讨论。"; };
   /** 熟人组：组里的人现实中认识角色和用户（同校、同城、同公司），不是公众人物也会被聊到 */
-  const localLine = g => g && g.local ? `这是熟人组：组里的人现实中认识这些人（同校、同城、同事），会聊到他们、八卦他们：${[...activeChars().map(c => c.name), `用户（${herName()}）`].join("、")}。他们本人这次不一定出场。组里的人认识用户（${herName()}，豆瓣昵称「${S.meta.nickname}」），聊到她可以用名字，也可以用大家平时对她的叫法（学姐、xx班那个……）。${userLine()}` : "";
+  const localLine = g => g && g.local ? `这是熟人组：组里的人现实中认识这些人（同校、同城、同事），会聊到他们、八卦他们：${[...activeChars().map(c => c.name), `用户（${herName()}）`].join("、")}。他们本人这次不一定出场。组里的人认识用户（${herName()}，豆瓣昵称「${S.meta.nickname}」），聊到她可以用名字，也可以用大家对她的叫法（按人设和世界书里她的身份来，不要自己编身份）。${userLine()}` : "";
   /**
    * 小组自己的设定：成员称呼（她起的「小气球」要用上）、组长是谁（她当组长时大家都知道，只有她能加精、发头衔）
    */

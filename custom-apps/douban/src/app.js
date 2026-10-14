@@ -212,7 +212,7 @@
   const DOUBAN_RULE = `【豆瓣小组】这是仿真的豆瓣 App 小组。写法手感（是参考，不是公式，好看比合规更重要）：
 - 豆瓣是文艺青年和吃瓜群众的地盘：比微博安静、比小红书话多。帖子标题像真人随手起的（求助、吐槽、分享、讨论、碎碎念、「有没有人和我一样……」），正文口语，长短不一。
 - 回应的是一群各有性格的豆友：蹲后续的、接梗玩梗的、一针见血锐评的、认真分析给建议的、跑题的、站队吵起来的。每层都像真人随手打的字，短句为主，不写小作文。常见的豆瓣味：dd、mark、蹲、码住、沙发、楼主好人、哈哈哈哈哈哈、这个组真的笑死、楼主更新了吗。
-- 楼层之间要有来往：引用楼上、楼主下场回复、豆友互相接梗，笑点靠一来一回打出来。
+- 楼层之间要有来往：引用楼上、楼主下场回复、豆友互相接梗，笑点靠一来一回打出来。引用写在「引用」字段里就行，正文开头不要再写「回3楼：」「回复@xx：」。
 - 赞数是隐形叙事：最好笑或最扎心的那层赞最高。
 - 楼主是不可靠叙述者时（嘴上一套，心里一套），让楼下豆友替读者把真实心思扒出来。
 - 一次不要把事讲完，留点让人想蹲后续的地方。
@@ -299,6 +299,22 @@
     const local = S.groups.filter(g => g.name.includes(term) && !made.includes(g));
     S.meta.searches[term] = [...made, ...local].map(g => g.id); saveMeta();
     return [...made, ...local];
+  }
+  /**
+   * 小组人数自己长（不花 API）：按离上次打开过了多久长一点；小组长得快、大组几乎不动；
+   * 刚建的组前几天冷启动涨得快；最近帖子热闹（她发的帖回应多、有精华）再多一波。她手动改过也从改过的数接着长
+   */
+  function growMembers(g) {
+    const now = Date.now(); const last = g.grownAt ? new Date(g.grownAt).getTime() : new Date(g.createdAt || now).getTime();
+    const days = (now - last) / 86400e3; if (days < 0.02) return; // 半小时内不重复算
+    const m = g.members || 1;
+    const rate = m < 100 ? 0.25 : m < 1000 ? 0.08 : m < 10000 ? 0.02 : m < 100000 ? 0.004 : 0.001; // 每天涨百分之几
+    const age = (now - new Date(g.createdAt || now).getTime()) / 86400e3;
+    const boost = (g.mine && age < 5 ? 2.5 : 1) * (S.topics.some(t => t.groupId === g.id && (t.elite || (t.author.type === "user" && t.floors.length >= 8)) && now - new Date(t.lastReplyAt || t.createdAt) < 3 * 86400e3) ? 1.8 : 1);
+    const add = Math.round(m * rate * Math.min(days, 30) * boost * (0.6 + Math.random() * 0.8)) + (m < 100 && days > 0.2 ? rand(0, 2) : 0);
+    g.grownAt = new Date(now).toISOString();
+    if (add > 0) g.members = m + add;
+    saveGroup(g);
   }
   /** AI 写的组长、成员称呼、发言规则、分区 → 存到小组上（已经有的不覆盖） */
   function fillGroupInfo(g, b) {
@@ -403,8 +419,11 @@
     const aiMap = {}; const dropped = new Set(); // AI 写的楼层号 → 实际楼层号；被删掉的楼（不许出场的 char）
     for (const b of parseBlocks(text, "楼")) {
       const aiN = clampInt(b["层"], 0);
-      const txt = String(b["内容"] || "").trim(); if (!txt) { if (aiN) dropped.add(aiN); continue; }
-      const q0 = clampInt(b["引用"], 0);
+      let txt = String(b["内容"] || "").trim(); if (!txt) { if (aiN) dropped.add(aiN); continue; }
+      let q0 = clampInt(b["引用"], 0);
+      // 正文开头的「回3楼：」「回复 3 楼」「@xx：」：引用条已经说明了，去掉；没写引用的顺便补上
+      const pre = txt.match(/^(?:回复?\s*(\d+)\s*[楼L#]|@[^\s：:]{1,20})\s*[：:，,]?\s*/i);
+      if (pre && txt.length > pre[0].length) { if (!q0 && pre[1]) q0 = +pre[1]; txt = txt.slice(pre[0].length).trim(); }
       if (q0 && dropped.has(q0)) { if (aiN) dropped.add(aiN); continue; } // 在回被删掉的楼：一起删，不留对着空气说话的楼
       const claimsOp = yes(b["楼主"]) || String(b["作者"] || "").trim() === "楼主";
       if (claimsOp && t.author.type === "user") { if (aiN) dropped.add(aiN); continue; } // 她自己的帖子：楼主的楼只能她自己发，AI 不能替她说
@@ -595,6 +614,7 @@
   /** 小组内页（照真豆瓣）：整块彩色/自选背景的头，组头像 + 名字 + 「N 成员称呼 · 组长 xx」+ 右边加入；简介和发言规则；分区标签；最新/热门/精华；右下角笔 */
   function openGroup(id) {
     const g = groupById(id); if (!g) return;
+    growMembers(g);
     let sec = "all", sort = "new";
     const page = openPage(`group:${id}`, pg => {
       const all = S.topics.filter(t => t.groupId === id);
@@ -814,7 +834,7 @@
       case "eg-admin": { const g = groupById(el.dataset.id); if (g) { g.admin = !g.admin; saveGroup(g); refreshAll(); } return; }
       case "eg-save": { const g = groupById(el.dataset.id); if (!g) return; g.intro = $("#eg-intro", pg.el).value.trim(); g.topicsHint = $("#eg-topics", pg.el).value.trim();
         const v = id => { const e = $(`#${id}`, pg.el); return e ? e.value.trim() : null; };
-        g.members = clampInt(v("eg-members"), g.members) || g.members; g.memberNoun = v("eg-noun") || ""; g.rules = v("eg-rules") || "";
+        const nm = clampInt(v("eg-members"), g.members) || g.members; if (nm !== g.members) { g.members = nm; g.grownAt = nowIso(); } g.memberNoun = v("eg-noun") || ""; g.rules = v("eg-rules") || "";
         if (v("eg-leader") != null) g.leader = v("eg-leader") || "";
         g.sections = (v("eg-secs") || "").split(/[、,，/｜|]+/).map(x => x.trim()).filter(Boolean).slice(0, 6);
         saveGroup(g); closePage(); toast("保存了"); return; }

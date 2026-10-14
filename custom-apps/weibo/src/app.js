@@ -702,7 +702,7 @@
   }
 
   // ───────────────────────── AI 输出解析 ─────────────────────────
-  const KEYS = ["认识", "关注用户", "置顶", "表情包", "引用", "图片", "回关", "取关", "转发语", "口吻", "发博原因", "删除", "点赞人", "截图", "做法", "代发", "登录", "对方", "记录", "角色", "作者", "认证", "认证说明", "会员", "来源", "时间", "配图", "转评赞", "转发自", "原文", "转发链", "正文", "编号", "回复", "赞", "内容",
+  const KEYS = ["类型", "认识", "关注用户", "置顶", "表情包", "引用", "图片", "回关", "取关", "转发语", "口吻", "发博原因", "删除", "点赞人", "截图", "做法", "代发", "登录", "对方", "记录", "角色", "作者", "认证", "认证说明", "会员", "来源", "时间", "配图", "转评赞", "转发自", "原文", "转发链", "正文", "编号", "回复", "赞", "内容",
     "性别", "点赞角色", "转发", "路人点赞", "新增粉丝", "昵称", "简介", "IP属地", "粉丝", "关注",
     "热搜词", "热度", "标签", "相关", "来自", "新粉丝", "名称", "分类", "帖子数", "粉丝数", "导语", "主持人", "阅读", "讨论", "分区", "词条", "热搜", "阅读量", "讨论量",
     // 模型常换的叫法
@@ -3856,25 +3856,44 @@
     return activeChars().filter(c => c.id !== id && (mine.includes(c.id) || (((S.accounts[c.id] || {}).rel || {}).knows || []).includes(id)));
   }
   async function ensureCharRel(id) {
-    const ch = charById(id); const acc = S.accounts[id]; if (!ch || (acc && acc.rel) || S[`_rel_${id}`]) return;
+    // 第一次打开：判断认识谁 + 按人设写一批他关注的账号和粉丝（同一次调用）；老数据只有关系没有账号的，再补一次账号
+    const ch = charById(id); const acc = S.accounts[id]; if (!ch || (acc && acc.rel && acc.personaFollows) || S[`_rel_${id}`]) return;
     S[`_rel_${id}`] = true; refreshAll();
+    const needRel = !(acc && acc.rel);
     const others = activeChars().filter(c => c.id !== id);
-    const askMe = isPublic(id) && isLove(id) === "secret";
+    const askMe = needRel && isPublic(id) && isLove(id) === "secret";
     const instruction = [
       `当前时间：${nowText()}`,
-      `按你（${ch.name}）的人设、世界书和记忆，判断下面这些人里你在现实中认识谁（同学、校友、同事、队友、朋友、家人……认识就算，不用很熟）：${others.map(c => c.name).join("、") || "无"}。`,
+      needRel ? `按你（${ch.name}）的人设、世界书和记忆，判断下面这些人里你在现实中认识谁（同学、校友、同事、队友、朋友、家人……认识就算，不用很熟）：${others.map(c => c.name).join("、") || "无"}。` : "",
       askMe ? `你是公众人物，和${herName()}在谈地下恋。如果你们在工作或生活上本来就有直接联系（比如她也是圈内人/同行/前后辈、你的经纪人或助理、同学同事、亲戚……），大号互关很正常；如果她是和你工作生活都没有直接交集的素人，大号关注她容易被扒。判断你的大号会不会关注她。` : "",
-      `只输出：\n===关系===\n认识：认识的人的本名，用、分隔（都不认识写 无）${askMe ? "\n关注用户：是 / 否" : ""}\n===结束===`,
+      `再写出你（${ch.name}）微博大号的关注列表和粉丝列表里的账号，要一眼看出是你的号：`,
+      `- 关注 ${rand(8, 12)} 个：按你的人设、爱好、职业、学校和生活来（喜欢的歌手演员、游戏动漫官号、学校/公司/社团官号、兴趣博主、搞笑号……），要有你自己的特色，不要大众脸。`,
+      `- 粉丝 ${rand(6, 10)} 个：${isPublic(id) ? "你是公众人物，大多是你的粉丝，昵称带粉圈味（站姐、应援号、追了你很多年的老粉……）" : "普通人的粉丝：同学同事的朋友、社团学弟学妹、看过你某条博关注你的网友……"}`,
+      `- 都不能是认识的真人（上面那些角色）和${herName()}。`,
+      `输出：${needRel ? `\n===关系===\n认识：认识的人的本名，用、分隔（都不认识写 无）${askMe ? "\n关注用户：是 / 否" : ""}\n===结束===` : ""}\n每个账号：\n===账号===\n类型：关注 / 粉丝\n昵称：微博昵称\n简介：一句简介\n认证：无 / 黄V / 蓝V（官号写蓝V）\n===结束===`,
     ].filter(Boolean).join("\n\n");
     let text = null;
     try { const r = await api.ai.generate({ characterId: id, appTags: ["nox_weibo", "rel"], instruction }); text = (r && r.text) || ""; logAi({ label: `${ch.name}的关注关系`, ok: true, text }); }
     catch (e) { logAi({ label: `${ch.name}的关注关系`, ok: false, error: String((e && e.message) || e) }); toast("关注关系没判断出来，等下再点一次试试"); }
     S[`_rel_${id}`] = false;
     if (text == null) { refreshAll(); return; }
-    const b = parseBlocks(text, "关系")[0] || {};
-    const knows = none(b["认识"]) ? [] : String(b["认识"]).split(/[、,，\s]+/).map(n => charByName(n.trim())).filter(c => c && c.id !== id).map(c => c.id);
-    ensureAccount(id, { rel: { knows, followsMe: askMe ? !/否/.test(String(b["关注用户"] || "")) : true, at: nowIso() } });
-    noteParsed(`认识 ${knows.length} 个角色${askMe ? `；大号${charFollowsMe(id) ? "" : "不"}关注你` : ""}`);
+    const patch = {};
+    if (needRel) {
+      const b = parseBlocks(text, "关系")[0] || {};
+      const knows = none(b["认识"]) ? [] : String(b["认识"]).split(/[、,，\s]+/).map(n => charByName(n.trim())).filter(c => c && c.id !== id).map(c => c.id);
+      patch.rel = { knows, followsMe: askMe ? !/否/.test(String(b["关注用户"] || "")) : true, at: nowIso() };
+    }
+    const fol = [], fans = [];
+    for (const b of parseBlocks(text, "账号")) {
+      const name = String(b["昵称"] || "").replace(/^@/, "").trim().slice(0, 24);
+      if (!name || isUserName(name) || charByName(name, true) || charByName(name) || altOwner(name) || fol.includes(name) || fans.includes(name)) continue;
+      (/粉丝/.test(String(b["类型"] || "")) ? fans : fol).push(name);
+      if (!S.npcs.map[name]) S.npcs.map[name] = { bio: none(b["简介"]) ? "" : String(b["简介"]).trim(), verified: /V/.test(String(b["认证"] || "")) ? String(b["认证"]).trim() : "无", verifiedNote: "", vip: false, at: nowIso(), pending: true };
+    }
+    if (fol.length || fans.length) { saveNpcs(); patch.personaFollows = true; const a0 = S.accounts[id] || {};
+      patch.moreFollowing = [...fol, ...(a0.moreFollowing || []).filter(n => !fol.includes(n))]; patch.moreFans = [...fans, ...(a0.moreFans || []).filter(n => !fans.includes(n))]; }
+    ensureAccount(id, patch);
+    noteParsed(`${needRel ? `认识 ${(patch.rel || {}).knows ? patch.rel.knows.length : 0} 个角色；` : ""}关注 ${fol.length} 个、粉丝 ${fans.length} 个${askMe ? `；大号${charFollowsMe(id) ? "" : "不"}关注你` : ""}`);
     refreshAll();
   }
   /** 关注 / 粉丝列表的行：{ a: author, tag, mutualWithMe } */
@@ -3886,11 +3905,11 @@
     if (kind === "following") {
       if (charFollowsMe(id)) push(me, "你");
       for (const c of knownChars(id)) push(authorOf({ authorType: "char", charId: c.id }), "");
-      // 他赞过 / 评论过的路人博主，最近的在前
+      // 按他人设写的账号在前；和他有来往的路人博主（赞过 / 评论过）最多 5 个放最后
+      for (const n of acc.moreFollowing || []) push(authorOf({ authorType: "npc", authorName: n }), "");
       const touched = S.posts.filter(p => p.authorType === "npc" && !p.altOf && ((p.likedBy || []).includes(id) || (p.comments || []).some(c => c.authorType === "char" && c.charId === id)))
         .sort((x, y) => new Date(y.likeAt || y.createdAt) - new Date(x.likeAt || x.createdAt));
-      for (const p of touched.slice(0, 30)) push(authorOf({ authorType: "npc", authorName: p.authorName }), "");
-      for (const n of acc.moreFollowing || []) push(authorOf({ authorType: "npc", authorName: n }), "");
+      for (const n of [...new Set(touched.map(p => p.authorName))].slice(0, 5)) push(authorOf({ authorType: "npc", authorName: n }), "");
     } else {
       if (isFollowingChar(id)) push(me, "你");
       for (const c of knownChars(id)) push(authorOf({ authorType: "char", charId: c.id }), "");
@@ -3900,8 +3919,8 @@
         for (const c of p.comments || []) if (c.authorType === "npc" && !c.altOf && !altOwner(c.authorName)) names.push(c.authorName);
         for (const n of p.npcLikers || []) if (!altOwner(n) || altSeen(altOwner(n))) names.push(n);
       }
-      for (const n of names.slice(0, 40)) push(authorOf({ authorType: "npc", authorName: n }), "");
       for (const n of acc.moreFans || []) push(authorOf({ authorType: "npc", authorName: n }), "");
+      for (const n of [...new Set(names)].slice(0, 5)) push(authorOf({ authorType: "npc", authorName: n }), "");
     }
     return rows.map(r => ({ ...r, common: r.a.type === "char" ? isFollowingChar(r.a.charId) : r.a.type === "npc" ? isFollowingNpc(r.a.name) : false }));
   }
@@ -3945,7 +3964,7 @@
       const rowHtml = r => `<div class="list-cell" ${profileAttrs(r.a)}>${avatarHtml(r.a)}<div class="cell-main"><div class="${r.a.vip ? "vip" : ""}">${esc(r.a.name)}</div>${r.a.type === "npc" && S.npcs.map[r.a.name] && S.npcs.map[r.a.name].bio ? `<div class="cell-sub">${esc(S.npcs.map[r.a.name].bio)}</div>` : r.a.type === "char" ? `<div class="cell-sub">${esc(charSub(r.a.charId))}</div>` : ""}</div>${r.tag ? `<span class="follow-tag me">${esc(r.tag)}</span>` : r.common ? `<span class="follow-tag">共同关注</span>` : ""}</div>`;
       const total = tab === "following" ? acc.following || rows.length : acc.followers || rows.length;
       b.innerHTML = `<div class="profile-tabs"><button class="${tab === "following" ? "on" : ""}" data-act="profile-tab" data-tab="following">关注 ${fmtNum(acc.following || 0)}</button><button class="${tab === "fans" ? "on" : ""}" data-act="profile-tab" data-tab="fans">粉丝 ${fmtNum(acc.followers || 0)}</button></div>`
-        + (S[`_rel_${id}`] ? `<div class="gen-tip"><span class="spinner"></span>正在看他认识谁…</div>` : "")
+        + (S[`_rel_${id}`] ? `<div class="gen-tip"><span class="spinner"></span>正在翻他的关注和粉丝…</div>` : "")
         + (common ? `<div class="form-note">你们共同关注了 ${common} 人</div>` : "")
         + rows.map(rowHtml).join("")
         + (pg.busy ? `<div class="gen-tip"><span class="spinner"></span>加载中…</div>` : rows.length < total ? `<button class="load-more" data-act="char-follows-more" data-char="${esc(id)}" data-tab="${tab}">加载更多（会用 1 次 API）</button>` : "");

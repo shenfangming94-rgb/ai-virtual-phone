@@ -221,12 +221,17 @@
 - 帖子里被讨论、被八卦的人（瓜主）只能是这三种：你本来就知道的真实明星名人、联网搜到的真实新闻里的人、本轮说明里列出的这个世界的公众人物。*不要编一个有名有姓的明星、网红、名人出来当瓜主*。豆友讲自己生活里的普通人（室友、同事、楼下大爷）可以，那不算瓜。
 - 豆友可以用缩写、代号说人（豆瓣味），但有人问「说的是谁」时，总有人会好心解释清楚（直接说名字，或者「就是演《xx》那个」），不要一直打太极。
 - 用户本人绝不能出现在你写的内容里，除非下面明确写了她发的楼；不能替用户说话，也不能编造她做过的事。`;
+  /** 被讨论时对用户的底线（公众人物、熟人组都适用） */
+  const USER_LINE = `角色可以聊他们没跟用户提过的新鲜事（他们有自己的生活），合人设就行；*用户（${"${herName()}"}）做过的事只能来自聊天记录和记忆，不能编*。万一一定要提到她，也绝不能贬低、矮化她，不能把她写成衬托角色的工具人、陪衬或笑料。`;
+  const userLine = () => USER_LINE.replace("${herName()}", herName());
   const publicLine = () => { const list = [...activeChars().filter(c => (S.meta.publicChars || []).includes(c.id)).map(c => `${c.name}（角色，豆瓣昵称「${charNick(c.id)}」）`), ...(S.meta.publicMe ? [`用户本人（${herName()}）`] : [])];
-    return list.length ? `这个世界的公众人物（可以被大家讨论，只聊聊天记录、记忆、世界书里真发生过的事；用户本人尤其不能编她没做过的事）：${list.join("、")}。` : "这个世界里没有公众人物：角色和用户都是普通人，不会被当成明星讨论。"; };
+    return list.length ? `这个世界的公众人物（可以被大家当明星名人讨论）：${list.join("、")}。${userLine()}` : "这个世界里没有公众人物：角色和用户都不会被当成明星讨论。"; };
+  /** 熟人组：组里的人现实中认识角色和用户（同校、同城、同公司），不是公众人物也会被聊到 */
+  const localLine = g => g && g.local ? `这是熟人组：组里的人现实中认识这些人（同校、同城、同事），会聊到他们、八卦他们（「高二那个打篮球的」「年级第一」）：${[...activeChars().map(c => c.name), `用户（${herName()}）`].join("、")}。他们本人这次不一定出场。${userLine()}` : "";
   const WHO_LINE = () => `用户的豆瓣昵称是「${S.meta.nickname}」，真名「${herName()}」：你写的豆友不能用这两个名字。${activeChars().length ? `认识的角色（他们的豆瓣昵称）：${activeChars().map(c => `${c.name}「${charNick(c.id)}」`).join("、")}，豆友不能撞这些名字。` : ""}`;
 
   /** 借来的角色资料只是世界背景（宿主规定调用必须带一个角色）：没轮到出场的人不许出现，也不许被提起 */
-  const bgLine = appear => `【这次谁出场】${appear.length ? `只有 ${appear.map(c => c.name).join("、")} 可以出场（按下面说的方式）。` : "这次没有任何角色出场。"}你拿到的角色人设、世界书、记忆只是这个世界的背景：其他角色本人不出现，豆友也不认识他们，不要提他们的名字、外号、身份（比如「X姐」「班长」），也不要编和他们有关的人和事。豆友都是普通路人，聊的是自己的事。`;
+  const bgLine = (appear, g) => `【这次谁出场】${appear.length ? `只有 ${appear.map(c => c.name).join("、")} 可以出场（按下面说的方式）。` : "这次没有任何角色出场。"}${g && g.local ? "其他角色本人不出现（不发帖不回帖），但这是熟人组，豆友可以聊到、八卦他们（见下面）。" : "你拿到的角色人设、世界书、记忆只是这个世界的背景：其他角色本人不出现，豆友也不认识他们，不要提他们的名字、外号、身份（比如「X姐」「班长」），也不要编和他们有关的人和事。豆友都是普通路人，聊的是自己的事。"}`;
   function logAi(entry) {
     S.debug = [{ at: nowIso(), ...entry, text: String(entry.text || "").slice(0, 6000) }, ...S.debug].slice(0, 10);
     dbUpsert(COL.meta, { id: "debug_log", entries: S.debug }).catch(() => {});
@@ -243,7 +248,7 @@
     } finally { S.jobs.delete(job); refreshAll(); }
   }
   /** ===块=== 解析：字段「名：值」，值可以多行（接到上一个字段） */
-  const KEYS = ["说的是", "来源", "IP", "组长", "成员称呼", "分区", "发言规则", "配图", "精华", "名称", "成员", "简介", "标题", "作者", "角色", "匿名", "时间", "回应数", "正文", "楼主", "赞", "引用", "内容", "层"];
+  const KEYS = ["熟人圈", "说的是", "来源", "IP", "组长", "成员称呼", "分区", "发言规则", "配图", "精华", "名称", "成员", "简介", "标题", "作者", "角色", "匿名", "时间", "回应数", "正文", "楼主", "赞", "引用", "内容", "层"];
   function parseBlocks(raw, kind) {
     const text = String(raw || "").replace(/```[a-z]*\n?/g, "").replace(/\r/g, "");
     const out = []; let label = null;
@@ -291,14 +296,14 @@
       have.length ? `这些已经有了，不要重复：${have.join("、")}` : "",
       "名字和简介要像真豆瓣：大多数组名简单直白，简介很短很平实（一句话介绍，或者几条组规：禁广告、禁人身攻击、标题加 tag……），只有少数组有点个性。不要文艺抒情、不要排比、不要「这里只存放……」这种句子；也不要写网上烂大街的梗（比如食堂阿姨手抖、颠勺）。",
       bgLine([]),
-      "每个小组：\n===小组===\n名称：小组名\n成员：成员数（纯数字，大组几十万，小众组几百几千）\n成员称呼：这个组对成员的叫法（豆瓣特色，像「小不知道」「组员」「豆友」「病友」，很多组就叫「成员」）\n组长：组长的豆瓣昵称\n简介：一句小组介绍\n发言规则：一两条组规（没有写 无）\n分区：3～4 个讨论分区的名字，用、分隔（像「求助」「吐槽」「分享」或者有组内梗的名字）\n===结束===",
+      "每个小组：\n===小组===\n名称：小组名\n成员：成员数（纯数字，大组几十万，小众组几百几千）\n成员称呼：这个组对成员的叫法（豆瓣特色，像「小不知道」「组员」「豆友」「病友」，很多组就叫「成员」）\n组长：组长的豆瓣昵称\n简介：一句小组介绍\n发言规则：一两条组规（没有写 无）\n分区：3～4 个讨论分区的名字，用、分隔（像「求助」「吐槽」「分享」或者有组内梗的名字）\n熟人圈：是 / 否（这是不是世界书里角色们所在的学校、城市、公司这种本地组，组里的人现实中可能认识他们）\n===结束===",
     ].filter(Boolean).join("\n\n"), `搜小组「${term}」`);
     if (text == null) return cached ? cached.map(groupById).filter(Boolean) : [];
     const made = [];
     for (const b of parseBlocks(text, "小组")) {
       const name = String(b["名称"] || "").trim().slice(0, 30); if (!name || S.groups.some(g => g.name === name)) continue;
       const g = { id: uid("g"), scope: S.identity.id, name, members: clampInt(b["成员"], rand(800, 90000)), intro: b["简介"] || "", topicsHint: "", mine: false, admin: false, createdAt: nowIso(), from: term };
-      fillGroupInfo(g, b);
+      fillGroupInfo(g, b); if (yes(b["熟人圈"])) g.local = true;
       S.groups.push(g); saveGroup(g); made.push(g);
     }
     const local = S.groups.filter(g => g.name.includes(term) && !made.includes(g));
@@ -349,7 +354,7 @@
         : `其中 1 个帖子是 ${hit.name} 本人用自己的豆瓣号发的（作者写他的豆瓣昵称${S.meta.charNicks[hit.id] ? `「${S.meta.charNicks[hit.id]}」` : "，自己起一个像豆瓣的"}，角色写 ${hit.name}，匿名写 否）：按他的人设写。`)
         : "这批帖子全是路人发的，角色都不出现。",
       recent ? `组里已经有这些帖子，不要重复：\n${recent}` : "",
-      bgLine(hit ? [hit] : []),
+      bgLine(hit ? [hit] : [], g), localLine(g),
       (g.sections || []).length ? `组里的分区：${g.sections.join("、")}。每个帖子归到一个分区（闲聊的可以不归，写 无）。` : "",
       publicLine(),
       "如果你能联网搜索：按这个小组聊的话题，去搜最近现实里真的在讨论的事（娱乐圈、体育、游戏、社会新闻、新剧新书……看小组是干什么的），把其中 1～2 个帖子写成在聊这些真事，用真名；和世界观冲突的不要。不能联网就按这个世界写。",
@@ -417,7 +422,7 @@
       history ? `已有的楼层：\n${history}` : "",
       mine ? `用户刚刚${mine.author.anon ? "匿名" : ""}回了 ${mine.n} 楼${mine.quote ? `（引用了 ${mine.quote} 楼）` : ""}：「${mine.text}」。接下来 ${n} 层里要有人回应她这层（引用 ${mine.n}），${askChar ? `${charById(askChar).name} 一定会回${mine.author.anon ? "（他不知道这是用户，当陌生豆友回）" : "（他知道这是用户）"}，按他的人设和你们的关系；` : ""}其他豆友可以接着聊。` : "",
       passer ? `${passer.name} 刷到了这个帖子，可能会顺手回一层（按人设决定实名还是匿名，不来也行）。` : "",
-      bgLine(cast),
+      bgLine(cast, g), localLine(g),
       `从 ${next} 楼开始，往下写 ${n} 层回应。${t.floors.length ? "接着已有的话题自然往下聊，楼主可以更新进展或下场回复。" : "楼主可以下场回复几层。"}`,
       `每层：\n===楼===\n层：楼层号\n作者：豆友昵称（楼主就写楼主${t.author.anon ? "；匿名的写 匿名" : ""}）\n角色：角色本名（路人写 无）\n匿名：是 / 否\n楼主：是 / 否\n引用：引用了第几楼（没引用写 无）\nIP：这个人的 IP 属地（省份或城市；楼主的和帖子一致）\n赞：点赞数（纯数字）\n内容：\n这层的内容\n===结束===`,
     ].filter(Boolean).join("\n\n"), `《${t.title.slice(0, 12)}》的回应`);
@@ -633,7 +638,7 @@
       list.sort(sort === "hot" ? (a, b) => Math.max(b.replyCount, b.floors.length) - Math.max(a.replyCount, a.floors.length) : (a, b) => new Date(b.lastReplyAt || b.createdAt) - new Date(a.lastReplyAt || a.createdAt));
       const leader = g.mine && g.admin ? `${S.meta.nickname}（你）` : g.leader || "";
       body(pg, `<div class="g-hero" style="background:${g.coverRef ? "#333" : `linear-gradient(160deg, ${groupColor(g)}, ${groupColor(g)}cc)`}" ${g.coverRef ? `data-bg-ref="${esc(g.coverRef)}"` : ""}>
-          <div class="g-hero-top">${groupAvaHtml(g, "lg")}<div class="cell-main"><h2>${esc(g.name)}</h2><div class="g-sub">${fmtNum(g.members)} ${esc(g.memberNoun || "成员")}${leader ? ` · 组长 ${esc(leader)}` : ""}</div></div>
+          <div class="g-hero-top">${groupAvaHtml(g, "lg")}<div class="cell-main"><h2>${esc(g.name)}</h2><div class="g-sub">${fmtNum(g.members)} ${esc(g.memberNoun || "成员")}${leader ? ` · 组长 ${esc(leader)}` : ""}${g.local ? " · 熟人组" : ""}</div></div>
             ${g.mine ? `<button class="g-join2 on" data-act="edit-group" data-id="${esc(id)}">管理</button>` : `<button class="g-join2 ${isJoined(g) ? "on" : ""}" data-act="toggle-join" data-id="${esc(id)}">${isJoined(g) ? "已加入" : "加入"}</button>`}</div>
           ${g.intro ? `<div class="g-line"><b>小组简介：</b>${esc(g.intro)}</div>` : ""}
           ${g.rules ? `<div class="g-line"><b>发言规则：</b>${esc(g.rules)}</div>` : ""}
@@ -661,6 +666,7 @@
         <div class="form-row"><label>成员称呼</label><input id="eg-noun" maxlength="8" placeholder="比如：小不知道、组员" value="${esc(g.memberNoun || "")}"></div>
         ${g.admin ? "" : `<div class="form-row"><label>组长</label><input id="eg-leader" maxlength="20" placeholder="组长的豆瓣昵称" value="${esc(g.leader || "")}"></div>`}
         <div class="form-row"><label>发言规则</label><textarea id="eg-rules" maxlength="200">${esc(g.rules || "")}</textarea></div>
+        <div class="list-cell"><div class="cell-main"><div>熟人组</div><div class="cell-sub">组里的人现实中认识你和 char（同校、同城），不是公众人物也会被聊到</div></div><button class="switch ${g.local ? "on" : ""}" data-act="eg-local" data-id="${esc(id)}"><span></span></button></div>
         <div class="form-row"><label>分区</label><input id="eg-secs" maxlength="60" placeholder="用顿号隔开，比如：求助、吐槽、分享" value="${esc((g.sections || []).join("、"))}"></div>
         <div class="list-cell"><div class="cell-main"><div>我当组长</div></div><button class="switch ${g.admin ? "on" : ""}" data-act="eg-admin" data-id="${esc(id)}"><span></span></button></div></div>
         <div style="padding:20px 16px;display:grid;gap:10px"><button class="btn-primary" style="height:42px;border-radius:21px;background:var(--wb-orange);color:#fff" data-act="eg-save" data-id="${esc(id)}">保存</button>
@@ -845,6 +851,7 @@
         toast(on ? "已退出小组" : "加入成功"); refreshAll(); return;
       }
       case "edit-group": editGroup(el.dataset.id); return;
+      case "eg-local": { const g = groupById(el.dataset.id); if (g) { g.local = !g.local; saveGroup(g); refreshAll(); } return; }
       case "eg-admin": { const g = groupById(el.dataset.id); if (g) { g.admin = !g.admin; saveGroup(g); refreshAll(); } return; }
       case "eg-save": { const g = groupById(el.dataset.id); if (!g) return; g.intro = $("#eg-intro", pg.el).value.trim(); g.topicsHint = $("#eg-topics", pg.el).value.trim();
         const v = id => { const e = $(`#${id}`, pg.el); return e ? e.value.trim() : null; };
@@ -892,10 +899,11 @@
       case "group-menu": {
         const g = groupById(el.dataset.id); if (!g) return;
         const v = await sheet(g.name, [{ label: "换小组头像", value: "ava" }, { label: "换背景", value: "cover" }, ...(g.avatarRef || g.coverRef ? [{ label: "恢复默认头像和背景", value: "reset" }] : []),
-          { label: "看看有没有新帖（1 次 API）", value: "refresh" }, ...(g.mine ? [{ label: "编辑小组", value: "edit" }] : isJoined(g) ? [{ label: "退出小组", value: "quit", danger: true }] : [])]);
+          { label: "看看有没有新帖（1 次 API）", value: "refresh" }, ...(g.mine ? [] : [{ label: g.local ? "设成普通组（组里的人不认识你们）" : "设成熟人组（组里的人认识你们）", value: "local" }]), ...(g.mine ? [{ label: "编辑小组", value: "edit" }] : isJoined(g) ? [{ label: "退出小组", value: "quit", danger: true }] : [])]);
         if (v === "ava" || v === "cover") { try { const [ref] = await pickImages(1, v === "ava" ? 400 : 1200); if (ref) { g[v === "ava" ? "avatarRef" : "coverRef"] = ref; saveGroup(g); refreshAll(); } } catch (err) { toast("上传失败"); } }
         if (v === "reset") { g.avatarRef = null; g.coverRef = null; saveGroup(g); refreshAll(); }
         if (v === "refresh") genTopics(g);
+        if (v === "local") { g.local = !g.local; saveGroup(g); toast(g.local ? "这个组的人认识你们啦" : "改成普通组了"); refreshAll(); }
         if (v === "edit") editGroup(g.id);
         if (v === "quit") { S.meta.joined = S.meta.joined.filter(x => x !== g.id); saveMeta(); toast("已退出小组"); refreshAll(); }
         return;

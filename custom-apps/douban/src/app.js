@@ -136,7 +136,8 @@
    * 匿名的一律显示成「匿名豆友」+ 按身份固定的随机头像；char 的马甲只有她看得到（小标记）
    */
   function whoOf(a) {
-    if (a.anon) return { name: "匿名豆友", seed: `anon_${a.type}_${a.charId || a.name || ""}`, avatarRef: null, avatar: null };
+    if (a.anon) { const seed = `anon_${a.type}_${a.charId || a.name || ""}`; const pool = S.meta.avatarPool || [];
+      return { name: "匿名豆友", seed, avatarRef: pool.length ? pool[hashHue(seed) % pool.length] : null, avatar: null }; }
     if (a.type === "user") return { name: S.meta.nickname, seed: "me", avatarRef: S.meta.avatarRef, avatar: S.meta.avatarRef ? null : S.identity.avatarUrl };
     if (a.type === "char") { const c = charById(a.charId) || {}; return { name: charNick(a.charId), seed: a.charId, avatar: c.avatar }; }
     const pool = S.meta.avatarPool || [];

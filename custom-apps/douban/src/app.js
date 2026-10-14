@@ -573,21 +573,22 @@
     return page;
   }
   async function createGroup() {
-    let draft = { name: "", intro: "", topicsHint: "", admin: true };
+    let draft = { name: "", intro: "", topicsHint: "", admin: true, members: "" };
     const page = openPage("create-group", pg => {
       body(pg, `<div class="form">
         <div class="form-row"><label>小组名</label><input id="cg-name" maxlength="30" placeholder="比如：平南一高吐槽组" value="${esc(draft.name)}"></div>
         <div class="form-row"><label>简介</label><textarea id="cg-intro" maxlength="300" placeholder="小组介绍、组规">${esc(draft.intro)}</textarea></div>
         <div class="form-row"><label>讨论什么</label><textarea id="cg-topics" maxlength="300" placeholder="这个组平时聊些什么，AI 会照着写帖子">${esc(draft.topicsHint)}</textarea></div>
+        <div class="form-row"><label>成员数</label><input id="cg-members" inputmode="numeric" maxlength="9" placeholder="不填：你当组长就是小组，别人当组长就是大组" value="${esc(draft.members)}"></div>
         <div class="list-cell"><div class="cell-main"><div>我当组长</div><div class="cell-sub">关掉就是你建了组，但组长是别人（AI 会写一个）</div></div><button class="switch ${draft.admin ? "on" : ""}" data-act="cg-admin"><span></span></button></div>
       </div><div style="padding:20px 16px"><button class="btn-primary" style="width:100%;height:42px;border-radius:21px;background:var(--wb-orange);color:#fff" data-act="cg-submit">创建小组</button></div>`);
-      for (const [id, k] of [["cg-name", "name"], ["cg-intro", "intro"], ["cg-topics", "topicsHint"]]) $(`#${id}`, pg.el).oninput = e => { draft[k] = e.target.value; };
+      for (const [id, k] of [["cg-name", "name"], ["cg-intro", "intro"], ["cg-topics", "topicsHint"], ["cg-members", "members"]]) $(`#${id}`, pg.el).oninput = e => { draft[k] = e.target.value; };
     }, { title: "创建小组" });
     page.toggleAdmin = () => { draft.admin = !draft.admin; page.render(page); };
     page.submit = () => {
       const name = draft.name.trim(); if (!name) { toast("先给小组起个名字"); return; }
       if (S.groups.some(g => g.name === name)) { toast("已经有同名小组了"); return; }
-      const g = { id: uid("g"), scope: S.identity.id, name, intro: draft.intro.trim(), topicsHint: draft.topicsHint.trim(), members: rand(3, 30), mine: true, admin: draft.admin, createdAt: nowIso() };
+      const g = { id: uid("g"), scope: S.identity.id, name, intro: draft.intro.trim(), topicsHint: draft.topicsHint.trim(), members: clampInt(draft.members, 0) || (draft.admin ? rand(3, 60) : rand(2000, 80000)), mine: true, admin: draft.admin, createdAt: nowIso() };
       S.groups.push(g); saveGroup(g); closePage(); openGroup(g.id); toast("小组建好了");
     };
   }
@@ -626,6 +627,11 @@
     openPage(`edit-group:${id}`, pg => {
       body(pg, `<div class="form"><div class="form-row"><label>简介</label><textarea id="eg-intro" maxlength="300">${esc(g.intro)}</textarea></div>
         <div class="form-row"><label>讨论什么</label><textarea id="eg-topics" maxlength="300">${esc(g.topicsHint || "")}</textarea></div>
+        <div class="form-row"><label>成员数</label><input id="eg-members" inputmode="numeric" maxlength="9" value="${esc(g.members || "")}"></div>
+        <div class="form-row"><label>成员称呼</label><input id="eg-noun" maxlength="8" placeholder="比如：小不知道、组员" value="${esc(g.memberNoun || "")}"></div>
+        ${g.admin ? "" : `<div class="form-row"><label>组长</label><input id="eg-leader" maxlength="20" placeholder="组长的豆瓣昵称" value="${esc(g.leader || "")}"></div>`}
+        <div class="form-row"><label>发言规则</label><textarea id="eg-rules" maxlength="200">${esc(g.rules || "")}</textarea></div>
+        <div class="form-row"><label>分区</label><input id="eg-secs" maxlength="60" placeholder="用顿号隔开，比如：求助、吐槽、分享" value="${esc((g.sections || []).join("、"))}"></div>
         <div class="list-cell"><div class="cell-main"><div>我当组长</div></div><button class="switch ${g.admin ? "on" : ""}" data-act="eg-admin" data-id="${esc(id)}"><span></span></button></div></div>
         <div style="padding:20px 16px;display:grid;gap:10px"><button class="btn-primary" style="height:42px;border-radius:21px;background:var(--wb-orange);color:#fff" data-act="eg-save" data-id="${esc(id)}">保存</button>
         <button class="load-more" style="color:var(--wb-red)" data-act="del-group" data-id="${esc(id)}">解散小组（帖子一起删掉）</button></div>`);
@@ -806,7 +812,12 @@
       }
       case "edit-group": editGroup(el.dataset.id); return;
       case "eg-admin": { const g = groupById(el.dataset.id); if (g) { g.admin = !g.admin; saveGroup(g); refreshAll(); } return; }
-      case "eg-save": { const g = groupById(el.dataset.id); if (!g) return; g.intro = $("#eg-intro", pg.el).value.trim(); g.topicsHint = $("#eg-topics", pg.el).value.trim(); saveGroup(g); closePage(); toast("保存了"); return; }
+      case "eg-save": { const g = groupById(el.dataset.id); if (!g) return; g.intro = $("#eg-intro", pg.el).value.trim(); g.topicsHint = $("#eg-topics", pg.el).value.trim();
+        const v = id => { const e = $(`#${id}`, pg.el); return e ? e.value.trim() : null; };
+        g.members = clampInt(v("eg-members"), g.members) || g.members; g.memberNoun = v("eg-noun") || ""; g.rules = v("eg-rules") || "";
+        if (v("eg-leader") != null) g.leader = v("eg-leader") || "";
+        g.sections = (v("eg-secs") || "").split(/[、,，/｜|]+/).map(x => x.trim()).filter(Boolean).slice(0, 6);
+        saveGroup(g); closePage(); toast("保存了"); return; }
       case "del-group": {
         const g = groupById(el.dataset.id); if (!g) return;
         if (await sheet(`解散「${g.name}」？组里的帖子会一起删掉`, [{ label: "解散", value: "yes", danger: true }]) !== "yes") return;

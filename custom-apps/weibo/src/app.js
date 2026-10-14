@@ -3582,19 +3582,23 @@
   function openCharSupers(charId) {
     const ch = charById(charId); if (!ch) return;
     const page = openPage(`char-supers:${charId}`, pg => {
-      const info = (S.supers.charSupers || {})[charId];
       const body = $(".page-body", pg.el);
-      if (!info) { body.innerHTML = pg.busy ? `<div class="gen-tip"><span class="spinner"></span>正在看看TA在逛哪些超话…</div>` : `<div class="empty">还没看过TA的超话<div><button class="btn-primary" data-act="char-supers-gen" data-char="${esc(charId)}">看看（会用一次 API）</button></div></div>`; return; }
-      const rows = names => names.map(getSuper).filter(Boolean).map(sp => superRowHtml(sp).replace(/<\/div>$/, `<button class="btn-ghost csup-rm" data-act="char-super-rm" data-char="${esc(charId)}" data-name="${esc(sp.name)}">移除</button></div>`)).join("");
-      const ta = charById(charId)?.name || "TA";
-      body.innerHTML = `<div class="find-sec">关于TA的</div>${rows(info.about || []) || `<div class="list-cell"><div class="cell-sub">${isPublic(charId) ? "暂时没有" : "TA不是公众人物，没有个人超话；你们的 CP 超话可以去超话社区搜"}</div></div>`}
-        <div class="find-sec">TA常逛的</div>${rows(info.haunts || []) || `<div class="list-cell"><div class="cell-sub">TA好像不怎么逛超话</div></div>`}
-        <button class="load-more search-more" data-act="char-super-add" data-char="${esc(charId)}">＋ 让${esc(ta)}关注一个超话</button>
-        ${pg.busy ? `<div class="gen-tip"><span class="spinner"></span>重新生成中…</div>` : `<button class="load-more" data-act="char-supers-gen" data-char="${esc(charId)}">重新生成（会用一次 API）</button>`}`;
+      body.innerHTML = charSupersHtml(charId, pg.busy);
       hydrateImages(body);
     }, { title: `${charNickname(charId)}的超话` });
     page.charId = charId;
     if (!(S.supers.charSupers || {})[charId]) genCharSupers(page);
+  }
+  /** 他的超话（单独页和他主页的「超话」标签共用） */
+  function charSupersHtml(charId, busy) {
+      const info = (S.supers.charSupers || {})[charId];
+      if (!info) return busy ? `<div class="gen-tip"><span class="spinner"></span>正在看看TA在逛哪些超话…</div>` : `<div class="empty">还没看过TA的超话<div><button class="btn-primary" data-act="char-supers-gen" data-char="${esc(charId)}">看看（会用一次 API）</button></div></div>`;
+      const rows = names => names.map(getSuper).filter(Boolean).map(sp => superRowHtml(sp).replace(/<\/div>$/, `<button class="btn-ghost csup-rm" data-act="char-super-rm" data-char="${esc(charId)}" data-name="${esc(sp.name)}">移除</button></div>`)).join("");
+      const ta = charById(charId)?.name || "TA";
+      return `<div class="find-sec">关于TA的</div>${rows(info.about || []) || `<div class="list-cell"><div class="cell-sub">${isPublic(charId) ? "暂时没有" : "TA不是公众人物，没有个人超话；你们的 CP 超话可以去超话社区搜"}</div></div>`}
+        <div class="find-sec">TA常逛的</div>${rows(info.haunts || []) || `<div class="list-cell"><div class="cell-sub">TA好像不怎么逛超话</div></div>`}
+        <button class="load-more search-more" data-act="char-super-add" data-char="${esc(charId)}">＋ 让${esc(ta)}关注一个超话</button>
+        ${busy ? `<div class="gen-tip"><span class="spinner"></span>重新生成中…</div>` : `<button class="load-more" data-act="char-supers-gen" data-char="${esc(charId)}">重新生成（会用一次 API）</button>`}`;
   }
   async function genCharSupers(page) {
     const charId = page.charId; const ch = charById(charId); if (!ch || page.busy) return;
@@ -3808,7 +3812,8 @@
       const likedPosts = S.posts.filter(p => !(p.authorType === "char" && p.charId === charId) && p.visibility !== "self"
         && ((p.likedBy || []).includes(charId) || (p.comments || []).some(c => c.authorType === "char" && c.charId === charId)))
         .sort((x, y) => new Date(y.likeAt || y.createdAt) - new Date(x.likeAt || x.createdAt));
-      if (tab === "liked") list = likedPosts.length ? likedPosts.map(p => cardHtml(p)).join("") : `<div class="empty">还没有赞过的微博</div>`;
+      if (tab === "supers") list = charSupersHtml(charId, pg.busy);
+      else if (tab === "liked") list = likedPosts.length ? likedPosts.map(p => cardHtml(p)).join("") : `<div class="empty">还没有赞过的微博</div>`;
       else if (tab === "posts") list = (pid => [...posts.filter(p => p.id === pid), ...posts.filter(p => p.id !== pid)])(acc.pinnedId).map(p => cardHtml(p, { noFollow: true, showPin: true })).join("")
         + (busy ? `<div class="gen-tip"><span class="spinner"></span>${acc.profileGenerated ? "加载更早的微博…" : "正在打开TA的主页…"}</div>`
           : acc.profileGenerated ? `<button class="load-more" data-act="char-more" data-char="${esc(charId)}">查看更早的微博</button>` : "");
@@ -3825,13 +3830,14 @@
         actions: `<button class="follow-btn ${isStarred(charId) ? "star-on" : "on"}" style="height:32px;padding:0 12px;font-size:14px" data-act="toggle-star" data-char="${esc(charId)}">${isStarred(charId) ? "★ 特别关注" : "☆ 特别关注"}</button>
           <button class="follow-btn on" style="height:32px;padding:0 12px;font-size:14px" data-act="open-dm" data-char="${esc(charId)}">私信</button>
           <button class="follow-btn ${following ? "on" : ""}" style="height:32px;padding:0 16px;font-size:14px" data-act="toggle-follow-char" data-char="${esc(charId)}">${following ? "已关注" : "+ 关注"}</button>`,
-      }) + `<div class="list-cell char-super-link" data-act="open-char-supers" data-char="${esc(charId)}"><div class="cell-main">⭐ ${acc.gender === "女" ? "她" : acc.gender === "男" ? "他" : "TA"}的超话</div><span class="cell-sub">›</span></div>
-        <div class="profile-tabs"><button class="${tab === "posts" ? "on" : ""}" data-act="profile-tab" data-tab="posts">微博</button>
+      }) + `        <div class="profile-tabs"><button class="${tab === "posts" ? "on" : ""}" data-act="profile-tab" data-tab="posts">微博</button>
           <button class="${tab === "album" ? "on" : ""}" data-act="profile-tab" data-tab="album">相册</button>
-          <button class="${tab === "liked" ? "on" : ""}" data-act="profile-tab" data-tab="liked">赞过</button></div>${list}`;
+          <button class="${tab === "liked" ? "on" : ""}" data-act="profile-tab" data-tab="liked">赞过</button>
+          <button class="${tab === "supers" ? "on" : ""}" data-act="profile-tab" data-tab="supers">超话</button></div>${list}`;
       body.scrollTop = scroll; hydrateImages(body);
     }, { clearHead: true });
-    page.setTab = t => { tab = t; page.render(page); };
+    page.charId = charId; // 「超话」标签里的生成按钮用
+    page.setTab = t => { tab = t; page.render(page); if (t === "supers" && !(S.supers.charSupers || {})[charId]) genCharSupers(page); };
     ensureCharProfile(charId);
   }
 

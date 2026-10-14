@@ -1431,6 +1431,14 @@
     const off = { none: "也没人往别人身上想：最多觉得他今天画风有点怪、心情不一样，照常互动", few: "只有一两个熟人起疑（这语气不像他啊？谁拿你手机发的？），其他人不信、照常互动", many: "熟人基本都看出来了，会起哄、调侃" }[g.spot];
     return `熟人认不认得出来，先看这条像不像${who}本人会发的（口吻、用词、在意的事、人设）：*像* → 基本没人认出来，顶多一个人说有点奇怪，马上有人回「你想多了吧」，事情就过去了，不要一直揪着；*明显不像* → ${off}。起疑也只是猜测的口气，不要说得像已经确定。`;
   }
+  /** 她用他的号发的博，他本人来回复评论时要知道的事（不然会以为是偷拿手机，还会编她偷笑之类没发生的事） */
+  function ghostSelfLine(post) {
+    const g = post.ghost; const who = herName();
+    const how = g.mode === "login" ? `这条其实是${who}登着你的微博号发的：号是你自己给她的，你知道她在用，不是偷拿你手机。`
+      : g.mode === "asked" ? `这条是你让${who}帮你发的，内容你知道。`
+      : g.found ? `这条是${who}偷偷拿你手机发的，你已经发现了${g.react ? `（你当时的反应：${g.react}）` : ""}。` : `这条不是你发的，是${who}偷偷用你的号发的：你刚刚才发现。`;
+    return `${how}要不要在评论区承认是她发的、怎么接，按你的人设和你们的关系来（可以替她打掩护、装作就是自己发的、宠着认下来、逗她）。对她的语气就是你平时对她的语气：平时宠就宠、黏人就黏人，别无缘无故凶她、阴阳她。她做了什么只照上面写的来，不要编她没做过的事（比如她在旁边偷笑、以为你没看见）。`;
+  }
   /** 评论区提示：这条其实是她发的 */
   function ghostLine(post) {
     const g = post.ghost; if (!g) return "";
@@ -1694,7 +1702,8 @@
     const others = post.superName ? superChars(post.superName).filter(c => c.id !== owner).slice(0, 3) : pickCast(activeChars().filter(c => c.id !== owner), 3);
     const cast = owner ? [charById(owner), ...others].filter(Boolean) : others.length ? others : activeChars().slice(0, 1);
     const author = authorOf(post);
-    const want = Math.min(Math.max(post.counts.comments, 3), rand(9, 14));
+    // 用他的号刚发的博评论数是 0：按他平时的热闹程度来，不然只要 3 条
+    const want = post.ghost && !post.counts.comments ? (isPublic(post.charId) ? rand(8, 14) : rand(5, 9)) : Math.min(Math.max(post.counts.comments, 3), rand(9, 14));
     const rpN = repostWant(post);
     const instruction = [
       `当前时间：${nowText()}`,
@@ -1971,6 +1980,7 @@
       `微博博主：${authorOf(post).name}${post.authorType === "user" ? (acctOf(post) === "alt" ? (knowsAlt(charId) ? "（用户的小号）" : "") : "（就是用户）") : post.charId === charId || (ca && post.altOf === charId) ? "（就是你）" : ""}`,
       ca ? `你这次在用自己的微博小号「${ca.nick}」（不认证、粉丝很少；${altOpen(charId) ? "用户已经知道这是你的小号" : "你没告诉过用户这是你，你以为用户不知道；不自称是谁、不提真名和大号、不用只有你们俩才用的称呼，心虚了可以装傻或少说"}）。小号就是你本人，口癖性格不变，只是更随意。「作者」填「${ca.nick}」。` : "",
       `微博正文：${post.text.slice(0, 300)}`,
+      post.ghost && post.charId === charId ? ghostSelfLine(post) : "",
       thread ? `这条评论楼里的对话：\n${thread}` : "",
       `${!alt ? `用户（微博昵称 ${nick}）` : knows ? `用户用小号「${nick}」` : `陌生网友「${nick}」（你不认识这个人，就当普通网友回）`}刚刚${targetComment ? `回复了 ${targetComment.authorType === "char" ? "你" : targetComment.authorName}` : "评论了你的微博"}：「${userComment.text}」，这条评论的编号是 ${uCode}。`,
       `你的微博昵称：${ca ? ca.nick : charNickname(charId)}。回复${knows ? "用户" : "这个网友"}时「回复」字段填 ${uCode}。${knows && !ca ? "" : "不要私信。"}`,
@@ -2085,6 +2095,7 @@
       `博主：${authorOf(post).name}${post.authorType === "user" ? (altPost ? "（用户的小号：粉丝很少，来的大多是陌生网友；除了下面列出的角色，没人知道这是用户。用户不要出现在新评论里）" : "（就是用户本人，用户不要出现在新评论里）") : altBloggerNote(post)}`,
       `微博正文：\n${post.text}`,
       genderLine(post),
+      ghostLine(post),
       `已有评论（方括号里是编号）：\n${existing || "无"}`,
       `继续生成 ${altPost ? rand(4, 7) : rand(5, 8)} 条新评论：可以是新的一级评论，也可以回复已有评论（「回复」字段填已有编号）或本次新评论（填本次编号）。新评论的编号用 n1、n2……`,
       `可能来评论的其他角色（符合关系才来）：\n${charsForPrompt(others) || "无"}`,
@@ -2094,7 +2105,8 @@
     const text = await generate(withVision({ characterIds: cast.map(c => c.id), appTags: ["nox_weibo", "comments"], instruction }, await postVision(post)), "加载评论");
     post._genComments = false;
     if (text != null) {
-      const list = dropCharAtUser(fixAltAuthors(commentsFromBlocks(parseComments(text), post, {}), { post }), post).filter(c => !altPost || !(c.charId || c.altOf) || others.some(x => x.id === (c.charId || c.altOf)));
+      let list = dropCharAtUser(fixAltAuthors(commentsFromBlocks(parseComments(text), post, {}), { post }), post).filter(c => !altPost || !(c.charId || c.altOf) || others.some(x => x.id === (c.charId || c.altOf)));
+      if (post.ghost && (post.ghost.mode === "login" || (post.ghost.mode === "secret" && !post.ghost.found))) list = list.filter(c => !(c.authorType === "char" && c.charId === post.charId)); // 和第一轮一样：他不出来
       if (list.length) noteParsed(`${list.length} 条评论`); else parseFailed("加载评论");
       if (post.authorType === "user" && list.length) {
         // 自己的博：新评论算刚到的，顺便来几个赞，通知里能看到

@@ -1,0 +1,34 @@
+<!doctype html><meta charset="utf-8"><style>
+body{margin:0;padding:16px;background:#f4f4f2;font-family:-apple-system,"PingFang SC",sans-serif;width:358px}
+h3{font-size:14px;color:#555;margin:6px 0 10px;font-weight:600}
+.row{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:22px}
+.it span{display:block;font-size:12px;color:#333;margin-top:6px;text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cv{position:relative;aspect-ratio:2/3;border-radius:6px;overflow:hidden;box-shadow:0 2px 6px rgba(0,0,0,.12);
+  background:radial-gradient(circle at 25% 15%,rgba(255,255,255,.55),transparent 55%),var(--bg);color:var(--fg)}
+/* A：书脊感，竖排宋体标题 */
+.a::before{content:"";position:absolute;left:0;top:0;bottom:0;width:7px;background:var(--fg);opacity:.12}
+.a .t{position:absolute;right:14px;top:16px;writing-mode:vertical-rl;text-orientation:upright;font-family:"Songti SC","STSong",serif;font-weight:700;font-size:19px;letter-spacing:var(--ls,4px);line-height:1.3;max-height:76%}
+.a .s{position:absolute;left:15px;bottom:12px;font-size:9px;letter-spacing:1px;opacity:.75;font-family:"Songti SC",serif}
+.a .k{position:absolute;left:15px;top:14px;font-size:9px;border:1px solid currentColor;padding:1px 4px;border-radius:2px;opacity:.6}
+/* B：横排，细线框 */
+.b .frame{position:absolute;inset:8px;border:1px solid var(--fg);opacity:.35;border-radius:2px}
+.b .t{position:absolute;left:14px;right:14px;top:30%;text-align:center;font-family:"Songti SC","STSong",serif;font-weight:700;font-size:17px;line-height:1.35}
+.b .line{position:absolute;left:50%;top:calc(30% - 12px);width:18px;height:1px;background:var(--fg);transform:translateX(-50%);opacity:.5}
+.b .s{position:absolute;left:0;right:0;bottom:18px;text-align:center;font-size:9px;letter-spacing:1px;opacity:.7}
+/* C：极简，左下大字 */
+.c .t{position:absolute;left:12px;right:10px;bottom:30px;font-family:"Songti SC","STSong",serif;font-weight:900;font-size:var(--fs,20px);line-height:1.25;text-wrap:balance}
+.c .s{position:absolute;left:12px;bottom:12px;font-size:9px;opacity:.7}
+.c .dot{position:absolute;right:12px;top:12px;width:22px;height:22px;border-radius:50%;background:var(--fg);opacity:.15}
+</style>
+<div id="r"></div>
+<script>
+const P=[["#cfe3f2","#2f4f6b"],["#d6ecd9","#2f5a3c"],["#e3dbf2","#4b3c6e"],["#f7dbe3","#7d3a52"],["#f7edc9","#6e5622"],["#d2eee8","#27594f"]];
+const W=[["活着","余华 · 1993","书"],["月亮与六便士","毛姆","书"],["小王子","圣埃克苏佩里","书"],["百年孤独","马尔克斯","书"],["我与地坛","史铁生","书"],["被讨厌的勇气","岸见一郎","书"],["海边的曼彻斯特","肯尼思·洛纳根","电影"],["请回答1988","申源浩 · 2015","剧集"],["情书","岩井俊二 · 1995","电影"],["千与千寻","宫崎骏 · 2001","电影"],["漫长的季节","辛爽 · 2023","剧集"],["瞬息全宇宙","关家永 · 2022","电影"]];
+// 书（A）：标题越长字越小，尽量一列放下；电影剧集（C）同理
+const fsA=t=>{const n=[...t].length;return n<=3?[19,5]:n<=4?[18,4]:n<=5?[16,3]:n<=6?[14.5,2]:n<=7?[13,1]:[12,1]};
+const fsC=t=>{const n=[...t].length;return n<=4?20:n<=6?17:16};
+const cell=(k,i)=>{const [bg,fg]=P[i%6];const [t,s,kind]=W[i];const [fa,la]=fsA(t);
+ const inner=k==="a"?`<div class="k">${kind}</div><div class="t" style="font-size:${fa}px">${t}</div><div class="s">${s}</div>`:k==="b"?`<div class="frame"></div><div class="line"></div><div class="t">${t}</div><div class="s">${s}</div>`:`<div class="dot"></div><div class="t">${t}</div><div class="s">${s}</div>`;
+ return `<div class="it"><div class="cv ${k}" style="--bg:${bg};--fg:${fg};--ls:${la}px;--fs:${fsC(t)}px">${inner}</div><span>${t}</span></div>`};
+document.getElementById("r").innerHTML=`<h3>书 · A（标题长了自动变小）</h3><div class="row">${[0,1,2,3,4,5].map(i=>cell("a",i)).join("")}</div><h3>电影 / 剧集 · C</h3><div class="row">${[6,7,8,9,10,11].map(i=>cell("c",i)).join("")}</div>`;
+</script>

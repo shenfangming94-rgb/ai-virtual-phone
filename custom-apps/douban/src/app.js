@@ -92,8 +92,8 @@
 
   // ───────────────────────── 数据 ─────────────────────────
   // groups：小组（搜出来的、建的）；topics：帖子（楼层在帖子里）；meta：我的资料、搜索缓存、调试记录
-  const COL = { groups: "groups", topics: "topics", meta: "meta" };
-  const S = { identity: null, chars: [], meta: null, groups: [], topics: [], tab: "group", debug: [], jobs: new Set(), mediaCache: new Map() };
+  const COL = { groups: "groups", topics: "topics", meta: "meta", works: "works", marks: "marks", doulists: "doulists" };
+  const S = { identity: null, chars: [], meta: null, groups: [], topics: [], works: [], marks: [], doulists: [], tab: "group", debug: [], jobs: new Set(), mediaCache: new Map() };
   async function dbList(c) { try { return (await api.db.list(c, { limit: 500 })) || []; } catch (e) { console.warn(e); return []; } }
   async function dbUpsert(c, row) {
     try { const u = await api.db.update(c, row.id, row); if (u) return u; } catch (e) { /* 没有就 create */ }
@@ -113,10 +113,11 @@
     const chars = await api.characters.list().catch(() => []);
     const owners = await Promise.all(chars.map(c => api.user.getProfile({ characterId: c.id }).catch(() => null)));
     S.chars = chars.filter((c, i) => !owners[i] || !identity || owners[i].id === identity.id);
-    const [groups, topics, metas] = await Promise.all([dbList(COL.groups), dbList(COL.topics), dbList(COL.meta)]);
+    const [groups, topics, metas, works, marks, doulists] = await Promise.all([dbList(COL.groups), dbList(COL.topics), dbList(COL.meta), dbList(COL.works), dbList(COL.marks), dbList(COL.doulists)]);
     const scope = S.identity.id;
     S.groups = groups.filter(g => g.scope === scope);
     S.topics = topics.filter(t => t.scope === scope).map(t => ({ ...t, floors: t.floors || [] }));
+    S.works = works.filter(w => w.scope === scope); S.marks = marks.filter(m => m.scope === scope); S.doulists = doulists.filter(d => d.scope === scope).map(d => ({ ...d, workIds: d.workIds || [] }));
     S.debug = (metas.find(m => m.id === "debug_log") || {}).entries || [];
     S.meta = metas.find(m => m.id === `meta_${scope}`) || { id: `meta_${scope}`, nickname: S.identity.name || "豆友", sign: "", avatarRef: null,
       joined: [], searches: {}, charNicks: {}, excludedChars: [], avatarPool: [] };
@@ -319,7 +320,7 @@
     } finally { S.jobs.delete(job); refreshAll(); }
   }
   /** ===块=== 解析：字段「名：值」，值可以多行（接到上一个字段） */
-  const KEYS = ["豆瓣ID", "豆瓣昵称", "昵称", "关注用户", "签名", "关注数", "被关注数", "小组", "会逛的角色", "楼主赞过", "头衔", "熟人圈", "说的是", "来源", "IP", "组长", "成员称呼", "分区", "发言规则", "配图", "精华", "名称", "成员", "简介", "标题", "作者", "角色", "匿名", "时间", "回应数", "正文", "楼主", "赞", "引用", "内容", "层"];
+  const KEYS = ["类型标签", "类型", "年份", "作者导演", "主演", "国家", "评分", "评价人数", "星级分布", "状态", "星级", "短评", "有用", "和用户亲密", "作品", "豆瓣ID", "豆瓣昵称", "昵称", "关注用户", "签名", "关注数", "被关注数", "小组", "会逛的角色", "楼主赞过", "头衔", "熟人圈", "说的是", "来源", "IP", "组长", "成员称呼", "分区", "发言规则", "配图", "精华", "名称", "成员", "简介", "标题", "作者", "角色", "匿名", "时间", "回应数", "正文", "楼主", "赞", "引用", "内容", "层"];
   function parseBlocks(raw, kind) {
     const text = String(raw || "").replace(/```[a-z]*\n?/g, "").replace(/\r/g, "");
     const out = []; let label = null;
@@ -777,6 +778,7 @@
       const hero = $(".me-hero", pg.el); if (hero && hero.dataset.bgRef) mediaUrl(hero.dataset.bgRef).then(u => { if (u) hero.style.backgroundImage = `linear-gradient(rgba(0,0,0,.25),rgba(0,0,0,.35)),url("${u}")`; });
     }, { title: "", cls: "gpage ppage", corner: `<button class="top-icon" data-act="person-menu" data-k="${esc(k)}" aria-label="更多">${I.more}</button>` });
     if (isChar && !personInfo(k)) genPerson(k);
+    if (isChar && !(S.meta.charWorksAt || {})[id] && !charMarks(id).length) genCharWorks(id); // 书影音另一次调用，和主页同时发
     { const inf0 = personInfo(k); if (inf0 && !inf0.uid) { inf0.uid = `${rand(1000, 9999)}${rand(1000, 9999)}`; saveMeta(); page.render(page); } } // 老主页补一个 ID
     // 回关：她关注了他、他还没关注她 → 之后每天第一次打开他主页掷一次骰子（不花 API，主页不变）
     const inf = personInfo(k); const day = new Date().toDateString();
@@ -796,13 +798,13 @@
     const who = a.type === "user" ? "我" : a.type === "char" ? "他" : "TA";
     const { posts, replied } = topicsOfAuthor(a);
     const slots = (w, n, label) => `<div class="hscroll">${Array.from({ length: n }, () => `<div class="slot" data-act="coming" data-what="${w}"><div class="slot-cover"></div><span>${label}</span></div>`).join("")}</div>`;
-    return `<div class="mcard"><div class="mcard-h" data-act="coming" data-what="${a.type === "user" ? "book" : "charbook"}">书影音<span class="soon">第二期</span><i>›</i></div>${slots("book", 6, "想看")}</div>
+    return `${a.type === "npc" ? `<div class="mcard"><div class="mcard-h">书影音</div><div class="mcard-empty">TA 的书影音没有公开</div></div>` : worksCard(a.type === "user" ? "me" : a.charId)}
       <div class="mcard"><div class="mcard-h" ${a.type === "user" ? 'data-act="all-groups"' : ""}>${who === "我" ? "我的" : who + "加入的"}小组 ${groups.length}${a.type === "user" ? "<i>›</i>" : ""}</div>
         ${groups.length ? `<div class="hscroll">${groups.map(g => `<button class="gtile" data-act="open-group" data-id="${esc(g.id)}">${groupAvaHtml(g)}<span>${esc(g.name)}</span></button>`).join("")}</div>` : `<div class="mcard-empty">${a.type === "user" ? "还没有加入小组" : `还看不出${who}在哪些组`}</div>`}</div>
       <div class="mcard"><div class="mcard-h" data-act="person-list" data-k="${esc(k)}" data-kind="posts">${who}发的帖子 ${posts.length}<i>›</i></div></div>
       <div class="mcard"><div class="mcard-h" data-act="person-list" data-k="${esc(k)}" data-kind="replied">${who}的回应 ${replied.length}<i>›</i></div></div>
       <div class="mcard"><div class="mcard-h" data-act="coming" data-what="diary">日记<span class="soon">第三期</span><i>›</i></div>${slots("diary", 4, "日记")}</div>
-      <div class="mcard"><div class="mcard-h" data-act="coming" data-what="doulist">豆列<span class="soon">第二期</span><i>›</i></div>${slots("doulist", 4, "豆列")}</div>`;
+      ${a.type === "npc" ? "" : `<div class="mcard"><div class="mcard-h" data-act="w-doulists" data-v="${a.type === "user" ? "me" : esc(a.charId)}">${who === "我" ? "我的" : who + "的"}豆列<i>›</i></div>${doulistRow(a.type === "user" ? "me" : a.charId)}</div>`}`;
   }
   /** 帖子 / 回应列表：匿名发的显示匿名头像（char 的带「他的马甲」、她的带「我」，只她看得到） */
   function openPersonList(k, kind) {
@@ -856,7 +858,7 @@
     renderTabbar();
     $("#topbar").className = `topbar ${S.tab === "me" ? "clear" : ""}`; $("#view").className = `view ${S.tab === "me" ? "under-top" : ""}`;
     $("#view").onscroll = S.tab === "me" ? () => $("#topbar").classList.toggle("solid", $("#view").scrollTop > 160) : null;
-    ({ home: renderHome, book: renderBook, group: renderGroupTab, market: renderMarket, me: renderMe })[S.tab]();
+    ({ home: renderHome, book: renderBookTab, group: renderGroupTab, market: renderMarket, me: renderMe })[S.tab]();
     hydrateImages($("#view"));
   }
   const topSearch = (ph, act, right) => `<div class="topbar-inner"><button class="db-search" data-act="${act}">${I.search}<span>${esc(ph)}</span></button>${right === "trash"
@@ -909,10 +911,6 @@
     $("#view").innerHTML = `<div class="db-sec">动态</div>${comingHtml(["feed"])}
       <div class="db-sec">我的小组新帖<button data-act="tab" data-tab="group">全部 ›</button></div>
       ${list.length ? `<div class="db-white">${list.slice(0, 8).map(t => topicCard(t, "feed")).join("")}</div>` : `<div class="empty" style="padding:30px">还没有加入小组，去「小组」搜一个感兴趣的吧</div>`}`;
-  }
-  function renderBook() {
-    $("#topbar").innerHTML = `<div class="topbar-inner"><span class="top-title">书影音</span></div>`;
-    $("#view").innerHTML = `<div class="empty" style="padding:36px 30px 10px"><div class="big">🎬</div>书影音第二期上线</div>${comingHtml(["book", "charbook", "doulist", "report"])}`;
   }
   function renderMarket() {
     $("#topbar").innerHTML = `<div class="topbar-inner"><span class="top-title">市集</span></div>`;
@@ -1205,7 +1203,8 @@
       body(pg, `<div class="form-note">参与豆瓣的角色 · 关掉的人不会出现在小组里</div>
         ${S.chars.map(c => { const on = !(S.meta.excludedChars || []).includes(c.id);
           return `<div class="list-cell">${avatarHtml({ name: c.name, seed: c.id, avatar: c.avatar })}<div class="cell-main"><div>${esc(c.name)}</div><div class="cell-sub">豆瓣昵称：${esc(S.meta.charNicks[c.id] || "还没有（第一次实名出场时起）")} · IP：${esc(charIp(c.id) || "未定")}</div></div>
-            <button class="btn-ghost" data-act="set-char-nick" data-id="${esc(c.id)}" style="height:28px;padding:0 10px;font-size:12px">改昵称</button><button class="btn-ghost" data-act="set-char-ip" data-id="${esc(c.id)}" style="height:28px;padding:0 10px;font-size:12px">IP</button><button class="switch ${on ? "on" : ""}" data-act="toggle-char" data-id="${esc(c.id)}"><span></span></button></div>`; }).join("") || `<div class="empty" style="padding:24px">这个身份还没有角色好友</div>`}
+            <button class="btn-ghost" data-act="set-char-nick" data-id="${esc(c.id)}" style="height:28px;padding:0 10px;font-size:12px">改昵称</button><button class="btn-ghost" data-act="set-char-ip" data-id="${esc(c.id)}" style="height:28px;padding:0 10px;font-size:12px">IP</button><button class="btn-ghost ${isClose(c.id) ? "on-close" : ""}" data-act="w-close" data-id="${esc(c.id)}" style="height:28px;padding:0 10px;font-size:12px">${isClose(c.id) ? "亲密 ✓" : "亲密"}</button><button class="switch ${on ? "on" : ""}" data-act="toggle-char" data-id="${esc(c.id)}"><span></span></button></div>`; }).join("") || `<div class="empty" style="padding:24px">这个身份还没有角色好友</div>`}
+        <div class="form-note" style="margin-top:4px">「亲密」：书影音里他会和你扯上关系，也更常跟着你标记。第一次生成他的书影音时 AI 按你们的关系判断，可以自己改</div>
         <div class="form-note" style="margin-top:8px">公众人物 · 打开的人会被豆友当成明星、名人讨论（只聊真发生过的事）；都不打开就没人被八卦</div>
         <div class="list-cell"><div class="cell-main"><div>我（${esc(S.meta.nickname)}）</div></div><button class="switch ${S.meta.publicMe ? "on" : ""}" data-act="toggle-public-me"><span></span></button></div>
         ${S.chars.map(c => `<div class="list-cell"><div class="cell-main"><div>${esc(c.name)}</div></div><button class="switch ${(S.meta.publicChars || []).includes(c.id) ? "on" : ""}" data-act="toggle-public" data-id="${esc(c.id)}"><span></span></button></div>`).join("")}
@@ -1302,8 +1301,11 @@
         return;
       }
       case "wipe-all": {
-        if (await sheet("清空豆瓣的全部内容？小组、帖子、回应、搜索记录和相关记忆都会删掉，删了不能恢复（你的昵称、头像、IP 和设置会留着）", [{ label: "全部删除", value: "yes", danger: true }]) !== "yes") return;
+        if (await sheet("清空豆瓣的全部内容？小组、帖子、回应、书影音标记、豆列、搜索记录和相关记忆都会删掉，删了不能恢复（你的昵称、头像、IP 和设置会留着）", [{ label: "全部删除", value: "yes", danger: true }]) !== "yes") return;
         for (const t of S.topics) forget(memEventsOfTopic(t));
+        forget(S.marks.map(m => ({ charId: m.charId, eventId: `douban_mark_${m.id}` })));
+        await Promise.all([...S.works.map(w => dbDelete(COL.works, w.id)), ...S.marks.map(m => dbDelete(COL.marks, m.id)), ...S.doulists.map(d => dbDelete(COL.doulists, d.id))]);
+        S.works = []; S.marks = []; S.doulists = []; S.meta.followQueue = []; S.meta.hot = {}; S.meta.workSearches = {}; S.meta.close = {}; S.meta.charWorksAt = {};
         await Promise.all([...S.topics.map(t => dbDelete(COL.topics, t.id)), ...S.groups.map(g => dbDelete(COL.groups, g.id))]);
         S.topics = []; S.groups = []; S.groupChip = null;
         Object.assign(S.meta, { joined: [], searches: {}, follows: [], charNicks: {} }); saveMeta();
@@ -1335,7 +1337,8 @@
         const v = await sheet("发到哪个小组", mine.map(g => ({ label: g.name, value: g.id }))); if (v) newTopic(v); return;
       }
       case "me-menu": {
-        const v = await sheet("", [{ label: "编辑资料", value: "edit" }, { label: "换背景图", value: "cover" }, ...(S.meta.coverRef ? [{ label: "恢复默认背景", value: "uncover" }] : []), { label: "设置", value: "set" }, { label: "调试记录", value: "debug" }]);
+        const v = await sheet("", [{ label: "编辑资料", value: "edit" }, { label: "换背景图", value: "cover" }, ...(S.meta.coverRef ? [{ label: "恢复默认背景", value: "uncover" }] : []), { label: "书影音年度报告", value: "report" }, { label: "设置", value: "set" }, { label: "调试记录", value: "debug" }]);
+        if (v === "report") openReport();
         if (v === "edit") openEditMe(); if (v === "set") openSettings(); if (v === "debug") openDebug();
         if (v === "cover") { try { const [ref] = await pickImages(1, 1200); if (ref) { S.meta.coverRef = ref; saveMeta(); renderTab(); } } catch (err) { toast("上传失败"); } }
         if (v === "uncover") { S.meta.coverRef = null; saveMeta(); renderTab(); }
@@ -1415,12 +1418,465 @@
     }
   });
 
+  // ───────────────────────── 书影音（第二期） ─────────────────────────
+  // works：作品条目（真实作品，信息由 AI 写，小出入可以接受）；her 的标记存在条目上 w.my；
+  // marks：char 的标记 { charId, workId, status, stars, comment, at, src }；doulists：豆列 { owner: "me" | charId, name, intro, workIds }
+  const KIND_NAME = { book: "书", movie: "电影", tv: "剧集" };
+  const KIND_BY_NAME = n => /书|读/.test(n || "") ? "book" : /剧|电视|综艺|动画剧/.test(n || "") ? "tv" : "movie";
+  const STATUS_NAME = { book: { wish: "想读", doing: "在读", done: "读过" }, movie: { wish: "想看", doing: "在看", done: "看过" }, tv: { wish: "想看", doing: "在看", done: "看过" } };
+  const statusOf = n => /想/.test(n || "") ? "wish" : /在/.test(n || "") ? "doing" : "done";
+  const statusName = (kind, st) => (STATUS_NAME[kind] || STATUS_NAME.movie)[st] || "";
+  // 马卡龙封面（她挑的六色，字是同色系深色）
+  const MACARON = [["#cfe3f2", "#2f4f6b"], ["#d6ecd9", "#2f5a3c"], ["#e3dbf2", "#4b3c6e"], ["#f7dbe3", "#7d3a52"], ["#f7edc9", "#6e5622"], ["#d2eee8", "#27594f"]];
+  const workById = id => S.works.find(w => w.id === id);
+  /** 封面颜色：FNV 哈希（hashHue 对中文短名分得很不均，一排全是同一个色） */
+  const coverColor = t => { let h = 2166136261; for (const ch of String(t)) { h ^= ch.codePointAt(0); h = Math.imul(h, 16777619) >>> 0; } return MACARON[(h >>> 8) % MACARON.length]; };
+  const normTitle = s => String(s || "").replace(/[《》「」\s·:：,，.。!！?？'"“”]/g, "").toLowerCase();
+  const findWork = (title, kind) => S.works.find(w => normTitle(w.title) === normTitle(title) && (!kind || w.kind === kind));
+  const saveWork = w => dbUpsert(COL.works, w).catch(e => console.warn(e));
+  const saveMark = m => dbUpsert(COL.marks, m).catch(e => console.warn(e));
+  const saveDoulist = d => dbUpsert(COL.doulists, d).catch(e => console.warn(e));
+  const workSub = w => [w.creator, w.year].filter(Boolean).join(" · ");
+  /** 封面：她上传了就用图；书 = 竖排宋体书脊，电影剧集 = 左下大字。标题越长字越小 */
+  function coverHtml(w, cls) {
+    if (w.coverRef) return `<div class="wcv ${cls || ""}"><img ${refSrc(w.coverRef)} alt=""></div>`;
+    const [bg, fg] = coverColor(w.title); const n = [...w.title].length;
+    const style = `--bg:${bg};--fg:${fg}`;
+    if (w.kind === "book") {
+      const fs = n <= 3 ? 19 : n <= 4 ? 18 : n <= 5 ? 16 : n <= 6 ? 14.5 : n <= 7 ? 13 : 12; const ls = n <= 3 ? 5 : n <= 4 ? 4 : n <= 5 ? 3 : n <= 6 ? 2 : 1;
+      return `<div class="wcv a ${cls || ""}" style="${style}"><div class="k">书</div><div class="t" style="font-size:calc(var(--u) * ${fs});letter-spacing:calc(var(--u) * ${ls})">${esc(w.title)}</div><div class="s">${esc(w.creator || "")}</div></div>`;
+    }
+    const fs = n <= 4 ? 20 : n <= 6 ? 17 : n <= 9 ? 16 : 14;
+    return `<div class="wcv c ${cls || ""}" style="${style}"><div class="dot"></div><div class="t" style="font-size:calc(var(--u) * ${fs})">${esc(w.title)}</div><div class="s">${esc(workSub(w))}</div></div>`;
+  }
+  const starsHtml = (n, cls) => `<span class="wstars ${cls || ""}">${[1, 2, 3, 4, 5].map(i => `<i class="${i <= n ? "on" : i - 0.5 <= n ? "half" : ""}">★</i>`).join("")}</span>`;
+  const workTile = (w, extra) => `<button class="wtile" data-act="w-open" data-id="${esc(w.id)}">${coverHtml(w)}<span class="wt-name">${esc(w.title)}</span>${extra || (w.rating ? `<span class="wt-r">${starsHtml(w.rating / 2, "xs")}${w.rating.toFixed(1)}</span>` : "")}</button>`;
+  const charMarks = id => S.marks.filter(m => m.charId === id && workById(m.workId)).sort((a, b) => new Date(b.at) - new Date(a.at));
+  const myMarked = () => S.works.filter(w => w.my && w.my.status).sort((a, b) => new Date(b.my.at) - new Date(a.my.at));
+  const isClose = id => (S.meta.close || {})[id] === true;
+
+  /** AI 写的 ===作品=== → 条目（已有同名的就补信息） */
+  function workFromBlock(b, kindHint) {
+    const title = String(b["名称"] || "").replace(/[《》]/g, "").trim().slice(0, 40); if (!title || none(title)) return null;
+    const kind = b["类型"] ? KIND_BY_NAME(b["类型"]) : kindHint || "movie";
+    let w = findWork(title, kind);
+    if (!w) { w = { id: uid("w"), scope: S.identity.id, kind, title, createdAt: nowIso() }; S.works.push(w); }
+    const set = (k, v) => { if (v != null && v !== "" && !w[k]) w[k] = v; };
+    set("year", none(b["年份"]) ? "" : String(b["年份"]).replace(/[^\d]/g, "").slice(0, 4));
+    set("creator", none(b["作者导演"]) ? "" : String(b["作者导演"]).trim().slice(0, 30));
+    set("cast", none(b["主演"]) ? "" : String(b["主演"]).trim().slice(0, 60));
+    set("region", none(b["国家"]) ? "" : String(b["国家"]).trim().slice(0, 20));
+    set("genre", none(b["类型标签"]) ? "" : String(b["类型标签"]).trim().slice(0, 30));
+    set("intro", none(b["简介"]) ? "" : String(b["简介"]).trim().slice(0, 600));
+    const r = parseFloat(String(b["评分"] || "").replace(/[^\d.]/g, ""));
+    if (!w.rating && r > 0 && r <= 10) w.rating = Math.round(r * 10) / 10;
+    if (!w.ratingCount && !none(b["评价人数"])) w.ratingCount = clampInt(b["评价人数"], 0) || undefined;
+    if (!w.dist && !none(b["星级分布"])) { const d = String(b["星级分布"]).split(/[/／、,，\s]+/).map(x => parseFloat(x)).filter(x => x >= 0); if (d.length === 5) { const s = d.reduce((a, c) => a + c, 0) || 1; w.dist = d.map(x => Math.round(x / s * 1000) / 10); } }
+    saveWork(w); return w;
+  }
+  const WORK_FIELDS = "\n类型：书 / 电影 / 剧集\n名称：中文名（不带书名号）\n年份：首映或出版年份\n作者导演：书写作者，电影剧集写导演\n主演：电影剧集写两三个主演（书写 无）\n国家：国家或地区\n类型标签：两三个类型，像 剧情 / 爱情 / 悬疑\n评分：豆瓣评分（一位小数，按你知道的写；不知道就按口碑估）\n评价人数：大概多少人评过（纯数字）\n星级分布：五星到一星各占百分之几，用 / 分隔，像 52/31/12/3/2\n简介：两三句剧情或内容简介，不剧透结局";
+  const WORK_RULE = "只写现实里真实存在的作品，作品信息尽量和现实一致；拿不准的细节写简单点，不要编不存在的作品。";
+
+  /** 搜书影音：本地的先列；没搜过的词让 AI 写 3～6 部 */
+  async function searchWorks(term, again) {
+    term = term.trim(); if (!term) return [];
+    const local = S.works.filter(w => w.title.includes(term) || (w.creator || "").includes(term) || (w.cast || "").includes(term));
+    const cached = (S.meta.workSearches || {})[term];
+    if (cached && !again) return [...new Set([...cached.map(workById).filter(Boolean), ...local])];
+    const text = await generate(pickCast(activeChars(), 1).map(c => c.id), "worksearch", [
+      `用户在豆瓣搜索书影音：「${term}」。列出 ${rand(3, 6)} 部最相关的作品（片名、书名、人名、类型都可能是搜索词：搜人名就列 TA 的代表作，搜类型就列这个类型的好作品）。`, WORK_RULE,
+      `每部：\n===作品===${WORK_FIELDS}\n===结束===`,
+    ].join("\n\n"), `搜书影音「${term}」`);
+    if (text == null) return local;
+    const made = parseBlocks(text, "作品").map(b => workFromBlock(b)).filter(Boolean);
+    S.meta.workSearches = { ...(S.meta.workSearches || {}), [term]: made.map(w => w.id) }; saveMeta();
+    return [...new Set([...made, ...local])];
+  }
+  /** 条目页第一次打开：补作品信息 + 写短评、长评（char 标记过的，他的短评直接从标记来，不用 AI 写） */
+  async function genWorkDetail(w) {
+    if (w._busy) return; w._busy = true; refreshAll();
+    const need = !w.intro || !w.rating;
+    const text = await generate(pickCast(activeChars(), 1).map(c => c.id), "work", [
+      `豆瓣条目：${KIND_NAME[w.kind]}《${w.title}》${workSub(w) ? `（${workSub(w)}）` : ""}。`, WORK_RULE,
+      need ? `先补全条目信息：\n===作品===${WORK_FIELDS}\n===结束===` : "",
+      `写这个条目下 ${rand(6, 8)} 条豆友短评：各种口味都有（真心喜欢的、毒舌吐槽的、一句话神评、看哭的、看睡着的、二刷三刷的），星级要和内容对得上，大多是一两句话；赞最高的往往是一句话的神评。豆友不写角色名。\n每条：\n===短评===\n作者：豆友昵称\n星级：1～5（没打分写 无）\n状态：${statusName(w.kind, "done")} / ${statusName(w.kind, "wish")}\n时间：如 3天前、2023-05-12\n有用：点有用的人数（纯数字）\n内容：\n短评内容\n===结束===`,
+      `再写 2 篇豆友长评（影评、书评）：有标题，正文 200～400 字，有观点有细节，像真人写的豆瓣长评，不要写成作文。\n每篇：\n===长评===\n作者：豆友昵称\n星级：1～5\n标题：长评标题\n时间：如 2个月前\n有用：纯数字\n正文：\n长评正文\n===结束===`,
+    ].filter(Boolean).join("\n\n"), `《${w.title.slice(0, 12)}》的短评`);
+    w._busy = false;
+    if (text == null) { refreshAll(); return; }
+    const info = parseBlocks(text, "作品")[0]; if (info) workFromBlock({ ...info, 名称: w.title, 类型: KIND_NAME[w.kind] });
+    const at = s => parseRelTime(s, 60 * 24 * 60);
+    w.reviews = parseBlocks(text, "短评").map(b => ({ name: String(b["作者"] || "豆友").replace(/^@/, "").trim().slice(0, 24), stars: none(b["星级"]) ? 0 : Math.min(5, clampInt(b["星级"], 0)), status: statusOf(b["状态"]), text: String(b["内容"] || "").trim(), useful: clampInt(b["有用"], rand(0, 200)), createdAt: at(b["时间"]) })).filter(r => r.text && !isUserName(r.name) && !charByName(r.name));
+    w.longs = parseBlocks(text, "长评").map(b => ({ id: uid("lr"), name: String(b["作者"] || "豆友").replace(/^@/, "").trim().slice(0, 24), stars: Math.min(5, clampInt(b["星级"], 0)), title: String(b["标题"] || "").trim().slice(0, 40), text: String(b["正文"] || "").trim(), useful: clampInt(b["有用"], rand(5, 500)), createdAt: at(b["时间"]) })).filter(r => r.text && r.title);
+    w.detailAt = nowIso(); saveWork(w); refreshAll();
+  }
+
+  /** 角色跟她扯上关系的规矩（亲密的才会，而且不强制） */
+  const tieLine = id => isClose(id)
+    ? `你和用户很亲密。你的标记和短评里可以偶尔和她扯上关系（不是每条，一两条就够）：她没跟你提过的作品，可以写「想和她一起看」「这里很像她 / 像我们」「感觉她会喜欢」；但不能说她看过、推荐过、和你一起看过——除非聊天记录或记忆里真有这件事。`
+    : "你的标记和短评就是你自己的口味和生活，不用扯上用户。";
+  /**
+   * char 的书影音：第一次打开他主页时和主页同时生成（分开两次调用，各写各的不挤）。
+   * 写他标记过的作品（想看在看看过、星级、短评）、一两个他的豆列；顺便判断他和她亲不亲密（设置里能改）
+   */
+  async function genCharWorks(id, more) {
+    const ch = charById(id); if (!ch || S[`_gw_${id}`]) return; S[`_gw_${id}`] = true; refreshAll();
+    const had = charMarks(id).map(m => workById(m.workId).title);
+    const askClose = !(S.meta.close && id in S.meta.close);
+    const text = await generate([id], "charworks", [
+      `当前时间：${new Date().toLocaleString("zh-CN", { hour12: false })}`,
+      `写你（${ch.name}）在豆瓣标记过的书影音：${more ? `最近新标记的 ${rand(3, 5)} 部` : `${rand(10, 14)} 部，书、电影、剧集都有（按你的兴趣，比例随你）`}。按你的人设、年龄、爱好和生活来挑，口味要有个人特色，别全是最出名的经典；状态有想看、在看、看过，时间从最近到几个月前。短评一两句，像你自己会说的话，不是每部都写短评（没写的写 无）。`,
+      had.length ? `你已经标记过这些（不要重复）：${had.slice(0, 40).join("、")}` : "", WORK_RULE, tieLine(id),
+      `每部：\n===标记===${WORK_FIELDS}\n状态：想看 / 在看 / 看过（书写 想读 / 在读 / 读过）\n星级：1～5（想看的写 无）\n时间：标记时间，如 3天前、2个月前\n短评：一两句（没写写 无）\n===结束===`,
+      more ? "" : `再写 1～2 个你建的豆列（作品清单，像「失眠的时候看」「${isClose(id) ? "想和她一起看的" : "下雨天适合看的"}」，名字随你）：\n===豆列===\n名称：豆列名\n简介：一句话\n作品：豆列里的作品名，用、分隔，四到八部（可以有上面没标记过的）\n===结束===`,
+      askClose ? `最后写：\n===关系===\n和用户亲密：是 / 否（按你们的真实关系：恋人、暧昧、很好的朋友算亲密）\n===结束===` : "",
+    ].filter(Boolean).join("\n\n"), `${ch.name}的书影音`);
+    S[`_gw_${id}`] = false;
+    if (text == null) { refreshAll(); return; }
+    if (askClose) { const r = parseBlocks(text, "关系")[0]; S.meta.close = { ...(S.meta.close || {}), [id]: !!(r && yes(r["和用户亲密"])) }; saveMeta(); }
+    for (const b of parseBlocks(text, "标记")) {
+      const w = workFromBlock(b); if (!w || S.marks.some(m => m.charId === id && m.workId === w.id)) continue;
+      const st = statusOf(b["状态"]);
+      const m = { id: uid("m"), scope: S.identity.id, charId: id, workId: w.id, status: st, stars: st === "wish" || none(b["星级"]) ? 0 : Math.min(5, clampInt(b["星级"], 0)), comment: none(b["短评"]) ? "" : String(b["短评"]).trim().slice(0, 200), at: parseRelTime(b["时间"], 60 * 24 * 90), src: "gen" };
+      S.marks.push(m); saveMark(m);
+      remember(id, `我在豆瓣标记了${KIND_NAME[w.kind]}《${w.title}》：${statusName(w.kind, st)}${m.stars ? ` ${m.stars}星` : ""}${m.comment ? `，短评「${m.comment.slice(0, 50)}」` : ""}`, `douban_mark_${m.id}`);
+    }
+    for (const b of parseBlocks(text, "豆列")) {
+      const name = String(b["名称"] || "").trim().slice(0, 30); if (!name) continue;
+      const ids = String(b["作品"] || "").split(/[、,，|]+/).map(x => x.replace(/[《》]/g, "").trim()).filter(Boolean).map(t => findWork(t) || workFromBlock({ 名称: t })).filter(Boolean).map(w => w.id);
+      const d = { id: uid("dl"), scope: S.identity.id, owner: id, name, intro: none(b["简介"]) ? "" : String(b["简介"]).trim().slice(0, 100), workIds: [...new Set(ids)], createdAt: nowIso() };
+      S.doulists.push(d); saveDoulist(d);
+    }
+    S.meta.charWorksAt = { ...(S.meta.charWorksAt || {}), [id]: nowIso() }; saveMeta(); refreshAll();
+  }
+
+  /**
+   * 她标记了一部作品 → 代码掷骰子（亲密的 30%、其他 10%，一次最多一个人，每天最多 3 次），掷中的过几个小时才去标记（她下次打开豆瓣时到点了才写），弹提示
+   */
+  function rollFollowMark(w) {
+    const day = new Date().toDateString(); const q = S.meta.followQueue || [];
+    const today = (S.meta.followDay === day ? S.meta.followCount || 0 : 0);
+    if (today >= 3 || q.some(x => x.workId === w.id)) return;
+    const cands = shuffle(activeChars().filter(c => !S.marks.some(m => m.charId === c.id && m.workId === w.id)));
+    const hit = cands.find(c => Math.random() < (isClose(c.id) ? 0.3 : 0.1)); if (!hit) return;
+    S.meta.followQueue = [...q, { charId: hit.id, workId: w.id, due: new Date(Date.now() + rand(2, 6) * 3600e3).toISOString() }];
+    S.meta.followDay = day; S.meta.followCount = today + 1; saveMeta();
+  }
+  async function runFollowMarks() {
+    if (S._fmBusy) return; S._fmBusy = true;
+    try { await runFollowMarks0(); } finally { S._fmBusy = false; }
+  }
+  async function runFollowMarks0() {
+    const q = S.meta.followQueue || []; const due = q.filter(x => new Date(x.due) <= new Date());
+    for (const job of due) {
+      const ch = charById(job.charId); const w = workById(job.workId);
+      if (!ch || !w || S.marks.some(m => m.charId === ch.id && m.workId === w.id)) { S.meta.followQueue = (S.meta.followQueue || []).filter(x => x !== job); saveMeta(); continue; }
+      const my = w.my || {};
+      const reply = my.comment && isClose(ch.id) && Math.random() < 0.5;
+      const text = await generate([ch.id], "followmark", [
+        `你（${ch.name}）在豆瓣刷到用户标记了${KIND_NAME[w.kind]}《${w.title}》${workSub(w) ? `（${workSub(w)}）` : ""}：${statusName(w.kind, my.status)}${my.stars ? `，${my.stars}星` : ""}${my.comment ? `，短评「${my.comment}」` : ""}。你自己也去${w.kind === "book" ? "找来读" : "找来看"}了（或者加进了想看），现在在豆瓣上标记它。`,
+        "按你的人设和你们的关系写你的标记和短评；你可以提到是因为看到她标记了才去看的，也可以不提。" + tieLine(ch.id), CHAR_TALK_LINE,
+        `===标记===\n状态：想看 / 在看 / 看过（书写 想读 / 在读 / 读过）\n星级：1～5（想看写 无）\n短评：一两句（没写写 无）\n===结束===`,
+        reply ? `你还在她那条短评下面回应了一句：\n===回应===\n内容：回她的话（一句）\n===结束===` : "",
+      ].filter(Boolean).join("\n\n"), `${ch.name}跟着标记《${w.title.slice(0, 10)}》`);
+      if (text == null) break; // 失败留着，下次打开再试
+      S.meta.followQueue = (S.meta.followQueue || []).filter(x => x !== job);
+      const b = parseBlocks(text, "标记")[0];
+      if (b) {
+        const st = statusOf(b["状态"]);
+        const m = { id: uid("m"), scope: S.identity.id, charId: ch.id, workId: w.id, status: st, stars: st === "wish" || none(b["星级"]) ? 0 : Math.min(5, clampInt(b["星级"], 0)), comment: none(b["短评"]) ? "" : String(b["短评"]).trim().slice(0, 200), at: new Date(Date.now() - rand(5, 90) * 60e3).toISOString(), src: "follow" };
+        S.marks.push(m); saveMark(m);
+        remember(ch.id, `我看到${herName()}在豆瓣标记了《${w.title}》，自己也去标记了：${statusName(w.kind, st)}${m.comment ? `「${m.comment.slice(0, 50)}」` : ""}`, `douban_mark_${m.id}`);
+        toast(`${charNick(ch.id)} 也标记了《${w.title}》`);
+      }
+      const r = parseBlocks(text, "回应")[0];
+      if (r && !none(r["内容"]) && w.my) { w.my.replies = [...(w.my.replies || []), { charId: ch.id, text: String(r["内容"]).trim().slice(0, 200), at: nowIso() }]; saveWork(w); }
+      saveMeta(); refreshAll();
+    }
+  }
+
+  // ── 书影音标签 ──
+  function renderBookTab() {
+    $("#topbar").innerHTML = topSearch("搜索书影音", "w-search");
+    const kind = S.bookKind || "movie";
+    const mine = myMarked().filter(w => w.kind === kind);
+    const by = st => mine.filter(w => w.my.status === st);
+    const hot = (S.meta.hot || {})[kind] || [];
+    const friends = S.marks.filter(m => (workById(m.workId) || {}).kind === kind && activeChars().some(c => c.id === m.charId)).sort((a, b) => new Date(b.at) - new Date(a.at)).slice(0, 10);
+    $("#view").innerHTML = `<div class="sec-tabs db-white wk-tabs">${["movie", "tv", "book"].map(k => `<button class="${kind === k ? "on" : ""}" data-act="w-kind" data-v="${k}">${{ movie: "电影", tv: "剧集", book: "读书" }[k]}</button>`).join("")}</div>
+      <div class="mcard"><div class="mcard-h" data-act="w-mine" data-v="${kind}">我的${{ movie: "电影", tv: "剧集", book: "读书" }[kind]}<i>›</i></div>
+        <div class="wk-count">${["wish", "doing", "done"].map(st => `<button data-act="w-mine" data-v="${kind}" data-st="${st}"><b>${by(st).length}</b>${statusName(kind, st)}</button>`).join("")}</div>
+        ${mine.length ? `<div class="hscroll">${mine.slice(0, 12).map(w => workTile(w, `<span class="wt-r">${w.my.stars ? starsHtml(w.my.stars, "xs") : statusName(kind, w.my.status)}</span>`)).join("")}</div>` : `<div class="mcard-empty">还没有标记，上面搜一部看过的${KIND_NAME[kind]}吧</div>`}</div>
+      ${friends.length ? `<div class="mcard"><div class="mcard-h">你认识的人在看</div>${friends.map(m => { const w = workById(m.workId); const a = { type: "char", charId: m.charId };
+        return `<div class="wfr" data-act="w-open" data-id="${esc(w.id)}">${avatarHtml(whoOf(a))}<div class="cell-main"><div><b>${esc(charNick(m.charId))}</b> ${statusName(w.kind, m.status)} 《${esc(w.title)}》${m.stars ? starsHtml(m.stars, "xs") : ""}</div>${m.comment ? `<div class="cell-sub">${esc(m.comment)}</div>` : ""}</div><span class="cell-sub">${fmtTime(m.at)}</span></div>`; }).join("")}</div>` : ""}
+      <div class="mcard"><div class="mcard-h">${{ movie: "近期热门电影", tv: "近期热门剧集", book: "最近大家在读" }[kind]}</div>
+        ${hot.length ? `<div class="hscroll">${hot.map(workById).filter(Boolean).map(w => workTile(w)).join("")}</div>` : ""}
+        ${S._hotBusy ? `<div class="gen-tip"><span class="spinner"></span>正在看看大家在${kind === "book" ? "读" : "看"}什么…</div>` : `<button class="load-more" data-act="w-hot" data-v="${kind}">${hot.length ? "换一批" : "看看大家在看什么"}（会用 1 次 API）</button>`}</div>
+      <div class="mcard"><div class="mcard-h" data-act="w-doulists" data-v="me">我的豆列<i>›</i></div>${doulistRow("me")}</div>
+      <div class="mcard"><div class="mcard-h" data-act="w-report">年度报告<i>›</i></div><div class="mcard-empty">${new Date().getFullYear()} 年你标记了 ${myMarked().filter(w => new Date(w.my.at).getFullYear() === new Date().getFullYear()).length} 部作品</div></div>`;
+  }
+  async function genHot(kind) {
+    if (S._hotBusy) return; S._hotBusy = true; refreshAll();
+    const had = ((S.meta.hot || {})[kind] || []).map(workById).filter(Boolean).map(w => w.title);
+    const text = await generate(pickCast(activeChars(), 1).map(c => c.id), "workhot", [
+      `当前时间：${new Date().toLocaleString("zh-CN", { hour12: false })}`,
+      `写豆瓣「${{ movie: "近期热门电影", tv: "近期热门剧集", book: "最近大家在读的书" }[kind]}」的 8 部作品：最近（今年、去年）真实上映、播出、出版、在讨论的，能联网就按现在真实的热门来；混一两部老作品翻红的也行。`,
+      had.length ? `上次是这些，换一批：${had.join("、")}` : "", WORK_RULE,
+      `每部：\n===作品===${WORK_FIELDS}\n===结束===`,
+    ].filter(Boolean).join("\n\n"), `热门${KIND_NAME[kind]}`);
+    S._hotBusy = false;
+    if (text != null) { const ws = parseBlocks(text, "作品").map(b => workFromBlock(b, kind)).filter(Boolean); S.meta.hot = { ...(S.meta.hot || {}), [kind]: ws.map(w => w.id) }; saveMeta(); }
+    refreshAll();
+  }
+  function openWorkSearch() {
+    let term = "", results = null, busy = false;
+    const page = openPage("w-search", pg => {
+      body(pg, `<div style="padding:10px 16px;background:var(--wb-card)"><form class="db-search" id="wsform" style="height:38px">${I.search}<input id="wsq" placeholder="书名、片名、作者、导演、演员" value="${esc(term)}" enterkeyhint="search"></form></div>`
+        + (busy ? `<div class="gen-tip"><span class="spinner"></span>正在找「${esc(term)}」…</div>` : "")
+        + (results ? (results.length ? `<div class="db-white">${results.map(w => workRow(w)).join("")}</div>` : `<div class="empty">没找到</div>`) + (busy ? "" : `<button class="load-more" data-act="w-search-again">没有想找的？再搜一次（会用 1 次 API）</button>`) : "")
+        + (!results && !busy && Object.keys(S.meta.workSearches || {}).length ? `<div class="db-sec">搜过的</div><div style="padding:0 16px 16px;display:flex;flex-wrap:wrap;gap:8px">${Object.keys(S.meta.workSearches).slice(-12).reverse().map(k => `<button class="anon-chip" data-act="w-search-term" data-term="${esc(k)}">${esc(k)}</button>`).join("")}</div>` : ""));
+      const f = $("#wsform", pg.el); const q = $("#wsq", pg.el);
+      f.onsubmit = e => { e.preventDefault(); pg.run(q.value); };
+      if (!results && !busy) setTimeout(() => q.focus(), 60);
+    }, { title: "搜索书影音" });
+    page.run = async (v, again) => { term = String(v || "").trim(); if (!term || busy) return; busy = true; page.render(page); results = await searchWorks(term, again); busy = false; page.render(page); };
+  }
+  /** 列表里的一行：封面 + 名字 + 评分 + 年份作者 */
+  function workRow(w, note) {
+    return `<div class="wrow" data-act="w-open" data-id="${esc(w.id)}">${coverHtml(w, "sm")}<div class="cell-main"><b>${esc(w.title)}</b>
+      <div class="wrow-r">${w.rating ? `${starsHtml(w.rating / 2, "xs")}<span>${w.rating.toFixed(1)}</span>` : `<span class="cell-sub">暂无评分</span>`}</div>
+      <div class="cell-sub">${esc([KIND_NAME[w.kind], w.year, w.region, w.creator].filter(Boolean).join(" / "))}</div>${note ? `<div class="wrow-note">${note}</div>` : ""}</div>
+      ${w.my && w.my.status ? `<span class="wrow-st">${statusName(w.kind, w.my.status)}</span>` : ""}</div>`;
+  }
+  // ── 条目页 ──
+  function openWork(id) {
+    const w0 = workById(id); if (!w0) return;
+    let fold = true;
+    const page = openPage(`work:${id}`, pg => {
+      const w = workById(id); if (!w) { body(pg, `<div class="empty">条目不存在</div>`); return; }
+      const my = w.my || {}; const kn = STATUS_NAME[w.kind];
+      const friends = S.marks.filter(m => m.workId === w.id && charById(m.charId)).sort((a, b) => new Date(b.at) - new Date(a.at));
+      const dist = w.dist || null;
+      const lists = S.doulists.filter(d => d.workIds.includes(w.id));
+      const myRev = my.comment ? [{ me: true, stars: my.stars, text: my.comment, useful: my.useful || 0, createdAt: my.at, status: my.status, replies: my.replies }] : [];
+      const charRev = friends.filter(m => m.comment).map(m => ({ charId: m.charId, stars: m.stars, text: m.comment, useful: m.useful || rand(0, 30), createdAt: m.at, status: m.status }));
+      const reviews = [...myRev, ...charRev, ...(w.reviews || [])];
+      body(pg, `<div class="w-hero" style="--bg:${coverColor(w.title)[0]}">
+          ${coverHtml(w, "lg")}
+          <div class="cell-main"><h1>${esc(w.title)}</h1><div class="w-meta">${esc([w.year, w.region, w.genre].filter(Boolean).join(" / "))}</div>
+            <div class="w-meta">${w.kind === "book" ? "作者" : "导演"}：${esc(w.creator || "未知")}</div>${w.cast ? `<div class="w-meta">主演：${esc(w.cast)}</div>` : ""}</div></div>
+        <div class="w-rate db-white"><div class="w-score"><span class="lbl">豆瓣评分</span><b>${w.rating ? w.rating.toFixed(1) : "-"}</b>${w.rating ? starsHtml(w.rating / 2) : ""}<span class="cell-sub">${w.ratingCount ? `${fmtNum(w.ratingCount)}人评价` : "评价人数不足"}</span></div>
+          ${dist ? `<div class="w-dist">${dist.map((p, i) => `<div><span>${5 - i}星</span><i><em style="width:${p}%"></em></i><span>${p}%</span></div>`).join("")}</div>` : ""}</div>
+        <div class="w-mark db-white">${my.status ? `<div class="w-mymark" data-act="w-mark"><span>我${statusName(w.kind, my.status)}</span>${my.stars ? starsHtml(my.stars) : ""}<span class="cell-sub">${fmtTime(my.at)} · 修改 ›</span></div>`
+          : ["wish", "doing", "done"].map(st => `<button data-act="w-mark" data-st="${st}">${st === "wish" ? "♡ " : st === "doing" ? "◎ " : "☆ "}${kn[st]}</button>`).join("")}</div>
+        ${w.intro ? `<div class="db-white w-sec"><div class="w-h">简介</div><div class="w-intro ${fold ? "fold" : ""}" data-act="w-unfold">${esc(w.intro)}</div></div>` : ""}
+        ${friends.length ? `<div class="db-white w-sec"><div class="w-h">你认识的人</div>${friends.map(m => { const a = { type: "char", charId: m.charId };
+          return `<div class="wfr" ${personAttrs(a)}>${avatarHtml(whoOf(a))}<div class="cell-main"><div><b>${esc(charNick(m.charId))}</b> ${statusName(w.kind, m.status)} ${m.stars ? starsHtml(m.stars, "xs") : ""}</div>${m.comment ? `<div class="cell-sub">${esc(m.comment)}</div>` : ""}</div><span class="cell-sub">${fmtTime(m.at)}</span></div>`; }).join("")}</div>` : ""}
+        <div class="db-white w-sec"><div class="w-h">短评 ${reviews.length}<button data-act="w-mark" data-st="${my.status || "done"}">写短评</button></div>
+          ${w._busy && !(w.reviews || []).length ? `<div class="gen-tip"><span class="spinner"></span>正在加载短评…</div>` : ""}
+          ${reviews.map(r => { const a = r.me ? { type: "user" } : r.charId ? { type: "char", charId: r.charId } : null; const who = a ? whoOf(a) : { name: r.name, seed: r.name, avatarRef: (S.meta.avatarPool || []).length ? S.meta.avatarPool[hashHue(r.name) % S.meta.avatarPool.length] : null };
+            return `<div class="wrev"><div ${a ? personAttrs(a) : ""}>${avatarHtml(who)}</div><div class="cell-main"><div class="wrev-top"><b>${esc(who.name)}</b>${r.me ? `<span class="role-tag mask">我</span>` : ""}<span class="cell-sub">${statusName(w.kind, r.status || "done")}</span>${r.stars ? starsHtml(r.stars, "xs") : ""}<span class="cell-sub">${fmtTime(r.createdAt)}</span></div>
+              <div class="wrev-text">${richText(r.text)}</div><div class="wrev-useful">${r.useful ? `${fmtNum(r.useful)} 有用` : "有用"}</div>
+              ${(r.replies || []).map(x => `<div class="floor-quote"><span><b>${esc(charNick(x.charId))}</b> 回应：${esc(x.text)}</span></div>`).join("")}</div></div>`; }).join("")}</div>
+        <div class="db-white w-sec"><div class="w-h">${w.kind === "book" ? "书评" : "影评"} ${(w.longs || []).length + (my.long ? 1 : 0)}<button data-act="w-long">写${w.kind === "book" ? "书评" : "影评"}</button></div>
+          ${[...(my.long ? [{ me: true, ...my.long }] : []), ...(w.longs || [])].map(r => `<div class="wlong" data-act="w-long-open" data-id="${esc(r.me ? "me" : r.id)}"><div class="wrev-top"><b>${esc(r.me ? S.meta.nickname : r.name)}</b>${r.stars ? starsHtml(r.stars, "xs") : ""}</div><div class="wlong-t">${esc(r.title)}</div><div class="wlong-x">${esc(r.text.slice(0, 90))}…</div><div class="cell-sub">${r.useful ? `${fmtNum(r.useful)} 有用 · ` : ""}${fmtTime(r.createdAt)}</div></div>`).join("") || `<div class="mcard-empty" style="padding:6px 16px 14px">还没有${w.kind === "book" ? "书评" : "影评"}</div>`}</div>
+        ${lists.length ? `<div class="db-white w-sec"><div class="w-h">收进了这些豆列</div>${lists.map(d => `<div class="mline" data-act="w-doulist" data-id="${esc(d.id)}">${esc(d.name)}<span>${d.owner === "me" ? "我的" : esc(charNick(d.owner))}</span></div>`).join("")}</div>` : ""}
+        ${w._busy && (w.reviews || []).length ? `<div class="gen-tip"><span class="spinner"></span>加载中…</div>` : ""}`);
+    }, { title: "", cls: "wpage", action: `<button class="top-icon" data-act="w-menu" data-id="${esc(id)}" aria-label="更多">${I.more}</button>` });
+    page.unfold = () => { fold = !fold; page.render(page); };
+    if (!w0.detailAt) genWorkDetail(w0);
+    return page;
+  }
+  /** 标记：状态 → 星级 → 短评（一个面板里） */
+  function markSheet(w, st0) {
+    const my = w.my || {}; let st = st0 || my.status || "done"; let stars = my.stars || 0;
+    const mask = document.createElement("div"); mask.className = "sheet-mask";
+    const draw = () => {
+      mask.innerHTML = `<form class="sheet input-sheet wmark-sheet" action="#"><div class="sheet-title">${esc(w.title)}</div>
+        <div class="seg3 wm-st">${["wish", "doing", "done"].map(k => `<button type="button" class="${st === k ? "on" : ""}" data-st="${k}">${statusName(w.kind, k)}</button>`).join("")}</div>
+        ${st !== "wish" ? `<div class="wm-stars">${[1, 2, 3, 4, 5].map(i => `<button type="button" data-star="${i}" class="${i <= stars ? "on" : ""}">★</button>`).join("")}<span>${["", "很差", "较差", "还行", "推荐", "力荐"][stars] || "点星星打分"}</span></div>` : ""}
+        <div class="input-sheet-row"><textarea class="search-input" rows="4" style="height:auto;padding:10px;line-height:1.5" maxlength="350" placeholder="写几句短评（可以不写）">${esc(my.comment || "")}</textarea></div>
+        <button class="sheet-item ok" type="submit">保存</button>${my.status ? `<button class="sheet-item danger" type="button" data-rm>删除标记</button>` : ""}<div class="sheet-gap"></div><button class="sheet-item" type="button" data-cancel>取消</button></form>`;
+    };
+    draw();
+    mask.onclick = e => {
+      const s = e.target.closest("[data-st]"); if (s) { const ta = $("textarea", mask).value; st = s.dataset.st; draw(); $("textarea", mask).value = ta; return; }
+      const r = e.target.closest("[data-star]"); if (r) { const ta = $("textarea", mask).value; stars = +r.dataset.star; draw(); $("textarea", mask).value = ta; return; }
+      if (e.target.closest("[data-rm]")) { delete w.my; saveWork(w); mask.remove(); refreshAll(); toast("删除了"); return; }
+      if (e.target === mask || e.target.closest("[data-cancel]")) mask.remove();
+    };
+    mask.addEventListener("submit", e => {
+      e.preventDefault(); const comment = $("textarea", mask).value.trim(); const fresh = !my.status;
+      w.my = { ...my, status: st, stars: st === "wish" ? 0 : stars, comment, at: fresh || my.status !== st ? nowIso() : my.at };
+      if (comment && !my.comment) w.my.useful = rand(0, 3);
+      saveWork(w); mask.remove(); refreshAll(); toast(fresh ? `标记为「${statusName(w.kind, st)}」` : "保存了");
+      if (fresh) rollFollowMark(w);
+    });
+    document.body.appendChild(mask);
+  }
+  function openLongEditor(w) {
+    const d = { ...(w.my && w.my.long || { title: "", text: "", stars: (w.my || {}).stars || 0 }) };
+    openPage(`w-long-edit:${w.id}`, pg => {
+      body(pg, `<div class="form"><div class="form-note" style="margin:0">《${esc(w.title)}》的${w.kind === "book" ? "书评" : "影评"}</div>
+        <div class="form-row"><label>标题</label><input id="wl-title" maxlength="40" value="${esc(d.title)}"></div>
+        <div class="form-row" style="align-items:flex-start"><label style="padding-top:14px">正文</label><textarea id="wl-text" style="min-height:240px" maxlength="5000" placeholder="写点什么……">${esc(d.text)}</textarea></div></div>`);
+      $("#wl-title", pg.el).oninput = e => { d.title = e.target.value; }; $("#wl-text", pg.el).oninput = e => { d.text = e.target.value; };
+    }, { title: `写${w.kind === "book" ? "书评" : "影评"}`, action: `<button class="top-icon" style="width:auto;color:var(--wb-orange);font-size:15px" data-act="w-long-save" data-id="${esc(w.id)}">发布</button>` }).draft = d;
+  }
+  function openLongReview(w, rid) {
+    const r = rid === "me" ? { ...(w.my || {}).long, name: S.meta.nickname, me: true } : (w.longs || []).find(x => x.id === rid); if (!r) return;
+    openPage(`w-long:${w.id}:${rid}`, pg => body(pg, `<div class="db-white" style="padding:18px 16px 30px"><h1 style="font-size:21px;margin:0 0 12px">${esc(r.title)}</h1>
+      <div class="wrev-top" style="margin-bottom:12px">${avatarHtml(r.me ? whoOf({ type: "user" }) : { name: r.name, seed: r.name })}<b>${esc(r.name)}</b> 评论 《${esc(w.title)}》 ${r.stars ? starsHtml(r.stars, "xs") : ""}</div>
+      <div class="post-body" style="padding:0">${richText(r.text).replace(/\n/g, "<br>")}</div><div class="cell-sub" style="margin-top:14px">${fmtTime(r.createdAt)}${r.useful ? ` · ${fmtNum(r.useful)} 有用` : ""}</div></div>`), { title: w.kind === "book" ? "书评" : "影评" });
+  }
+  // ── 我的书影音 / 他的书影音 ──
+  function openMarks(owner, kind, st) {
+    let k = kind || "all", s = st || "done";
+    const page = openPage(`w-marks:${owner}`, pg => {
+      const rows = owner === "me" ? myMarked().map(w => ({ w, m: w.my })) : charMarks(owner).map(m => ({ w: workById(m.workId), m }));
+      const list = rows.filter(x => (k === "all" || x.w.kind === k) && x.m.status === s);
+      const both = owner === "me" ? [] : rows.filter(x => x.m.status === "done" && x.w.my && x.w.my.status === "done");
+      body(pg, `<div class="sec-tabs db-white">${[["all", "全部"], ["movie", "电影"], ["tv", "剧集"], ["book", "读书"]].map(([v, l]) => `<button class="${k === v ? "on" : ""}" data-act="w-marks-k" data-v="${v}">${l}</button>`).join("")}</div>
+        <div class="list-head"><span></span><div class="seg3">${["wish", "doing", "done"].map(v => `<button class="${s === v ? "on" : ""}" data-act="w-marks-s" data-v="${v}">${statusName(k === "book" ? "book" : "movie", v)} ${rows.filter(x => (k === "all" || x.w.kind === k) && x.m.status === v).length}</button>`).join("")}</div></div>
+        ${both.length ? `<div class="wboth">你们都${k === "book" ? "读" : "看"}过 ${both.length} 部：${both.slice(0, 6).map(x => `《${esc(x.w.title)}》`).join("")}</div>` : ""}
+        <div class="db-white">${list.map(x => workRow(x.w, `${x.m.stars ? starsHtml(x.m.stars, "xs") : ""} <span class="cell-sub">${fmtTime(x.m.at)}</span>${x.m.comment ? `<div>${esc(x.m.comment)}</div>` : ""}`)).join("") || `<div class="empty" style="padding:30px">还没有</div>`}</div>`);
+    }, { title: owner === "me" ? "我的书影音" : `${charNick(owner)}的书影音` });
+    page.setK = v => { k = v; page.render(page); }; page.setS = v => { s = v; page.render(page); };
+  }
+  /** 主页上的书影音卡片（我的 / char 的）：横划封面 + 「你们都看过」 */
+  function worksCard(owner) {
+    if (owner === "me") {
+      const mine = myMarked();
+      return `<div class="mcard"><div class="mcard-h" data-act="w-marks" data-owner="me">书影音<i>›</i></div>${mine.length ? `<div class="hscroll">${mine.slice(0, 10).map(w => workTile(w, `<span class="wt-r">${w.my.stars ? starsHtml(w.my.stars, "xs") : statusName(w.kind, w.my.status)}</span>`)).join("")}</div>` : `<div class="mcard-empty">还没有标记书影音，去「书影音」搜一部吧</div>`}</div>`;
+    }
+    const ms = charMarks(owner); const busy = S[`_gw_${owner}`];
+    const both = ms.filter(m => m.status === "done" && (workById(m.workId).my || {}).status === "done");
+    return `<div class="mcard"><div class="mcard-h" data-act="w-marks" data-owner="${esc(owner)}">书影音 ${ms.length || ""}<i>›</i></div>
+      ${both.length ? `<div class="wboth sm">你们都看过 ${both.length} 部</div>` : ""}
+      ${ms.length ? `<div class="hscroll">${ms.slice(0, 10).map(m => workTile(workById(m.workId), `<span class="wt-r">${m.stars ? starsHtml(m.stars, "xs") : statusName(workById(m.workId).kind, m.status)}</span>`)).join("")}</div>`
+        : busy ? "" : `<button class="load-more" data-act="w-gen-char" data-id="${esc(owner)}">看看他标记过什么（会用 1 次 API）</button>`}
+      ${busy ? `<div class="gen-tip"><span class="spinner"></span>正在看他标记过什么…</div>` : ms.length ? `<button class="load-more" data-act="w-more-char" data-id="${esc(owner)}">他最近又看了什么（会用 1 次 API）</button>` : ""}</div>`;
+  }
+  // ── 豆列 ──
+  const doulistsOf = owner => S.doulists.filter(d => d.owner === owner);
+  function doulistRow(owner) {
+    const ls = doulistsOf(owner);
+    return ls.length ? `<div class="hscroll">${ls.map(d => { const ws = d.workIds.map(workById).filter(Boolean);
+      return `<button class="dltile" data-act="w-doulist" data-id="${esc(d.id)}"><div class="dl-covers">${ws.slice(0, 3).map(w => coverHtml(w, "xs")).join("") || `<div class="wcv xs" style="--bg:#eee"></div>`}</div><span>${esc(d.name)}</span><em>${ws.length} 部</em></button>`; }).join("")}</div>`
+      : `<div class="mcard-empty">${owner === "me" ? "还没有豆列：在条目页 ··· 里「加入豆列」就能建" : "还没有豆列"}</div>`;
+  }
+  function openDoulist(id) {
+    openPage(`w-dl:${id}`, pg => {
+      const d = S.doulists.find(x => x.id === id); if (!d) { body(pg, `<div class="empty">豆列不存在</div>`); return; }
+      const ws = d.workIds.map(workById).filter(Boolean);
+      body(pg, `<div class="db-white" style="padding:16px"><h1 style="font-size:20px;margin:0 0 6px">${esc(d.name)}</h1><div class="cell-sub">${d.owner === "me" ? esc(S.meta.nickname) : esc(charNick(d.owner))} 创建 · ${ws.length} 部</div>${d.intro ? `<div style="margin-top:8px;font-size:14px">${esc(d.intro)}</div>` : ""}</div>
+        <div class="db-white" style="margin-top:8px">${ws.map(w => workRow(w)).join("") || `<div class="empty" style="padding:30px">还是空的</div>`}</div>`);
+    }, { title: "豆列", action: `<button class="top-icon" data-act="w-dl-menu" data-id="${esc(id)}" aria-label="更多">${I.more}</button>` });
+  }
+  function openDoulists(owner) {
+    openPage(`w-dls:${owner}`, pg => body(pg, `<div class="db-white">${doulistsOf(owner).map(d => `<div class="mline" data-act="w-doulist" data-id="${esc(d.id)}">${esc(d.name)}<span>${d.workIds.length} 部</span></div>`).join("") || `<div class="empty" style="padding:30px">还没有豆列</div>`}</div>
+      ${owner === "me" ? `<button class="load-more" data-act="w-dl-new">＋ 新建豆列</button>` : ""}`), { title: owner === "me" ? "我的豆列" : `${charNick(owner)}的豆列` });
+  }
+  async function newDoulist() {
+    const name = await inputSheet("新建豆列", { placeholder: "豆列名，比如：下雨天适合看的电影", maxlength: 30 }); if (!name) return null;
+    const intro = await inputSheet("一句话简介（可以不写）", { maxlength: 100 });
+    const d = { id: uid("dl"), scope: S.identity.id, owner: "me", name, intro: intro || "", workIds: [], createdAt: nowIso() };
+    S.doulists.push(d); saveDoulist(d); refreshAll(); return d;
+  }
+  // ── 年度报告（不花 API，按她的标记算） ──
+  function openReport() {
+    const y = new Date().getFullYear();
+    openPage("w-report", pg => {
+      const ws = myMarked().filter(w => new Date(w.my.at).getFullYear() === y);
+      const done = ws.filter(w => w.my.status === "done");
+      const cnt = k => done.filter(w => w.kind === k).length;
+      const rated = done.filter(w => w.my.stars); const avg = rated.length ? (rated.reduce((a, w) => a + w.my.stars, 0) / rated.length).toFixed(1) : "-";
+      const months = Array.from({ length: 12 }, (_, i) => done.filter(w => new Date(w.my.at).getMonth() === i).length); const mx = Math.max(1, ...months);
+      const top = [...rated].sort((a, b) => b.my.stars - a.my.stars || new Date(b.my.at) - new Date(a.my.at)).slice(0, 5);
+      const genres = {}; for (const w of done) for (const g of String(w.genre || "").split(/[\/／、,，\s]+/).filter(Boolean)) genres[g] = (genres[g] || 0) + 1;
+      const tg = Object.entries(genres).sort((a, b) => b[1] - a[1]).slice(0, 3).map(x => x[0]);
+      const withChars = activeChars().map(c => ({ c, n: charMarks(c.id).filter(m => m.status === "done" && done.some(w => w.id === m.workId)).length })).filter(x => x.n).sort((a, b) => b.n - a.n)[0];
+      body(pg, `<div class="report"><div class="rp-year">${y}</div><div class="rp-title">${esc(S.meta.nickname)} 的书影音年度报告</div>
+        <div class="rp-nums"><div><b>${cnt("movie")}</b>部电影</div><div><b>${cnt("tv")}</b>部剧集</div><div><b>${cnt("book")}</b>本书</div></div>
+        <div class="rp-card"><div class="rp-h">每个月</div><div class="rp-bars">${months.map((n, i) => `<div><i style="height:${Math.round(n / mx * 100)}%"></i><span>${i + 1}</span></div>`).join("")}</div></div>
+        <div class="rp-card"><div class="rp-h">你给出的平均分</div><div class="rp-big">${avg}<span> / 5</span></div>${tg.length ? `<div class="cell-sub">最常看的类型：${tg.map(esc).join("、")}</div>` : ""}</div>
+        ${top.length ? `<div class="rp-card"><div class="rp-h">今年最爱</div><div class="hscroll">${top.map(w => workTile(w, `<span class="wt-r">${starsHtml(w.my.stars, "xs")}</span>`)).join("")}</div></div>` : ""}
+        ${withChars ? `<div class="rp-card"><div class="rp-h">和你口味最像的人</div><div class="wfr" ${personAttrs({ type: "char", charId: withChars.c.id })}>${avatarHtml(whoOf({ type: "char", charId: withChars.c.id }))}<div class="cell-main"><b>${esc(charNick(withChars.c.id))}</b><div class="cell-sub">你们今年都看过 ${withChars.n} 部</div></div></div></div>` : ""}
+        ${!done.length ? `<div class="empty" style="padding:20px">今年还没有标记「看过 / 读过」的作品</div>` : ""}</div>`);
+    }, { title: "年度报告" });
+  }
+  /** 旧条目清理：没人标记、不在豆列、不在热门、她没上传封面的，超过 300 个从最旧的删 */
+  async function pruneWorks() {
+    const keep = new Set([...S.marks.map(m => m.workId), ...S.doulists.flatMap(d => d.workIds), ...Object.values(S.meta.hot || {}).flat()]);
+    const free = S.works.filter(w => !(w.my && w.my.status) && !w.my?.long && !keep.has(w.id) && !w.coverRef).sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
+    const over = S.works.length - 300; if (over <= 0) return;
+    const drop = new Set(free.slice(0, over)); S.works = S.works.filter(w => !drop.has(w));
+    for (const w of drop) await dbDelete(COL.works, w.id);
+  }
+
+  document.addEventListener("click", async e => {
+    const el = e.target.closest("[data-act]"); if (!el || !/^w-/.test(el.dataset.act)) return;
+    const act = el.dataset.act; const pg = topPage();
+    switch (act) {
+      case "w-kind": S.bookKind = el.dataset.v; renderTab(); return;
+      case "w-search": openWorkSearch(); return;
+      case "w-search-term": if (pg && pg.run) pg.run(el.dataset.term); return;
+      case "w-search-again": { const q = pg && $("#wsq", pg.el); if (pg && pg.run && q) pg.run(q.value, true); return; }
+      case "w-hot": genHot(el.dataset.v); return;
+      case "w-open": openWork(el.dataset.id); return;
+      case "w-unfold": if (pg && pg.unfold) pg.unfold(); return;
+      case "w-mark": { const w = workById(pg.key.split(":")[1]); if (w) markSheet(w, el.dataset.st); return; }
+      case "w-long": { const w = workById(pg.key.split(":")[1]); if (w) openLongEditor(w); return; }
+      case "w-long-save": {
+        const w = workById(el.dataset.id); const d = pg && pg.draft; if (!w || !d) return;
+        if (!d.title.trim() || !d.text.trim()) { toast("标题和正文都要写"); return; }
+        w.my = { status: "done", at: nowIso(), ...(w.my || {}), long: { title: d.title.trim(), text: d.text.trim(), stars: (w.my || {}).stars || 0, createdAt: (w.my && w.my.long && w.my.long.createdAt) || nowIso(), useful: (w.my && w.my.long && w.my.long.useful) || rand(0, 5) } };
+        saveWork(w); closePage(); toast("发布了"); return;
+      }
+      case "w-long-open": { const w = workById(pg.key.split(":")[1]); if (w) openLongReview(w, el.dataset.id); return; }
+      case "w-menu": {
+        const w = workById(el.dataset.id); if (!w) return;
+        const v = await sheet(w.title, [{ label: "加入豆列", value: "dl" }, { label: "换封面（上传图片）", value: "cover" }, ...(w.coverRef ? [{ label: "恢复默认封面", value: "uncover" }] : []), { label: "重新加载短评（1 次 API）", value: "regen" }]);
+        if (v === "dl") {
+          const mine = doulistsOf("me"); const pick = await sheet("加入哪个豆列", [...mine.map(d => ({ label: `${d.name}${d.workIds.includes(w.id) ? "（已在）" : ""}`, value: d.id })), { label: "＋ 新建豆列", value: "_new" }]);
+          const d = pick === "_new" ? await newDoulist() : S.doulists.find(x => x.id === pick);
+          if (d && !d.workIds.includes(w.id)) { d.workIds.push(w.id); saveDoulist(d); toast(`加入了「${d.name}」`); refreshAll(); }
+        }
+        if (v === "cover") { try { const [ref] = await pickImages(1, 800); if (ref) { w.coverRef = ref; saveWork(w); refreshAll(); } } catch (err) { toast("上传失败"); } }
+        if (v === "uncover") { w.coverRef = null; saveWork(w); refreshAll(); }
+        if (v === "regen") { w.reviews = []; w.longs = []; w.detailAt = null; genWorkDetail(w); }
+        return;
+      }
+      case "w-marks": openMarks(el.dataset.owner); return;
+      case "w-mine": { openMarks("me", el.dataset.v, el.dataset.st); return; }
+      case "w-marks-k": if (pg && pg.setK) pg.setK(el.dataset.v); return;
+      case "w-marks-s": if (pg && pg.setS) pg.setS(el.dataset.v); return;
+      case "w-gen-char": genCharWorks(el.dataset.id); return;
+      case "w-more-char": genCharWorks(el.dataset.id, true); return;
+      case "w-doulist": openDoulist(el.dataset.id); return;
+      case "w-doulists": openDoulists(el.dataset.v); return;
+      case "w-dl-new": await newDoulist(); return;
+      case "w-dl-menu": {
+        const d = S.doulists.find(x => x.id === el.dataset.id); if (!d || d.owner !== "me") return;
+        const v = await sheet(d.name, [{ label: "改名字和简介", value: "edit" }, ...(d.workIds.length ? [{ label: "移出作品", value: "rm" }] : []), { label: "删除豆列", value: "del", danger: true }]);
+        if (v === "edit") { const n = await inputSheet("豆列名", { value: d.name, maxlength: 30 }); if (n) d.name = n; const i = await inputSheet("简介", { value: d.intro, maxlength: 100 }); if (i != null) d.intro = i; saveDoulist(d); refreshAll(); }
+        if (v === "rm") { const id = await sheet("移出哪部", d.workIds.map(workById).filter(Boolean).map(w => ({ label: w.title, value: w.id }))); if (id) { d.workIds = d.workIds.filter(x => x !== id); saveDoulist(d); refreshAll(); } }
+        if (v === "del") { if (await sheet(`删除豆列「${d.name}」？`, [{ label: "删除", value: "yes", danger: true }]) === "yes") { S.doulists = S.doulists.filter(x => x !== d); dbDelete(COL.doulists, d.id); closePage(); refreshAll(); } }
+        return;
+      }
+      case "w-report": openReport(); return;
+      case "w-close": { const id = el.dataset.id; S.meta.close = { ...(S.meta.close || {}), [id]: !isClose(id) }; saveMeta(); refreshAll(); return; }
+    }
+  });
+
   // ───────────────────────── 启动 ─────────────────────────
   async function boot() {
     document.body.insertAdjacentHTML("afterbegin", `<header class="topbar" id="topbar"></header><main class="view" id="view"><div class="gen-tip"><span class="spinner"></span>加载中…</div></main><nav class="tabbar" id="tabbar"></nav>`);
     if (!api) { $("#view").innerHTML = `<div class="empty">请在小手机里打开这个 APP</div>`; return; }
-    try { await loadAll(); pruneTopics().catch(e => console.warn(e)); } catch (e) { console.error(e); $("#view").innerHTML = `<div class="empty">加载失败：${esc(e.message || e)}</div>`; return; }
+    try { await loadAll(); pruneTopics().catch(e => console.warn(e)); pruneWorks().catch(e => console.warn(e)); } catch (e) { console.error(e); $("#view").innerHTML = `<div class="empty">加载失败：${esc(e.message || e)}</div>`; return; }
     renderTab();
+    runFollowMarks().catch(e => console.warn(e));
+    document.addEventListener("visibilitychange", () => { if (!document.hidden) runFollowMarks().catch(e => console.warn(e)); });
   }
   boot();
 })();

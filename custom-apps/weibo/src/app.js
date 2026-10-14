@@ -1586,8 +1586,9 @@
       const vision = await dmVisionMsgs(pending, me.name);
       text = await generate({ characterId: pc.id, appTags: ["nox_weibo", "dm"], instruction, ...(vision ? { appMessages: vision } : {}) }, `${pc.name}私信`);
     } else {
+      await seeForNpc(pending);
       const prompt = [`你是微博用户「${th.peer.name}」。给你发私信的是博主「${charNickname(me.id)}」${isPublic(me.id) ? "（公众人物，你是 TA 的粉丝或路人）" : ""}。`,
-        history ? `你们的私信记录：\n${history}` : "", `「${charNickname(me.id)}」刚刚${pending.length > 1 ? "连着" : ""}私信你：${pendText}`,
+        history ? `你们的私信记录：\n${history}` : "", `「${charNickname(me.id)}」刚刚${pending.length > 1 ? "连着" : ""}私信你：${pending.map(m => `「${dmText(m)}」`).join("")}`,
         `「来自」写 ${th.peer.name}，「角色」写 无。`, DM_FMT, DM_EXTRA].filter(Boolean).join("\n\n");
       const job = uid("job"); S.jobs.add(job);
       try { const r = await api.ai.chat({ system: NPC_DM_SYSTEM.replace("绝对不能以用户本人的身份说话。", `绝对不能以「${charNickname(me.id)}」的身份说话。`), prompt, timeoutMs: 90000 }); text = (r && r.text) || ""; logAi({ label: "路人私信", ok: true, text }); }
@@ -1695,7 +1696,7 @@
       caltLine(cast, { post }),
       reservedLine(),
     ].filter(Boolean).join("\n\n");
-    const text = await generate({ characterIds: cast.map(c => c.id), appTags: ["nox_weibo", "comments"], instruction }, "加载评论");
+    const text = await generate(withVision({ characterIds: cast.map(c => c.id), appTags: ["nox_weibo", "comments"], instruction }, await postVision(post)), "加载评论");
     post._genComments = false;
     if (text != null) {
       let list = dropCharAtUser(fixAltAuthors(commentsFromBlocks(parseComments(text), post, {}), { post }), post);
@@ -1865,7 +1866,7 @@
       fanPick.length ? `用户的粉丝刷到了这条：\n${fanPick.map(n => `- ${npcCard(n)}`).join("\n")}\n符合 TA 的人设和兴趣就来评论（「作者」一字不差、「角色」写 无，算在路人评论里），不感兴趣也可以不来。` : "",
       reservedLine(),
     ].filter(Boolean).join("\n\n");
-    const text = await generate({ characterIds: castIds, appTags: ["nox_weibo", "reaction"], instruction }, "获取互动");
+    const text = await generate(withVision({ characterIds: castIds, appTags: ["nox_weibo", "reaction"], instruction }, await postVision(post)), "获取互动");
     post._genComments = false; rerenderDetail(post);
     if (text == null) { post.reacted = false; savePost(post); return; }
     const list = fixAltAuthors(commentsFromBlocks(parseComments(text), post, {}), { post }).filter(c => !alt || !(c.charId || c.altOf) || cast.some(x => x.id === (c.charId || c.altOf)));
@@ -1958,7 +1959,7 @@
       `你的微博昵称：${ca ? ca.nick : charNickname(charId)}。回复${knows ? "用户" : "这个网友"}时「回复」字段填 ${uCode}。${knows && !ca ? "" : "不要私信。"}`,
       reservedLine(),
     ].filter(Boolean).join("\n\n");
-    const text = await generate({ characterId: charId, appTags: ["nox_weibo", "reply"], instruction }, `${ca && !altSeen(charId) ? "路人" : ch.name}回复`);
+    const text = await generate(withVision({ characterId: charId, appTags: ["nox_weibo", "reply"], instruction }, await postVision(post)), `${ca && !altSeen(charId) ? "路人" : ch.name}回复`);
     if (text == null) return;
     // 等回复的时候用户把评论删了：这轮回复整个作废
     const alive = () => { const p = S.posts.find(x => x.id === post.id); return p && p.comments.some(c => c.id === userComment.id); };
@@ -2073,7 +2074,7 @@
       caltLine(cast, { post }),
       reservedLine(),
     ].filter(Boolean).join("\n\n");
-    const text = await generate({ characterIds: cast.map(c => c.id), appTags: ["nox_weibo", "comments"], instruction }, "加载评论");
+    const text = await generate(withVision({ characterIds: cast.map(c => c.id), appTags: ["nox_weibo", "comments"], instruction }, await postVision(post)), "加载评论");
     post._genComments = false;
     if (text != null) {
       const list = dropCharAtUser(fixAltAuthors(commentsFromBlocks(parseComments(text), post, {}), { post }), post).filter(c => !altPost || !(c.charId || c.altOf) || others.some(x => x.id === (c.charId || c.altOf)));
@@ -2766,7 +2767,7 @@
   /** 一条私信给 AI 看的样子：图片写成 [图片：描述]，引用写在后面 */
   function dmText(m) {
     const img = (m.images || [])[0];
-    const body = img ? `[${img.ref ? `照片（见附图）${img.desc ? `，配的话：${img.desc}` : ""}` : `图片：${img.desc || "看不到内容"}`}]${m.text && m.text !== "[图片]" ? m.text : ""}` : m.text;
+    const body = img ? `[${img.ref ? `照片：${img.seen || "见附图"}${img.desc ? `，配的话：${img.desc}` : ""}` : `图片：${img.desc || "看不到内容"}`}]${m.text && m.text !== "[图片]" ? m.text : ""}` : m.text;
     return m.quote ? `${body}（引用了「${String(m.quote.text || "").slice(0, 40)}」）` : body;
   }
   /** 私信里的真图直接给 AI 看（宿主 appMessages 视觉通道：每次最多 4 张、每张 ≤2MB；模型没开识图会自动降级成 [图片]） */
@@ -2780,6 +2781,36 @@
       out.push({ role: "user", content: `（微博私信里${who}发来的图片${img.desc ? `，配的话：${img.desc}` : ""}）`, image: url });
     }
     return out.length ? out : null;
+  }
+  /** 她发的微博（含用他的号发的）里自己传的照片：生成评论、互动时一起给 AI 看（最多 4 张） */
+  async function postVision(post) {
+    if (!post || !(post.authorType === "user" || post.ghost)) return null;
+    const imgs = (post.images || []).filter(i => i.ref).slice(0, 4); if (!imgs.length) return null;
+    const out = [];
+    for (const [k, img] of imgs.entries()) {
+      let url = await mediaUrl(img.ref); if (!url) continue;
+      if (url.length > 1900000) url = await compressImage(url, 1024);
+      out.push({ role: "user", content: `（这条微博的第 ${k + 1} 张配图${imgs.length > 1 ? `，共 ${imgs.length} 张` : ""}：评论的人都看得到，按图里真实的内容来评，别瞎编图里没有的东西）`, image: url });
+    }
+    return out.length ? out : null;
+  }
+  const withVision = (payload, v) => (v ? { ...payload, appMessages: v } : payload);
+  /**
+   * 路人私信走 ai.chat，只能传文字：她发给路人的照片先借一个角色的视觉通道客观看一遍，存成 img.seen，再给路人。每张只看一次
+   */
+  async function seeForNpc(msgs) {
+    const ch = activeChars()[0]; if (!ch) return;
+    for (const m of msgs) for (const img of m.images || []) {
+      if (!img.ref || img.seen) continue;
+      let url = await mediaUrl(img.ref); if (!url) continue;
+      if (url.length > 1900000) url = await compressImage(url, 1024);
+      try {
+        const r = await api.ai.generate({ characterId: ch.id, appTags: ["nox_weibo", "vision"], instruction: "这一轮不扮演任何人，只做一件事：用一两句话客观描述上面这张图片里有什么（人物穿着、物品、场景、文字、氛围），不评价、不加戏、不要任何格式，直接输出描述。", appMessages: [{ role: "user", content: "（要描述的图片）", image: url }] });
+        const t = String((r && r.text) || "").replace(/^[\s"「]+|[\s"」]+$/g, "").slice(0, 200);
+        logAi({ label: "看图", ok: true, text: t });
+        if (t) img.seen = t;
+      } catch (e) { logAi({ label: "看图", ok: false, error: String((e && e.message) || e) }); }
+    }
   }
   /** AI 回的私信块 → 消息（引用找原话，图片存描述） */
   function dmFromBlock(b, th) {
@@ -3128,6 +3159,7 @@
     const recentMine = S.posts.filter(p => p.authorType === "user" && acctOf(p) === acctOf(th) && p.visibility !== "self").sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)).slice(0, 2)
       .map(p => `- ${fmtTime(p.createdAt)}：${(p.text || "（图片）").slice(0, 60)}`).join("\n");
     th._typing = true; refreshMsgViews();
+    if (!pc) await seeForNpc(pending);
     let text = null;
     if (pc) {
       const ch = charById(pc);
@@ -3159,7 +3191,7 @@
         !altDm && isFollowingNpc(th.peer.name) && !isFanNpc(th.peer.name) ? "用户关注了你，你还没有回关。按你的人设决定要不要回关：如果这次聊天里你决定回关（被说动了、聊得投缘），在私信后面多写：\n===互动===\n回关：是\n===结束===\n不回关就不写。" : "",
         `用户的微博昵称：${S.me.nickname}，性别：${S.identity.gender || "未知（用 ta 称呼）"}`,
         history ? `你们的私信记录：\n${history}` : "",
-        lastIsMine ? `用户刚刚${pending.length > 1 ? "连着" : ""}私信你：${pendText}` : "用户还没有回你：你接着刚才的话往下说，不要重复说过的话。",
+        lastIsMine ? `用户刚刚${pending.length > 1 ? "连着" : ""}私信你：${pending.map(m => `「${dmText(m)}」`).join("")}` : "用户还没有回你：你接着刚才的话往下说，不要重复说过的话。",
         `「来自」写 ${th.peer.name}，「角色」写 无。`,
         DM_FMT, DM_EXTRA,
       ].filter(Boolean).join("\n\n");

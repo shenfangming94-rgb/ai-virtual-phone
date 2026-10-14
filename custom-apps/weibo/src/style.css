@@ -560,3 +560,24 @@ img { display: block; }
 .alt-tag.as-tag { background: #e8f2ff; color: #2f80ed; }
 .as-banner { margin: 0; text-align: center; color: #2f80ed; background: #eef5ff; }
 .dm-bubble.invite.login i { background: linear-gradient(135deg, #4fb3ff, #2f80ed); }
+
+/* char 关注 / 粉丝列表的标签 */
+.follow-tag { flex: none; font-size: 11.5px; color: var(--wb-text-3); border: 1px solid var(--wb-line); border-radius: 10px; padding: 1px 7px; }
+.follow-tag.me { color: var(--wb-orange); border-color: currentColor; }
+
+/* 表情包库 / 选表情包 */
+.sticker-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; padding: 10px 16px 14px; max-height: 50vh; overflow-y: auto; }
+.sticker-grid.lib { max-height: none; background: var(--wb-card); }
+.sticker-grid button { display: flex; flex-direction: column; align-items: center; gap: 4px; border: 0; background: transparent; color: var(--wb-text-2); font-size: 11.5px; cursor: pointer; min-width: 0; }
+.sticker-grid img { width: 64px; height: 64px; object-fit: contain; border-radius: 8px; background: var(--wb-bg); }
+.sticker-grid span { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sticker-grid .compose-add { width: 64px; height: 64px; justify-self: center; justify-content: center; border-radius: 8px; background: var(--wb-bg); color: var(--wb-text-3); font-size: 28px; font-weight: 300; }
+/* 评论里的附件 */
+.att-sticker img { display: block; width: 72px; height: 72px; object-fit: contain; margin: 6px 0 2px; }
+.att-pic { position: relative; width: 110px; margin: 6px 0 2px; border-radius: 8px; overflow: hidden; line-height: 0; cursor: pointer; }
+.att-pic img { width: 100%; height: 110px; object-fit: cover; display: block; }
+.att-pic span { position: absolute; left: 0; right: 0; bottom: 0; padding: 10px 6px 4px; background: linear-gradient(transparent, rgba(0, 0, 0, .6)); color: #fff; font-size: 11px; line-height: 1.35; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.sub-line .att-sticker img { width: 56px; height: 56px; }
+.sub-line .att-pic { width: 84px; }
+.sub-line .att-pic img { height: 84px; }
+.dm-sticker img { display: block; width: 110px; height: 110px; object-fit: contain; }

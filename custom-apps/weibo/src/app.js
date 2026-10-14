@@ -928,6 +928,18 @@
     return c.mode === "none" ? null : c.mode === "custom" ? (c.q ? c : null) : myCity();
   }
   const cityLabel = c => c ? (c.name ? `${c.q}（微博里叫 ${c.name}）` : c.q) : "";
+  /**
+   * char 主页的 IP 属地：她手动改过的优先；否则跟着他的城市走（同城 → 她资料里的 IP，没填就用她天气里「微博里叫」的名字；
+   * 别的城市 → 那个城市「微博里叫」的名字）；「不设置」或什么都没有才用 AI 写的
+   */
+  function charIp(charId) {
+    const acc = S.accounts[charId] || {};
+    if (acc.ipManual) return acc.ip || "";
+    const cfg = charCityCfg(charId);
+    const auto = cfg.mode === "same" ? (S.meta.ip || (myCity() && (myCity().name || myCity().q)) || "")
+      : cfg.mode === "custom" && cityOf(charId) ? (cityOf(charId).name || cityOf(charId).q) : "";
+    return auto || acc.ip || "";
+  }
   async function weatherLine(charIds) {
     const people = [["用户那边", myCity()], ...charIds.map(id => [charById(id)?.name, cityOf(id)]).filter(x => x[0])];
     const lines = await Promise.all(people.map(async ([who, c]) => {
@@ -2142,7 +2154,7 @@
           nickname: (acc && acc.nickname) || (pb["昵称"] || ch.name).replace(/^@/, ""),
           bio: (acc && acc.bio) || (none(pb["简介"]) ? "" : pb["简介"]), verified: pb["认证"] || "无", verifiedNote: none(pb["认证说明"]) ? "" : pb["认证说明"],
           // IP 一旦有了就不再被 AI 改（加载更早的微博时 AI 有时又写一遍主页）；跟她同城又填了 IP 的，第一次就用她的
-          vip: yes(pb["会员"]), ip: (acc && acc.ip) || (charCityCfg(charId).mode === "same" && S.meta.ip ? S.meta.ip : none(pb["IP属地"]) ? "" : pb["IP属地"]),
+          vip: yes(pb["会员"]), ip: (acc && acc.ip) || (none(pb["IP属地"]) ? "" : pb["IP属地"]), // AI 写的只当兜底，显示走 charIp()
           followers: clampInt(pb["粉丝"], rand(80, 3000)), following: clampInt(pb["关注"], rand(30, 400)),
         });
       }
@@ -3654,7 +3666,7 @@
         realName: `${acc.gender === "女" ? "她" : acc.gender === "男" ? "他" : "TA"}是${charById(charId)?.name || ""}`,
         cover: gradientFor(charId + "cover"), coverRef: acc.coverRef, bio: acc.bio,
         bioExtra: (acc.bioLog || []).length ? ` <span class="link" data-act="bio-log" data-char="${esc(charId)}">${acc.bioAt && Date.now() - new Date(acc.bioAt) < 86400e3 ? "刚改过" : "改过"} ›</span>` : "",
-        coverAction: `<button class="cover-btn" data-act="char-cover" data-char="${esc(charId)}">${I.camera}换背景</button>${isAs() && asId() === charId ? "" : `<button class="cover-btn cover-more" data-act="char-more" data-char="${esc(charId)}" aria-label="更多">···</button>`}`, ip: acc.ip, verifiedNote: acc.verifiedNote, posts: Math.max(posts.length, acc.postCount || 0),
+        coverAction: `<button class="cover-btn" data-act="char-cover" data-char="${esc(charId)}">${I.camera}换背景</button>${isAs() && asId() === charId ? "" : `<button class="cover-btn cover-more" data-act="char-more" data-char="${esc(charId)}" aria-label="更多">···</button>`}`, ip: charIp(charId), verifiedNote: acc.verifiedNote, posts: Math.max(posts.length, acc.postCount || 0),
         following: acc.following || 0, followers: acc.followers || 0,
         actions: `<button class="follow-btn ${isStarred(charId) ? "star-on" : "on"}" style="height:32px;padding:0 12px;font-size:14px" data-act="toggle-star" data-char="${esc(charId)}">${isStarred(charId) ? "★ 特别关注" : "☆ 特别关注"}</button>
           <button class="follow-btn on" style="height:32px;padding:0 12px;font-size:14px" data-act="open-dm" data-char="${esc(charId)}">私信</button>
@@ -4159,7 +4171,7 @@
         <div class="cs-row"><div class="cs-t">身份</div>${seg("set-public", [["0", "普通人"], ["1", "公众人物"]], isPublic(charId) ? "1" : "0")}<div class="cs-s">公众人物才会上热搜、有粉丝控评</div></div>
         <div class="cs-row cs-flex" data-act="char-alt" data-char="${esc(charId)}"><div><div class="cs-t">微博小号</div><div class="cs-s">${esc(altSub)}</div></div><span class="set-chev">›</span></div>
         <div class="cs-row"><div class="cs-t">所在城市</div>${seg("set-city", [["same", "跟我同城"], ["custom", "别的城市"], ["none", "不设置"]], charCityCfg(charId).mode)}<div class="cs-s">${(m => m === "none" ? "他的博不带天气，AI 也不会给他编温度" : m === "custom" ? (cityOf(charId) ? `${esc(cityLabel(cityOf(charId)))} · <button class="link" data-act="set-city" data-char="${esc(charId)}" data-v="custom">改</button>` : "还没填城市") : myCity() ? `跟你一样：${esc(cityLabel(myCity()))}` : "你还没填所在城市（编辑资料里填）")(charCityCfg(charId).mode)}</div></div>
-        <div class="cs-row cs-flex" data-act="set-char-ip" data-char="${esc(charId)}"><div><div class="cs-t">IP属地</div><div class="cs-s">${esc((S.accounts[charId] || {}).ip || "还没有（打开他主页时生成）")}</div></div><span class="set-chev">改 ›</span></div>
+        <div class="cs-row cs-flex" data-act="set-char-ip" data-char="${esc(charId)}"><div><div class="cs-t">IP属地</div><div class="cs-s">${esc(charIp(charId) || "还没有（打开他主页时生成）")}${(S.accounts[charId] || {}).ipManual ? " · 你改过" : " · 跟着城市走"}</div></div><span class="set-chev">改 ›</span></div>
         <div class="cs-row"><div class="cs-t">恋情状态</div>${seg("set-love", Object.entries(LOVE_LABEL), love)}<div class="cs-s">${love === "open" && loveFresh(charId) ? "刚官宣，前三天评论区沸腾，之后慢慢变成「公开很久了」" : LOVE_NOTE[love]}</div></div>
         ${love !== "none" ? `<div class="cs-row cs-flex"><div><div class="cs-t">刷新时单独写他的博</div><div class="cs-s">他出场的那次刷新多用 1 次 API，人设和聊天记录更完整，更像他本人</div></div><button class="switch ${loverSolo(charId) ? "on" : ""}" data-act="toggle-solo" data-char="${esc(charId)}"><span></span></button></div>` : ""}
         ${love === "secret" ? (pg.busy ? `<div class="gen-tip"><span class="spinner"></span>他正在写官宣微博…</div>` : `<button class="cs-btn" data-act="love-announce" data-char="${esc(charId)}">📢 让他发官宣微博（会用 1～2 次 API）</button>`) : ""}
@@ -4355,8 +4367,8 @@
       case "open-visits": openVisits(); return;
       case "open-album": openAlbum(); return;
       case "set-char-ip": {
-        const id = el.dataset.char; const v = await inputSheet("他主页显示的 IP 属地", { value: (S.accounts[id] || {}).ip || "", placeholder: "比如 平南", maxlength: 12 });
-        if (v == null) return; ensureAccount(id, { ip: v }); saveAccount(id); refreshAll(); toast("改好了"); return;
+        const id = el.dataset.char; const v = await inputSheet("他主页显示的 IP 属地（清空就恢复跟着城市走）", { value: charIp(id), placeholder: "比如 平南", maxlength: 12 });
+        if (v == null) return; ensureAccount(id, v ? { ip: v, ipManual: true } : { ipManual: false }); refreshAll(); toast(v ? "改好了" : "恢复成跟着城市走"); return;
       }
       case "as-more-dms": if (isAs()) seedHisDms(asId(), true); return;
       case "as-list-soon": toast("他的关注/粉丝列表在灵感本里排着队，做好就能点开"); return;

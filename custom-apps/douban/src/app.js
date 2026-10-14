@@ -220,7 +220,7 @@
     } finally { S.jobs.delete(job); refreshAll(); }
   }
   /** ===块=== 解析：字段「名：值」，值可以多行（接到上一个字段） */
-  const KEYS = ["组长", "成员称呼", "分区", "发言规则", "配图", "精华", "名称", "成员", "简介", "标题", "作者", "角色", "匿名", "时间", "回应数", "正文", "楼主", "赞", "引用", "内容", "层"];
+  const KEYS = ["IP", "组长", "成员称呼", "分区", "发言规则", "配图", "精华", "名称", "成员", "简介", "标题", "作者", "角色", "匿名", "时间", "回应数", "正文", "楼主", "赞", "引用", "内容", "层"];
   function parseBlocks(raw, kind) {
     const text = String(raw || "").replace(/```[a-z]*\n?/g, "").replace(/\r/g, "");
     const out = []; let label = null;
@@ -314,7 +314,7 @@
       (g.sections || []).length ? `组里的分区：${g.sections.join("、")}。每个帖子归到一个分区（闲聊的可以不归，写 无）。` : "",
       "大约四分之一的帖子带图（晒东西、现场、截图这类才带），写在「配图」里；最多 1 个帖子是组长加精的（内容特别好、特别有用的才加，没有就都写 否）。",
       needInfo ? `先补全这个小组的信息（只写一次）：\n===小组信息===\n组长：组长的豆瓣昵称${g.mine && g.admin ? "（组长是用户本人，这行写 无）" : ""}\n成员称呼：这个组对成员的叫法（像「小不知道」「组员」「病友」，很多组就叫「成员」）\n发言规则：一两条组规（没有写 无）\n分区：3～4 个讨论分区的名字，用、分隔\n===结束===` : "",
-      "每个帖子：\n===帖子===\n标题：帖子标题（不用自己加分区前缀）\n作者：豆友昵称（匿名发的写 匿名）\n角色：角色本名（路人写 无）\n匿名：是 / 否\n分区：分区名（没有写 无）\n时间：发帖时间（如 3小时前、昨天 21:30、2天前）\n回应数：目前有多少条回应（纯数字）\n配图：图片描述，多张用 | 分隔（不带图写 无）\n精华：是 / 否\n正文：\n楼主的首帖正文\n===结束===",
+      "每个帖子：\n===帖子===\n标题：帖子标题（不用自己加分区前缀）\n作者：豆友昵称（匿名发的写 匿名）\n角色：角色本名（路人写 无）\n匿名：是 / 否\n分区：分区名（没有写 无）\n时间：发帖时间（如 3小时前、昨天 21:30、2天前）\nIP：这个人的 IP 属地（省份或城市，按他在哪写；同校同城的组大多一样）\n回应数：目前有多少条回应（纯数字）\n配图：图片描述，多张用 | 分隔（不带图写 无）\n精华：是 / 否\n正文：\n楼主的首帖正文\n===结束===",
     ].filter(Boolean).join("\n\n"), `「${g.name}」的帖子`);
     g._busy = false;
     if (text == null) { refreshAll(); return; }
@@ -329,7 +329,7 @@
       const sec = String(b["分区"] || "").trim(); const replyCount = clampInt(b["回应数"], rand(3, 80));
       const isElite = yes(b["精华"]) && elite < 1; if (isElite) elite++;
       const t = { id: uid("t"), scope: S.identity.id, groupId: g.id, title: title.replace(/^[^|｜]{1,8}\s*[|｜]\s*/, ""), author, body, createdAt, lastReplyAt: createdAt, replyCount, floors: [], liked: false,
-        section: !none(sec) && (g.sections || []).includes(sec) ? sec : "", elite: isElite || undefined,
+        section: !none(sec) && (g.sections || []).includes(sec) ? sec : "", elite: isElite || undefined, ip: none(b["IP"]) ? "" : String(b["IP"]).trim().slice(0, 8),
         images: none(b["配图"]) ? [] : String(b["配图"]).split(/[|｜]/).map(x => x.trim()).filter(Boolean).slice(0, 4).map(desc => ({ desc })),
         likes: Math.round(replyCount * (0.2 + Math.random() * 0.8)), favs: Math.round(replyCount * Math.random() * 0.4), reposts: Math.round(replyCount * Math.random() * 0.15) };
       S.topics.push(t); saveTopic(t); n++;
@@ -375,7 +375,7 @@
       passer ? `${passer.name} 刷到了这个帖子，可能会顺手回一层（按人设决定实名还是匿名，不来也行）。` : "",
       bgLine(cast),
       `从 ${next} 楼开始，往下写 ${n} 层回应。${t.floors.length ? "接着已有的话题自然往下聊，楼主可以更新进展或下场回复。" : "楼主可以下场回复几层。"}`,
-      `每层：\n===楼===\n层：楼层号\n作者：豆友昵称（楼主就写楼主${t.author.anon ? "；匿名的写 匿名" : ""}）\n角色：角色本名（路人写 无）\n匿名：是 / 否\n楼主：是 / 否\n引用：引用了第几楼（没引用写 无）\n赞：点赞数（纯数字）\n内容：\n这层的内容\n===结束===`,
+      `每层：\n===楼===\n层：楼层号\n作者：豆友昵称（楼主就写楼主${t.author.anon ? "；匿名的写 匿名" : ""}）\n角色：角色本名（路人写 无）\n匿名：是 / 否\n楼主：是 / 否\n引用：引用了第几楼（没引用写 无）\nIP：这个人的 IP 属地（省份或城市；楼主的和帖子一致）\n赞：点赞数（纯数字）\n内容：\n这层的内容\n===结束===`,
     ].filter(Boolean).join("\n\n"), `《${t.title.slice(0, 12)}》的回应`);
     t._busy = false;
     if (text == null) { refreshAll(); return; }
@@ -395,7 +395,8 @@
       at = mine ? Date.now() - (n - made) * rand(20, 90) * 1000 : at + Math.random() * span / n;
       const fn = num++; if (aiN) aiMap[aiN] = fn;
       const q = q0 >= next ? aiMap[q0] || 0 : q0; // 本批的楼按实际楼层号换算；只能引用前面已有的楼，不能引用自己
-      const f = { n: fn, author, text: txt, likes: clampInt(b["赞"], rand(0, 20)), quote: q > 0 && q < fn ? q : null, createdAt: new Date(Math.min(Date.now(), at)).toISOString() };
+      const fip = claimsOp ? t.ip : none(b["IP"]) ? "" : String(b["IP"]).trim().slice(0, 8);
+      const f = { n: fn, author, ip: fip || undefined, text: txt, likes: clampInt(b["赞"], rand(0, 20)), quote: q > 0 && q < fn ? q : null, createdAt: new Date(Math.min(Date.now(), at)).toISOString() };
       t.floors.push(f); made++;
       if (author.type === "char" && mine && !mine.author.anon) remember(author.charId, `${herName()}在豆瓣小组「${g.name}」的帖子《${t.title}》里回复：「${mine.text.slice(0, 60)}」，我回：「${txt.slice(0, 60)}」`, `douban_floor_${t.id}_${f.n}`);
       else if (author.type === "char" && !sameAuthor(author, t.author)) remember(author.charId, `我在豆瓣小组「${g.name}」的帖子《${t.title}》里${author.anon ? "匿名" : ""}回了一层：「${txt.slice(0, 60)}」`, `douban_floor_${t.id}_${f.n}`);
@@ -630,14 +631,14 @@
       const n = Math.max(t.replyCount, t.floors.length);
       const follow = t.author.type === "user" || t.author.anon ? "" : `<button class="follow-mini ${isFollowing(t.author) ? "on" : ""}" data-act="follow-author">${isFollowing(t.author) ? "已关注" : "＋关注"}</button>`;
       body(pg, `<div class="post-head"><div class="post-author">${avatarHtml(w)}<div class="cell-main"><div class="pa-name">${esc(w.name)}${roleTags(t, t.author).replace('<span class="role-tag op">楼主</span>', "")}</div>
-            <div class="post-from">${fmtTime(t.createdAt)} · 来自 <span class="grp" data-act="open-group" data-id="${esc(t.groupId)}">${esc(g.name)}</span></div></div>${follow}</div>
+            <div class="post-from">${fmtTime(t.createdAt)}${ipOf(t.author, t.ip) ? ` · ${esc(ipOf(t.author, t.ip))}` : ""}</div></div>${follow}</div>
           <h1>${t.section ? `${esc(t.section)}<span class="sep">|</span>` : ""}${esc(t.title)}${t.elite ? '<span class="elite after">精</span>' : ""}</h1></div>
         <div class="post-body">${esc(t.body)}</div>
         ${(t.images || []).length ? `<div class="post-pics">${t.images.map((im, k) => `<div class="post-pic" data-act="topic-pic" data-idx="${k}">${im.ref ? `<img data-ref="${esc(im.ref)}" alt="">` : placeholderImg()}${!im.ref && im.desc ? `<span>${esc(im.desc)}</span>` : ""}</div>`).join("")}</div>` : ""}
         <div class="post-stats"><span class="on">回复 ${fmtNum(n)}</span><span>赞 ${fmtNum(t.likes || 0)}</span><span>转发 ${fmtNum(t.reposts || 0)}</span><span>收藏 ${fmtNum(t.favs || 0)}</span></div>
         <div class="list-head">全部回复<button class="op-filter ${onlyOp ? "on" : ""}" data-act="only-op">楼主</button></div>
         ${floors.map(f => { const fw = whoOf(f.author); const q = f.quote ? t.floors.find(x => x.n === f.quote) : null;
-          return `<div class="floor" data-act="floor" data-n="${f.n}">${avatarHtml(fw)}<div class="cell-main"><div class="floor-top"><span class="nm">${esc(fw.name)}</span>${roleTags(t, f.author)}<span class="fl-t">${fmtTime(f.createdAt)} · ${f.n}楼</span>
+          return `<div class="floor" data-act="floor" data-n="${f.n}">${avatarHtml(fw)}<div class="cell-main"><div class="floor-top"><span class="nm">${esc(fw.name)}</span>${roleTags(t, f.author)}<span class="fl-t">${fmtTime(f.createdAt)}${ipOf(f.author, f.ip) ? ` · ${esc(ipOf(f.author, f.ip))}` : ""} · ${f.n}楼</span>
               <button class="fl-like ${f.liked ? "on" : ""}" data-act="floor-like" data-n="${f.n}">${f.likes ? fmtNum(f.likes) : ""}${f.liked ? I.liked : I.like}</button></div>
             ${q ? `<div class="floor-quote">${esc(whoOf(q.author).name)}：${esc(q.text)}</div>` : f.quote === 1 ? `<div class="floor-quote">${esc(w.name)}：${esc(t.body.slice(0, 80))}</div>` : ""}
             <div class="floor-text">${esc(f.text)}</div></div></div>`; }).join("")}
@@ -669,6 +670,13 @@
       genFloors(t, f);
     });
     if (!t0.floors.length) genFloors(t0);
+  }
+  /** IP 属地：AI 写的优先；她自己用资料里填的；老数据按名字固定分一个省 */
+  const PROVS = ["北京", "上海", "广东", "浙江", "江苏", "四川", "湖北", "湖南", "山东", "河南", "福建", "陕西", "重庆", "天津", "安徽", "辽宁"];
+  function ipOf(a, ip) {
+    if (a.type === "user") return S.meta.ip || "";
+    if (ip) return ip;
+    return PROVS[hashHue(a.type === "char" ? a.charId : a.name) % PROVS.length];
   }
   const followKey = a => a.type === "char" ? `c:${a.charId}` : `n:${a.name}`;
   const isFollowing = a => !a.anon && (S.meta.follows || []).includes(followKey(a));

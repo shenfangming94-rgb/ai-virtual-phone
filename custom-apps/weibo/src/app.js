@@ -138,6 +138,8 @@
   const knowsAlt = charId => !!S.alt && (S.alt.knownBy || []).includes(charId);
   const LK = () => (isAlt() ? "likedAlt" : isAs() ? `liked_${asId()}` : "liked");
   const LKAT = () => (isAlt() ? "likedAtAlt" : isAs() ? `likedAt_${asId()}` : "likedAt");
+  /** 当前账号赞过没有：登着他的号时，他本人赞过的（likedBy）也算 */
+  const likedNow = p => !!p[LK()] || (isAs() && (p.likedBy || []).includes(asId()));
   /** 超话里的加入 / 经验 / 签到按账号分开 */
   const su = sp => (isAlt() ? (sp.alt || (sp.alt = {})) : sp);
   /** 小号相关的一句话：写进 prompt，告诉 AI 谁知道、谁不知道 */
@@ -1623,7 +1625,7 @@
     $("#topbar").innerHTML = `<div class="topbar-inner"><span class="top-title">我</span><button class="acct-switch" data-act="switch-acct">切换账号</button></div>`;
     $("#view").innerHTML = `<div class="me-head" ${profileAttrs(a)}>${avatarHtml(a)}<div class="cell-main">
         <div class="profile-name ${a.vip ? "vip" : ""}">${esc(a.name)}${a.vip ? I.crown : ""}</div>
-        <div class="me-bio"><span class="alt-tag as-tag" style="margin:0 4px 0 0">🔑 登着${esc(ch.name)}的号</span>${esc(acc.bio || "暂无简介")}</div></div><span class="me-home-link">${esc(he)}的主页 ›</span></div>
+        <div class="me-bio">简介：${esc(acc.bio || "暂无简介")}</div></div><span class="me-home-link">${esc(he)}的主页 ›</span></div>
       <div class="me-stats">
         <button ${profileAttrs(a)}><b>${fmtNum(Math.max(posts.length, acc.postCount || 0))}</b>微博</button>
         <button data-act="as-list-soon"><b>${fmtNum(acc.following || 0)}</b>关注</button>
@@ -2136,7 +2138,8 @@
         ensureAccount(charId, {
           nickname: (acc && acc.nickname) || (pb["昵称"] || ch.name).replace(/^@/, ""),
           bio: (acc && acc.bio) || (none(pb["简介"]) ? "" : pb["简介"]), verified: pb["认证"] || "无", verifiedNote: none(pb["认证说明"]) ? "" : pb["认证说明"],
-          vip: yes(pb["会员"]), ip: none(pb["IP属地"]) ? "" : pb["IP属地"],
+          // IP 一旦有了就不再被 AI 改（加载更早的微博时 AI 有时又写一遍主页）；跟她同城又填了 IP 的，第一次就用她的
+          vip: yes(pb["会员"]), ip: (acc && acc.ip) || (charCityCfg(charId).mode === "same" && S.meta.ip ? S.meta.ip : none(pb["IP属地"]) ? "" : pb["IP属地"]),
           followers: clampInt(pb["粉丝"], rand(80, 3000)), following: clampInt(pb["关注"], rand(30, 400)),
         });
       }
@@ -2189,7 +2192,7 @@
       <div class="actions">
         <button class="act" data-act="repost" data-post="${esc(p.id)}">${I.repost}<span>${p.counts.reposts ? fmtNum(p.counts.reposts) : "转发"}</span></button>
         <button class="act" data-act="${opts.full ? "focus-reply" : "open-detail"}" data-post="${esc(p.id)}">${I.comment}<span>${p.counts.comments ? fmtNum(p.counts.comments) : "评论"}</span></button>
-        <button class="act ${p[LK()] ? "liked" : ""}" data-act="like" data-post="${esc(p.id)}">${p[LK()] ? I.liked : I.like}<span>${p.counts.likes ? fmtNum(p.counts.likes) : "赞"}</span></button>
+        <button class="act ${likedNow(p) ? "liked" : ""}" data-act="like" data-post="${esc(p.id)}">${likedNow(p) ? I.liked : I.like}<span>${p.counts.likes ? fmtNum(p.counts.likes) : "赞"}</span></button>
       </div>
     </article>`;
   }
@@ -2297,7 +2300,7 @@
   function myHomeHtml() {
     const a = authorOf({ authorType: "user", ...acctTag() });
     const posts = myPosts();
-    const liked = S.posts.filter(p => p[LK()] && !isMe(p)).sort((x, y) => new Date(y[LKAT()] || y.createdAt) - new Date(x[LKAT()] || x.createdAt));
+    const liked = S.posts.filter(p => likedNow(p) && !isMe(p) && !(isAs() && p.charId === asId() && p.authorType === "char")).sort((x, y) => new Date(y[LKAT()] || y.likeAt || y.createdAt) - new Date(x[LKAT()] || x.likeAt || x.createdAt));
     let body = "";
     if (meTab === "posts") body = posts.length ? posts.map(p => cardHtml(p, { showPin: true })).join("") : `<div class="empty"><div class="big">✏️</div>还没有发过微博<div><button class="btn-primary" data-act="compose">发一条</button></div></div>`;
     if (meTab === "album") {
@@ -2413,7 +2416,7 @@
     const page = openPage("likefav", pg => {
       const b = $(".page-body", pg.el);
       const favs = (S.me.favs || []).map(f => S.posts.find(p => p.id === f.id)).filter(Boolean);
-      const liked = S.posts.filter(p => p[LK()] && !isMe(p)).sort((x, y) => new Date(y[LKAT()] || y.createdAt) - new Date(x[LKAT()] || x.createdAt));
+      const liked = S.posts.filter(p => likedNow(p) && !isMe(p) && !(isAs() && p.charId === asId() && p.authorType === "char")).sort((x, y) => new Date(y[LKAT()] || y.likeAt || y.createdAt) - new Date(x[LKAT()] || x.likeAt || x.createdAt));
       const list = tab === "fav" ? favs : liked;
       b.innerHTML = `<div class="profile-tabs"><button class="${tab === "fav" ? "on" : ""}" data-act="profile-tab" data-tab="fav">收藏 ${favs.length}</button><button class="${tab === "liked" ? "on" : ""}" data-act="profile-tab" data-tab="liked">赞过 ${liked.length}</button></div>`
         + (list.length ? list.map(p => cardHtml(p, { noFollow: true })).join("") : `<div class="empty">${tab === "fav" ? "还没有收藏，微博右上角「…」里可以收藏" : "还没有赞过微博"}</div>`);
@@ -4153,6 +4156,7 @@
         <div class="cs-row"><div class="cs-t">身份</div>${seg("set-public", [["0", "普通人"], ["1", "公众人物"]], isPublic(charId) ? "1" : "0")}<div class="cs-s">公众人物才会上热搜、有粉丝控评</div></div>
         <div class="cs-row cs-flex" data-act="char-alt" data-char="${esc(charId)}"><div><div class="cs-t">微博小号</div><div class="cs-s">${esc(altSub)}</div></div><span class="set-chev">›</span></div>
         <div class="cs-row"><div class="cs-t">所在城市</div>${seg("set-city", [["same", "跟我同城"], ["custom", "别的城市"], ["none", "不设置"]], charCityCfg(charId).mode)}<div class="cs-s">${(m => m === "none" ? "他的博不带天气，AI 也不会给他编温度" : m === "custom" ? (cityOf(charId) ? `${esc(cityLabel(cityOf(charId)))} · <button class="link" data-act="set-city" data-char="${esc(charId)}" data-v="custom">改</button>` : "还没填城市") : myCity() ? `跟你一样：${esc(cityLabel(myCity()))}` : "你还没填所在城市（编辑资料里填）")(charCityCfg(charId).mode)}</div></div>
+        <div class="cs-row cs-flex" data-act="set-char-ip" data-char="${esc(charId)}"><div><div class="cs-t">IP属地</div><div class="cs-s">${esc((S.accounts[charId] || {}).ip || "还没有（打开他主页时生成）")}</div></div><span class="set-chev">改 ›</span></div>
         <div class="cs-row"><div class="cs-t">恋情状态</div>${seg("set-love", Object.entries(LOVE_LABEL), love)}<div class="cs-s">${love === "open" && loveFresh(charId) ? "刚官宣，前三天评论区沸腾，之后慢慢变成「公开很久了」" : LOVE_NOTE[love]}</div></div>
         ${love !== "none" ? `<div class="cs-row cs-flex"><div><div class="cs-t">刷新时单独写他的博</div><div class="cs-s">他出场的那次刷新多用 1 次 API，人设和聊天记录更完整，更像他本人</div></div><button class="switch ${loverSolo(charId) ? "on" : ""}" data-act="toggle-solo" data-char="${esc(charId)}"><span></span></button></div>` : ""}
         ${love === "secret" ? (pg.busy ? `<div class="gen-tip"><span class="spinner"></span>他正在写官宣微博…</div>` : `<button class="cs-btn" data-act="love-announce" data-char="${esc(charId)}">📢 让他发官宣微博（会用 1～2 次 API）</button>`) : ""}
@@ -4347,6 +4351,10 @@
       case "open-visitors": openVisitors(); return;
       case "open-visits": openVisits(); return;
       case "open-album": openAlbum(); return;
+      case "set-char-ip": {
+        const id = el.dataset.char; const v = await inputSheet("他主页显示的 IP 属地", { value: (S.accounts[id] || {}).ip || "", placeholder: "比如 平南", maxlength: 12 });
+        if (v == null) return; ensureAccount(id, { ip: v }); saveAccount(id); refreshAll(); toast("改好了"); return;
+      }
       case "as-more-dms": if (isAs()) seedHisDms(asId(), true); return;
       case "as-list-soon": toast("他的关注/粉丝列表在灵感本里排着队，做好就能点开"); return;
       case "open-likefav": openLikeFav(); return;
@@ -4398,7 +4406,7 @@
       case "open-npc": openNpcProfile(el.dataset.name); return;
       case "like": {
         if (!post) return;
-        const k = LK(); const on = post[k] = !post[k]; post.counts.likes += on ? 1 : -1; post[LKAT()] = on ? nowIso() : undefined;
+        const k = LK(); const on = !likedNow(post); post[k] = on; post.counts.likes += on ? 1 : -1; post[LKAT()] = on ? nowIso() : undefined;
         if (isAs()) { post.likedBy = on ? [...new Set([...(post.likedBy || []), asId()])] : (post.likedBy || []).filter(x => x !== asId()); savePost(post); refreshVisible(post); return; }
         savePost(post);
         const likeEvt = `weibo_like_${isAlt() ? "alt_" : ""}${post.id}`;
@@ -4504,7 +4512,7 @@
         const items = [{ label: `大号：${S.meta.nickname}`, value: "main", on: !isAlt() && !isAs() }];
         if (S.alt && S.alt.nickname) items.push({ label: `小号：${S.alt.nickname}`, value: "alt", on: isAlt() });
         else items.push({ label: "＋ 注册一个小号", value: "new" });
-        for (const id of Object.keys(S.meta.logins || {}).filter(granted)) items.push({ label: `🔑 ${charById(id).name}的号：${charNickname(id)}`, value: `c:${id}`, on: asId() === id });
+        for (const id of Object.keys(S.meta.logins || {}).filter(granted)) items.push({ label: `${charById(id).name}的号：${charNickname(id)}`, value: `c:${id}`, on: asId() === id });
         if (isAs()) items.push({ label: `退出${charById(asId()).name}的号`, value: "logout", danger: true });
         const v = await sheet("切换账号", items); if (!v) return;
         if (v === "new") newAlt(); else if (v === "logout") logoutAs(asId()); else switchAcct(v);

@@ -801,3 +801,13 @@ img { display: block; }
 .nt-pics { display: flex; flex-wrap: wrap; gap: 8px; padding: 12px 16px; background: var(--wb-card); }
 .nt-add { width: 86px; height: 86px; border-radius: 8px; background: var(--wb-bg); color: var(--wb-text-3); font-size: 24px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; }
 .nt-add span { font-size: 12px; }
+/* 帖子页：发帖人在正文区（头像左、关注右），滑过去以后顶栏才显示 */
+.page.tpage .topic-head { opacity: 0; pointer-events: none; transition: opacity .15s; width: 100%; }
+.page.tpage.scrolled .topic-head { opacity: 1; pointer-events: auto; }
+.page.tpage .page-title { flex: 1; min-width: 0; }
+.topic-head .follow-mini { margin-left: auto; }
+.post-head .post-author { margin-bottom: 14px; }
+.post-head .post-author .avatar { width: 42px; height: 42px; }
+.pa-name { font-size: 15.5px; color: var(--wb-text); }
+.post-head h1 .sep { margin: 0 8px; color: var(--wb-text-3); font-weight: 300; }
+.elite.after { margin: 0 0 0 8px; vertical-align: 4px; }

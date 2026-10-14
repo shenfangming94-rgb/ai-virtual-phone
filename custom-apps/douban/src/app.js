@@ -510,7 +510,7 @@
     $("#view").innerHTML = `<div class="me-hero" ${S.meta.coverRef ? `data-bg-ref="${esc(S.meta.coverRef)}"` : ""}>
         <div class="me-ava" data-act="me-avatar">${avatarHtml(w)}<i>${I.camera}</i></div>
         <h2>${esc(w.name)}</h2>
-        <div class="me-id">ID：${esc(String(S.identity.id || "").replace(/\D/g, "").slice(-9) || "260397985")}${S.meta.ip ? ` / IP：${esc(S.meta.ip)}` : ""}</div>
+        <div class="me-id" data-act="edit-me">IP：${esc(S.meta.ip || "未填写（编辑资料里填）")}</div>
         <div class="me-sign" data-act="edit-me">${I.pen}${esc(S.meta.sign || "介绍下自己")}</div>
         <div class="me-follow"><span>关注 ${activeChars().length}</span><span>被关注 ${activeChars().length + (S.meta.fansExtra || 0)}</span></div>
       </div>
@@ -628,8 +628,10 @@
       const g = groupById(t.groupId) || { name: "" }; const w = whoOf(t.author);
       const floors = onlyOp ? t.floors.filter(f => sameAuthor(f.author, t.author)) : t.floors;
       const n = Math.max(t.replyCount, t.floors.length);
-      body(pg, `<div class="post-head"><h1>${t.elite ? '<span class="elite">精</span>' : ""}${esc(t.title)}</h1>
-          <div class="post-from">${fmtTime(t.createdAt)} · 来自 <span class="grp" data-act="open-group" data-id="${esc(t.groupId)}">${esc(g.name)}</span>${t.section ? ` · ${esc(t.section)}` : ""}${roleTags(t, t.author).replace('<span class="role-tag op">楼主</span>', "")}</div></div>
+      const follow = t.author.type === "user" || t.author.anon ? "" : `<button class="follow-mini ${isFollowing(t.author) ? "on" : ""}" data-act="follow-author">${isFollowing(t.author) ? "已关注" : "＋关注"}</button>`;
+      body(pg, `<div class="post-head"><div class="post-author">${avatarHtml(w)}<div class="cell-main"><div class="pa-name">${esc(w.name)}${roleTags(t, t.author).replace('<span class="role-tag op">楼主</span>', "")}</div>
+            <div class="post-from">${fmtTime(t.createdAt)} · 来自 <span class="grp" data-act="open-group" data-id="${esc(t.groupId)}">${esc(g.name)}</span></div></div>${follow}</div>
+          <h1>${t.section ? `${esc(t.section)}<span class="sep">|</span>` : ""}${esc(t.title)}${t.elite ? '<span class="elite after">精</span>' : ""}</h1></div>
         <div class="post-body">${esc(t.body)}</div>
         ${(t.images || []).length ? `<div class="post-pics">${t.images.map((im, k) => `<div class="post-pic" data-act="topic-pic" data-idx="${k}">${im.ref ? `<img data-ref="${esc(im.ref)}" alt="">` : placeholderImg()}${!im.ref && im.desc ? `<span>${esc(im.desc)}</span>` : ""}</div>`).join("")}</div>` : ""}
         <div class="post-stats"><span class="on">回复 ${fmtNum(n)}</span><span>赞 ${fmtNum(t.likes || 0)}</span><span>转发 ${fmtNum(t.reposts || 0)}</span><span>收藏 ${fmtNum(t.favs || 0)}</span></div>
@@ -645,12 +647,16 @@
       const chip = $(".anon-chip", pg.el); chip.classList.toggle("on", anon); chip.textContent = anon ? "匿名" : "实名";
       $(".bb-like", pg.el).classList.toggle("on", !!t.liked); $(".bb-like", pg.el).innerHTML = t.liked ? I.liked : I.like;
       $(".bb-fav", pg.el).classList.toggle("on", !!t.faved); $(".bb-fav", pg.el).innerHTML = t.faved ? I.favOn : I.fav;
-    }, { head: `<div class="topic-head" data-act="noop">${avatarHtml(w0)}<span>${esc(w0.name)}</span>${t0.author.type === "user" || t0.author.anon ? "" : `<button class="follow-mini ${isFollowing(t0.author) ? "on" : ""}" data-act="follow-author">${isFollowing(t0.author) ? "已关注" : "＋关注"}</button>`}</div>`,
+      // 滑过发帖人那一行后，顶栏才出现头像、名字和关注（关注在最右）
+      const th = $(".topic-head", pg.el); if (th) { const fb = th.querySelector(".follow-mini"); if (fb) { fb.classList.toggle("on", isFollowing(t.author)); fb.textContent = isFollowing(t.author) ? "已关注" : "＋关注"; } }
+    }, { cls: "tpage", head: `<div class="topic-head" data-act="noop">${avatarHtml(w0)}<span>${esc(w0.name)}</span>${t0.author.type === "user" || t0.author.anon ? "" : `<button class="follow-mini ${isFollowing(t0.author) ? "on" : ""}" data-act="follow-author">${isFollowing(t0.author) ? "已关注" : "＋关注"}</button>`}</div>`,
       footer: `<div class="reply-quote hidden"></div><div class="reply-bar bb"><button class="anon-chip" data-act="toggle-anon">实名</button><textarea class="reply-input" rows="1" placeholder="写回复" maxlength="500"></textarea><button class="reply-send hidden">发送</button>
         <span class="bb-icons"><button class="bb-like" data-act="topic-like">${I.like}</button><button data-act="topic-repost">${I.repost}</button><button class="bb-fav" data-act="topic-fav">${I.fav}</button></span></div>` });
     page.setOnlyOp = () => { onlyOp = !onlyOp; page.render(page); };
     page.setQuote = n => { quote = n; page.render(page); $(".reply-input", page.el).focus(); };
     page.toggleAnon = () => { anon = !anon; page.render(page); };
+    const pb = $(".page-body", page.el); const onScroll = () => { const a = $(".post-author", page.el); page.el.classList.toggle("scrolled", !!a && pb.scrollTop > a.offsetTop + a.offsetHeight - 10); };
+    pb.addEventListener("scroll", onScroll, { passive: true });
     const input = $(".reply-input", page.el); const send = $(".reply-send", page.el); const icons = $(".bb-icons", page.el);
     input.addEventListener("input", () => { const has = !!input.value.trim(); send.classList.toggle("hidden", !has); icons.classList.toggle("hidden", has); input.style.height = "auto"; input.style.height = Math.min(100, input.scrollHeight) + "px"; });
     send.addEventListener("click", () => {
@@ -722,7 +728,8 @@
     openPage("edit-me", pg => {
       body(pg, `<div class="form"><div class="form-row"><label>头像</label>${avatarHtml(whoOf({ type: "user" }))}<button class="btn-ghost" data-act="me-avatar">上传</button>${S.meta.avatarRef ? `<button class="btn-ghost" data-act="me-avatar-reset">用身份头像</button>` : ""}</div>
         <div class="form-row"><label>昵称</label><input id="em-nick" maxlength="20" value="${esc(S.meta.nickname)}"></div>
-        <div class="form-row"><label>签名</label><input id="em-sign" maxlength="60" value="${esc(S.meta.sign || "")}"></div></div>
+        <div class="form-row"><label>签名</label><input id="em-sign" maxlength="60" value="${esc(S.meta.sign || "")}"></div>
+        <div class="form-row"><label>IP属地</label><input id="em-ip" maxlength="12" placeholder="比如 平南" value="${esc(S.meta.ip || "")}"></div></div>
         <div style="padding:20px 16px"><button class="btn-primary" style="width:100%;height:42px;border-radius:21px;background:var(--wb-orange);color:#fff" data-act="em-save">保存</button></div>`);
     }, { title: "编辑资料" });
   }
@@ -819,7 +826,7 @@
         const t = topicById(pg.key.split(":")[1]); if (!t || t.author.anon) { toast("匿名豆友没法关注"); return; }
         const k = followKey(t.author); const on = (S.meta.follows || []).includes(k);
         S.meta.follows = on ? S.meta.follows.filter(x => x !== k) : [...(S.meta.follows || []), k]; saveMeta();
-        el.classList.toggle("on", !on); el.textContent = on ? "＋关注" : "已关注"; return;
+        toast(on ? "已取消关注" : "关注成功"); pg.render(pg); return;
       }
       case "topic-pic": { const t = topicById(pg.key.split(":")[1]); if (t) openViewer(t.images, +el.dataset.idx, () => saveTopic(t), t.author.charId); return; }
       case "nt-sec": if (pg && pg.draft) { pg.draft.section = el.dataset.v; pg.render(pg); } return;
@@ -849,7 +856,7 @@
       case "more-floors": { const t = topicById(pg.key.split(":")[1]); if (t) genFloors(t); return; }
       case "my-posts": openMyPosts(); return;
       case "edit-me": openEditMe(); return;
-      case "em-save": { S.meta.nickname = $("#em-nick", pg.el).value.trim() || S.meta.nickname; S.meta.sign = $("#em-sign", pg.el).value.trim(); saveMeta(); closePage(); toast("保存了"); return; }
+      case "em-save": { S.meta.nickname = $("#em-nick", pg.el).value.trim() || S.meta.nickname; S.meta.sign = $("#em-sign", pg.el).value.trim(); S.meta.ip = $("#em-ip", pg.el).value.trim(); saveMeta(); closePage(); toast("保存了"); return; }
       case "me-avatar": { try { const [ref] = await pickImages(1, 400); if (ref) { S.meta.avatarRef = ref; saveMeta(); refreshAll(); } } catch (err) { toast("上传失败"); } return; }
       case "me-avatar-reset": S.meta.avatarRef = null; saveMeta(); refreshAll(); return;
       case "open-settings": openSettings(); return;

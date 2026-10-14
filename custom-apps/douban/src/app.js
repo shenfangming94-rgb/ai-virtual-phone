@@ -410,7 +410,7 @@
     return { kind, post: (g.rate && g.rate.post != null ? g.rate.post : p) / 100, floor: (g.rate && g.rate.floor != null ? g.rate.floor : f) / 100,
       custom: !!(g.rate && (g.rate.post != null || g.rate.floor != null)), pool: kind === "interest" ? fans : act };
   }
-  const charsLine = () => activeChars().length ? `\n会逛的角色：按人设和兴趣，这些角色里谁平时会逛这个组：${activeChars().map(c => c.name).join("、")}（写本名，用、分隔；都不会写 无）` : "";
+  const charsLine = () => activeChars().length ? `\n会逛的角色：按人设和兴趣，这些角色里谁真的加入了、平时会逛这个组：${activeChars().map(c => c.name).join("、")}（写本名，用、分隔；都不会写 无）。按每个人自己的爱好判断，大多数组只有 0～1 个人会逛；本地的组也不是谁都加` : "";
   function fillCharsHere(g, b) {
     if (!("会逛的角色" in b)) return;
     g.charsHere = none(b["会逛的角色"]) ? [] : String(b["会逛的角色"]).split(/[、,，\s]+/).map(n => charByName(n.trim())).filter(Boolean).map(c => c.id);
@@ -757,7 +757,7 @@
       const posts = S.topics.filter(t => sameAuthor(t.author, author)).sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
       const replied = S.topics.filter(t => !sameAuthor(t.author, author) && t.floors.some(f => sameAuthor(f.author, author))).sort((a, b) => new Date(b.lastReplyAt) - new Date(a.lastReplyAt));
       const masks = isChar ? S.topics.filter(t => (t.author.type === "char" && t.author.charId === id && t.author.anon) || t.floors.some(f => f.author.type === "char" && f.author.charId === id && f.author.anon)) : [];
-      const groups = isChar ? S.groups.filter(g => (g.charsHere || []).includes(id) || g.local) : [...new Set(posts.map(t => t.groupId))].map(groupById).filter(Boolean);
+      const groups = isChar ? S.groups.filter(g => (g.charsHere || []).includes(id)) : [...new Set(posts.map(t => t.groupId))].map(groupById).filter(Boolean);
       const he = isChar ? "他" : "TA";
       const line = (t, extra) => `<div class="mline" data-act="open-topic" data-id="${esc(t.id)}">${esc(t.title)}<span>${extra || fmtTime(t.createdAt)}</span></div>`;
       body(pg, `<div class="me-hero" ${info && info.coverRef ? `data-bg-ref="${esc(info.coverRef)}"` : ""}>

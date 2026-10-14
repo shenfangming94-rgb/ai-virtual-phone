@@ -812,3 +812,8 @@ img { display: block; }
 .post-head h1 .sep { margin: 0 8px; color: var(--wb-text-3); font-weight: 300; }
 .elite.after { margin: 0 0 0 8px; vertical-align: 4px; }
 .post-head h1 { text-wrap: wrap; }
+/* 楼层名字那一行：标签多时整体换行，不把字挤成竖排 */
+.floor-top { flex-wrap: wrap; row-gap: 2px; }
+.floor-top .nm, .floor-top .role-tag, .floor-top .fl-t { white-space: nowrap; flex: none; }
+.floor-top .fl-like { flex: none; }
+.trow-meta .role-tag { flex: none; white-space: nowrap; }

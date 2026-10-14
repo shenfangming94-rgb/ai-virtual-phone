@@ -136,8 +136,8 @@
    * 匿名的一律显示成「匿名豆友」+ 按身份固定的随机头像；char 的马甲只有她看得到（小标记）
    */
   function whoOf(a) {
-    if (a.anon) { const seed = `anon_${a.type}_${a.charId || a.name || ""}`; const pool = S.meta.avatarPool || [];
-      return { name: "匿名豆友", seed, avatarRef: pool.length ? pool[hashHue(seed) % pool.length] : null, avatar: null }; }
+    // 匿名豆友统一一张头像（她挑的绿色小人，设置里能换）
+    if (a.anon) return { name: "匿名豆友", seed: "anon", avatarRef: S.meta.anonRef || null, avatar: S.meta.anonRef ? null : ANON_AVATAR };
     if (a.type === "user") return { name: S.meta.nickname, seed: "me", avatarRef: S.meta.avatarRef, avatar: S.meta.avatarRef ? null : S.identity.avatarUrl };
     if (a.type === "char") { const c = charById(a.charId) || {}; return { name: charNick(a.charId), seed: a.charId, avatar: c.avatar }; }
     const pool = S.meta.avatarPool || [];
@@ -490,6 +490,7 @@
       ${img ? `<div class="trow-pic">${img.ref ? `<img data-ref="${esc(img.ref)}" alt="">` : placeholderImg()}</div>` : ""}</div>`;
   }
   const DEFAULT_PLACEHOLDER = "/*__PLACEHOLDER__*/";
+  const ANON_AVATAR = "/*__ANON__*/";
   const placeholderImg = () => `<img src="${DEFAULT_PLACEHOLDER}" alt="">`;
   const feedTopics = () => S.topics.filter(t => { const g = groupById(t.groupId); return g && isJoined(g); }).sort((a, b) => new Date(b.lastReplyAt || b.createdAt) - new Date(a.lastReplyAt || a.createdAt));
 
@@ -768,6 +769,8 @@
         ${S.chars.map(c => { const on = !(S.meta.excludedChars || []).includes(c.id);
           return `<div class="list-cell">${avatarHtml({ name: c.name, seed: c.id, avatar: c.avatar })}<div class="cell-main"><div>${esc(c.name)}</div><div class="cell-sub">豆瓣昵称：${esc(S.meta.charNicks[c.id] || "还没有（第一次实名出场时起）")}</div></div>
             <button class="btn-ghost" data-act="set-char-nick" data-id="${esc(c.id)}" style="height:28px;padding:0 10px;font-size:12px">改昵称</button><button class="switch ${on ? "on" : ""}" data-act="toggle-char" data-id="${esc(c.id)}"><span></span></button></div>`; }).join("") || `<div class="empty" style="padding:24px">这个身份还没有角色好友</div>`}
+        <div class="form-note" style="margin-top:8px">匿名头像 · 所有匿名豆友都用这一张</div>
+        <div class="list-cell">${avatarHtml(whoOf({ type: "npc", anon: true }))}<div class="cell-main"></div><button class="btn-ghost" data-act="anon-ava">换一张</button>${S.meta.anonRef ? `<button class="btn-ghost" data-act="anon-ava-reset">用默认</button>` : ""}</div>
         <div class="form-note" style="margin-top:8px">豆友头像库 · 豆友从这里分头像，同一个人一直是同一张。点图片可以删除</div>
         <div class="album avatar-pool">${pool.map((ref, i) => `<div class="pic" data-act="pool-rm" data-idx="${i}"><img data-ref="${esc(ref)}" alt=""></div>`).join("")}<button class="compose-add" data-act="pool-add">＋</button></div>`);
     }, { title: "设置" });
@@ -908,6 +911,8 @@
       case "open-debug": openDebug(); return;
       case "toggle-char": { const id = el.dataset.id; const ex = S.meta.excludedChars || []; S.meta.excludedChars = ex.includes(id) ? ex.filter(x => x !== id) : [...ex, id]; saveMeta(); refreshAll(); return; }
       case "set-char-nick": { const id = el.dataset.id; const v = await inputSheet(`${charById(id)?.name || ""}的豆瓣昵称`, { value: S.meta.charNicks[id] || "", maxlength: 20 }); if (v != null) { if (v) S.meta.charNicks[id] = v; else delete S.meta.charNicks[id]; saveMeta(); refreshAll(); } return; }
+      case "anon-ava": { try { const [ref] = await pickImages(1, 300); if (ref) { S.meta.anonRef = ref; saveMeta(); refreshAll(); } } catch (err) { toast("上传失败"); } return; }
+      case "anon-ava-reset": S.meta.anonRef = null; saveMeta(); refreshAll(); return;
       case "pool-add": { try { const refs = await pickImages(20, 300); if (refs.length) { S.meta.avatarPool = [...S.meta.avatarPool, ...refs]; saveMeta(); toast(`加了 ${refs.length} 张`); refreshAll(); } } catch (err) { toast("上传失败"); } return; }
       case "pool-rm": { const i = +el.dataset.idx; if (await sheet("从头像库删除这张？", [{ label: "删除", value: "yes", danger: true }]) !== "yes") return; S.meta.avatarPool.splice(i, 1); saveMeta(); refreshAll(); return; }
     }

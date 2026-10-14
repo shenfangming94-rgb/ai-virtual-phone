@@ -9,7 +9,8 @@ const root = dirname(fileURLToPath(import.meta.url));
 const read = p => readFileSync(join(root, p), "utf8");
 const version = JSON.parse(read("manifest.json")).version;
 const placeholder = "data:image/jpeg;base64," + readFileSync(join(root, "assets/placeholder.jpg")).toString("base64");
-const js = read("src/app.js").replace("/*__VERSION__*/", () => version).replace("/*__PLACEHOLDER__*/", () => placeholder);
+const js = read("src/app.js").replace("/*__VERSION__*/", () => version).replace("/*__PLACEHOLDER__*/", () => placeholder)
+  .replace("/*__ANON__*/", () => "data:image/jpeg;base64," + readFileSync(join(root, "assets/anon.jpg")).toString("base64"));
 const fill = mock => read("src/index.html").replace("/*__CSS__*/", () => read("src/style.css")).replace("/*__JS__*/", () => js).replace("<!--__MOCK__-->", () => mock);
 
 mkdirSync(join(root, "dist"), { recursive: true });

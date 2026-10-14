@@ -441,8 +441,8 @@
    * 进组 / 刷新：写一批新帖子（标题、楼主、首帖正文、回应数），点进帖子才写楼层。
    * 代码掷骰子决定这批里有没有 char 出场：约 30% 有一个，出场时 60% 匿名（马甲，只有她看得到标记）
    */
-  async function genTopics(g) {
-    if (g._busy) return; g._busy = true; refreshAll();
+  async function genTopics(g, focus) {
+    if (g._busy) return []; g._busy = true; refreshAll();
     const rates = charRates(g);
     const cast = pickCast(rates.pool.length ? rates.pool : activeChars(), 3);
     const hit = cast.length && Math.random() < rates.post ? cast[0] : null;
@@ -455,7 +455,8 @@
     const text = await generate((hit ? [hit] : cast.slice(0, 2)).map(c => c.id), "topics", [
       `当前时间：${new Date().toLocaleString("zh-CN", { hour12: false })}`,
       `小组：「${g.name}」（${fmtNum(g.members)} 个成员）\n小组介绍：${g.intro || "无"}${g.topicsHint ? `\n组里讨论：${g.topicsHint}` : ""}`,
-      `写这个组里最近的 ${rand(5, 7)} 个帖子，大部分是路人豆友发的，话题贴着小组主题，五花八门。`,
+      focus ? `用户在组内搜「${focus}」：写这个组里 ${rand(2, 3)} 个和「${focus}」有关的帖子（角度各不相同：求助、吐槽、分享、讨论、八卦……），大部分是路人豆友发的。`
+        : `写这个组里最近的 ${rand(5, 7)} 个帖子，大部分是路人豆友发的，话题贴着小组主题，五花八门。`,
       hit ? (anon
         ? `其中 1 个帖子是 ${hit.name} 本人用匿名发的（作者写 匿名，角色写 ${hit.name}，匿名写 是）：按他的人设、近况和心事写，可以是关于用户的事（不点名；她的事只能来自聊天记录和记忆，只写他自己的心情、纠结和打算）。他可以是不可靠叙述者，嘴上一套心里一套。`
         : `其中 1 个帖子是 ${hit.name} 本人用自己的豆瓣号发的（作者写他的豆瓣昵称${S.meta.charNicks[hit.id] ? `「${S.meta.charNicks[hit.id]}」` : "，自己起一个像豆瓣的"}，角色写 ${hit.name}，匿名写 否）：写他生活里真正在意、有情绪的事（开心的、烦的、想炫耀的、想求助的），和他在意的人有关更好（用户的事只能来自聊天记录和记忆）；不要写成干巴巴的技术问答。`)
@@ -471,9 +472,9 @@
       "每个帖子：\n===帖子===\n标题：帖子标题（不用自己加分区前缀）\n作者：豆友昵称（匿名发的写 匿名）\n角色：角色本名（路人写 无）\n匿名：是 / 否\n分区：分区名（没有写 无）\n时间：发帖时间（如 3小时前、昨天 21:30、2天前）\nIP：这个人的 IP 属地（省份或城市，按他在哪写；同校同城的组大多一样）\n回应数：目前有多少条回应（纯数字）\n配图：图片描述，多张用 | 分隔（不带图写 无）\n精华：是 / 否\n说的是：这帖在讨论谁（真名；不涉及具体的人写 无）\n来源：现实新闻 / 联网搜到的 / 这个世界的事 / 无\n正文：\n楼主的首帖正文\n===结束===",
     ].filter(Boolean).join("\n\n"), `「${g.name}」的帖子`);
     g._busy = false;
-    if (text == null) { refreshAll(); return; }
+    if (text == null) { refreshAll(); return []; }
     const info = parseBlocks(text, "小组信息")[0]; if (info) { fillGroupInfo(g, info); fillCharsHere(g, info); }
-    let n = 0, elite = 0;
+    let n = 0, elite = 0; const made = [];
     for (const b of parseBlocks(text, "帖子")) {
       const title = String(b["标题"] || "").trim().slice(0, 60); const body = String(b["正文"] || "").trim();
       if (!title || !body) continue;
@@ -487,13 +488,34 @@
         about: none(b["说的是"]) ? "" : String(b["说的是"]).trim().slice(0, 60), source: none(b["来源"]) ? "" : String(b["来源"]).trim().slice(0, 12), ip: none(b["IP"]) ? "" : String(b["IP"]).trim().slice(0, 8),
         images: picDescs(b["配图"]),
         likes: Math.round(replyCount * (0.2 + Math.random() * 0.8)), favs: Math.round(replyCount * Math.random() * 0.4), reposts: Math.round(replyCount * Math.random() * 0.15) };
-      S.topics.push(t); saveTopic(t); n++;
+      if (focus) t.q = focus;
+      S.topics.push(t); saveTopic(t); n++; made.push(t);
       if (author.type === "char") noteCharIp(author.charId, t.ip);
       if (author.type === "char") remember(author.charId, `我在豆瓣小组「${g.name}」${author.anon ? "匿名" : ""}发了个帖子《${title}》：${body.slice(0, 80)}`, `douban_topic_${t.id}`);
     }
     g.refreshedAt = nowIso(); saveGroup(g);
     if (!n) toast("这次没写出能用的帖子，去「我的 → 调试记录」看看");
-    refreshAll();
+    refreshAll(); return made;
+  }
+  /** 组内搜：先搜组里已有的帖子（标题、正文、回应）；想看更多就让 AI 按这个词写 2～3 个 */
+  function openGroupSearch(id) {
+    const g = groupById(id); if (!g) return;
+    let term = "", busy = false;
+    const page = openPage(`gsearch:${id}`, pg => {
+      const hits = term ? S.topics.filter(t => t.groupId === id && (t.q === term || `${t.title}\n${t.body}\n${t.floors.map(f => f.text).join("\n")}`.includes(term)))
+        .sort((a, b) => (b.q === term) - (a.q === term) || new Date(b.lastReplyAt || b.createdAt) - new Date(a.lastReplyAt || a.createdAt)) : [];
+      body(pg, `<div style="padding:10px 16px;background:var(--wb-card)"><form class="db-search" id="gsform" style="height:38px">${I.search}<input id="gsq" placeholder="组内搜｜${esc(g.name)}" value="${esc(term)}" enterkeyhint="search"></form></div>`
+        + (term ? `<div class="db-white">${hits.map(t => topicCard(t, "group")).join("")}${!hits.length && !busy ? `<div class="empty" style="padding:24px">组里还没人聊过「${esc(term)}」</div>` : ""}</div>`
+          + (busy ? `<div class="gen-tip"><span class="spinner"></span>组里的人正在聊「${esc(term)}」…</div>` : `<button class="load-more" data-act="gsearch-gen">让组里聊聊「${esc(term)}」（写 2～3 个帖子，会用 1 次 API）</button>`) : ""));
+      const f = $("#gsform", pg.el); const q = $("#gsq", pg.el);
+      f.onsubmit = e => { e.preventDefault(); term = q.value.trim(); page.render(page); };
+      if (!term) setTimeout(() => q.focus(), 60);
+    }, { title: "组内搜" });
+    page.gen = async () => {
+      if (!term || busy) return; busy = true; page.render(page);
+      const made = await genTopics(g, term); busy = false; page.render(page);
+      if (made.length) toast(`写了 ${made.length} 个和「${term}」有关的帖子`);
+    };
   }
 
   /** AI 写的配图 → [{desc}]：去掉「1张」「图片」这种不是画面的碎片 */
@@ -982,7 +1004,7 @@
         ${all.length ? (g._busy ? `<div class="gen-tip"><span class="spinner"></span>刷新中…</div>` : `<button class="load-more" data-act="g-refresh" data-id="${esc(id)}">看看有没有新帖（会用 1 次 API）</button>`) : ""}
         </div>`);
       const hero = $(".g-hero", pg.el); if (hero && hero.dataset.bgRef) mediaUrl(hero.dataset.bgRef).then(u => { if (u) hero.style.background = `linear-gradient(rgba(0,0,0,.3),rgba(0,0,0,.45)),center/cover url("${u}")`; });
-    }, { title: "", cls: "gpage", corner: `<button class="top-icon" data-act="group-menu" data-id="${esc(id)}" aria-label="更多">${I.more}</button>`, after: `<button class="fab" data-act="new-topic" data-id="${esc(id)}" aria-label="发帖">${I.pen}</button>` });
+    }, { cls: "gpage", head: `<button class="g-search" data-act="g-search" data-id="${esc(id)}">${I.search}<span>组内搜｜${esc(g.name)}</span></button>`, corner: `<button class="top-icon" data-act="group-menu" data-id="${esc(id)}" aria-label="更多">${I.more}</button>`, after: `<button class="fab" data-act="new-topic" data-id="${esc(id)}" aria-label="发帖">${I.pen}</button>` });
     page.setSec = v => { sec = v; page.render(page); };
     page.setSort = v => { sort = v; page.render(page); };
     if (!S.topics.some(t => t.groupId === id)) genTopics(g);
@@ -1197,6 +1219,8 @@
       case "cg-submit": if (pg && pg.submit) pg.submit(); return;
       case "open-group": openGroup(el.dataset.id); return;
       case "g-fold": if (pg && pg.unfold) pg.unfold(); return;
+      case "g-search": openGroupSearch(el.dataset.id); return;
+      case "gsearch-gen": if (pg && pg.gen) pg.gen(); return;
       case "g-refresh": { const g = groupById(el.dataset.id); if (g) genTopics(g); return; }
       case "toggle-join": {
         const g = groupById(el.dataset.id); if (!g || g.mine) return;

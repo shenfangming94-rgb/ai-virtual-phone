@@ -570,6 +570,7 @@
       S.topics.push(t); saveTopic(t); n++;
       if (isChar) remember(id, `我以前在豆瓣小组「${g.name}」发过一个帖子《${title}》：${bodyT.slice(0, 60)}`, `douban_topic_${t.id}`);
     }
+    if (isChar && S.meta.people[k].followsMe && !(old && old.followsMe)) toast(`${charNick(id)} 关注了你`);
     saveMeta(); refreshAll();
   }
   function openPerson(k) {

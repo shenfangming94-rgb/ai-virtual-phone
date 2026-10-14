@@ -825,3 +825,17 @@ img { display: block; }
 /* 引用条：在里面那层截断，框的留白不会漏出半行 */
 .floor-quote { display: block; -webkit-line-clamp: unset; }
 .floor-quote span { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+/* 豆友主页 */
+.ppage .me-ava { margin-bottom: 14px; }
+.ph-row { display: flex; align-items: center; gap: 12px; }
+.ph-row .cell-main { flex: 1; min-width: 0; }
+.ph-follow { flex: none; height: 32px; padding: 0 16px; border-radius: 6px; background: #fff; color: var(--wb-orange); font-size: 14px; font-weight: 600; }
+.ph-follow.on { background: rgba(255,255,255,.22); color: #fff; font-weight: 400; }
+.fo-me { padding: 0 6px; border-radius: 4px; background: rgba(255,255,255,.25); }
+.mask-card { background: #f3f5ff; }
+@media (prefers-color-scheme: dark) { .mask-card { background: #1f2236; } }
+.soon.mk { color: #5b6fd6; background: #e3e8ff; }
+@media (prefers-color-scheme: dark) { .soon.mk { background: #2c3260; color: #a9b6ff; } }
+.page.gpage.solid .page-head { background: var(--wb-card); border-bottom: 1px solid var(--wb-line); color: var(--wb-text); }
+.page.gpage.solid .page-head .back, .page.gpage.solid .page-head .top-icon { color: var(--wb-text); }
+.page.gpage .page-head { transition: background .15s; }

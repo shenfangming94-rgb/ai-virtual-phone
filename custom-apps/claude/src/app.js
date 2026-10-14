@@ -202,6 +202,7 @@
     const more = (mustAsk || yes(b["继续问"]) || fbv === "redo") && !none(b["内容"]) ? String(b["内容"]).trim() : "";
     if (more) c.msgs.push({ role: "char", text: more, at: nowIso() });
     else if (fbv === "redo") c.msgs.push({ role: "char", text: "（点了重新生成）", at: nowIso(), redoAsk: true });
+    else if (last) last.read = true;
     c.updatedAt = nowIso(); saveConv(c); refresh();
   }
 
@@ -214,12 +215,16 @@
     remember(c.charId, `我问 AI 助手 Claude「${(q ? q.text : c.title).slice(0, 50)}」，它回答：「${text.slice(0, 120)}」`, `claude_ans_${c.id}_${c.msgs.length}`);
     // 他自己会不会接着问：按设置的概率掷骰子；不掷中就只等她在 ··· 里叫他
     if (Math.random() * 100 < (S.meta.follow ?? 50)) setTimeout(() => followUp(c), 900);
+    else markRead(c, m);
   }
+  /** 他看了但没接着问：她那条下面显示「已读」 */
+  function markRead(c, m) { setTimeout(() => { if (c.msgs[c.msgs.length - 1] !== m) return; m.read = true; saveConv(c); refresh(); }, rand(2, 8) * 1000); }
   function sendBlocked(c) {
     c.msgs.push({ role: "me", blocked: true, text: "", at: nowIso() }); c.updatedAt = nowIso(); saveConv(c); refresh();
     const q = [...c.msgs].reverse().find(x => x.role === "char");
     remember(c.charId, `我问 AI 助手 Claude「${(q ? q.text : c.title).slice(0, 50)}」，结果它说违反使用政策，拒绝回答我`, `claude_block_${c.id}_${c.msgs.length}`);
     if (Math.random() < 0.7) setTimeout(() => followUp(c), 900);
+    else markRead(c, c.msgs[c.msgs.length - 1]);
   }
   async function banChar(charId) {
     const ch = charById(charId); if (!ch) return;
@@ -279,10 +284,11 @@
       body(pg, `<div class="chat">${c.msgs.map((m, i) => {
         if (m.role === "char") return m.redoAsk ? `<div class="sysline">${esc(ch.name)} 点了重新生成</div>` : `<div class="who">${esc(ch.name)}${avatarHtml(ch)}</div><div class="u">${esc(m.text).replace(/\n/g, "<br>")}</div>`;
         if (m.role === "sys") return `<div class="sysline warn">${esc(m.text)}</div>`;
-        if (m.blocked) return `<div class="blocked">${I.shield}<div>这条消息可能违反了我们的使用政策，Claude 无法回复。<small>如果你认为这是误判，可以换个说法再试一次。</small></div></div>`;
+        const rd = m.read && i === lastIdx ? `<div class="read">已读</div>` : "";
+        if (m.blocked) return `<div class="blocked">${I.shield}<div>这条消息可能违反了我们的使用政策，Claude 无法回复。<small>如果你认为这是误判，可以换个说法再试一次。</small></div></div>${rd}`;
         return `<div class="a ${m.redo ? "redone" : ""}">${m.secs ? `<button class="think" data-act="toggle-think" data-i="${i}">思考了 ${m.secs} 秒 ${I.chev}</button>${m.open && m.thinking ? `<div class="think-body">${esc(m.thinking).replace(/\n/g, "<br>")}</div>` : ""}` : ""}
           <div class="tx">${md(m.text)}</div>
-          <div class="acts"><button data-act="copy" data-i="${i}">${I.copy}</button><button data-act="noop">${I.share}</button><button data-act="noop">${I.play}</button><span class="${m.feedback === "good" ? "on" : ""}">${I.good}</span><span class="bad ${m.feedback === "bad" ? "on" : ""}">${I.good}</span><span class="${m.feedback === "redo" ? "on" : ""}">${I.retry}</span></div></div>`;
+          <div class="acts"><button data-act="copy" data-i="${i}">${I.copy}</button><button data-act="noop">${I.share}</button><button data-act="noop">${I.play}</button><span class="${m.feedback === "good" ? "on" : ""}">${I.good}</span><span class="bad ${m.feedback === "bad" ? "on" : ""}">${I.good}</span><span class="${m.feedback === "redo" ? "on" : ""}">${I.retry}</span></div>${rd}</div>`;
       }).join("")}
         ${c._busy ? `<div class="who">${esc(ch.name)}${avatarHtml(ch)}</div><div class="typing"><i></i><i></i><i></i></div>` : ""}
         ${banned ? `<div class="sysline warn">${esc(ch.name)} 的账号已停用</div>` : ""}

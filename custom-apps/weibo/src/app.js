@@ -1083,7 +1083,8 @@
         : `<div class="empty">还没有调用过 AI</div>`;
       // 测试用：不想干等几个小时
       $(".page-body", pg.el).insertAdjacentHTML("beforeend", `<div class="form-note" style="margin-top:12px">测试工具</div>
-        <div class="list-cell" data-act="away-try"><div class="cell-main"><div style="color:var(--wb-link)">${S.awayBusy ? "正在补…" : "「你不在的时候」现在试一次"}</div><div class="cell-sub">假装你离开了 6 小时，马上补一次（会用 1 次 API）</div></div></div>`);
+        <div class="list-cell" data-act="away-try"><div class="cell-main"><div style="color:var(--wb-link)">${S.awayBusy ? "正在补…" : "「你不在的时候」现在试一次"}</div><div class="cell-sub">假装你离开了 6 小时，马上补一次（会用 1 次 API）</div></div></div>
+        ${(r => r ? `<div class="form-note away-last"><b>最近一次「你不在的时候」</b>：${esc(fmtTime(r.at))}${r.force ? "（现在试一次）" : ""}${r.gapH != null ? `，离开了 ${r.gapH} 小时` : ""}<br>${r.error ? `❗ 出错了：${esc(r.error)}` : r.note ? esc(r.note) : `骰子：${esc(r.dice || "")}${r.extra ? `<br>${esc(r.extra)}` : ""}<br>${r.api ? `调了 API，结果：${esc(r.result || "还没回来")}` : "谁都没掷中，没调 API（只补了访客和偷偷点赞）"}`}</div>` : "")(S.meta.awayLast)}`);
     }, { title: "调试记录" });
   }
 
@@ -1306,12 +1307,20 @@
       reservedLine(),
     ].filter(Boolean).join("\n\n");
   }
+  /** 外壳：出错也要留记录、不能卡在「正在补」；最近一次的掷骰子结果和是否调 API 存进 meta.awayLast，调试记录底部能看 */
   async function awayCatchUp(force) {
     if (!S.meta || isAlt() || !awayOn() || S.awayBusy) return;
+    const rec = { at: nowIso(), force: !!force };
+    try { return await awayRun(force, rec); }
+    catch (e) { rec.error = String((e && e.message) || e); console.error(e); logAi({ label: "你不在的时候", ok: false, error: rec.error }); return 0; }
+    finally { S.awayBusy = false; if (rec.gapH != null || rec.error) { S.meta.awayLast = rec; saveMeta(); } }
+  }
+  async function awayRun(force, rec) {
     const now = Date.now(); const last = S.meta.lastOpenAt ? new Date(S.meta.lastOpenAt).getTime() : 0;
     S.meta.lastOpenAt = nowIso(); saveMeta();
     if (!last || now - last < awayHours() * 3600e3) return;
-    const chars = activeChars(); if (!chars.length) return;
+    rec.gapH = Math.round((now - last) / 360e3) / 10;
+    const chars = activeChars(); if (!chars.length) { rec.note = "没有参与微博的角色"; return; }
     const from = Math.max(last, now - 3 * 86400e3);
     const pPost = Math.min(0.6, 0.05 + (now - from) / 3600e3 * 0.05); // 2 小时 15%，6 小时 35%，一天以上 60%
     const plans = chars.map(c => { const n = Math.random() < pPost ? (Math.random() < 0.12 ? 2 : 1) : 0;
@@ -1328,6 +1337,9 @@
     const newsBefore = (S.meta.news || []).length; const likedBefore = S.posts.filter(p => p.origin === "liked").length;
     awaySilent(chars, from, now);
     const busy = plans.filter(p => p.n || p.bio || p.liked);
+    rec.dice = plans.map(p => `${p.c.name}：${p.n ? `发 ${p.n} 条` : "不发"}${p.bio ? "、改简介" : ""}${p.liked ? `、赞 ${p.liked} 条` : ""}`).join("；");
+    rec.extra = [npcs.length ? `关注的路人：${npcs.join("、")}` : "", alts.length ? `小号：${alts.map(c => c.name).join("、")}` : ""].filter(Boolean).join("；");
+    rec.api = !!(busy.length || npcs.length || alts.length);
     if (busy.length || npcs.length || alts.length) {
       S.awayBusy = true;
       const lovers = busy.filter(p => p.n && !isAlt() && loveOf(p.c.id).state !== "none" && loverSolo(p.c.id));
@@ -1349,6 +1361,7 @@
     }
     saveMeta(); refreshAll(); ghostTick();
     const n = (S.meta.news || []).length - newsBefore + S.posts.filter(p => p.origin === "liked").length - likedBefore;
+    rec.result = `${n} 条新动态`;
     if (n > 0) toast("你不在的时候大家有新动态，去消息页「通知」看看");
     return n;
   }

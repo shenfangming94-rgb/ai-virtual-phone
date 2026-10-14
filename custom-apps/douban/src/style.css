@@ -811,3 +811,4 @@ img { display: block; }
 .pa-name { font-size: 15.5px; color: var(--wb-text); }
 .post-head h1 .sep { margin: 0 8px; color: var(--wb-text-3); font-weight: 300; }
 .elite.after { margin: 0 0 0 8px; vertical-align: 4px; }
+.post-head h1 { text-wrap: wrap; }

@@ -469,8 +469,9 @@
       mine ? `用户刚刚${mine.author.anon ? "匿名" : ""}回了 ${mine.n} 楼${mine.quote ? `（引用了 ${mine.quote} 楼）` : ""}：「${mine.text}」。接下来 ${n} 层里要有人回应她这层（引用 ${mine.n}），${askChar ? `${charById(askChar).name} 一定会回${mine.author.anon ? "（他不知道这是用户，当陌生豆友回）" : "（他知道这是用户）"}，按他的人设和你们的关系；` : ""}其他豆友可以接着聊。` : "",
       passer ? `${passer.name} 刷到了这个帖子，可能会顺手回一层（按人设决定实名还是匿名，不来也行）。` : "",
       bgLine(cast, g), localLine(g),
+      `时间线：帖子是 ${fmtTime(t.createdAt)} 发的，${t.floors.length ? `最后一层是 ${fmtTime(t.lastReplyAt || t.createdAt)}，` : ""}现在是 ${new Date().toLocaleString("zh-CN", { hour12: false })}。每层的时间按内容排：楼层越往后越晚，都在现在之前；楼主更新的进展要在那件事发生之后（白天的事白天之后更、晚自习的事当晚之后更），还没到时候的事不能更，让大家先蹲着；深夜、凌晨大多是熬夜的人在聊。`,
       `从 ${next} 楼开始，往下写 ${n} 层回应。${t.floors.length ? "接着已有的话题自然往下聊，楼主可以更新进展或下场回复。" : "楼主可以下场回复几层。"}`,
-      `每层：\n===楼===\n层：楼层号\n作者：豆友昵称（楼主就写楼主${t.author.anon ? "；匿名的写 匿名" : ""}）\n角色：角色本名（路人写 无）\n匿名：是 / 否\n楼主：是 / 否\n引用：引用了第几楼（没引用写 无）\nIP：这个人的 IP 属地（省份或城市；楼主的和帖子一致）\n头衔：${(g.titles || []).length ? `这个组的头衔之一（${g.titles.join("、")}），只有一部分人有，没有写 无` : "无"}\n楼主赞过：是 / 否（楼主给这层点了赞，一批最多一两层，大多是 否）\n赞：点赞数（纯数字）\n内容：\n这层的内容\n===结束===`,
+      `每层：\n===楼===\n层：楼层号\n作者：豆友昵称（楼主就写楼主${t.author.anon ? "；匿名的写 匿名" : ""}）\n角色：角色本名（路人写 无）\n匿名：是 / 否\n楼主：是 / 否\n引用：引用了第几楼（没引用写 无）\n时间：这层是什么时候回的（如 昨天 23:40、今天 01:15、2天前 20:10）\nIP：这个人的 IP 属地（省份或城市；楼主的和帖子一致）\n头衔：${(g.titles || []).length ? `这个组的头衔之一（${g.titles.join("、")}），只有一部分人有，没有写 无` : "无"}\n楼主赞过：是 / 否（楼主给这层点了赞，一批最多一两层，大多是 否）\n赞：点赞数（纯数字）\n内容：\n这层的内容\n===结束===`,
     ].filter(Boolean).join("\n\n"), `《${t.title.slice(0, 12)}》的回应`);
     t._busy = false;
     if (text == null) { refreshAll(); return; }
@@ -491,7 +492,10 @@
       if (claimsOp && t.author.type === "user") { if (aiN) dropped.add(aiN); continue; } // 她自己的帖子：楼主的楼只能她自己发，AI 不能替她说
       let author = claimsOp ? { ...t.author } : authorFrom(b);
       if (author.type === "user" || (author.type === "char" && !cast.some(c => c.id === author.charId))) { if (aiN) dropped.add(aiN); continue; }
-      at = mine ? Date.now() - (n - made) * rand(20, 90) * 1000 : at + Math.random() * span / n;
+      // 时间：她刚回的那批跟在她后面（不超过现在）；其他的用 AI 按内容写的时间，代码保证在上一层之后、现在之前，没写就均匀撒
+      const ai = !mine && !none(b["时间"]) ? new Date(parseRelTime(b["时间"])).getTime() : 0;
+      at = mine ? Math.min(Date.now(), Math.max(at, new Date(mine.createdAt).getTime()) + rand(10, 60) * 1000)
+        : ai ? Math.min(Date.now() - (n - made) * 20e3, Math.max(at + 30e3, ai)) : at + Math.random() * span / n;
       const fn = num++; if (aiN) aiMap[aiN] = fn;
       const q = q0 >= next ? aiMap[q0] || 0 : q0; // 本批的楼按实际楼层号换算；只能引用前面已有的楼，不能引用自己
       const fip = claimsOp ? t.ip : none(b["IP"]) ? "" : String(b["IP"]).trim().slice(0, 8);

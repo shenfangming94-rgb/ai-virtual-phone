@@ -56,6 +56,14 @@
     like: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"><path d="M7.5 10.5v9.5H4.5v-9.5zM7.5 10.5 11 3.5c1.6 0 2.5 1 2.3 2.6l-.5 3.4h5.6c1.3 0 2.2 1.2 1.9 2.4l-1.6 6.3c-.2.9-1 1.5-1.9 1.5H7.5"/></svg>',
     liked: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M3.8 10.3h3.6v10.2H3.8zM8.6 10.2 11.9 3c1.9 0 3 1.3 2.7 3.1l-.4 3h5c1.5 0 2.6 1.4 2.2 2.8l-1.7 6.6c-.3 1.1-1.2 1.9-2.4 1.9H8.6z"/></svg>',
     reply: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"><path d="M4 5.5h16v11H9l-5 3.5z"/></svg>',
+    bubble: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M5 4h14a2 2 0 0 1 2 2v8.5a2 2 0 0 1-2 2h-7.2L7 20.5v-4H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z"/></svg>',
+    menu: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><path d="M4 6.5h16M4 12h16M4 17.5h16"/></svg>',
+    camera: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linejoin="round"><path d="M4 8h3.2l1.6-2.5h6.4L16.8 8H20v11H4z"/><circle cx="12" cy="13.3" r="3.3"/></svg>',
+    pen: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 19.5l1.2-4.6L15.9 4.7a1.8 1.8 0 0 1 2.6 0l.8.8a1.8 1.8 0 0 1 0 2.6L9.1 18.3z"/></svg>',
+    more: '<svg viewBox="0 0 24 24" fill="currentColor"><circle cx="6" cy="12" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="18" cy="12" r="1.7"/></svg>',
+    repost: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3.5 20.5 7 17 10.5"/><path d="M4 11V9.5A2.5 2.5 0 0 1 6.5 7h14M7 20.5 3.5 17 7 13.5"/><path d="M20 13v1.5a2.5 2.5 0 0 1-2.5 2.5h-14"/></svg>',
+    fav: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"><path d="M6 3.5h12v17l-6-4-6 4z"/></svg>',
+    favOn: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M6 3.5h12v17l-6-4-6 4z"/></svg>',
     // 底栏（线条，选中时填色）
     home: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"><path d="M4 10.5 12 4l8 6.5V20h-5.5v-5.5h-5V20H4z"/></svg>',
     homeOn: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M4 10.5 12 4l8 6.5V20h-5.5v-5.5h-5V20H4z"/></svg>',
@@ -212,7 +220,7 @@
     } finally { S.jobs.delete(job); refreshAll(); }
   }
   /** ===块=== 解析：字段「名：值」，值可以多行（接到上一个字段） */
-  const KEYS = ["名称", "成员", "简介", "标题", "作者", "角色", "匿名", "时间", "回应数", "正文", "楼主", "赞", "引用", "内容", "层"];
+  const KEYS = ["组长", "成员称呼", "分区", "发言规则", "配图", "精华", "名称", "成员", "简介", "标题", "作者", "角色", "匿名", "时间", "回应数", "正文", "楼主", "赞", "引用", "内容", "层"];
   function parseBlocks(raw, kind) {
     const text = String(raw || "").replace(/```[a-z]*\n?/g, "").replace(/\r/g, "");
     const out = []; let label = null;
@@ -260,18 +268,27 @@
       have.length ? `这些已经有了，不要重复：${have.join("、")}` : "",
       "名字和简介要像真豆瓣：大多数组名简单直白，简介很短很平实（一句话介绍，或者几条组规：禁广告、禁人身攻击、标题加 tag……），只有少数组有点个性。不要文艺抒情、不要排比、不要「这里只存放……」这种句子；也不要写网上烂大街的梗（比如食堂阿姨手抖、颠勺）。",
       bgLine([]),
-      "每个小组：\n===小组===\n名称：小组名\n成员：成员数（纯数字，大组几十万，小众组几百几千）\n简介：一两句小组介绍，像组长写的（可以带组规）\n===结束===",
+      "每个小组：\n===小组===\n名称：小组名\n成员：成员数（纯数字，大组几十万，小众组几百几千）\n成员称呼：这个组对成员的叫法（豆瓣特色，像「小不知道」「组员」「豆友」「病友」，很多组就叫「成员」）\n组长：组长的豆瓣昵称\n简介：一句小组介绍\n发言规则：一两条组规（没有写 无）\n分区：3～4 个讨论分区的名字，用、分隔（像「求助」「吐槽」「分享」或者有组内梗的名字）\n===结束===",
     ].filter(Boolean).join("\n\n"), `搜小组「${term}」`);
     if (text == null) return cached ? cached.map(groupById).filter(Boolean) : [];
     const made = [];
     for (const b of parseBlocks(text, "小组")) {
       const name = String(b["名称"] || "").trim().slice(0, 30); if (!name || S.groups.some(g => g.name === name)) continue;
       const g = { id: uid("g"), scope: S.identity.id, name, members: clampInt(b["成员"], rand(800, 90000)), intro: b["简介"] || "", topicsHint: "", mine: false, admin: false, createdAt: nowIso(), from: term };
+      fillGroupInfo(g, b);
       S.groups.push(g); saveGroup(g); made.push(g);
     }
     const local = S.groups.filter(g => g.name.includes(term) && !made.includes(g));
     S.meta.searches[term] = [...made, ...local].map(g => g.id); saveMeta();
     return [...made, ...local];
+  }
+  /** AI 写的组长、成员称呼、发言规则、分区 → 存到小组上（已经有的不覆盖） */
+  function fillGroupInfo(g, b) {
+    const nick = String(b["组长"] || "").replace(/^@/, "").trim();
+    if (!g.leader && nick && !none(nick) && !isUserName(nick)) g.leader = nick.slice(0, 20);
+    if (!g.memberNoun && !none(b["成员称呼"])) g.memberNoun = String(b["成员称呼"]).trim().slice(0, 8);
+    if (!g.rules && !none(b["发言规则"])) g.rules = String(b["发言规则"]).trim().slice(0, 200);
+    if (!(g.sections || []).length && !none(b["分区"])) g.sections = String(b["分区"]).split(/[、,，/｜|]+/).map(x => x.trim()).filter(Boolean).slice(0, 5);
   }
   /**
    * 进组 / 刷新：写一批新帖子（标题、楼主、首帖正文、回应数），点进帖子才写楼层。
@@ -282,6 +299,7 @@
     const cast = pickCast(activeChars(), 3);
     const hit = cast.length && Math.random() < 0.3 ? cast[0] : null;
     const anon = hit && Math.random() < 0.6;
+    const needInfo = !g.memberNoun || !(g.sections || []).length || (!g.leader && !(g.mine && g.admin));
     const recent = S.topics.filter(t => t.groupId === g.id).sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)).slice(0, 10).map(t => `- ${t.title}`).join("\n");
     const text = await generate((hit ? [hit] : cast.slice(0, 2)).map(c => c.id), "topics", [
       `当前时间：${new Date().toLocaleString("zh-CN", { hour12: false })}`,
@@ -293,18 +311,27 @@
         : "这批帖子全是路人发的，角色都不出现。",
       recent ? `组里已经有这些帖子，不要重复：\n${recent}` : "",
       bgLine(hit ? [hit] : []),
-      "每个帖子：\n===帖子===\n标题：帖子标题\n作者：豆友昵称（匿名发的写 匿名）\n角色：角色本名（路人写 无）\n匿名：是 / 否\n时间：发帖时间（如 3小时前、昨天 21:30、2天前）\n回应数：目前有多少条回应（纯数字）\n正文：\n楼主的首帖正文\n===结束===",
+      (g.sections || []).length ? `组里的分区：${g.sections.join("、")}。每个帖子归到一个分区（闲聊的可以不归，写 无）。` : "",
+      "大约四分之一的帖子带图（晒东西、现场、截图这类才带），写在「配图」里；最多 1 个帖子是组长加精的（内容特别好、特别有用的才加，没有就都写 否）。",
+      needInfo ? `先补全这个小组的信息（只写一次）：\n===小组信息===\n组长：组长的豆瓣昵称${g.mine && g.admin ? "（组长是用户本人，这行写 无）" : ""}\n成员称呼：这个组对成员的叫法（像「小不知道」「组员」「病友」，很多组就叫「成员」）\n发言规则：一两条组规（没有写 无）\n分区：3～4 个讨论分区的名字，用、分隔\n===结束===` : "",
+      "每个帖子：\n===帖子===\n标题：帖子标题（不用自己加分区前缀）\n作者：豆友昵称（匿名发的写 匿名）\n角色：角色本名（路人写 无）\n匿名：是 / 否\n分区：分区名（没有写 无）\n时间：发帖时间（如 3小时前、昨天 21:30、2天前）\n回应数：目前有多少条回应（纯数字）\n配图：图片描述，多张用 | 分隔（不带图写 无）\n精华：是 / 否\n正文：\n楼主的首帖正文\n===结束===",
     ].filter(Boolean).join("\n\n"), `「${g.name}」的帖子`);
     g._busy = false;
     if (text == null) { refreshAll(); return; }
-    let n = 0;
+    const info = parseBlocks(text, "小组信息")[0]; if (info) fillGroupInfo(g, info);
+    let n = 0, elite = 0;
     for (const b of parseBlocks(text, "帖子")) {
       const title = String(b["标题"] || "").trim().slice(0, 60); const body = String(b["正文"] || "").trim();
       if (!title || !body) continue;
       const author = authorFrom(b);
       if (author.type === "char" && (!hit || author.charId !== hit.id)) continue; // 只让掷中的那个出场
       const createdAt = parseRelTime(b["时间"], 600);
-      const t = { id: uid("t"), scope: S.identity.id, groupId: g.id, title, author, body, createdAt, lastReplyAt: createdAt, replyCount: clampInt(b["回应数"], rand(3, 80)), floors: [], liked: false };
+      const sec = String(b["分区"] || "").trim(); const replyCount = clampInt(b["回应数"], rand(3, 80));
+      const isElite = yes(b["精华"]) && elite < 1; if (isElite) elite++;
+      const t = { id: uid("t"), scope: S.identity.id, groupId: g.id, title: title.replace(/^[^|｜]{1,8}\s*[|｜]\s*/, ""), author, body, createdAt, lastReplyAt: createdAt, replyCount, floors: [], liked: false,
+        section: !none(sec) && (g.sections || []).includes(sec) ? sec : "", elite: isElite || undefined,
+        images: none(b["配图"]) ? [] : String(b["配图"]).split(/[|｜]/).map(x => x.trim()).filter(Boolean).slice(0, 4).map(desc => ({ desc })),
+        likes: Math.round(replyCount * (0.2 + Math.random() * 0.8)), favs: Math.round(replyCount * Math.random() * 0.4), reposts: Math.round(replyCount * Math.random() * 0.15) };
       S.topics.push(t); saveTopic(t); n++;
       if (author.type === "char") remember(author.charId, `我在豆瓣小组「${g.name}」${author.anon ? "匿名" : ""}发了个帖子《${title}》：${body.slice(0, 80)}`, `douban_topic_${t.id}`);
     }
@@ -342,7 +369,7 @@
       `当前时间：${new Date().toLocaleString("zh-CN", { hour12: false })}`,
       `小组「${g.name}」里的帖子《${t.title}》（${fmtTime(t.createdAt)} 发的）`,
       opDesc(t),
-      `楼主首帖（1楼）：\n${t.body}`,
+      `楼主首帖（1楼）：\n${t.body}${(t.images || []).length ? `\n（配图：${t.images.map(im => im.desc || "一张照片").join(" | ")}）` : ""}`,
       history ? `已有的楼层：\n${history}` : "",
       mine ? `用户刚刚${mine.author.anon ? "匿名" : ""}回了 ${mine.n} 楼${mine.quote ? `（引用了 ${mine.quote} 楼）` : ""}：「${mine.text}」。接下来 ${n} 层里要有人回应她这层（引用 ${mine.n}），${askChar ? `${charById(askChar).name} 一定会回${mine.author.anon ? "（他不知道这是用户，当陌生豆友回）" : "（他知道这是用户）"}，按他的人设和你们的关系；` : ""}其他豆友可以接着聊。` : "",
       passer ? `${passer.name} 刷到了这个帖子，可能会顺手回一层（按人设决定实名还是匿名，不来也行）。` : "",
@@ -382,8 +409,8 @@
   const pages = [];
   function openPage(key, render, opts = {}) {
     const old = pages.find(p => p.key === key); if (old && pages[pages.length - 1] === old) { old.render(old); return old; }
-    const el = document.createElement("section"); el.className = "page"; el.dataset.key = key;
-    el.innerHTML = `<header class="page-head"><div class="page-head-inner"><button class="back" data-act="back">${I.back}</button><div class="page-title">${esc(opts.title || "")}</div>${opts.action || ""}</div></header><div class="page-body"></div>${opts.footer || ""}`;
+    const el = document.createElement("section"); el.className = `page ${opts.cls || ""}`; el.dataset.key = key;
+    el.innerHTML = `<header class="page-head"><div class="page-head-inner"><button class="back" data-act="back">${I.back}</button><div class="page-title">${opts.head || esc(opts.title || "")}</div>${opts.action || ""}</div></header><div class="page-body"></div>${opts.footer || ""}${opts.after || ""}`;
     document.body.appendChild(el);
     const page = { key, el, render, opts }; pages.push(page); render(page); return page;
   }
@@ -400,6 +427,7 @@
   function renderTab() {
     if (!S.meta) return;
     renderTabbar();
+    $("#topbar").className = `topbar ${S.tab === "me" ? "clear" : ""}`; $("#view").className = `view ${S.tab === "me" ? "under-top" : ""}`;
     ({ home: renderHome, book: renderBook, group: renderGroupTab, market: renderMarket, me: renderMe })[S.tab]();
     hydrateImages($("#view"));
   }
@@ -413,6 +441,7 @@
     diary: ["日记", "第三期", "char 写长日记，可以设成仅自己可见……然后被你看到"],
     doulist: ["豆列", "第二期", "把书影音收进自己的片单"],
     report: ["年度报告", "第二期", "你的书影音年度总结"],
+    album: ["相册", "第三期", "你发过的图都收在这里"],
     mail: ["豆邮", "第四期", "豆瓣私信：char 和豆友找你聊，像微博私信那样"],
     event: ["同城活动", "第五期", "一起去看展、音乐节、话剧，可以约 char"],
     market: ["市集", "以后", "豆瓣好物，暂时不开"],
@@ -420,12 +449,27 @@
   const comingHtml = keys => `<div class="coming-list">${keys.map(k => { const [t, p, d] = COMING[k]; return `<div class="coming-item"><span class="phase">${p}上线</span><b>${t}</b><p>${d}</p></div>`; }).join("")}</div>`;
   function openComing(k) { const [t, p, d] = COMING[k] || ["这个功能", "以后", ""]; openPage(`coming:${k}`, pg => body(pg, `<div class="empty"><div class="big">🌱</div><b>${esc(t)}</b>正在装修中，${esc(p)}上线<br><span style="font-size:13px">${esc(d)}</span></div>`), { title: t }); }
 
-  function topicCard(t, showGroup) {
-    const w = whoOf(t.author); const g = groupById(t.groupId);
-    const mask = t.author.type === "char" && t.author.anon ? `<span class="role-tag mask">${esc(charById(t.author.charId)?.name || "")}的马甲</span>` : "";
-    return `<div class="topic" data-act="open-topic" data-id="${esc(t.id)}"><div class="topic-title">${esc(t.title)}</div><div class="topic-ex">${esc(t.body.slice(0, 80))}</div>
-      <div class="topic-meta">${avatarHtml(w)}<span>${esc(w.name)}</span>${mask}${showGroup && g ? `<span>·</span><span class="grp">${esc(g.name)}</span>` : ""}<span style="margin-left:auto">${fmtNum(Math.max(t.replyCount, t.floors.length))} 回应 · ${fmtTime(t.lastReplyAt || t.createdAt)}</span></div></div>`;
+  /** 小组头像：她换过就用图，没换就是色块 + 首字 */
+  function groupAvaHtml(g, cls) {
+    return g.avatarRef ? `<img class="g-ava ${cls || ""} img" data-ref="${esc(g.avatarRef)}" alt="">` : groupAva(g, cls);
   }
+  const heatColor = n => n >= 300 ? "#f05a4a" : n >= 100 ? "#f7884f" : n >= 30 ? "#f9a46a" : "#f6c66b";
+  /**
+   * 帖子行（照真豆瓣）：左边气泡 + 回应数；标题前有「精」和「分区 |」；下面一行在小组页里是作者，在小组讨论里是小组头像 + 组名；有图的话缩略图在右边
+   * where = "group"（小组内页）/ "feed"（小组标签、首页）
+   */
+  function topicCard(t, where) {
+    const g = groupById(t.groupId) || { name: "" }; const n = Math.max(t.replyCount, t.floors.length);
+    const mask = t.author.type === "char" && t.author.anon ? `<span class="role-tag mask">${esc(charById(t.author.charId)?.name || "")}的马甲</span>` : t.author.type === "user" ? `<span class="role-tag mask">我</span>` : "";
+    const meta = where === "group" ? (w => `${avatarHtml(w)}<span>${esc(w.name)}</span>${mask}`)(whoOf(t.author)) : `${groupAvaHtml(g, "xs")}<span>${esc(g.name)}</span>${mask}`;
+    const img = (t.images || [])[0];
+    return `<div class="trow" data-act="open-topic" data-id="${esc(t.id)}"><div class="trow-n"><i style="color:${heatColor(n)}">${I.bubble}</i><span>${fmtNum(n)}</span></div>
+      <div class="trow-main"><div class="trow-title">${t.elite ? '<span class="elite">精</span>' : ""}${t.section ? `${esc(t.section)}<span class="sep">|</span>` : ""}${esc(t.title)}</div>
+        <div class="trow-meta">${meta}<span class="upd">${fmtTime(t.lastReplyAt || t.createdAt)}更新</span></div></div>
+      ${img ? `<div class="trow-pic">${img.ref ? `<img data-ref="${esc(img.ref)}" alt="">` : placeholderImg()}</div>` : ""}</div>`;
+  }
+  const DEFAULT_PLACEHOLDER = "/*__PLACEHOLDER__*/";
+  const placeholderImg = () => `<img src="${DEFAULT_PLACEHOLDER}" alt="">`;
   const feedTopics = () => S.topics.filter(t => { const g = groupById(t.groupId); return g && isJoined(g); }).sort((a, b) => new Date(b.lastReplyAt || b.createdAt) - new Date(a.lastReplyAt || a.createdAt));
 
   function renderHome() {
@@ -433,7 +477,7 @@
     const list = feedTopics().slice(0, 30);
     $("#view").innerHTML = `<div class="db-sec">动态</div>${comingHtml(["feed"])}
       <div class="db-sec">我的小组新帖<button data-act="tab" data-tab="group">全部 ›</button></div>
-      ${list.length ? list.slice(0, 8).map(t => topicCard(t, true)).join("") : `<div class="empty" style="padding:30px">还没有加入小组，去「小组」搜一个感兴趣的吧</div>`}`;
+      ${list.length ? `<div class="db-white">${list.slice(0, 8).map(t => topicCard(t, "feed")).join("")}</div>` : `<div class="empty" style="padding:30px">还没有加入小组，去「小组」搜一个感兴趣的吧</div>`}`;
   }
   function renderBook() {
     $("#topbar").innerHTML = `<div class="topbar-inner"><span class="top-title">书影音</span></div>`;
@@ -446,24 +490,43 @@
   function renderGroupTab() {
     $("#topbar").innerHTML = topSearch("搜索小组", "open-search");
     const mine = myGroups();
-    const list = feedTopics();
-    $("#view").innerHTML = `<div class="db-sec">我的小组<button data-act="create-group">＋ 创建小组</button></div>
-      ${mine.length ? `<div class="db-mygroups">${mine.map(g => `<button data-act="open-group" data-id="${esc(g.id)}">${groupAva(g)}<span>${esc(g.name)}</span></button>`).join("")}</div>`
-        : `<div class="empty" style="padding:24px 30px">还没有加入小组<br>上面搜一个，或者自己建一个</div>`}
-      <div class="db-sec">小组讨论</div>
-      ${list.length ? list.slice(0, 40).map(t => topicCard(t, true)).join("") : `<div class="empty" style="padding:24px">加入的小组有新帖会出现在这里</div>`}`;
+    const chip = S.groupChip && mine.some(g => g.id === S.groupChip) ? S.groupChip : "all";
+    const list = feedTopics().filter(t => chip === "all" || t.groupId === chip);
+    $("#view").innerHTML = `<div class="db-white">
+      <div class="db-sec2">我的小组<button data-act="all-groups">全部 ›</button></div>
+      <div class="gtiles">${mine.slice(0, 9).map(g => `<button data-act="open-group" data-id="${esc(g.id)}">${groupAvaHtml(g)}<span>${esc(g.name)}</span></button>`).join("")}
+        <button data-act="create-group"><div class="g-ava add">${I.plus}</div><span>创建小组</span></button></div>
+      <div class="db-sec2">正在讨论</div>
+      <div class="chips"><button class="${chip === "all" ? "on" : ""}" data-act="g-chip" data-id="all">全部</button>${mine.map(g => `<button class="${chip === g.id ? "on" : ""}" data-act="g-chip" data-id="${esc(g.id)}">${esc(g.name)}</button>`).join("")}</div>
+      ${list.length ? list.slice(0, 40).map(t => topicCard(t, "feed")).join("") : `<div class="empty" style="padding:30px">${mine.length ? "加入的小组还没有帖子，点进小组看看" : "还没有加入小组：上面搜一个，或者自己建一个"}</div>`}</div>`;
   }
+  /** 「我」：背景图 + 居中头像 + 昵称签名；下面白色大卡片里一栏一栏的模块（书影音、日记、豆列可以左右划，我的小组） */
   function renderMe() {
-    $("#topbar").innerHTML = `<div class="topbar-inner"><span class="top-title">我的</span><button class="top-icon" data-act="open-settings" aria-label="设置">${I.gear}</button></div>`;
+    $("#topbar").innerHTML = `<div class="topbar-inner me-bar"><button class="top-icon" data-act="me-menu" aria-label="菜单" style="margin-left:0">${I.menu}</button><button class="top-icon" data-act="coming" data-what="mail" aria-label="豆邮">${I.mail}</button></div>`;
     const w = whoOf({ type: "user" });
-    const myTopics = S.topics.filter(t => t.author.type === "user");
-    const myFloors = S.topics.reduce((n, t) => n + t.floors.filter(f => f.author.type === "user").length, 0);
-    const grid = [["film", "书影音", "book", "#42bd56"], ["diary", "日记", "diary", "#f4a137"], ["list", "豆列", "doulist", "#3ba1d8"], ["chart", "年度报告", "report", "#e86a8f"],
-      ["pin", "同城活动", "event", "#8a6be0"], ["posts", "我的帖子", "_posts", "#4cb5a8"], ["debug", "调试记录", "_debug", "#8c8c8c"], ["gear", "设置", "_settings", "#5b8ad9"]];
-    $("#view").innerHTML = `<div class="me-top" data-act="edit-me">${avatarHtml(w)}<div class="cell-main"><h2>${esc(w.name)}</h2><div class="cell-sub">${esc(S.meta.sign || "点这里写个签名")}</div></div><span class="cell-sub">编辑 ›</span></div>
-      <div class="me-nums"><button data-act="tab" data-tab="group"><b>${myGroups().length}</b>小组</button><button data-act="my-posts"><b>${myTopics.length}</b>帖子</button><button data-act="my-posts"><b>${myFloors}</b>回应</button><button data-act="coming" data-what="book"><b>0</b>标记</button></div>
-      <div class="db-grid">${grid.map(([ic, label, k, color]) => `<button data-act="${k.startsWith("_") ? k.slice(1) === "posts" ? "my-posts" : k.slice(1) === "debug" ? "open-debug" : "open-settings" : "coming"}" data-what="${k}"><i style="background:${color}">${I[ic]}</i><span>${label}</span></button>`).join("")}</div>
-      <div class="form-note" style="text-align:center">豆瓣 v${VERSION} · 第一期：小组</div>`;
+    const mine = myGroups();
+    const myTopics = S.topics.filter(t => t.author.type === "user").sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+    const slots = (k, n, label) => `<div class="hscroll">${Array.from({ length: n }, () => `<div class="slot" data-act="coming" data-what="${k}"><div class="slot-cover"></div><span>${label}</span></div>`).join("")}</div>`;
+    $("#view").innerHTML = `<div class="me-hero" ${S.meta.coverRef ? `data-bg-ref="${esc(S.meta.coverRef)}"` : ""}>
+        <div class="me-ava" data-act="me-avatar">${avatarHtml(w)}<i>${I.camera}</i></div>
+        <h2>${esc(w.name)}</h2>
+        <div class="me-id">ID：${esc(String(S.identity.id || "").replace(/\D/g, "").slice(-9) || "260397985")}${S.meta.ip ? ` / IP：${esc(S.meta.ip)}` : ""}</div>
+        <div class="me-sign" data-act="edit-me">${I.pen}${esc(S.meta.sign || "介绍下自己")}</div>
+        <div class="me-follow"><span>关注 ${activeChars().length}</span><span>被关注 ${activeChars().length + (S.meta.fansExtra || 0)}</span></div>
+      </div>
+      <div class="me-sheet">
+        <div class="me-tabs"><button class="on">主页</button><button data-act="coming" data-what="feed">动态</button><button data-act="coming" data-what="album">相册</button></div>
+        <div class="mcard"><div class="mcard-h" data-act="coming" data-what="book">书影音<span class="soon">第二期</span><i>›</i></div>${slots("book", 6, "想看")}</div>
+        <div class="mcard"><div class="mcard-h" data-act="all-groups">我的小组 ${mine.length}<i>›</i></div>
+          ${mine.length ? `<div class="hscroll">${mine.map(g => `<button class="gtile" data-act="open-group" data-id="${esc(g.id)}">${groupAvaHtml(g)}<span>${esc(g.name)}</span></button>`).join("")}</div>` : `<div class="mcard-empty">还没有加入小组</div>`}</div>
+        <div class="mcard"><div class="mcard-h" data-act="my-posts">我的帖子 ${myTopics.length}<i>›</i></div>
+          ${myTopics.length ? myTopics.slice(0, 3).map(t => `<div class="mline" data-act="open-topic" data-id="${esc(t.id)}">${esc(t.title)}<span>${fmtTime(t.createdAt)}</span></div>`).join("") : `<div class="mcard-empty">还没发过帖子</div>`}</div>
+        <div class="mcard"><div class="mcard-h" data-act="coming" data-what="diary">日记<span class="soon">第三期</span><i>›</i></div>${slots("diary", 4, "日记")}</div>
+        <div class="mcard"><div class="mcard-h" data-act="coming" data-what="doulist">豆列<span class="soon">第二期</span><i>›</i></div>${slots("doulist", 4, "豆列")}</div>
+        <div class="form-note" style="text-align:center">豆瓣 v${VERSION} · 第一期：小组</div>
+      </div>
+      <button class="fab" data-act="fab-me" aria-label="发帖">${I.pen}</button>`;
+    const hero = $(".me-hero"); if (hero && hero.dataset.bgRef) mediaUrl(hero.dataset.bgRef).then(u => { if (u) hero.style.backgroundImage = `linear-gradient(rgba(0,0,0,.25),rgba(0,0,0,.35)),url("${u}")`; });
   }
 
   // ───────────────────────── 搜索 / 建组 / 小组页 ─────────────────────────
@@ -506,21 +569,34 @@
       S.groups.push(g); saveGroup(g); closePage(); openGroup(g.id); toast("小组建好了");
     };
   }
+  /** 小组内页（照真豆瓣）：整块彩色/自选背景的头，组头像 + 名字 + 「N 成员称呼 · 组长 xx」+ 右边加入；简介和发言规则；分区标签；最新/热门/精华；右下角笔 */
   function openGroup(id) {
     const g = groupById(id); if (!g) return;
-    let fold = true;
+    let sec = "all", sort = "new";
     const page = openPage(`group:${id}`, pg => {
-      const list = S.topics.filter(t => t.groupId === id).sort((a, b) => new Date(b.lastReplyAt || b.createdAt) - new Date(a.lastReplyAt || a.createdAt));
-      body(pg, `<div class="g-head">${groupAva(g, "lg")}<div class="cell-main"><h2>${esc(g.name)}</h2><div class="cell-sub">${fmtNum(g.members)} 个成员${g.mine ? ` · ${g.admin ? "你是组长" : "你创建的"}` : ""}</div></div></div>
-        ${g.intro ? `<div class="g-intro ${fold ? "fold" : ""}" data-act="g-fold">${esc(g.intro)}</div>` : ""}
-        <div class="g-acts">${g.mine ? `<button class="on" data-act="edit-group" data-id="${esc(id)}">编辑小组</button>` : `<button class="${isJoined(g) ? "on" : "fill"}" data-act="toggle-join" data-id="${esc(id)}">${isJoined(g) ? "已加入" : "加入小组"}</button>`}
-          <button class="fill" data-act="new-topic" data-id="${esc(id)}">发帖</button></div>
-        <div class="floors-head">讨论<button class="only-op" data-act="g-refresh" data-id="${esc(id)}" ${g._busy ? "disabled" : ""}>${g._busy ? "刷新中…" : "刷新"}</button></div>
-        ${g._busy && !list.length ? `<div class="gen-tip"><span class="spinner"></span>正在进组看看大家在聊什么…</div>` : ""}
-        ${list.map(t => topicCard(t)).join("")}
-        ${!list.length && !g._busy ? `<div class="empty" style="padding:30px">还没有帖子</div>` : ""}`);
-    }, { title: "小组" });
-    page.unfold = () => { fold = !fold; page.render(page); };
+      const all = S.topics.filter(t => t.groupId === id);
+      let list = all.filter(t => sec === "all" || t.section === sec);
+      if (sort === "elite") list = list.filter(t => t.elite);
+      list.sort(sort === "hot" ? (a, b) => Math.max(b.replyCount, b.floors.length) - Math.max(a.replyCount, a.floors.length) : (a, b) => new Date(b.lastReplyAt || b.createdAt) - new Date(a.lastReplyAt || a.createdAt));
+      const leader = g.mine && g.admin ? `${S.meta.nickname}（你）` : g.leader || "";
+      body(pg, `<div class="g-hero" style="background:${g.coverRef ? "#333" : `linear-gradient(160deg, ${groupColor(g)}, ${groupColor(g)}cc)`}" ${g.coverRef ? `data-bg-ref="${esc(g.coverRef)}"` : ""}>
+          <div class="g-hero-top">${groupAvaHtml(g, "lg")}<div class="cell-main"><h2>${esc(g.name)}</h2><div class="g-sub">${fmtNum(g.members)} ${esc(g.memberNoun || "成员")}${leader ? ` · 组长 ${esc(leader)}` : ""}</div></div>
+            ${g.mine ? `<button class="g-join2 on" data-act="edit-group" data-id="${esc(id)}">管理</button>` : `<button class="g-join2 ${isJoined(g) ? "on" : ""}" data-act="toggle-join" data-id="${esc(id)}">${isJoined(g) ? "已加入" : "加入"}</button>`}</div>
+          ${g.intro ? `<div class="g-line"><b>小组简介：</b>${esc(g.intro)}</div>` : ""}
+          ${g.rules ? `<div class="g-line"><b>发言规则：</b>${esc(g.rules)}</div>` : ""}
+        </div>
+        <div class="db-white">
+        <div class="sec-tabs"><button class="${sec === "all" ? "on" : ""}" data-act="g-sec" data-v="all">全部</button>${(g.sections || []).map(x => `<button class="${sec === x ? "on" : ""}" data-act="g-sec" data-v="${esc(x)}">${esc(x)}</button>`).join("")}</div>
+        <div class="list-head">讨论列表<div class="seg3">${[["new", "最新"], ["hot", "热门"], ["elite", "精华"]].map(([k, l]) => `<button class="${sort === k ? "on" : ""}" data-act="g-sort" data-v="${k}">${l}</button>`).join("")}</div></div>
+        ${g._busy && !all.length ? `<div class="gen-tip"><span class="spinner"></span>正在进组看看大家在聊什么…</div>` : ""}
+        ${list.map(t => topicCard(t, "group")).join("")}
+        ${!list.length && !g._busy ? `<div class="empty" style="padding:30px">${sort === "elite" ? "还没有精华帖" : "还没有帖子"}</div>` : ""}
+        ${all.length ? (g._busy ? `<div class="gen-tip"><span class="spinner"></span>刷新中…</div>` : `<button class="load-more" data-act="g-refresh" data-id="${esc(id)}">看看有没有新帖（会用 1 次 API）</button>`) : ""}
+        </div>`);
+      const hero = $(".g-hero", pg.el); if (hero && hero.dataset.bgRef) mediaUrl(hero.dataset.bgRef).then(u => { if (u) hero.style.background = `linear-gradient(rgba(0,0,0,.3),rgba(0,0,0,.45)),center/cover url("${u}")`; });
+    }, { title: "", cls: "gpage", action: `<button class="top-icon" data-act="group-menu" data-id="${esc(id)}" aria-label="更多">${I.more}</button>`, after: `<button class="fab" data-act="new-topic" data-id="${esc(id)}" aria-label="发帖">${I.pen}</button>` });
+    page.setSec = v => { sec = v; page.render(page); };
+    page.setSort = v => { sort = v; page.render(page); };
     if (!S.topics.some(t => t.groupId === id)) genTopics(g);
   }
   function editGroup(id) {
@@ -542,51 +618,85 @@
       a.type === "user" && a.anon ? `<span class="role-tag mask">我</span>` : "",
       a.type === "char" && a.anon ? `<span class="role-tag mask">${esc(charById(a.charId)?.name || "")}的马甲</span>` : ""].join("");
   }
+  /** 帖子页（照真豆瓣）：顶部作者 + 关注；标题、正文、配图；回复/赞/转发/收藏；全部回复 + 「楼主」筛选；底部 实名匿名 + 写回复 + 赞转发收藏 */
   function openTopic(id) {
     const t0 = topicById(id); if (!t0) return;
     let onlyOp = false; let quote = null; let anon = false;
+    const w0 = whoOf(t0.author);
     const page = openPage(`topic:${id}`, pg => {
       const t = topicById(id); if (!t) { body(pg, `<div class="empty">帖子已删除</div>`); return; }
       const g = groupById(t.groupId) || { name: "" }; const w = whoOf(t.author);
       const floors = onlyOp ? t.floors.filter(f => sameAuthor(f.author, t.author)) : t.floors;
-      body(pg, `<div class="post-head"><h1>${esc(t.title)}</h1><div class="post-author">${avatarHtml(w)}<div class="cell-main"><div style="font-size:14.5px;color:var(--wb-link)">${esc(w.name)}${roleTags(t, t.author).replace('<span class="role-tag op">楼主</span>', "")}</div>
-          <div class="post-from">${fmtTime(t.createdAt)} · 来自 <span class="grp" data-act="open-group" data-id="${esc(t.groupId)}">${esc(g.name)}</span></div></div></div></div>
+      const n = Math.max(t.replyCount, t.floors.length);
+      body(pg, `<div class="post-head"><h1>${t.elite ? '<span class="elite">精</span>' : ""}${esc(t.title)}</h1>
+          <div class="post-from">${fmtTime(t.createdAt)} · 来自 <span class="grp" data-act="open-group" data-id="${esc(t.groupId)}">${esc(g.name)}</span>${t.section ? ` · ${esc(t.section)}` : ""}${roleTags(t, t.author).replace('<span class="role-tag op">楼主</span>', "")}</div></div>
         <div class="post-body">${esc(t.body)}</div>
-        <div class="floors-head">回应 ${fmtNum(Math.max(t.replyCount, t.floors.length))}<button class="only-op ${onlyOp ? "on" : ""}" data-act="only-op">只看楼主</button></div>
+        ${(t.images || []).length ? `<div class="post-pics">${t.images.map((im, k) => `<div class="post-pic" data-act="topic-pic" data-idx="${k}">${im.ref ? `<img data-ref="${esc(im.ref)}" alt="">` : placeholderImg()}${!im.ref && im.desc ? `<span>${esc(im.desc)}</span>` : ""}</div>`).join("")}</div>` : ""}
+        <div class="post-stats"><span class="on">回复 ${fmtNum(n)}</span><span>赞 ${fmtNum(t.likes || 0)}</span><span>转发 ${fmtNum(t.reposts || 0)}</span><span>收藏 ${fmtNum(t.favs || 0)}</span></div>
+        <div class="list-head">全部回复<button class="op-filter ${onlyOp ? "on" : ""}" data-act="only-op">楼主</button></div>
         ${floors.map(f => { const fw = whoOf(f.author); const q = f.quote ? t.floors.find(x => x.n === f.quote) : null;
-          return `<div class="floor" data-act="floor" data-n="${f.n}">${avatarHtml(fw)}<div class="cell-main"><div class="floor-top"><span>${esc(fw.name)}</span>${roleTags(t, f.author)}<span class="fl-no">${f.n}楼</span></div>
-            ${q ? `<div class="floor-quote">${esc(whoOf(q.author).name)}（${q.n}楼）：${esc(q.text)}</div>` : f.quote ? `<div class="floor-quote">${f.quote === 1 ? `${esc(w.name)}（1楼）：${esc(t.body.slice(0, 80))}` : `${f.quote}楼`}</div>` : ""}
-            <div class="floor-text">${esc(f.text)}</div>
-            <div class="floor-foot"><span>${fmtTime(f.createdAt)}</span><button class="${f.liked ? "on" : ""}" data-act="floor-like" data-n="${f.n}">${f.liked ? I.liked : I.like}${f.likes ? fmtNum(f.likes) : "赞"}</button><button data-act="floor-quote" data-n="${f.n}">${I.reply}回应</button></div></div></div>`; }).join("")}
+          return `<div class="floor" data-act="floor" data-n="${f.n}">${avatarHtml(fw)}<div class="cell-main"><div class="floor-top"><span class="nm">${esc(fw.name)}</span>${roleTags(t, f.author)}<span class="fl-t">${fmtTime(f.createdAt)} · ${f.n}楼</span>
+              <button class="fl-like ${f.liked ? "on" : ""}" data-act="floor-like" data-n="${f.n}">${f.likes ? fmtNum(f.likes) : ""}${f.liked ? I.liked : I.like}</button></div>
+            ${q ? `<div class="floor-quote">${esc(whoOf(q.author).name)}：${esc(q.text)}</div>` : f.quote === 1 ? `<div class="floor-quote">${esc(w.name)}：${esc(t.body.slice(0, 80))}</div>` : ""}
+            <div class="floor-text">${esc(f.text)}</div></div></div>`; }).join("")}
         ${t._busy ? `<div class="gen-tip"><span class="spinner"></span>${t.floors.length ? "楼下有人在打字…" : "正在加载回应…"}</div>` : t.floors.length ? `<button class="load-more" data-act="more-floors">加载更多回应（会用 1 次 API）</button>` : ""}`);
       const qb = $(".reply-quote", pg.el); qb.classList.toggle("hidden", !quote);
-      if (quote) { const f = t.floors.find(x => x.n === quote); qb.innerHTML = `<div class="cell-main">回应 ${quote}楼 ${esc(f ? whoOf(f.author).name : "")}：${esc(f ? f.text : "")}</div><button data-act="unquote">✕</button>`; }
+      if (quote) { const f = t.floors.find(x => x.n === quote); qb.innerHTML = `<div class="cell-main">回复 ${esc(f ? whoOf(f.author).name : "")}：${esc(f ? f.text : "")}</div><button data-act="unquote">✕</button>`; }
       const chip = $(".anon-chip", pg.el); chip.classList.toggle("on", anon); chip.textContent = anon ? "匿名" : "实名";
-    }, { title: "帖子", footer: `<div class="reply-quote hidden"></div><div class="reply-bar"><button class="anon-chip" data-act="toggle-anon">实名</button><textarea class="reply-input" rows="1" placeholder="说点什么…" maxlength="500"></textarea><button class="reply-send" disabled>发送</button></div>` });
+      $(".bb-like", pg.el).classList.toggle("on", !!t.liked); $(".bb-like", pg.el).innerHTML = t.liked ? I.liked : I.like;
+      $(".bb-fav", pg.el).classList.toggle("on", !!t.faved); $(".bb-fav", pg.el).innerHTML = t.faved ? I.favOn : I.fav;
+    }, { head: `<div class="topic-head" data-act="noop">${avatarHtml(w0)}<span>${esc(w0.name)}</span>${t0.author.type === "user" || t0.author.anon ? "" : `<button class="follow-mini ${isFollowing(t0.author) ? "on" : ""}" data-act="follow-author">${isFollowing(t0.author) ? "已关注" : "＋关注"}</button>`}</div>`,
+      footer: `<div class="reply-quote hidden"></div><div class="reply-bar bb"><button class="anon-chip" data-act="toggle-anon">实名</button><textarea class="reply-input" rows="1" placeholder="写回复" maxlength="500"></textarea><button class="reply-send hidden">发送</button>
+        <span class="bb-icons"><button class="bb-like" data-act="topic-like">${I.like}</button><button data-act="topic-repost">${I.repost}</button><button class="bb-fav" data-act="topic-fav">${I.fav}</button></span></div>` });
     page.setOnlyOp = () => { onlyOp = !onlyOp; page.render(page); };
     page.setQuote = n => { quote = n; page.render(page); $(".reply-input", page.el).focus(); };
     page.toggleAnon = () => { anon = !anon; page.render(page); };
-    const input = $(".reply-input", page.el); const send = $(".reply-send", page.el);
-    input.addEventListener("input", () => { send.disabled = !input.value.trim(); input.style.height = "auto"; input.style.height = Math.min(100, input.scrollHeight) + "px"; });
+    const input = $(".reply-input", page.el); const send = $(".reply-send", page.el); const icons = $(".bb-icons", page.el);
+    input.addEventListener("input", () => { const has = !!input.value.trim(); send.classList.toggle("hidden", !has); icons.classList.toggle("hidden", has); input.style.height = "auto"; input.style.height = Math.min(100, input.scrollHeight) + "px"; });
     send.addEventListener("click", () => {
       const t = topicById(id); const text = input.value.trim(); if (!t || !text) return;
       const n = (t.floors.length ? t.floors[t.floors.length - 1].n : 1) + 1;
       const f = { n, author: { type: "user", anon }, text, likes: 0, quote, createdAt: nowIso() };
       t.floors.push(f); t.lastReplyAt = f.createdAt; t.replyCount = Math.max(t.replyCount, t.floors.length); saveTopic(t);
-      quote = null; input.value = ""; send.disabled = true; input.style.height = "";
+      quote = null; input.value = ""; send.classList.add("hidden"); icons.classList.remove("hidden"); input.style.height = "";
       page.render(page); const b = $(".page-body", page.el); b.scrollTop = b.scrollHeight;
       genFloors(t, f);
     });
     if (!t0.floors.length) genFloors(t0);
   }
-  /** 她发帖：选组、标题、正文、实名/匿名 → 楼下来人 */
+  const followKey = a => a.type === "char" ? `c:${a.charId}` : `n:${a.name}`;
+  const isFollowing = a => !a.anon && (S.meta.follows || []).includes(followKey(a));
+  /** 看大图：描述图可以「生成这张图」 */
+  function openViewer(images, idx, onSave, charId) {
+    const img = images[idx]; if (!img) return;
+    const el = document.createElement("div"); el.className = "viewer";
+    const draw = async () => {
+      const url = img.ref ? await mediaUrl(img.ref) : "";
+      el.innerHTML = `<div class="idx">${idx + 1}/${images.length}</div>${url ? `<img src="${url}" alt="">` : placeholderImg()}${img.desc ? `<div class="desc">${esc(img.desc)}</div>` : ""}
+        <div class="tools">${!url && img.desc && api.ai.generateImage ? `<button data-v="gen">生成这张图</button>` : ""}<button data-v="close">关闭</button></div>`;
+    };
+    el.onclick = async e => {
+      const b = e.target.closest("[data-v]"); if (!b) { el.remove(); return; }
+      if (b.dataset.v === "close") { el.remove(); return; }
+      b.disabled = true; b.textContent = "生成中…（10~30 秒）";
+      try {
+        const r = await api.ai.generateImage({ prompt: img.desc, characterId: charId, useReferenceImage: false, timeoutMs: 120000 });
+        if (r && r.dataUrl) { const st = await api.media.put({ dataUrl: r.dataUrl }); img.ref = st.ref; S.mediaCache.set(st.ref, r.dataUrl); onSave && onSave(); await draw(); refreshAll(); }
+      } catch (err) { toast(`生图失败：${(err && err.message) || err}`.slice(0, 60)); b.disabled = false; b.textContent = "生成这张图"; }
+    };
+    document.body.appendChild(el); draw();
+  }
+  /** 她发帖：标题、正文、分区、配图（相册或描述）、实名/匿名 → 楼下来人 */
   function newTopic(groupId) {
     const g = groupById(groupId); if (!g) return;
-    const d = { title: "", body: "", anon: false };
+    const d = { title: "", body: "", anon: false, section: "", images: [] };
     openPage(`new-topic:${groupId}`, pg => {
       body(pg, `<div class="form"><div class="form-note" style="margin:0">发到「${esc(g.name)}」</div>
+        ${(g.sections || []).length ? `<div class="chips" style="padding:10px 16px;background:var(--wb-card)"><button class="${!d.section ? "on" : ""}" data-act="nt-sec" data-v="">不选分区</button>${g.sections.map(x => `<button class="${d.section === x ? "on" : ""}" data-act="nt-sec" data-v="${esc(x)}">${esc(x)}</button>`).join("")}</div>` : ""}
         <div class="form-row"><label>标题</label><input id="nt-title" maxlength="60" placeholder="帖子标题" value="${esc(d.title)}"></div>
-        <div class="form-row" style="align-items:flex-start"><label style="padding-top:14px">正文</label><textarea id="nt-body" style="min-height:180px" maxlength="3000" placeholder="说点什么……">${esc(d.body)}</textarea></div>
+        <div class="form-row" style="align-items:flex-start"><label style="padding-top:14px">正文</label><textarea id="nt-body" style="min-height:160px" maxlength="3000" placeholder="说点什么……">${esc(d.body)}</textarea></div>
+        <div class="nt-pics">${d.images.map((im, k) => `<div class="post-pic sm" data-act="nt-pic-rm" data-idx="${k}">${im.ref ? `<img data-ref="${esc(im.ref)}" alt="">` : placeholderImg()}${!im.ref ? `<span>${esc(im.desc)}</span>` : ""}</div>`).join("")}
+          ${d.images.length < 4 ? `<button class="nt-add" data-act="nt-pic">＋<span>配图</span></button>` : ""}</div>
         <div class="list-cell"><div class="cell-main"><div>匿名发帖</div><div class="cell-sub">显示成「匿名豆友」，char 和豆友都不知道是你</div></div><button class="switch ${d.anon ? "on" : ""}" data-act="nt-anon"><span></span></button></div></div>`);
       $("#nt-title", pg.el).oninput = e => { d.title = e.target.value; }; $("#nt-body", pg.el).oninput = e => { d.body = e.target.value; };
     }, { title: "发帖", action: `<button class="top-icon" style="width:auto;color:var(--wb-orange);font-size:15px" data-act="nt-send">发布</button>` }).draft = d;
@@ -594,7 +704,8 @@
   function sendTopic(pg) {
     const d = pg.draft; const groupId = pg.key.split(":")[1];
     if (!d.title.trim() || !d.body.trim()) { toast("标题和正文都要写"); return; }
-    const t = { id: uid("t"), scope: S.identity.id, groupId, title: d.title.trim(), author: { type: "user", anon: d.anon }, body: d.body.trim(), createdAt: nowIso(), lastReplyAt: nowIso(), replyCount: 0, floors: [] };
+    const t = { id: uid("t"), scope: S.identity.id, groupId, title: d.title.trim(), author: { type: "user", anon: d.anon }, body: d.body.trim(), createdAt: nowIso(), lastReplyAt: nowIso(), replyCount: 0, floors: [],
+      section: d.section || "", images: d.images, likes: 0, favs: 0, reposts: 0 };
     S.topics.push(t); saveTopic(t);
     const g = groupById(groupId); if (g && !isJoined(g)) { S.meta.joined.push(g.id); saveMeta(); }
     closePage(); openTopic(t.id); toast(d.anon ? "匿名发出去了" : "发布成功");
@@ -604,7 +715,7 @@
   function openMyPosts() {
     openPage("my-posts", pg => {
       const list = S.topics.filter(t => t.author.type === "user" || t.floors.some(f => f.author.type === "user")).sort((a, b) => new Date(b.lastReplyAt) - new Date(a.lastReplyAt));
-      body(pg, list.length ? list.map(t => topicCard(t, true)).join("") : `<div class="empty">还没有发过帖子或回应</div>`);
+      body(pg, list.length ? `<div class="db-white">${list.map(t => topicCard(t, "feed")).join("")}</div>` : `<div class="empty">还没有发过帖子或回应</div>`);
     }, { title: "我的帖子和回应" });
   }
   function openEditMe() {
@@ -666,6 +777,60 @@
         while (pages.length) { const p = pages.pop(); p.el.remove(); } renderTab(); toast("已解散"); return;
       }
       case "new-topic": newTopic(el.dataset.id); return;
+      case "noop": return;
+      case "all-groups": {
+        const mine = myGroups(); if (!mine.length) { toast("还没有加入小组"); return; }
+        openPage("all-groups", p2 => body(p2, `<div class="db-white">${mine.map(g => `<div class="g-row" data-act="open-group" data-id="${esc(g.id)}">${groupAvaHtml(g)}<div class="cell-main"><b>${esc(g.name)}</b><div class="cell-sub">${fmtNum(g.members)} ${esc(g.memberNoun || "成员")}${g.mine ? " · 你创建的" : ""}</div></div></div>`).join("")}</div>`), { title: `我的小组 ${mine.length}` });
+        return;
+      }
+      case "g-chip": S.groupChip = el.dataset.id; renderTab(); return;
+      case "g-sec": if (pg && pg.setSec) pg.setSec(el.dataset.v); return;
+      case "g-sort": if (pg && pg.setSort) pg.setSort(el.dataset.v); return;
+      case "group-menu": {
+        const g = groupById(el.dataset.id); if (!g) return;
+        const v = await sheet(g.name, [{ label: "换小组头像", value: "ava" }, { label: "换背景", value: "cover" }, ...(g.avatarRef || g.coverRef ? [{ label: "恢复默认头像和背景", value: "reset" }] : []),
+          { label: "看看有没有新帖（1 次 API）", value: "refresh" }, ...(g.mine ? [{ label: "编辑小组", value: "edit" }] : isJoined(g) ? [{ label: "退出小组", value: "quit", danger: true }] : [])]);
+        if (v === "ava" || v === "cover") { try { const [ref] = await pickImages(1, v === "ava" ? 400 : 1200); if (ref) { g[v === "ava" ? "avatarRef" : "coverRef"] = ref; saveGroup(g); refreshAll(); } } catch (err) { toast("上传失败"); } }
+        if (v === "reset") { g.avatarRef = null; g.coverRef = null; saveGroup(g); refreshAll(); }
+        if (v === "refresh") genTopics(g);
+        if (v === "edit") editGroup(g.id);
+        if (v === "quit") { S.meta.joined = S.meta.joined.filter(x => x !== g.id); saveMeta(); toast("已退出小组"); refreshAll(); }
+        return;
+      }
+      case "fab-me": {
+        const mine = myGroups(); if (!mine.length) { toast("先加入或创建一个小组"); return; }
+        const v = await sheet("发到哪个小组", mine.map(g => ({ label: g.name, value: g.id }))); if (v) newTopic(v); return;
+      }
+      case "me-menu": {
+        const v = await sheet("", [{ label: "编辑资料", value: "edit" }, { label: "换背景图", value: "cover" }, ...(S.meta.coverRef ? [{ label: "恢复默认背景", value: "uncover" }] : []), { label: "设置", value: "set" }, { label: "调试记录", value: "debug" }]);
+        if (v === "edit") openEditMe(); if (v === "set") openSettings(); if (v === "debug") openDebug();
+        if (v === "cover") { try { const [ref] = await pickImages(1, 1200); if (ref) { S.meta.coverRef = ref; saveMeta(); renderTab(); } } catch (err) { toast("上传失败"); } }
+        if (v === "uncover") { S.meta.coverRef = null; saveMeta(); renderTab(); }
+        return;
+      }
+      case "topic-like": case "topic-fav": case "topic-repost": {
+        const t = topicById(pg.key.split(":")[1]); if (!t) return;
+        if (act === "topic-like") { t.liked = !t.liked; t.likes = Math.max(0, (t.likes || 0) + (t.liked ? 1 : -1)); }
+        if (act === "topic-fav") { t.faved = !t.faved; t.favs = Math.max(0, (t.favs || 0) + (t.faved ? 1 : -1)); toast(t.faved ? "已收藏" : "已取消收藏"); }
+        if (act === "topic-repost") { t.reposts = (t.reposts || 0) + 1; toast("转发到广播的功能第三期上线，先帮你记一笔转发数"); }
+        saveTopic(t); pg.render(pg); return;
+      }
+      case "follow-author": {
+        const t = topicById(pg.key.split(":")[1]); if (!t || t.author.anon) { toast("匿名豆友没法关注"); return; }
+        const k = followKey(t.author); const on = (S.meta.follows || []).includes(k);
+        S.meta.follows = on ? S.meta.follows.filter(x => x !== k) : [...(S.meta.follows || []), k]; saveMeta();
+        el.classList.toggle("on", !on); el.textContent = on ? "＋关注" : "已关注"; return;
+      }
+      case "topic-pic": { const t = topicById(pg.key.split(":")[1]); if (t) openViewer(t.images, +el.dataset.idx, () => saveTopic(t), t.author.charId); return; }
+      case "nt-sec": if (pg && pg.draft) { pg.draft.section = el.dataset.v; pg.render(pg); } return;
+      case "nt-pic": {
+        if (!pg || !pg.draft) return;
+        const how = await sheet("配图", [{ label: "从相册选", value: "pick" }, { label: "写一段描述当图片", value: "desc" }]);
+        if (how === "pick") { try { const refs = await pickImages(4 - pg.draft.images.length, 1280); pg.draft.images.push(...refs.map(ref => ({ ref, desc: "" }))); } catch (err) { toast("上传失败"); } }
+        if (how === "desc") { const desc = await inputSheet("图片描述", { placeholder: "画面里有什么", maxlength: 200, area: true }); if (desc) pg.draft.images.push({ desc }); }
+        pg.render(pg); return;
+      }
+      case "nt-pic-rm": if (pg && pg.draft) { pg.draft.images.splice(+el.dataset.idx, 1); pg.render(pg); } return;
       case "nt-anon": if (pg && pg.draft) { pg.draft.anon = !pg.draft.anon; pg.render(pg); } return;
       case "nt-send": if (pg && pg.draft) sendTopic(pg); return;
       case "open-topic": openTopic(el.dataset.id); return;

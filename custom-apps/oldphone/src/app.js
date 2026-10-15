@@ -23,7 +23,17 @@
   };
 
   // ───────────────────────── 状态 ─────────────────────────
-  const S = { view: "boot", sel: 0, unread: 0, battery: 4, meta: { operator: true } };
+  const S = { view: "boot", sel: 0, unread: 0, battery: 4, meta: { id: "meta", operator: true } };
+  // ───────────────────────── 存档 ─────────────────────────
+  const COL = { meta: "meta" };
+  async function loadMeta() { try { const rows = (await api.db.list(COL.meta, { limit: 50 })) || []; const m = rows.find(r => r.id === "meta"); if (m) S.meta = { ...S.meta, ...m }; } catch (e) { console.warn(e); } }
+  let metaT = null;
+  function saveMeta() { clearTimeout(metaT); metaT = setTimeout(async () => { try { const u = await api.db.update(COL.meta, "meta", S.meta); if (!u) await api.db.create(COL.meta, S.meta); } catch (e) { try { await api.db.create(COL.meta, S.meta); } catch (e2) { console.warn(e2); } } }, 200); }
+  /** 外观里的选项：[名字, 现在的值, 按确认时做什么] */
+  const LOOKS = () => [
+    ["运营商", S.meta.operator !== false ? "开" : "关", () => { S.meta.operator = S.meta.operator === false; saveMeta(); }],
+    ["机身颜色", "银色", null], ["屏幕颜色", "绿屏", null], ["贴纸", "", null],
+  ];
   const MENU = [["✉", "信息"], ["☎", "电话本"], ["↺", "通话记录"], ["✿", "外观"], ["?", "关于这部手机"]];
 
   // ───────────────────────── 外壳（只画一次） ─────────────────────────
@@ -64,6 +74,7 @@
     standby: () => { const now = new Date(); const th = thereDate(now);
       return `${bar()}${S.meta && S.meta.operator !== false ? `<div class="op s18">中国移动</div>` : ""}<div class="center"><div class="s48 bold">${hm(th)}</div><div class="s18">${ymd(th)} ${week(th)}</div></div>${soft("菜单", "电话本")}`; },
     menu: () => `${bar()}<div class="title">菜单</div><div class="list">${MENU.map(([i, t], n) => `<div class="${n === S.sel ? "on" : ""}"><i>${i}</i>${t}</div>`).join("")}</div>${soft("选择", "返回")}`,
+    looks: () => `${bar()}<div class="title">外观</div><div class="list">${LOOKS().map(([t, v], n) => `<div class="${n === S.sel ? "on" : ""}"><span style="flex:1">${esc(t)}</span>${esc(v)}</div>`).join("")}</div>${soft(LOOKS()[S.sel] && LOOKS()[S.sel][2] ? "切换" : "", "返回")}`,
     todo: () => `${bar()}<div class="title">${esc(S.todo)}</div><div class="center"><div class="s18">还在做<br>马上就好</div></div>${soft("", "返回")}`,
   };
   function draw() { const lcd = $("#lcd"); lcd.innerHTML = (VIEWS[S.view] || VIEWS.standby)(); }
@@ -79,17 +90,24 @@
       if (k === "up" || k === "left") { S.sel = (S.sel + MENU.length - 1) % MENU.length; return draw(); }
       if (k === "down" || k === "right") { S.sel = (S.sel + 1) % MENU.length; return draw(); }
       if (/^[1-9]$/.test(k) && +k <= MENU.length) { S.sel = +k - 1; draw(); k = "ok"; }
-      if (k === "ok" || k === "softL") { S.todo = MENU[S.sel][1]; return go("todo"); }
+      if (k === "ok" || k === "softL") { if (MENU[S.sel][1] === "外观") return go("looks"); S.todo = MENU[S.sel][1]; S.back = "menu"; return go("todo"); }
       if (k === "softR") return go("standby");
     }
-    if (S.view === "todo" && (k === "softR" || k === "ok")) return go("menu");
+    if (S.view === "looks") {
+      const L = LOOKS();
+      if (k === "up" || k === "left") { S.sel = (S.sel + L.length - 1) % L.length; return draw(); }
+      if (k === "down" || k === "right") { S.sel = (S.sel + 1) % L.length; return draw(); }
+      if (k === "ok" || k === "softL") { const f = L[S.sel][2]; if (f) { f(); return draw(); } S.todo = L[S.sel][0]; S.back = "looks"; return go("todo"); }
+      if (k === "softR") { go("menu"); S.sel = MENU.findIndex(m => m[1] === "外观"); return draw(); }
+    }
+    if (S.view === "todo" && (k === "softR" || k === "ok")) { const back = S.back || "menu"; go(back); return; }
   }
   // 背光：15 秒没按键变暗，按任何键亮
   let dimT = null;
   function wake() { const lcd = $("#lcd"); lcd.classList.remove("dim", "off"); clearTimeout(dimT); dimT = setTimeout(() => lcd.classList.add("dim"), 15000); }
 
   async function boot() {
-    shell();
+    shell(); await loadMeta();
     document.addEventListener("click", e => { const b = e.target.closest("[data-k]"); if (b) press(b.dataset.k); });
     S.bootStep = 0; draw();
     await new Promise(r => setTimeout(r, 300)); $("#lcd").classList.remove("off");

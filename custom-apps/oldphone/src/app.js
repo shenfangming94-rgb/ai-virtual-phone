@@ -192,7 +192,7 @@
   V.compose = {
     draw: () => { const c = S.compose; const n = [...c.text].length; const parts = Math.max(1, Math.ceil(n / 70));
       const to = c.to ? shown(personById(c.to) || {}) : c.number || "";
-      return `${bar()}<div class="title"><span class="cut">${to ? `给 ${esc(to)}` : "写信息"}</span><span class="r">${n % 70 || (n ? 70 : 0)}/${parts}</span></div><div class="scroll s18 typing">${esc(c.text)}<i class="caret"></i>${n ? "" : `<span class="hint">点这里打字</span>`}</div>${soft(n ? "发送" : "", n ? "存草稿" : "返回")}`; },
+      return `${bar()}<div class="title"><span class="cut">${c.next ? "下一条" : to ? `给 ${esc(to)}` : "写信息"}</span><span class="r">${n % 70 || (n ? 70 : 0)}/${parts}</span></div><div class="scroll s18 typing">${esc(c.text)}<i class="caret"></i>${n ? "" : `<span class="hint">点这里打字</span>`}</div>${soft(n ? "发送" : "", n ? "存草稿" : c.next ? "完成" : "返回")}`; },
     key: async k => {
       const c = S.compose;
       if (k === "softL" || k === "ok" || k === "call") { if (![...c.text].length) return; if (!c.to && !c.number) return open("pickto"); return sendNow(); }
@@ -294,7 +294,7 @@
     // 「我主动」：她随手按的号码 → 还没联系上的「我主动」的人里挑一个，这个号码从此就是他的
     if (!p && c.number) { const cand = S.people.filter(x => x.opening === "mine" && !x.met); if (cand.length) { p = cand[rand(0, cand.length - 1)]; p.number = c.number; savePerson(p); } }
     if (c.draftId) { S.meta.drafts = S.meta.drafts.filter(d => d.id !== c.draftId); saveMeta(); }
-    S.view = "sending"; S.sendState = null; S.sendPct = 0; $("#typer").blur(); draw();
+    S.sendingTo = p ? p.id : null; S.view = "sending"; S.sendState = null; S.sendPct = 0; $("#typer").blur(); draw();
     for (let i = 1; i <= 6; i++) { await wait(220); S.sendPct = i * 100 / 6; draw(); }
     const fail = Math.random() < 0.06;
     S.sendState = fail ? "fail" : "ok"; draw();
@@ -306,8 +306,11 @@
     th.msgs.push({ id: uid("m"), dir: "out", text, at: new Date().toISOString(), status: fail ? "failed" : "sent" }); saveThread(th);
     S.compose = null; $("#typer").value = "";
     await wait(900);
-    S.stack = S.stack.filter(x => !["compose", "pickto", "dial", "readopt"].includes(x.view)); back();
-    if (!fail && p && !p.ghost) { p.met = true; savePerson(p); queueReply(p.id); }
+    S.stack = S.stack.filter(x => !["compose", "pickto", "dial", "readopt"].includes(x.view));
+    if (!fail && p && !p.ghost) { p.met = true; savePerson(p); queueReply(p.id);
+      // 发完直接接着写「下一条」：她在给他写的时候，他先不回；按「完成」或者离开才开始等
+      S.compose = { to: p.id, text: "", next: true }; S.view = "compose"; S.sel = 0; draw(); syncTyper(); return; }
+    back();
   }
   /** 她发完一批（停几秒没再发）他才回；回复本身还要等一会儿（不秒回） */
   function queueReply(pid) {
@@ -387,7 +390,8 @@
   async function tick() {
     if (busy) return; busy = true;
     try {
-      for (const q of S.meta.queue.filter(q => new Date(q.due) <= new Date())) {
+      const writing = S.view === "compose" && S.compose ? S.compose.to : S.view === "sending" ? S.sendingTo : null; // 正在给他写下一条 / 正在发：先等她写完
+      for (const q of S.meta.queue.filter(q => new Date(q.due) <= new Date() && q.pid !== writing)) {
         const p = personById(q.pid); if (!p) { S.meta.queue = S.meta.queue.filter(x => x !== q); continue; }
         const parts = await genSms(p, q.kind);
         if (!parts || !parts.length) { // 没回出来：过一会儿再试，最多试 3 次

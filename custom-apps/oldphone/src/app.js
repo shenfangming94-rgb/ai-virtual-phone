@@ -68,9 +68,12 @@
   const personById = id => S.people.find(p => p.id === id);
   const threadOf = pid => { let t = S.threads.find(x => x.id === pid); if (!t) { t = { id: pid, msgs: [] }; S.threads.push(t); } return t; };
   const shown = p => (p.label ? p.label : p.number); // 存进电话本之前只显示号码
-  const allIn = () => S.threads.flatMap(t => t.msgs.filter(m => m.dir === "in").map(m => ({ ...m, pid: t.id }))).sort((a, b) => new Date(b.at) - new Date(a.at));
+  // 收件箱不算收藏夹里的（收藏夹不占收件箱的 30 条）
+  const allIn = () => S.threads.flatMap(t => t.msgs.filter(m => m.dir === "in" && !m.saved).map(m => ({ ...m, pid: t.id }))).sort((a, b) => new Date(b.at) - new Date(a.at));
   const allOut = () => S.threads.flatMap(t => t.msgs.filter(m => m.dir === "out").map(m => ({ ...m, pid: t.id }))).sort((a, b) => new Date(b.at) - new Date(a.at));
+  const allSaved = () => S.threads.flatMap(t => t.msgs.filter(m => m.dir === "in" && m.saved).map(m => ({ ...m, pid: t.id }))).sort((a, b) => new Date(b.at) - new Date(a.at));
   const unread = () => allIn().filter(m => !m.read).length;
+  const msgRef = x => { const th = threadOf(x.pid); return [th, th.msgs.find(m => m.id === x.id)]; };
   const msgTime = iso => { const t = thereDate(new Date(iso)); return `${pad(t.getMonth() + 1)}/${pad(t.getDate())} ${hm(t)}`; };
   const LOOKS = () => [
     ["运营商", S.meta.operator !== false ? "开" : "关", () => { S.meta.operator = S.meta.operator === false; saveMeta(); }],
@@ -133,14 +136,25 @@
     key: k => { const it = V.menu.items(); if (/^[1-9]$/.test(k) && +k <= it.length) { S.sel = +k - 1; k = "ok"; } if (k === "ok" || k === "softL") return open(it[S.sel][2]); if (k === "softR") return back(); },
   };
   V.sms = {
-    items: () => [["写信息", "compose"], [`收件箱`, "inbox", `${allIn().length}/${INBOX_MAX}`], ["发件箱", "outbox", allOut().length], ["草稿箱", "drafts", S.meta.drafts.length]],
+    items: () => [["写信息", "compose"], [`收件箱`, "inbox", `${allIn().length}/${INBOX_MAX}`], ["发件箱", "outbox", allOut().length], ["草稿箱", "drafts", S.meta.drafts.length], ["收藏夹", "saved", allSaved().length]],
     draw: () => `${bar()}<div class="title">信息</div>${list(V.sms.items().map(([t, , n]) => row(t, n)), S.sel)}${soft("选择", "返回")}`,
-    key: k => { const it = V.sms.items(); if (/^[1-4]$/.test(k)) { S.sel = +k - 1; k = "ok"; } if (k === "ok" || k === "softL") { if (it[S.sel][1] === "compose") { S.compose = { to: null, text: "" }; } return open(it[S.sel][1]); } if (k === "softR") return back(); },
+    key: k => { const it = V.sms.items(); if (/^[1-5]$/.test(k)) { S.sel = +k - 1; k = "ok"; } if (k === "ok" || k === "softL") { if (it[S.sel][1] === "compose") { S.compose = { to: null, text: "" }; } return open(it[S.sel][1]); } if (k === "softR") return back(); },
   };
   V.inbox = {
     items: () => allIn(),
-    draw: () => `${bar()}<div class="title">收件箱 ${allIn().length}/${INBOX_MAX}</div>${list(allIn().map(m => row(`${m.read ? "　" : "✉"}${shown(personById(m.pid) || { number: "未知号码" })}`, msgTime(m.at).slice(6))), S.sel)}${soft(allIn().length ? "阅读" : "", "返回")}`,
-    key: k => { const m = allIn()[S.sel]; if ((k === "ok" || k === "softL") && m) { S.reading = { pid: m.pid, id: m.id }; return open("read"); } if (k === "softR") return back(); },
+    draw: () => `${bar()}<div class="title">收件箱 ${allIn().length}/${INBOX_MAX}</div>${list(allIn().map(m => row(`${m.read ? "　" : "✉"}${shown(personById(m.pid) || { number: "未知号码" })}`, msgTime(m.at).slice(6))), S.sel)}${soft(allIn().length ? "选项" : "", "返回")}`,
+    key: async k => { const m = allIn()[S.sel]; if (k === "softR") return back(); if (!m) return;
+      if (k === "ok") { S.reading = { pid: m.pid, id: m.id }; return open("read"); }
+      if (k === "softL") { const v = await choose("选项", [["阅读", "read"], ["存进收藏夹", "save"], ["全部存进收藏夹", "all"], ["删除", "del"]]);
+        if (v === "read") { S.reading = { pid: m.pid, id: m.id }; return open("read"); }
+        if (v === "save" || v === "all") { for (const x of v === "all" ? allIn() : [m]) { const [th, mm] = msgRef(x); if (mm) { mm.saved = true; mm.read = true; saveThread(th); } } flushPending(); S.sel = 0; S.top = 0; return toastLcd(v === "all" ? "已全部存进收藏夹" : "已存进收藏夹"); }
+        if (v === "del") { const [th, mm] = msgRef(m); th.msgs = th.msgs.filter(x => x !== mm); saveThread(th); flushPending(); S.sel = Math.max(0, S.sel - 1); return toastLcd("已删除"); } } },
+  };
+  // 收藏夹：舍不得删的短信放这里，不占收件箱
+  V.saved = {
+    items: () => allSaved(),
+    draw: () => `${bar()}<div class="title">收藏夹 ${allSaved().length}</div>${list(allSaved().map(m => row(shown(personById(m.pid) || { number: "未知号码" }), msgTime(m.at).slice(0, 5))), S.sel)}${soft(allSaved().length ? "阅读" : "", "返回")}`,
+    key: k => { const m = allSaved()[S.sel]; if ((k === "ok" || k === "softL") && m) { S.reading = { pid: m.pid, id: m.id }; return open("read"); } if (k === "softR") return back(); },
   };
   V.outbox = {
     items: () => allOut(),
@@ -162,13 +176,14 @@
   };
   V.readopt = {
     items: () => { const r = S.reading; const p = personById(r.pid); const m = threadOf(r.pid).msgs.find(x => x.id === r.id) || {};
-      return [["回复", "reply"], ["查看对话", "conv"], ...(p && !p.label ? [["存入电话本", "save"]] : []), ...(m.status === "failed" ? [["重新发送", "resend"]] : []), ["删除", "del"]]; },
+      return [["回复", "reply"], ["查看对话", "conv"], ...(m.dir === "in" ? [[m.saved ? "移回收件箱" : "存进收藏夹", "fav"]] : []), ...(p && !p.label ? [["存入电话本", "save"]] : []), ...(m.status === "failed" ? [["重新发送", "resend"]] : []), ["删除", "del"]]; },
     draw: () => `${bar()}<div class="title">选项</div>${list(V.readopt.items().map(x => x[0]), S.sel)}${soft("确定", "返回")}`,
     key: async k => {
       if (k === "softR") return back(); if (k !== "ok" && k !== "softL") return;
       const r = S.reading; const p = personById(r.pid); const th = threadOf(r.pid); const m = th.msgs.find(x => x.id === r.id);
       const act = V.readopt.items()[S.sel][1];
       if (act === "reply") { S.compose = { to: r.pid, text: "" }; return open("compose", true); }
+      if (act === "fav" && m) { if (!m.saved || allIn().length < INBOX_MAX) { m.saved = !m.saved; saveThread(th); flushPending(); return toastLcd(m.saved ? "已存进收藏夹" : "已移回收件箱"); } return toastLcd("收件箱满了"); }
       if (act === "conv") { S.conv = r.pid; S.scroll = 9999; return open("conv", true); }
       if (act === "save") { const name = await ask("存入电话本", "名字", ""); if (name) { p.label = name.slice(0, 12); savePerson(p); toastLcd("已保存"); } return; }
       if (act === "resend" && m) { th.msgs = th.msgs.filter(x => x !== m); saveThread(th); S.compose = { to: r.pid, text: m.text }; return sendNow(); }

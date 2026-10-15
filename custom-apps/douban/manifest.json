@@ -4,7 +4,7 @@
   "name": "豆瓣",
   "version": "0.3.2",
   "author": "Nox for Flora",
-  "description": "仿真豆瓣：小组（搜小组、建小组、看帖回帖，路人豆友和 char 都会发帖，可以实名也可以匿名）+ 书影音（标记想看在看看过、打星写短评长评、char 的书影音和豆列、年度报告）。广播、日记、豆邮、同城后面几期上线。",
+  "description": "仿真豆瓣：小组（搜小组、建小组、看帖回帖，路人豆友和 char 都会发帖，可以实名也可以匿名）+ 书影音（标记想看在看看过、打星写短评长评、char 的书影音和豆列、年度报告）。+ 私信（和 char、豆友私聊，char 偶尔会主动来找你）。广播、日记、同城后面几期上线。",
   "icon": "icon.png",
   "entry": "index.html",
   "permissions": [
@@ -13,6 +13,7 @@
     "characters.read",
     "user.profile.read",
     "ai.generate",
+    "ai.chat",
     "ai.generateImage",
     "media.pick",
     "memory.write",

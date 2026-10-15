@@ -51,6 +51,9 @@
   const I = {
     back: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5 8 12l7 7"/></svg>',
     search: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><circle cx="11" cy="11" r="6.5"/><path d="m16 16 4.5 4.5"/></svg>',
+    smile: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="8.6"/><circle cx="9" cy="10" r=".9" fill="currentColor"/><circle cx="15" cy="10" r=".9" fill="currentColor"/><path d="M8.3 14.2c1 1.4 2.2 2 3.7 2s2.7-.6 3.7-2"/></svg>',
+    image: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><rect x="3.5" y="5" width="17" height="14" rx="2.5"/><circle cx="9" cy="10" r="1.6"/><path d="M4 17.5l5-4.5 4 3.5 3-2.5 4.5 3.8"/></svg>',
+    expand: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M14 4h6v6M20 4l-6.5 6.5M10 20H4v-6M4 20l6.5-6.5"/></svg>',
     mail: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"><rect x="3.5" y="5.5" width="17" height="13" rx="2"/><path d="m4 7 8 6 8-6"/></svg>',
     gear: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="12" cy="12" r="3.1"/><path d="M12 2.8v2.4M12 18.8v2.4M2.8 12h2.4M18.8 12h2.4M5.5 5.5l1.7 1.7M16.8 16.8l1.7 1.7M5.5 18.5l1.7-1.7M16.8 7.2l1.7-1.7"/></svg>',
     plus: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>',
@@ -92,8 +95,8 @@
 
   // ───────────────────────── 数据 ─────────────────────────
   // groups：小组（搜出来的、建的）；topics：帖子（楼层在帖子里）；meta：我的资料、搜索缓存、调试记录
-  const COL = { groups: "groups", topics: "topics", meta: "meta", works: "works", marks: "marks", doulists: "doulists" };
-  const S = { identity: null, chars: [], meta: null, groups: [], topics: [], works: [], marks: [], doulists: [], tab: "group", debug: [], jobs: new Set(), mediaCache: new Map() };
+  const COL = { groups: "groups", topics: "topics", meta: "meta", works: "works", marks: "marks", doulists: "doulists", dms: "dms" };
+  const S = { identity: null, chars: [], meta: null, groups: [], topics: [], works: [], marks: [], doulists: [], dms: [], tab: "group", debug: [], jobs: new Set(), mediaCache: new Map() };
   async function dbList(c) { try { return (await api.db.list(c, { limit: 500 })) || []; } catch (e) { console.warn(e); return []; } }
   async function dbUpsert(c, row) {
     try { const u = await api.db.update(c, row.id, row); if (u) return u; } catch (e) { /* 没有就 create */ }
@@ -113,11 +116,11 @@
     const chars = await api.characters.list().catch(() => []);
     const owners = await Promise.all(chars.map(c => api.user.getProfile({ characterId: c.id }).catch(() => null)));
     S.chars = chars.filter((c, i) => !owners[i] || !identity || owners[i].id === identity.id);
-    const [groups, topics, metas, works, marks, doulists] = await Promise.all([dbList(COL.groups), dbList(COL.topics), dbList(COL.meta), dbList(COL.works), dbList(COL.marks), dbList(COL.doulists)]);
+    const [groups, topics, metas, works, marks, doulists, dms] = await Promise.all([dbList(COL.groups), dbList(COL.topics), dbList(COL.meta), dbList(COL.works), dbList(COL.marks), dbList(COL.doulists), dbList(COL.dms)]);
     const scope = S.identity.id;
     S.groups = groups.filter(g => g.scope === scope);
     S.topics = topics.filter(t => t.scope === scope).map(t => ({ ...t, floors: t.floors || [] }));
-    S.works = works.filter(w => w.scope === scope); S.marks = marks.filter(m => m.scope === scope); S.doulists = doulists.filter(d => d.scope === scope).map(d => ({ ...d, workIds: d.workIds || [] }));
+    S.works = works.filter(w => w.scope === scope); S.marks = marks.filter(m => m.scope === scope); S.doulists = doulists.filter(d => d.scope === scope).map(d => ({ ...d, workIds: d.workIds || [] })); S.dms = dms.filter(d => d.scope === scope).map(d => ({ ...d, msgs: d.msgs || [] }));
     S.debug = (metas.find(m => m.id === "debug_log") || {}).entries || [];
     S.meta = metas.find(m => m.id === `meta_${scope}`) || { id: `meta_${scope}`, nickname: S.identity.name || "豆友", sign: "", avatarRef: null,
       joined: [], searches: {}, charNicks: {}, excludedChars: [], avatarPool: [] };
@@ -222,6 +225,8 @@
 
   // ───────────────────────── AI ─────────────────────────
   /** 豆瓣小组的写法（随请求发送，不依赖预设）。参考了小手机「捡手机文学」论坛体的手感，但她能参与 */
+  /** 事情多大情绪就多大；不拿她开涮（每次请求都带） */
+  const CALM_LINE = "- 事情多大情绪就多大，不放大、不戏剧化。提到用户时禁止无缘无故贬低、嘲讽、阴阳、吐槽她。";
   const DOUBAN_RULE = `【豆瓣小组】这是仿真的豆瓣 App 小组。写法手感（是参考，不是公式，好看比合规更重要）：
 - 豆友说话很少夹英文单词（比如不说 mark）。
 - 豆瓣是文艺青年和吃瓜群众的地盘：比微博安静、比小红书话多。帖子标题像真人随手起的（求助、吐槽、分享、讨论、碎碎念、「有没有人和我一样……」），正文口语，长短不一。
@@ -249,7 +254,7 @@
 - 不少豆友叫「momo」（新用户的默认名），同一个帖子里可以有好几个 momo。
 - 不要写「看到xx楼的话……」「xx楼说的……」这种句式：要回应哪层就写在「引用」里，正文直接说话。
 - 角色人设里没写的身份、成绩、头衔、外号（年级第一、学霸、校草、某某担当……）不要安给任何角色；不知道的就别提。
-- 事情多大情绪就多大，不放大、不戏剧化。提到用户时禁止无缘无故贬低、嘲讽、阴阳、吐槽她。
+${CALM_LINE}
 - 用户本人绝不能出现在你写的内容里，除非下面明确写了她发的楼；不能替用户说话，也不能编造她做过的事。`;
   /** 被讨论时对用户的底线（公众人物、熟人组都适用） */
   const USER_LINE = `角色可以聊他们没跟用户提过的新鲜事（他们有自己的生活），合人设就行；*用户（${"${herName()}"}）做过的事只能来自聊天记录和记忆，不能编*。万一一定要提到她，也绝不能贬低、矮化她，不能把她写成衬托角色的工具人、陪衬或笑料。`;
@@ -310,12 +315,12 @@
     S.debug = [{ at: nowIso(), ...entry, text: String(entry.text || "").slice(0, 6000) }, ...S.debug].slice(0, 10);
     dbUpsert(COL.meta, { id: "debug_log", entries: S.debug }).catch(() => {});
   }
-  async function generate(charIds, scene, instruction, label) {
+  async function generate(charIds, scene, instruction, label, opts = {}) {
     if (!charIds.length) { toast("没有参与的角色：先去微信加个好友，或者在设置里打开"); return null; }
     const job = uid("job"); S.jobs.add(job); refreshAll();
     try {
       const wx = scene === "groupsearch" ? "" : await weatherLine();
-      const payload = { appTags: ["nox_douban", scene], instruction: [DOUBAN_RULE, WHO_LINE(), wx, instruction, "【输出要求】只输出本轮说明要求的块，字段名照抄，不要解释、不要旁白、不要 markdown。"].join("\n\n") };
+      const payload = { appTags: ["nox_douban", scene], ...(opts.vision ? { appMessages: opts.vision } : {}), instruction: [opts.rule === false ? CALM_LINE : DOUBAN_RULE, WHO_LINE(), wx, instruction, "【输出要求】只输出本轮说明要求的块，字段名照抄，不要解释、不要旁白、不要 markdown。"].join("\n\n") };
       const r = await api.ai.generate(charIds.length === 1 ? { ...payload, characterId: charIds[0] } : { ...payload, characterIds: charIds });
       const text = (r && r.text) || ""; logAi({ label, ok: true, text }); return text;
     } catch (e) {
@@ -323,7 +328,7 @@
     } finally { S.jobs.delete(job); refreshAll(); }
   }
   /** ===块=== 解析：字段「名：值」，值可以多行（接到上一个字段） */
-  const KEYS = ["类型标签", "类型", "年份", "作者导演", "主演", "国家", "评分", "评价人数", "星级分布", "状态", "星级", "短评", "有用", "和用户亲密", "作品", "豆瓣ID", "豆瓣昵称", "昵称", "关注用户", "签名", "关注数", "被关注数", "小组", "会逛的角色", "楼主赞过", "头衔", "熟人圈", "说的是", "来源", "IP", "组长", "成员称呼", "分区", "发言规则", "配图", "精华", "名称", "成员", "简介", "标题", "作者", "角色", "匿名", "时间", "回应数", "正文", "楼主", "赞", "引用", "内容", "层"];
+  const KEYS = ["类型标签", "类型", "年份", "作者导演", "主演", "国家", "评分", "评价人数", "星级分布", "状态", "星级", "短评", "有用", "和用户亲密", "作品", "豆瓣ID", "豆瓣昵称", "昵称", "关注用户", "签名", "关注数", "被关注数", "小组", "会逛的角色", "楼主赞过", "头衔", "熟人圈", "说的是", "来源", "IP", "组长", "成员称呼", "分区", "发言规则", "配图", "精华", "名称", "成员", "简介", "标题", "作者", "角色", "匿名", "时间", "回应数", "正文", "楼主", "赞", "引用", "内容", "层", "图片", "回关"];
   function parseBlocks(raw, kind) {
     const text = String(raw || "").replace(/```[a-z]*\n?/g, "").replace(/\r/g, "");
     const out = []; let label = null;
@@ -567,7 +572,7 @@
   /** 写楼层：首次打开 / 加载更多 / 她回了一楼之后（mine = 她刚发的那楼） */
   async function genFloors(t, mine) {
     if (t._busy) return; t._busy = true; refreshAll();
-    const g = groupById(t.groupId) || { name: "小组" };
+    const g = groupById(t.groupId) || { name: "小组" }; const firstGen = !t.floors.length;
     const next = (t.floors.length ? t.floors[t.floors.length - 1].n : 1) + 1;
     const charsInFloor = new Set(t.floors.filter(f => f.author.type === "char").map(f => f.author.charId));
     if (t.author.type === "char") charsInFloor.add(t.author.charId);
@@ -656,6 +661,7 @@
       delete t.pendingReply;
     }
     if (made) { t.lastReplyAt = t.floors[t.floors.length - 1].createdAt; t.replyCount = Math.max(t.replyCount, t.floors.length); likeHers(t, made); }
+    if (mine || (firstGen && t.author.type === "user")) rollCharDm(t, mine, new Set(t.floors.slice(-made || t.floors.length).filter(f => f.author.type === "char").map(f => f.author.charId)));
     else toast("这次没写出能用的回应，去「我的 → 调试记录」看看");
     saveTopic(t); refreshAll();
   }
@@ -755,6 +761,7 @@
     const isChar = k.startsWith("c:"); const id = k.slice(2);
     if (isChar && !charById(id)) return;
     const author = isChar ? { type: "char", charId: id } : { type: "npc", name: id };
+    { const tp = topPage(); const m = tp && tp.key.match(/^topic:(.+)$/); if (m) S.lastTopicId = m[1]; else if (!tp || !/^dm:/.test(tp.key)) S.lastTopicId = null; } // 私信路人时知道是在哪个帖子碰到的
     const page = openPage(`person:${k}`, pg => {
       const info = personInfo(k); const w = whoOf(author); const busy = S[`_gp_${k}`];
       const followed = (S.meta.follows || []).includes(followKey(author));
@@ -768,7 +775,7 @@
           <div class="me-ava">${avatarHtml(w)}</div>
           <div class="ph-row"><div class="cell-main"><h2>${esc(w.name)}</h2>
             <div class="me-id">${info && info.uid ? `ID：${esc(info.uid)} · ` : ""}IP：${esc(ipOf(author, "") || "未知")}${isChar && info && info.followsMe ? ` · <span class="fo-me">关注了你</span>` : ""}</div></div>
-            <button class="ph-follow ${followed ? "on" : ""}" data-act="person-follow" data-k="${esc(k)}">${followed ? "已关注" : "＋关注"}</button></div>
+            <button class="ph-follow ${followed ? "on" : ""}" data-act="person-follow" data-k="${esc(k)}">${followed ? "已关注" : "＋关注"}</button><button class="ph-dm" data-act="dm-open" data-k="${esc(k)}">私信</button></div>
           ${info && info.sign ? `<div class="me-sign">${esc(info.sign)}</div>` : ""}
           <div class="me-follow"><span>关注 ${info ? fmtNum(info.following) : "-"}</span><span>被关注 ${info ? fmtNum(info.followers + (followed ? 1 : 0)) : "-"}</span></div>
         </div>
@@ -866,7 +873,7 @@
   }
   const topSearch = (ph, act, right) => `<div class="topbar-inner"><button class="db-search" data-act="${act}">${I.search}<span>${esc(ph)}</span></button>${right === "trash"
     ? `<button class="top-icon" data-act="wipe-all" aria-label="清空豆瓣" style="margin-left:0">${I.trash}</button>`
-    : `<button class="top-icon" data-act="coming" data-what="mail" aria-label="豆邮" style="margin-left:0">${I.mail}</button>`}</div>`;
+    : `<button class="top-icon dm-entry" data-act="dm-list" aria-label="私信" style="margin-left:0">${I.mail}${dmUnread() ? `<i class="dm-dot">${dmUnread() > 99 ? "99+" : dmUnread()}</i>` : ""}</button>`}</div>`;
   /** 还没做的：写清楚第几期上线 */
   const COMING = {
     feed: ["关注的人的动态（广播）", "第三期", "豆瓣式的动态：char 发广播、转发你的标记、给你点赞，比微博安静"],
@@ -1312,13 +1319,14 @@
         return;
       }
       case "wipe-all": {
-        if (await sheet("清空豆瓣的全部内容？小组、帖子、回应、书影音标记、豆列、搜索记录和相关记忆都会删掉，删了不能恢复（你的昵称、头像、IP 和设置会留着）", [{ label: "全部删除", value: "yes", danger: true }]) !== "yes") return;
+        if (await sheet("清空豆瓣的全部内容？小组、帖子、回应、书影音标记、豆列、私信、搜索记录和相关记忆都会删掉，删了不能恢复（你的昵称、头像、IP 和设置会留着）", [{ label: "全部删除", value: "yes", danger: true }]) !== "yes") return;
         for (const t of S.topics) forget(memEventsOfTopic(t));
         forget(S.marks.map(m => ({ charId: m.charId, eventId: `douban_mark_${m.id}` })));
         await Promise.all([...S.works.map(w => dbDelete(COL.works, w.id)), ...S.marks.map(m => dbDelete(COL.marks, m.id)), ...S.doulists.map(d => dbDelete(COL.doulists, d.id))]);
         S.works = []; S.marks = []; S.doulists = []; S.meta.followQueue = []; S.meta.hot = {}; S.meta.workSearches = {}; S.meta.close = {}; S.meta.charWorksAt = {};
         await Promise.all([...S.topics.map(t => dbDelete(COL.topics, t.id)), ...S.groups.map(g => dbDelete(COL.groups, g.id))]);
         S.topics = []; S.groups = []; S.groupChip = null;
+        for (const d of [...S.dms]) await deleteDm(d); S.meta.dmQueue = [];
         Object.assign(S.meta, { joined: [], searches: {}, follows: [], charNicks: {} }); saveMeta();
         renderTab(); toast("豆瓣已清空"); return;
       }
@@ -1885,13 +1893,304 @@
   });
 
   // ───────────────────────── 启动 ─────────────────────────
+  // ───────────────────────── 私信 ─────────────────────────
+  // dms：一个人一条会话 { id, scope, k: "c:角色id" | "n:昵称", fromTopic（第一次从哪个帖子点进来）, msgs: [{ id, me, text, images: [{ ref | desc, seen }], quote: { id, text }, at }], unread, lastAt, mem: [记忆 id] }
+  // 匿名豆友没有主页，也就私信不了；她发私信永远是实名
+  const DM_STYLE = "- 像真人发私信：一句一条，短，口语，可以连发 1～4 条；豆瓣私信比较安静，可以用 emoji，不用 [doge] 这种表情；不写旁白、动作、心理描写。\n- 接住对方的话往下聊，不要客服式总结，不说教。\n- 想接对方的某一句回时，可以在「内容：」前加一行「引用：对方那句原话（一字不差）」；偶尔用，不是每句都引。\n- 想发图片时，这一块的「内容：」写 [图片]，在前面加一行「图片：图片描述（画面里有什么，像真人随手拍的）」；偶尔才发。";
+  const DM_FMT = "每条私信一个块（一句一块，连发几条就写几块）：\n===私信===\n内容：一条私信\n===结束===";
+  const DM_NPC_SYSTEM = [
+    "你在模拟豆瓣私信里的一个豆友（路人），只输出私信，不要任何解释。",
+    "- 保持你自己的性格和立场：之前在帖子里跟用户吵过的，可以继续嘴硬，也可以服软；同好就聊同好的话题。",
+    DM_STYLE, CALM_LINE,
+    "- 绝对不能以用户本人的身份说话。",
+  ].join("\n");
+  const dmById = k => S.dms.find(d => d.k === k);
+  const dmAuthor = k => k.startsWith("c:") ? { type: "char", charId: k.slice(2) } : { type: "npc", name: k.slice(2) };
+  const saveDm = d => dbUpsert(COL.dms, (({ _typing, _timer, ...x }) => x)(d)).catch(e => console.warn(e));
+  const dmUnread = () => S.dms.reduce((a, d) => a + (d.unread || 0), 0);
+  const wait = ms => new Promise(r => setTimeout(r, ms));
+  function dmThread(k, fromTopic) {
+    let d = dmById(k);
+    if (!d) { d = { id: uid("dm"), scope: S.identity.id, k, fromTopic: fromTopic || null, msgs: [], unread: 0, lastAt: nowIso(), mem: [] }; S.dms.push(d); }
+    if (!d.fromTopic && fromTopic) d.fromTopic = fromTopic;
+    return d;
+  }
+  /** 一条私信给 AI 看的样子 */
+  function dmText(m) {
+    const img = (m.images || [])[0];
+    const body = img ? `[${img.ref ? `照片：${img.seen || "见附图"}` : `图片：${img.desc || "看不到内容"}`}]${m.text && m.text !== "[图片]" ? m.text : ""}` : m.text;
+    return m.quote ? `${body}（引用了「${String(m.quote.text || "").slice(0, 40)}」）` : body;
+  }
+  const dmHistory = (d, me, them) => d.msgs.slice(-24).map(m => `${m.me ? me : them}：${dmText(m)}`).join("\n");
+  /** 私信时间：今天只写几点，昨天写昨天，再早写日期 */
+  function dmTime(iso) {
+    const t = new Date(iso); const now = new Date(); const p = n => String(n).padStart(2, "0");
+    const hm = `${p(t.getHours())}:${p(t.getMinutes())}`;
+    if (t.toDateString() === now.toDateString()) return hm;
+    if (t.toDateString() === new Date(now - 86400e3).toDateString()) return `昨天 ${hm}`;
+    return `${t.getFullYear()}年${p(t.getMonth() + 1)}月${p(t.getDate())}日`;
+  }
+  /** 她最近在豆瓣上实名做的事（char 看得到；匿名的看不到） */
+  function herRecentLine() {
+    const acts = [];
+    for (const t of S.topics) {
+      const g = groupById(t.groupId) || { name: "小组" };
+      if (t.author.type === "user" && !t.author.anon) acts.push({ at: t.createdAt, s: `在「${g.name}」发帖《${t.title}》：${t.body.slice(0, 60)}` });
+      for (const f of t.floors) if (f.author.type === "user" && !f.author.anon) acts.push({ at: f.createdAt, s: `在《${t.title}》里回：${f.text.slice(0, 50)}` });
+    }
+    for (const w of myMarked()) acts.push({ at: w.my.at, s: `标记了${KIND_NAME[w.kind]}《${w.title}》：${statusName(w.kind, w.my.status)}${w.my.stars ? ` ${w.my.stars}星` : ""}${w.my.comment ? `「${w.my.comment.slice(0, 40)}」` : ""}` });
+    const list = acts.sort((a, b) => new Date(b.at) - new Date(a.at)).slice(0, 6);
+    return list.length ? `用户最近在豆瓣上实名做的事（你刷得到）：\n${list.map(a => `- ${fmtTime(a.at)} ${a.s}`).join("\n")}` : "";
+  }
+  /** 路人认识她的地方：第一次点进来的那个帖子，他和她（实名）在里面说过的话 */
+  function npcFromLine(d) {
+    const t = d.fromTopic && topicById(d.fromTopic); if (!t) return "你和用户在豆瓣上没有交集，是陌生豆友。";
+    const a = dmAuthor(d.k); const g = groupById(t.groupId) || { name: "小组" };
+    const his = t.floors.filter(f => sameAuthor(f.author, a)).slice(-3).map(f => `「${f.text.slice(0, 60)}」`);
+    const hers = t.floors.filter(f => f.author.type === "user" && !f.author.anon).slice(-3).map(f => `「${f.text.slice(0, 60)}」`);
+    return [`你们在豆瓣小组「${g.name}」的帖子《${t.title}》里碰到过。`, sameAuthor(t.author, a) ? `这是你发的帖子：${t.body.slice(0, 120)}` : "",
+      his.length ? `你在里面说过：${his.join("")}` : "", hers.length ? `用户在里面实名说过：${hers.join("")}` : ""].filter(Boolean).join("\n");
+  }
+  /** AI 回的私信块 → 消息 */
+  function dmFromBlock(b, d) {
+    const raw = String(b["内容"] || "").trim(); const desc = String(b["图片"] || "").trim();
+    const m = { id: uid("dmm"), me: false, text: raw, at: nowIso() };
+    if (desc && !none(desc)) { m.images = [{ desc: desc.slice(0, 200) }]; m.text = !raw || /^\[?图片\]?$/.test(raw) ? "[图片]" : raw.replace(/^\[图片\]\s*/, ""); }
+    else if (!raw || /^\[图片\]$/.test(raw)) return null;
+    const q = String(b["引用"] || "").replace(/^[「“"]|[」”"]$/g, "").trim();
+    if (q && !none(q)) { const hit = [...d.msgs].reverse().find(x => x.me && (x.text.includes(q) || (q.length >= 4 && q.includes(x.text)))); if (hit) m.quote = { id: hit.id, text: hit.images && hit.images.length ? "[图片]" : hit.text.slice(0, 60) }; }
+    return m;
+  }
+  /** 她发给路人的照片：路人走 ai.chat 看不了图，先借一个角色的视觉通道客观看一遍，存成 seen */
+  async function seeForNpc(msgs) {
+    const ch = activeChars()[0]; if (!ch) return;
+    for (const m of msgs) for (const img of m.images || []) {
+      if (!img.ref || img.seen) continue;
+      const url = await mediaUrl(img.ref); if (!url) continue;
+      try {
+        const r = await api.ai.generate({ characterId: ch.id, appTags: ["nox_douban", "vision"], instruction: "这一轮不扮演任何人，只做一件事：用一两句话客观描述上面这张图片里有什么，不评价、不加戏、不要任何格式，直接输出描述。", appMessages: [{ role: "user", content: "（要描述的图片）", image: url }] });
+        const t = String((r && r.text) || "").trim().slice(0, 200); logAi({ label: "看图", ok: true, text: t }); if (t) img.seen = t;
+      } catch (e) { logAi({ label: "看图", ok: false, error: String((e && e.message) || e) }); }
+    }
+  }
+  /** 一条条地出来（像对方在打字），出完存档 */
+  async function dmDeliver(d, items) {
+    for (let i = 0; i < items.length; i++) {
+      if (i) { d._typing = true; refreshDm(); await wait(rand(700, 1600)); }
+      items[i].at = nowIso(); d.msgs.push(items[i]); d.lastAt = items[i].at;
+      const open = topPage() && topPage().key === `dm:${d.k}` && !document.hidden;
+      if (!open) d.unread = (d.unread || 0) + 1;
+      d._typing = false; refreshDm(i === items.length - 1);
+    }
+    saveDm(d);
+  }
+  function refreshDm(all) { const p = topPage(); if (p && /^dm/.test(p.key)) p.render(p); if (all) renderTab(); }
+
+  /** 她发完一批（停 3 秒没再发）对方回 */
+  async function replyDm(d) {
+    if (d._typing) return;
+    let s = d.msgs.length; while (s > 0 && d.msgs[s - 1].me) s--;
+    const pending = d.msgs.slice(s); if (!pending.length) return;
+    d._typing = true; refreshDm();
+    const a = dmAuthor(d.k); let text = null;
+    const before = dmHistory({ msgs: d.msgs.slice(0, s) }, "用户", "你");
+    if (a.type === "char") {
+      const ch = charById(a.charId); if (!ch) { d._typing = false; return; }
+      const vision = await dmVision(pending);
+      text = await generate([ch.id], "dm", [
+        `当前时间：${new Date().toLocaleString("zh-CN", { hour12: false })}`,
+        `【豆瓣私信】你（${ch.name}，豆瓣昵称「${charNick(ch.id)}」）在豆瓣私信里和用户（豆瓣昵称「${S.meta.nickname}」）聊天。你知道这是豆瓣私信不是微信；你看得到你们所有的记忆，微信上聊过的事、她最近在豆瓣上发的东西你都知道，想提就自然地提。语气、称呼、性格完全按你的人设和你们现在的关系，不能 OOC。`,
+        herRecentLine(), before ? `你们之前的私信：\n${before}` : "这是你们在豆瓣私信里的第一句话。",
+        `用户刚刚${pending.length > 1 ? "连着" : ""}发来：${pending.map(m => `「${dmText(m)}」`).join("")}`,
+        DM_STYLE, CHAR_TALK_LINE, DM_FMT,
+      ].filter(Boolean).join("\n\n"), `${ch.name}私信`, { rule: false, vision });
+    } else {
+      await seeForNpc(pending);
+      const info = personInfo(d.k); const followed = (S.meta.follows || []).includes(d.k);
+      const prompt = [
+        `你是豆瓣用户「${a.name}」${info && info.sign ? `，签名「${info.sign}」` : ""}。给你发私信的是豆友「${S.meta.nickname}」。`,
+        npcFromLine(d),
+        followed && info && !info.followsMe ? "她关注了你，你还没回关。聊得投缘、被说动了的话可以回关：在私信后面多写\n===互动===\n回关：是\n===结束===\n不回关就不写。" : "",
+        before ? `你们之前的私信：\n${dmHistory({ msgs: d.msgs.slice(0, s) }, S.meta.nickname, "你")}` : "",
+        `「${S.meta.nickname}」刚刚${pending.length > 1 ? "连着" : ""}私信你：${pending.map(m => `「${dmText(m)}」`).join("")}`,
+        DM_FMT,
+      ].filter(Boolean).join("\n\n");
+      const job = uid("job"); S.jobs.add(job);
+      try { const r = await api.ai.chat({ system: DM_NPC_SYSTEM, prompt, timeoutMs: 90000 }); text = (r && r.text) || ""; logAi({ label: `${a.name}私信`, ok: true, text }); }
+      catch (e) { logAi({ label: `${a.name}私信`, ok: false, error: String((e && e.message) || e) }); toast(`私信回复失败：${(e && e.message) || e}`.slice(0, 60)); }
+      finally { S.jobs.delete(job); }
+      const fb = text && parseBlocks(text, "互动")[0];
+      if (fb && yes(fb["回关"]) && info && !info.followsMe) { info.followsMe = true; saveMeta(); toast(`${a.name} 回关了你`); }
+    }
+    d._typing = false;
+    const items = text ? parseBlocks(text, "私信").map(b => dmFromBlock(b, d)).filter(Boolean).slice(0, 5) : [];
+    if (!items.length) { refreshDm(); if (text != null) toast("对方没有回复，去「调试记录」看看"); return; }
+    await dmDeliver(d, items);
+    if (a.type === "char") {
+      const ev = `douban_dm_${items[0].id}`; d.mem = [...(d.mem || []), ev]; saveDm(d);
+      remember(a.charId, `${herName()}在豆瓣私信我：${pending.map(m => `「${dmText(m).slice(0, 50)}」`).join("")}，我回：${items.map(m => `「${dmText(m).slice(0, 40)}」`).join("")}`, ev);
+    }
+  }
+  async function dmVision(msgs) {
+    const out = [];
+    for (const m of msgs.filter(x => (x.images || []).some(i => i.ref)).slice(-4)) {
+      const url = await mediaUrl(m.images.find(i => i.ref).ref); if (url) out.push({ role: "user", content: "（豆瓣私信里用户发来的图片）", image: url });
+    }
+    return out.length ? out : null;
+  }
+
+  /**
+   * char 主动私信：她实名发帖 / 实名回帖之后掷骰子。
+   * 她回的是他的帖子或他的楼：亲密的 25%、其他 15%；别的 char 刷到了但没在楼里回她：亲密的 8%、其他 3%，一次最多一个人。
+   * 他上一条私信她还没回，就不再主动找她；每天最多 3 次；掷中的过 10～90 分钟才来
+   */
+  function rollCharDm(t, mine, replied) {
+    if (mine ? mine.author.anon : t.author.anon || t.author.type !== "user") return;
+    const day = new Date().toDateString(); const q = S.meta.dmQueue || [];
+    const today = S.meta.dmDay === day ? S.meta.dmCount || 0 : 0; if (today >= 3) return;
+    const free = c => { const d = dmById(`c:${c.id}`); const last = d && d.msgs[d.msgs.length - 1]; return !(last && !last.me) && !q.some(x => x.charId === c.id); };
+    const target = mine && mine.quote ? t.floors.find(f => f.n === mine.quote) : null;
+    const owner = target && target.author.type === "char" && !target.author.anon ? target.author.charId : mine && t.author.type === "char" && !t.author.anon ? t.author.charId : null;
+    let hit = null;
+    if (owner) { const c = charById(owner); if (c && free(c) && Math.random() < (isClose(owner) ? 0.25 : 0.15)) hit = c; }
+    if (!hit) hit = shuffle(activeChars().filter(c => c.id !== owner && !replied.has(c.id) && free(c))).find(c => Math.random() < (isClose(c.id) ? 0.08 : 0.03));
+    if (!hit) return;
+    S.meta.dmQueue = [...q, { charId: hit.id, topicId: t.id, n: mine ? mine.n : 0, his: hit.id === owner, due: new Date(Date.now() + rand(10, 90) * 60e3).toISOString() }];
+    S.meta.dmDay = day; S.meta.dmCount = today + 1; saveMeta();
+  }
+  async function runDmQueue() {
+    if (S._dqBusy) return; S._dqBusy = true;
+    try {
+      for (const job of (S.meta.dmQueue || []).filter(x => new Date(x.due) <= new Date())) {
+        const ch = charById(job.charId); const t = topicById(job.topicId); const f = t && job.n ? t.floors.find(x => x.n === job.n) : null;
+        const drop = () => { S.meta.dmQueue = (S.meta.dmQueue || []).filter(x => x !== job); saveMeta(); };
+        if (!ch || !t || (job.n && !f)) { drop(); continue; }
+        const d = dmThread(`c:${ch.id}`); const last = d.msgs[d.msgs.length - 1]; if (last && !last.me) { drop(); continue; }
+        const g = groupById(t.groupId) || { name: "小组" };
+        const saw = f ? `用户在小组「${g.name}」的帖子《${t.title}》里实名回了：「${f.text}」${job.his ? "（这是你的帖子 / 你的楼，她回的是你）" : "。你刷到了，没在楼里回她"}` : `用户在小组「${g.name}」实名发了帖子《${t.title}》：${t.body.slice(0, 200)}。你刷到了，没在楼里回她`;
+        const text = await generate([ch.id], "dm", [
+          `当前时间：${new Date().toLocaleString("zh-CN", { hour12: false })}`,
+          `【豆瓣私信】你（${ch.name}，豆瓣昵称「${charNick(ch.id)}」）在豆瓣上刷到：${saw}。你想私信她说几句：像真人随手发起聊天，1～3 条。语气、称呼、性格完全按你的人设和你们现在的关系，不能 OOC；你看得到你们所有的记忆，知道这是豆瓣私信不是微信。`,
+          d.msgs.length ? `你们之前的私信：\n${dmHistory(d, "用户", "你")}` : "",
+          DM_STYLE, CHAR_TALK_LINE, DM_FMT,
+        ].filter(Boolean).join("\n\n"), `${ch.name}主动私信`, { rule: false });
+        if (text == null) break; // 失败留着，下次打开再试
+        drop();
+        const items = parseBlocks(text, "私信").map(b => dmFromBlock(b, d)).filter(Boolean).slice(0, 3); if (!items.length) continue;
+        await dmDeliver(d, items);
+        const ev = `douban_dm_${items[0].id}`; d.mem = [...(d.mem || []), ev]; saveDm(d);
+        remember(ch.id, `我在豆瓣刷到${herName()}${f ? `在《${t.title}》里的回复` : `发的帖子《${t.title}》`}，私信了她：${items.map(m => `「${dmText(m).slice(0, 40)}」`).join("")}`, ev);
+        toast(`${charNick(ch.id)} 给你发了私信`);
+      }
+    } finally { S._dqBusy = false; }
+  }
+
+  // ── 私信列表 ──
+  function openDmList() {
+    openPage("dmlist", pg => {
+      const list = S.dms.filter(d => d.msgs.length).sort((a, b) => new Date(b.lastAt) - new Date(a.lastAt));
+      body(pg, list.length ? `<div class="db-white">${list.map(d => { const w = whoOf(dmAuthor(d.k)); const last = d.msgs[d.msgs.length - 1];
+        return `<div class="dml-row" data-act="dm-open" data-k="${esc(d.k)}">${avatarHtml(w)}<div class="cell-main"><div class="dml-top"><b>${esc(w.name)}</b><span>${esc(dmTime(last.at))}</span></div>
+          <div class="dml-last"><span>${esc(last.me ? `我：${dmText(last)}` : dmText(last))}</span>${d.unread ? `<i class="dml-badge">${d.unread > 99 ? "99+" : d.unread}</i>` : ""}</div></div></div>`; }).join("")}</div>`
+        : `<div class="empty">还没有私信<br><span style="font-size:12px">在豆友或 char 的主页点「私信」就能聊</span></div>`);
+    }, { title: "私信" });
+  }
+  // ── 聊天页（照她给的豆瓣截图：头像+名字居中，她的绿色气泡在右，对方浅灰在左，底下 发送消息 + 表情 + 图片） ──
+  const EMOJI = "😂🤣😭🥹😅🙏🏻👍🏻😇🥰😘😍🤔😮‍💨😤😡🙄😳🥲😴🤓😎🤗🫠🫡🤡👀💪🏻👏🏻🙌🏻✌🏻👌🏻🫶🏻❤️💔✨🔥🌸🍀🎉🍰☕️🐱🐶🌙⭐️".match(/\p{Extended_Pictographic}(?:‍\p{Extended_Pictographic}|️|\p{EMod})*/gu);
+  function openDm(k) {
+    const fromTopic = S.lastTopicId || null;
+    const d = dmThread(k, k.startsWith("n:") ? fromTopic : null);
+    if (d.unread) { d.unread = 0; saveDm(d); }
+    const a = dmAuthor(k); const meW = whoOf({ type: "user" });
+    let quote = null, emoji = false, tall = false;
+    const page = openPage(`dm:${k}`, pg => {
+      const w = whoOf(a); let lastAt = 0;
+      const rows = d.msgs.map(m => {
+        const t = new Date(m.at).getTime(); const sep = t - lastAt > 30 * 60e3 ? `<div class="dm-sep">${esc(dmTime(m.at))}</div>` : ""; lastAt = t;
+        const img = (m.images || [])[0];
+        const bub = img ? (img.ref ? `<img class="dm-pic" ${refSrc(img.ref)} alt="" data-act="dm-pic" data-id="${esc(m.id)}">` : `<div class="dm-picdesc" data-act="dm-pic" data-id="${esc(m.id)}">${placeholderImg()}<span>${esc(img.desc || "")}</span></div>`) : "";
+        const txt = m.text && m.text !== "[图片]" ? `<div class="dm-bub">${esc(m.text)}</div>` : "";
+        return `${sep}<div class="dm-row ${m.me ? "me" : ""}" data-mid="${esc(m.id)}">${m.me ? "" : `<div data-act="dm-person">${avatarHtml(w)}</div>`}<div class="dm-col">${bub}${txt}${m.quote ? `<div class="dm-quote">${esc(m.quote.text)}</div>` : ""}</div>${m.me ? avatarHtml(meW) : ""}</div>`;
+      }).join("");
+      body(pg, `<div class="dm-list">${rows || `<div class="dm-sep">打个招呼吧</div>`}${d._typing ? `<div class="dm-row"><div>${avatarHtml(w)}</div><div class="dm-col"><div class="dm-bub dm-typing"><i></i><i></i><i></i></div></div></div>` : ""}</div>`);
+      $(".page-title", pg.el).innerHTML = `<span class="dm-head">${avatarHtml(w)}<b>${esc(w.name)}</b></span>`;
+      const qb = $(".dm-quotebar", pg.el); qb.classList.toggle("hidden", !quote); if (quote) qb.innerHTML = `<span class="cell-main">${esc(quote.text)}</span><button data-act="dm-unquote">✕</button>`;
+      $(".dm-emoji", pg.el).classList.toggle("hidden", !emoji); $(".dm-input", pg.el).classList.toggle("tall", tall);
+      const b = $(".page-body", pg.el); if (b.scrollHeight - b.scrollTop - b.clientHeight < 240 || !pg._scrolled) { b.scrollTop = b.scrollHeight; pg._scrolled = true; }
+    }, { cls: "dmpage", action: `<button class="top-icon" data-act="dm-menu" aria-label="更多">${I.more}</button>`,
+      footer: `<div class="dm-quotebar hidden"></div><div class="dm-bar"><div class="dm-inbox"><textarea class="dm-input" rows="1" placeholder="发送消息" maxlength="500"></textarea><button class="dm-expand" data-act="dm-tall" aria-label="展开">${I.expand}</button></div>
+        <button class="dm-ico" data-act="dm-emoji" aria-label="表情">${I.smile}</button><button class="dm-ico" data-act="dm-img" aria-label="图片">${I.image}</button><button class="dm-send hidden" data-act="dm-send">发送</button></div>
+        <div class="dm-emoji hidden">${EMOJI.map(e => `<button data-act="dm-em" data-e="${e}">${e}</button>`).join("")}</div>` });
+    const input = $(".dm-input", page.el); const sendBtn = $(".dm-send", page.el);
+    const sync = () => { const has = !!input.value.trim(); sendBtn.classList.toggle("hidden", !has); page.el.querySelectorAll(".dm-ico").forEach(x => x.classList.toggle("hidden", has)); if (!tall) { input.style.height = "auto"; input.style.height = Math.min(96, input.scrollHeight) + "px"; } };
+    input.addEventListener("input", sync);
+    const push = m => {
+      m.id = uid("dmm"); m.me = true; m.at = nowIso(); if (quote) m.quote = quote; quote = null;
+      d.msgs.push(m); d.lastAt = m.at; saveDm(d); page.render(page); renderTab();
+      clearTimeout(d._timer); d._timer = setTimeout(() => replyDm(d), 3000); // 停 3 秒没再发才回（连发的一起回）
+    };
+    page.dmSend = () => { const text = input.value.trim(); if (!text) return; input.value = ""; sync(); push({ text }); };
+    page.dmEmoji = () => { emoji = !emoji; page.render(page); };
+    page.dmEm = e => { input.value += e; sync(); };
+    page.dmTall = () => { tall = !tall; input.style.height = tall ? "40vh" : "auto"; page.render(page); input.focus(); if (!tall) sync(); };
+    page.dmQuote = m => { quote = { id: m.id, text: m.images && m.images.length && m.text === "[图片]" ? "[图片]" : m.text.slice(0, 60) }; page.render(page); input.focus(); };
+    page.dmUnquote = () => { quote = null; page.render(page); };
+    page.dmImg = async () => {
+      const v = await sheet("", [{ label: "从相册选", value: "pick" }, { label: "写一张图（文字描述）", value: "desc" }]);
+      if (v === "pick") { try { const [ref] = await pickImages(1, 1200); if (ref) push({ text: "[图片]", images: [{ ref }] }); } catch (e) { toast("上传失败"); } }
+      if (v === "desc") { const t = await inputSheet("这张图里有什么", { placeholder: "比如：刚买的奶茶，杯子上画了只猫", maxlength: 200, area: true }); if (t) push({ text: "[图片]", images: [{ desc: t }] }); }
+    };
+    page.dmMsg = id => d.msgs.find(m => m.id === id);
+    // 长按气泡：引用 / 复制 / 删除
+    const pb = $(".page-body", page.el); let timer = null;
+    pb.addEventListener("pointerdown", e => { const row = e.target.closest(".dm-row[data-mid]"); if (!row || !e.target.closest(".dm-bub,.dm-pic,.dm-picdesc")) return; timer = setTimeout(async () => {
+      timer = null; const m = page.dmMsg(row.dataset.mid); if (!m) return;
+      const v = await sheet("", [{ label: "引用", value: "q" }, ...(m.text && m.text !== "[图片]" ? [{ label: "复制", value: "c" }] : []), { label: "删除", value: "d", danger: true }]);
+      if (v === "q") page.dmQuote(m);
+      if (v === "c") { try { await navigator.clipboard.writeText(m.text); toast("已复制"); } catch (e) { toast("复制失败"); } }
+      if (v === "d") { d.msgs = d.msgs.filter(x => x !== m); saveDm(d); page.render(page); }
+    }, 500); });
+    ["pointerup", "pointerleave", "pointercancel", "scroll"].forEach(ev => pb.addEventListener(ev, () => { clearTimeout(timer); timer = null; }, { passive: true }));
+    renderTab();
+  }
+  async function deleteDm(d) {
+    if (dmAuthor(d.k).type === "char") forget((d.mem || []).map(eventId => ({ charId: d.k.slice(2), eventId })));
+    S.dms = S.dms.filter(x => x !== d); await dbDelete(COL.dms, d.id);
+  }
+  document.addEventListener("click", async e => {
+    const el = e.target.closest("[data-act]"); if (!el) return;
+    const act = el.dataset.act; const pg = topPage();
+    if (!/^dm-/.test(act)) return;
+    e.stopPropagation();
+    switch (act) {
+      case "dm-list": openDmList(); return;
+      case "dm-open": openDm(el.dataset.k || (pg && pg.key.replace(/^person:/, ""))); return;
+      case "dm-send": pg.dmSend(); return;
+      case "dm-emoji": pg.dmEmoji(); return;
+      case "dm-em": pg.dmEm(el.dataset.e); return;
+      case "dm-tall": pg.dmTall(); return;
+      case "dm-img": pg.dmImg(); return;
+      case "dm-unquote": pg.dmUnquote(); return;
+      case "dm-person": openPerson(pg.key.slice(3)); return;
+      case "dm-pic": { const m = pg.dmMsg(el.dataset.id); if (m && m.images) openViewer(m.images, 0, () => saveDm(dmById(pg.key.slice(3)))); return; }
+      case "dm-menu": {
+        const k = pg.key.slice(3); const d = dmById(k);
+        const v = await sheet("", [{ label: "查看主页", value: "home" }, ...(d && d.msgs.length ? [{ label: "删除聊天记录", value: "del", danger: true }] : [])]);
+        if (v === "home") openPerson(k);
+        if (v === "del" && await sheet(`删除和 ${whoOf(dmAuthor(k)).name} 的聊天记录？${k.startsWith("c:") ? "他关于这些私信的记忆也会一起删掉" : ""}`, [{ label: "删除", value: "yes", danger: true }]) === "yes") { await deleteDm(d); closePage(); }
+        return;
+      }
+    }
+  });
+
   async function boot() {
     document.body.insertAdjacentHTML("afterbegin", `<header class="topbar" id="topbar"></header><main class="view" id="view"><div class="gen-tip"><span class="spinner"></span>加载中…</div></main><nav class="tabbar" id="tabbar"></nav>`);
     if (!api) { $("#view").innerHTML = `<div class="empty">请在小手机里打开这个 APP</div>`; return; }
     try { await loadAll(); pruneTopics().catch(e => console.warn(e)); pruneWorks().catch(e => console.warn(e)); } catch (e) { console.error(e); $("#view").innerHTML = `<div class="empty">加载失败：${esc(e.message || e)}</div>`; return; }
     renderTab();
-    runFollowMarks().catch(e => console.warn(e));
-    document.addEventListener("visibilitychange", () => { if (!document.hidden) runFollowMarks().catch(e => console.warn(e)); });
+    runFollowMarks().catch(e => console.warn(e)); runDmQueue().catch(e => console.warn(e));
+    document.addEventListener("visibilitychange", () => { if (!document.hidden) { runFollowMarks().catch(e => console.warn(e)); runDmQueue().catch(e => console.warn(e)); } });
+    setInterval(() => { if (!document.hidden) runDmQueue().catch(e => console.warn(e)); }, 60e3);
   }
   boot();
 })();

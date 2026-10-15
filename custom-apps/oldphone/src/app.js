@@ -331,11 +331,13 @@
     // 超过 70 字的按 70 字切开（像老手机自动分条）
     return out.flatMap(t => { const cs = [...t]; const parts = []; for (let i = 0; i < cs.length; i += 70) parts.push(cs.slice(i, i + 70).join("")); return parts; }).slice(0, 4);
   }
-  const historyText = msgs => msgs.slice(-30).map(m => `[${msgTime(m.at)}] ${m.dir === "in" ? "你" : "用户"}：${m.text}`).join("\n");
+  const KEEP = 40; // 每次回短信带最近 40 条原文；更早的总结进「他记得的事」
+  const historyText = msgs => msgs.slice(-KEEP).map(m => `[${msgTime(m.at)}] ${m.dir === "in" ? "你" : "用户"}：${m.text}`).join("\n");
   async function genSms(p, kind) {
     const th = threadOf(p.id);
     let s = th.msgs.length; while (s > 0 && th.msgs[s - 1].dir === "out") s--;
     const pending = th.msgs.slice(s).filter(m => m.dir === "out");
+    await updateMemo(p, th.msgs.slice(0, s));
     const hist = historyText(th.msgs.slice(0, s));
     const futures = futureIn(pending.map(m => m.text).join(" "));
     const lines = [
@@ -343,7 +345,8 @@
       `你在用自己的手机（号码 ${p.number}）收发短信。用户的号码是 ${S.meta.myNumber}${p.met ? "" : "，你不认识这个号码"}。`,
       kind === "wrong" ? "你本来想给你生活里的某个人发短信（按你那边的生活来定是谁、要说什么），结果按错了号码，发到了用户这个号码上。你还不知道自己发错了。写你发出的这条短信。" : "",
       kind === "owner" ? "这个号码以前是你一个朋友在用（按你那边的生活来定是谁），你像往常一样给这个号码发短信找他/她。你还不知道号码已经换了主人。写你发出的这条短信。" : "",
-      hist ? `你们之前的短信：\n${hist}` : "",
+      p.memo ? `你记得的事（更早的短信里发生的）：\n${p.memo}` : "",
+      hist ? `你们${p.memo ? "最近" : "之前"}的短信：\n${hist}` : "",
       kind === "reply" && (p.opening === "wrong" || p.opening === "owner") ? `你们的第一条短信是你发的，本来是想发给${p.meant ? `「${p.meant}」` : "你生活里的一个人"}；${p.opening === "wrong" ? "可你按错了号码" : "可这个号码早就不是他在用了"}，现在拿着这个号码的用户，你根本不认识。` : "",
       kind === "reply" ? `用户刚刚${pending.length > 1 ? "连着" : ""}发来：${pending.map(m => `「${m.text}」`).join("")}` : "",
       futures.length ? `用户提到的「${futures.join("」「")}」，是你那边还没有的东西，你没听说过。` : "",
@@ -370,6 +373,27 @@
   }
   /** 出错记下来（关于这部手机里能看到最近几条） */
   function logErr(t) { S.meta.errors = [`${hm(new Date())} ${String(t).slice(0, 120)}`, ...(S.meta.errors || [])].slice(0, 5); saveMeta(); }
+  /**
+   * 长期记忆：最近 40 条以前的短信，攒够 10 条就总结成几句要点，接在 p.memo 后面（按时间记到哪了：p.memoAt）。
+   * 太长了再压一遍。人物档案里能看到、能改
+   */
+  async function updateMemo(p, msgs) {
+    const old = msgs.slice(0, Math.max(0, msgs.length - KEEP)).filter(m => !p.memoAt || m.at > p.memoAt);
+    if (old.length < 10) return;
+    const name = personName(p);
+    const text = old.map(m => `[${msgTime(m.at)}] ${m.dir === "in" ? "你" : "用户"}：${m.text}`).join("\n");
+    try {
+      const r = await api.ai.chat({ system: "你负责帮一个人整理短信笔记，只输出要点，不要任何解释。", timeoutMs: 180000,
+        prompt: `下面是${name}（文中的「你」）和一个号码（文中的「用户」）之间的一段短信。${p.memo ? `之前已经记下的：\n${p.memo}\n\n` : ""}把这段短信整理成几条要点，用第二人称「你」写：发生了什么事；用户说过的关于自己的事；你说过的关于自己的事（名字、年龄、学校、家里这些原样记）；你们之间的称呼、约定和没说完的话。只写短信里真有的，不编，不评价。不超过 200 字，每条一行，开头写 -。\n\n${text}` });
+      const add = String((r && r.text) || "").trim(); if (!add) return;
+      p.memo = [p.memo, add].filter(Boolean).join("\n"); p.memoAt = old[old.length - 1].at;
+      if (p.memo.length > 1500) { // 太长了：压成 600 字以内
+        const r2 = await api.ai.chat({ system: "你负责帮一个人整理笔记，只输出要点。", timeoutMs: 180000, prompt: `把下面的笔记压缩到 600 字以内，保留名字、年龄、学校、约定这些具体信息和重要的事，删掉重复的，每条一行，开头写 -：\n\n${p.memo}` });
+        const c = String((r2 && r2.text) || "").trim(); if (c) p.memo = c;
+      }
+      savePerson(p);
+    } catch (e) { logErr(`整理记忆：${(e && e.message) || e}`); }
+  }
   /** 收到短信：收件箱满了就排队，删了旧的才进来 */
   function receive(pid, texts, at) {
     const th = threadOf(pid);
@@ -468,6 +492,7 @@
         <label>名字<input id="f-name" maxlength="12" value="${esc(p.name || "")}"></label>
         <div class="two"><label>2008 年几岁<input id="f-age" maxlength="3" inputmode="numeric" value="${esc(p.age || "")}"></label><label>在哪个城市<input id="f-city" maxlength="12" value="${esc(p.city || "")}"></label></div>
         <label>性格和说话方式<textarea id="f-persona" rows="3" maxlength="600">${esc(p.persona || "")}</textarea></label>
+        <label>他记得的事<textarea id="f-memo" rows="3" maxlength="2000" placeholder="聊多了以后，更早的短信会自动总结到这里，你也可以自己改">${esc(p.memo || "")}</textarea></label>
         <label>他那边的生活<textarea id="f-life" rows="3" maxlength="600" placeholder="在读书还是工作、家里什么样、最近在忙什么">${esc(p.life || "")}</textarea></label>
       </div>
       <label>怎么联系上<select id="f-open">${Object.entries({ wrong: "他发错号码，发到了这部手机", owner: "他找这部手机的前机主", mine: "我主动：在待机屏随手按号码发出去" }).map(([k, v]) => `<option value="${k}" ${p.opening === k ? "selected" : ""}>${v}</option>`).join("")}</select></label>
@@ -481,7 +506,7 @@
       if (b.dataset.v === "no") return closeSheet();
       if (b.dataset.v === "del") { if (!confirmInline(b)) return; S.people = S.people.filter(x => x.id !== p.id); S.threads = S.threads.filter(x => x.id !== p.id); dbDel(COL.people, p.id); dbDel(COL.threads, p.id); S.meta.queue = S.meta.queue.filter(q => q.pid !== p.id); saveMeta(); closeSheet(); return draw(); }
       p.charId = $("#f-charid") ? $("#f-charid").value : ""; p.name = $("#f-name").value.trim(); p.age = $("#f-age").value.trim(); p.city = $("#f-city").value.trim();
-      p.persona = $("#f-persona").value.trim(); p.life = $("#f-life").value.trim(); p.opening = $("#f-open").value; p.number = ($("#f-num").value.replace(/\D/g, "") || p.number);
+      p.persona = $("#f-persona").value.trim(); p.life = $("#f-life").value.trim(); p.memo = $("#f-memo").value.trim(); p.opening = $("#f-open").value; p.number = ($("#f-num").value.replace(/\D/g, "") || p.number);
       if (p.source === "char" && !p.charId) return alertInline("先选一个档案库角色");
       if (p.source === "local" && !p.name) return alertInline("写个名字吧");
       const old = personById(p.id); if (old) Object.assign(old, p); else S.people.push(p);

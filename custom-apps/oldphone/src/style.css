@@ -66,7 +66,7 @@ button { border: 0; background: none; font: inherit; color: inherit; cursor: poi
 .pbar { width: 180px; height: 16px; margin-top: 10px; border: 2px solid var(--ink); padding: 2px; }
 .pbar i { display: block; height: 100%; background: repeating-linear-gradient(90deg, var(--ink) 0 10px, transparent 10px 13px); }
 /* 写信息时，屏幕上盖一层透明的输入框：点屏幕弹键盘，字画在屏幕里 */
-#typer { position: absolute; left: 22px; top: 102px; width: 306px; height: 330px; opacity: 0; resize: none; border: 0; font-size: 16px; display: none; z-index: 5; caret-color: transparent; color: transparent; background: transparent; }
+#typer { position: absolute; left: 22px; top: 102px; width: 306px; height: 286px; opacity: 0; resize: none; border: 0; font-size: 16px; display: none; z-index: 5; caret-color: transparent; color: transparent; background: transparent; }
 #typer.on { display: block; }
 /* 人物档案：纸卡片 */
 #sheet { position: fixed; inset: 0; z-index: 20; display: none; background: rgba(0,0,0,.35); align-items: flex-end; justify-content: center; }
@@ -88,3 +88,4 @@ button { border: 0; background: none; font: inherit; color: inherit; cursor: poi
 .paper .btns button { flex: 1; height: 44px; border: 2px solid #2a2a22; font: 16px Px, monospace; background: #fffdf6; }
 .paper .btns .pri { background: #2a2a22; color: #f6f1e4; }
 .paper .btns .danger { color: #c0392b; border-color: #c0392b; flex: none; padding: 0 14px; }
+.soft span { padding: 4px 2px; min-width: 40px; } .soft span:last-child { text-align: right; } .list div { cursor: pointer; }

@@ -110,11 +110,11 @@
 
   // ───────────────────────── 屏幕 ─────────────────────────
   const bar = () => `<div class="bar">${ICON.signal}${unread() || S.meta.pendingIn.length ? `<span class="blink" style="display:flex">${ICON.mail}</span>` : ""}${ICON.bat(S.battery)}</div>`;
-  const soft = (l, r) => `<div class="soft"><span>${esc(l || "")}</span><span>${esc(r || "")}</span></div>`;
+  const soft = (l, r) => `<div class="soft"><span data-k="softL">${esc(l || "")}</span><span data-k="softR">${esc(r || "")}</span></div>`;
   /** 列表：一屏最多 6 行，选中的那行跟着滚 */
   function list(items, sel) {
     const N = 6; if (sel < S.top) S.top = sel; if (sel >= S.top + N) S.top = sel - N + 1;
-    return `<div class="list">${items.slice(S.top, S.top + N).map((it, i) => `<div class="${i + S.top === sel ? "on" : ""}">${it}</div>`).join("") || `<div>（空）</div>`}</div>`;
+    return `<div class="list">${items.slice(S.top, S.top + N).map((it, i) => `<div class="${i + S.top === sel ? "on" : ""}" data-row="${i + S.top}">${it}</div>`).join("") || `<div>（空）</div>`}</div>`;
   }
   const row = (a, b) => `<span class="cut">${esc(a)}</span>${b != null ? `<span class="r">${esc(b)}</span>` : ""}`;
 
@@ -171,7 +171,7 @@
       if (act === "conv") { S.conv = r.pid; S.scroll = 9999; return open("conv", true); }
       if (act === "save") { const name = await ask("存入电话本", "名字", ""); if (name) { p.label = name.slice(0, 12); savePerson(p); toastLcd("已保存"); } return; }
       if (act === "resend" && m) { th.msgs = th.msgs.filter(x => x !== m); saveThread(th); S.compose = { to: r.pid, text: m.text }; return sendNow(); }
-      if (act === "del" && m) { th.msgs = th.msgs.filter(x => x !== m); saveThread(th); flushPending(); toastLcd("已删除"); S.stack.pop(); return back(); }
+      if (act === "del" && m) { th.msgs = th.msgs.filter(x => x !== m); saveThread(th); flushPending(); return toastLcd("已删除", () => { S.stack.pop(); back(); }); }
     },
   };
   // 对话：像截图那样一行一行（名字：内容），上下键滚
@@ -190,7 +190,7 @@
     key: async k => {
       const c = S.compose;
       if (k === "softL" || k === "ok" || k === "call") { if (![...c.text].length) return; if (!c.to && !c.number) return open("pickto"); return sendNow(); }
-      if (k === "softR" || k === "end") { if (c.text.trim()) { saveDraft(); toastLcd("已存入草稿箱"); } if (k === "end") return home(); return back(); }
+      if (k === "softR" || k === "end") { const leave = () => (k === "end" ? home() : back()); if (c.text.trim()) { saveDraft(); return toastLcd("已存入草稿箱", leave); } return leave(); }
       if (/^[0-9*#]$/.test(k)) { c.text += k; syncTyper(); return draw(); }
     },
   };
@@ -260,7 +260,8 @@
   function back() { const prev = S.stack.pop(); if (!prev) return home(); S.view = prev.view; S.sel = Math.min(prev.sel, Math.max(0, ((V[prev.view].items && V[prev.view].items()) || []).length - 1)); S.top = prev.top; S.scroll = 0; draw(); }
   function home() { S.stack = []; S.view = "standby"; S.sel = 0; draw(); }
   let lcdT = null;
-  function toastLcd(msg) { const was = { view: S.view, sel: S.sel, top: S.top }; S.lcdMsg = msg; S.view = "msgline"; draw(); clearTimeout(lcdT); lcdT = setTimeout(() => { S.view = was.view; S.sel = was.sel; S.top = was.top; draw(); }, 900); }
+  /** 屏幕上闪一行字，0.9 秒后回原来的界面（给了 next 就改做 next） */
+  function toastLcd(msg, next) { const was = { view: S.view, sel: S.sel, top: S.top }; S.lcdMsg = msg; S.view = "msgline"; draw(); clearTimeout(lcdT); lcdT = setTimeout(() => { if (next) { S.view = was.view; return next(); } S.view = was.view; S.sel = was.sel; S.top = was.top; draw(); }, 900); }
   /** 屏幕里弹一个小菜单，返回选中的值 */
   function choose(title, items) {
     return new Promise(res => { const was = { view: S.view, sel: S.sel, top: S.top };
@@ -450,7 +451,11 @@
 
   async function boot() {
     shell(); setupTyper();
-    document.addEventListener("click", e => { const b = e.target.closest("[data-k]"); if (b) { e.preventDefault(); press(b.dataset.k); } });
+    document.addEventListener("click", e => {
+      // 屏幕也能点：点列表里的一行 = 选中它再按确认；点屏幕底下的「选择」「返回」= 按左右软键
+      const r = e.target.closest("[data-row]"); if (r && !$("#sheet").classList.contains("on")) { S.sel = +r.dataset.row; draw(); return press("ok"); }
+      const b = e.target.closest("[data-k]"); if (b) { e.preventDefault(); press(b.dataset.k); }
+    });
     $("#typer").addEventListener("focus", wake);
     S.bootStep = 0; draw();
     const loading = loadAll().catch(e => console.warn(e));

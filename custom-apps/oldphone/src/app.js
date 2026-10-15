@@ -74,6 +74,7 @@
   const msgTime = iso => { const t = thereDate(new Date(iso)); return `${pad(t.getMonth() + 1)}/${pad(t.getDate())} ${hm(t)}`; };
   const LOOKS = () => [
     ["运营商", S.meta.operator !== false ? "开" : "关", () => { S.meta.operator = S.meta.operator === false; saveMeta(); }],
+    ["触屏点选", S.meta.touch ? "开" : "关", () => { S.meta.touch = !S.meta.touch; saveMeta(); }],
     ["机身颜色", "银色", null], ["屏幕颜色", "绿屏", null], ["贴纸", "", null],
   ];
 
@@ -232,8 +233,9 @@
     key: k => { if (k === "softR") return back(); if (k === "ok" || k === "softL") { const f = LOOKS()[S.sel][2]; if (f) { f(); draw(); } else toastLcd("还在做"); } },
   };
   V.about = {
-    draw: () => `${bar()}<div class="title">关于这部手机</div><div class="scroll s18"><p>本机号码</p><p>${esc(S.meta.myNumber)}</p><p class="s12" style="margin-top:8px">请回答2008 · ${esc(VERSION)}</p></div>${soft("", "返回")}`,
-    key: k => { if (k === "softR" || k === "ok") return back(); },
+    draw: () => `${bar()}<div class="title">关于这部手机</div><div class="scroll s18"><p>本机号码</p><p>${esc(S.meta.myNumber)}</p><p class="s12" style="margin-top:8px">请回答2008 · ${esc(VERSION)}</p>${S.meta.queue.length ? `<p class="s12">等回复：${S.meta.queue.map(q => `${esc(personName(personById(q.pid) || {}))} ${hm(new Date(q.due))}${q.tries ? ` 第${q.tries}次重试` : ""}`).join("；")}</p>` : ""}${(S.meta.errors || []).map(e => `<p class="s12">❗${esc(e)}</p>`).join("")}</div>${soft("", "返回")}`,
+    after: () => { const b = $("#lcd .scroll"); if (b) b.scrollTop = S.scroll || 0; },
+    key: k => { if (k === "up") { S.scroll = Math.max(0, (S.scroll || 0) - 26); return draw(); } if (k === "down") { S.scroll = (S.scroll || 0) + 26; return draw(); } if (k === "softR" || k === "ok") return back(); },
   };
   // 发送中：进度条走完 → 已发送（偶尔信号不好，发送失败）
   V.sending = {
@@ -352,8 +354,10 @@
       const system = [`你在扮演一个人：${p.name || "无名"}${p.age ? `，${p.age}岁` : ""}${p.city ? `，在${p.city}` : ""}。`, p.persona ? `性格和说话方式：${p.persona}` : "", p.life ? `你那边的生活：${p.life}` : "", "只输出短信，不要任何解释。"].filter(Boolean).join("\n");
       const r = await api.ai.chat({ system, prompt: instruction, timeoutMs: 90000 });
       return parseSms(r && r.text);
-    } catch (e) { console.warn(e); return null; }
+    } catch (e) { console.warn(e); logErr(`${personName(p)}：${(e && e.message) || e}`); return null; }
   }
+  /** 出错记下来（关于这部手机里能看到最近几条） */
+  function logErr(t) { S.meta.errors = [`${hm(new Date())} ${String(t).slice(0, 120)}`, ...(S.meta.errors || [])].slice(0, 5); saveMeta(); }
   /** 收到短信：收件箱满了就排队，删了旧的才进来 */
   function receive(pid, texts, at) {
     const th = threadOf(pid);
@@ -378,6 +382,10 @@
       for (const q of S.meta.queue.filter(q => new Date(q.due) <= new Date())) {
         const p = personById(q.pid); if (!p) { S.meta.queue = S.meta.queue.filter(x => x !== q); continue; }
         const parts = await genSms(p, q.kind);
+        if (!parts || !parts.length) { // 没回出来：过一会儿再试，最多试 3 次
+          q.tries = (q.tries || 0) + 1; if (!parts) {} else logErr(`${personName(p)}：回了空白`);
+          if (q.tries < 3) { q.due = new Date(Date.now() + 20e3).toISOString(); saveMeta(); continue; }
+        }
         S.meta.queue = S.meta.queue.filter(x => x !== q); saveMeta();
         if (parts && parts.length) { if (q.kind !== "reply") { p.met = true; savePerson(p); } receive(p.id, parts, q.due); remember(p, parts); /* 她退出了也没关系：时间按他本来该回的那一刻算 */ }
       }
@@ -453,8 +461,8 @@
     shell(); setupTyper();
     document.addEventListener("click", e => {
       // 屏幕也能点：点列表里的一行 = 选中它再按确认；点屏幕底下的「选择」「返回」= 按左右软键
-      const r = e.target.closest("[data-row]"); if (r && !$("#sheet").classList.contains("on")) { S.sel = +r.dataset.row; draw(); return press("ok"); }
-      const b = e.target.closest("[data-k]"); if (b) { e.preventDefault(); press(b.dataset.k); }
+      const r = S.meta.touch && e.target.closest("[data-row]"); if (r && !$("#sheet").classList.contains("on")) { S.sel = +r.dataset.row; draw(); return press("ok"); }
+      const b = e.target.closest("[data-k]"); if (b && (S.meta.touch || !b.closest("#lcd"))) { e.preventDefault(); press(b.dataset.k); }
     });
     $("#typer").addEventListener("focus", wake);
     S.bootStep = 0; draw();

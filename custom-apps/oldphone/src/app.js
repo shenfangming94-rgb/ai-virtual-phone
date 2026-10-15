@@ -16,9 +16,9 @@
   const week = d => `周${WEEK[d.getDay()]}`;
 
   // ───────────────────────── 年代规矩（每次回短信都带，她过目定稿 10-15） ─────────────────────────
-  const thereText = () => { const t = thereDate(); return `${ymd(t)} ${week(t)} ${hm(t)}`; };
-  const ERA_RULE = () => `【请回答2008】
-- 你那边现在是 ${thereText()}。你的日子和用户同步往前走：用户过一天，你也过一天。
+  const thereText = d => { const t = thereDate(d || new Date()); return `${ymd(t)} ${week(t)} ${hm(t)}`; };
+  const ERA_RULE = d => `【请回答2008】
+- 你那边现在是 ${thereText(d)}。你的日子和用户同步往前走：用户过一天，你也过一天。
 - 你只知道你那边今天以前发生的事。以后的事你一概不知道，不会说出来，也不会碰巧说中。
 - 你身边的一切都属于你那边的年份：手机、上网方式、聊天软件、物价、流行的歌和剧、网络用语。那一年还没有的东西，你没见过也没听说过。
 - 你用按键手机发短信：一条最多 70 个字，按条收费，话短、省着发。可以用那个年代手机上有的文字表情和符号，不用现在的 emoji。
@@ -348,7 +348,7 @@
   }
   const KEEP = 40; // 每次回短信带最近 40 条原文；更早的总结进「他记得的事」
   const historyText = msgs => msgs.slice(-KEEP).map(m => `[${msgTime(m.at)}] ${m.dir === "in" ? "你" : "用户"}：${m.text}`).join("\n");
-  async function genSms(p, kind) {
+  async function genSms(p, kind, at) {
     const th = threadOf(p.id);
     let s = th.msgs.length; while (s > 0 && th.msgs[s - 1].dir === "out") s--;
     const pending = th.msgs.slice(s).filter(m => m.dir === "out");
@@ -356,9 +356,10 @@
     const hist = historyText(th.msgs.slice(0, s));
     const futures = futureIn(pending.map(m => m.text).join(" "));
     const lines = [
-      ERA_RULE(),
+      ERA_RULE(at ? new Date(at) : undefined),
       `你在用自己的手机（号码 ${p.number}）收发短信。用户的号码是 ${S.meta.myNumber}${p.met ? "" : "，你不认识这个号码"}。`,
       kind === "wrong" ? "你本来想给你生活里的某个人发短信（按你那边的生活来定是谁、要说什么），结果按错了号码，发到了用户这个号码上。你还不知道自己发错了。写你发出的这条短信。" : "",
+      kind === "pro" ? "你想主动给用户发条短信：说说你这会儿的生活——刚发生的事、在做的事、看到的、想到的，像跟一个隔着很远的朋友分享日常。按你的人设和你们聊到哪了来，一两条就够。不用交代行程，也不要追问用户为什么没发短信。" : "",
       kind === "owner" ? "这个号码以前是你一个朋友在用（按你那边的生活来定是谁），你像往常一样给这个号码发短信找他/她。你还不知道号码已经换了主人。写你发出的这条短信。" : "",
       p.memo ? `你记得的事（更早的短信里发生的）：\n${p.memo}` : "",
       hist ? `你们${p.memo ? "最近" : "之前"}的短信：\n${hist}` : "",
@@ -410,11 +411,11 @@
     } catch (e) { logErr(`整理记忆：${(e && e.message) || e}`); }
   }
   /** 收到短信：收件箱满了就排队，删了旧的才进来 */
-  function receive(pid, texts, at) {
+  function receive(pid, texts, at, pro) {
     const th = threadOf(pid);
     for (const [i, text] of texts.entries()) {
       if (allIn().length >= INBOX_MAX) { S.meta.pendingIn.push({ pid, text }); continue; }
-      th.msgs.push({ id: uid("m"), dir: "in", text, at: new Date(new Date(at || Date.now()).getTime() + i * 20e3).toISOString(), read: false });
+      th.msgs.push({ id: uid("m"), dir: "in", text, at: new Date(new Date(at || Date.now()).getTime() + i * 20e3).toISOString(), read: false, ...(pro ? { pro: true } : {}) });
     }
     saveThread(th); saveMeta(); notify();
   }
@@ -433,13 +434,13 @@
       const writing = S.view === "compose" && S.compose ? S.compose.to : S.view === "sending" ? S.sendingTo : null; // 正在给他写下一条 / 正在发：先等她写完
       for (const q of S.meta.queue.filter(q => new Date(q.due) <= new Date() && q.pid !== writing)) {
         const p = personById(q.pid); if (!p) { S.meta.queue = S.meta.queue.filter(x => x !== q); continue; }
-        const parts = await genSms(p, q.kind);
+        const parts = await genSms(p, q.kind, q.at);
         if (!parts || !parts.length) { // 没回出来：过一会儿再试，最多试 3 次
           q.tries = (q.tries || 0) + 1; if (!parts) {} else logErr(`${personName(p)}：回了空白`);
           if (q.tries < 3) { q.due = new Date(Date.now() + 20e3).toISOString(); saveMeta(); continue; }
         }
         S.meta.queue = S.meta.queue.filter(x => x !== q); saveMeta();
-        if (parts && parts.length) { if (q.kind !== "reply") { p.met = true; savePerson(p); } receive(p.id, parts, q.due); remember(p, parts); /* 她退出了也没关系：时间按他本来该回的那一刻算 */ }
+        if (parts && parts.length) { if (q.kind !== "reply") { p.met = true; savePerson(p); } receive(p.id, parts, q.at || q.due, q.kind === "pro"); remember(p, parts); /* 她退出了也没关系：时间按他本来该回的那一刻算 */ }
       }
     } finally { busy = false; }
   }
@@ -563,10 +564,33 @@
     // 补救：最后一条是她发出去的、却没有在等他回的（以前出错被丢掉了）→ 重新排上
     for (const t of S.threads) { const p = personById(t.id); const last = t.msgs[t.msgs.length - 1];
       if (p && !p.ghost && last && last.dir === "out" && last.status !== "failed" && !S.meta.queue.some(q => q.pid === p.id)) S.meta.queue.push({ pid: p.id, kind: "reply", due: new Date(Date.now() + rand(5, 20) * 1000 * TS()).toISOString() }); }
+    rollAway();
     saveMeta();
     if (unread()) { S.view = "newmsg"; draw(); }
     setInterval(() => { if (S.view === "standby") draw(); tick(); }, 3000);
-    document.addEventListener("visibilitychange", () => { if (!document.hidden) tick(); });
+    document.addEventListener("visibilitychange", () => { if (document.hidden) markSeen(); else { rollAway(); tick(); } });
+    setInterval(markSeen, 60e3); window.addEventListener("pagehide", markSeen);
+  }
+  /**
+   * 他主动找她：app 关着的时候没法发，所以她打开时按「离开了多久」掷骰子，补上她不在时他发来的短信（时间按那时候算）。
+   * 离开 1～3 小时 25%、3～8 小时 45%、8～24 小时 65%、一天以上 80%；每次打开最多两个人；他上一条主动的她还没回，就不再主动
+   */
+  function markSeen() { S.meta.lastSeen = new Date().toISOString(); saveMeta(); }
+  function rollAway() {
+    const last = S.meta.lastSeen ? new Date(S.meta.lastSeen).getTime() : 0; const now = Date.now(); markSeen();
+    const h = (now - last) / 3600e3; if (!last || h < 1) return;
+    const pr = h < 3 ? 0.25 : h < 8 ? 0.45 : h < 24 ? 0.65 : 0.8;
+    const cand = S.people.filter(p => p.met && !p.ghost && !S.meta.queue.some(q => q.pid === p.id)).filter(p => {
+      const ms = threadOf(p.id).msgs; const lastIn = [...ms].reverse().find(m => m.dir === "in"); const lastOut = [...ms].reverse().find(m => m.dir === "out");
+      return !(lastIn && lastIn.pro && (!lastOut || lastOut.at < lastIn.at)); });
+    let n = 0;
+    for (const p of cand.sort(() => Math.random() - 0.5)) {
+      if (n >= 2 || Math.random() > pr) continue;
+      // 时间：在她离开的这段里挑一个他醒着的点（7:00～23:30），挑不到就用现在
+      let at = null;
+      for (let i = 0; i < 12 && !at; i++) { const t = new Date(last + 30 * 60e3 + Math.random() * Math.max(0, now - last - 35 * 60e3)); const hh = t.getHours() + t.getMinutes() / 60; if (hh >= 7 && hh <= 23.5) at = t; }
+      S.meta.queue.push({ pid: p.id, kind: "pro", at: (at || new Date(now - 60e3)).toISOString(), due: new Date(now + rand(2, 6) * 1000).toISOString() }); n++;
+    }
   }
   boot();
 })();

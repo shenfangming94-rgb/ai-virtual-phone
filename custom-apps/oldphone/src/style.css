@@ -89,3 +89,4 @@ button { border: 0; background: none; font: inherit; color: inherit; cursor: poi
 .paper .btns .pri { background: #2a2a22; color: #f6f1e4; }
 .paper .btns .danger { color: #c0392b; border-color: #c0392b; flex: none; padding: 0 14px; }
 .soft span { padding: 4px 2px; min-width: 40px; } .soft span:last-child { text-align: right; } .list div { cursor: pointer; }
+.paper .longshot { display: block; width: 100%; margin: 8px 0; image-rendering: pixelated; -webkit-touch-callout: default; -webkit-user-select: auto; user-select: auto; border: 2px solid #2a2a22; }

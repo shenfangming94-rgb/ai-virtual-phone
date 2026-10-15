@@ -179,9 +179,13 @@
   V.conv = {
     draw: () => { const p = personById(S.conv); const who = p ? (p.label || "对方").slice(0, 4) : "对方";
       const lines = threadOf(S.conv).msgs.map(m => `<p>${m.dir === "out" ? "我" : esc(who)}：${esc(m.text)}</p>`).join("");
-      return `${bar()}<div class="title">${esc(p ? shown(p) : "")}</div><div class="scroll conv s18" id="convbox">${lines || "<p>（还没有短信）</p>"}</div>${soft("回复", "返回")}`; },
+      return `${bar()}<div class="title">${esc(p ? shown(p) : "")}</div><div class="scroll conv s18" id="convbox">${lines || "<p>（还没有短信）</p>"}</div>${soft("选项", "返回")}`; },
     after: () => { const b = $("#convbox"); if (!b) return; const max = b.scrollHeight - b.clientHeight; S.scroll = Math.max(0, Math.min(S.scroll, max)); b.scrollTop = S.scroll; },
-    key: k => { const step = 26; if (k === "up") { S.scroll -= step; return draw(); } if (k === "down") { S.scroll += step; return draw(); } if (k === "ok" || k === "softL") { S.compose = { to: S.conv, text: "" }; return open("compose"); } if (k === "softR") return back(); },
+    key: async k => { const step = 26; if (k === "up") { S.scroll -= step; return draw(); } if (k === "down") { S.scroll += step; return draw(); }
+      if (k === "ok" || k === "softL") { const v = await choose("选项", [["回复", "reply"], ["整段保存", "export"]]);
+        if (v === "reply") { S.compose = { to: S.conv, text: "" }; return open("compose"); }
+        if (v === "export") return exportConv(S.conv); }
+      if (k === "softR") return back(); },
   };
   // 写信息：点屏幕弹出键盘；右上角字数（超过 70 字按条数算）
   V.compose = {
@@ -399,6 +403,43 @@
     if (p.source !== "char" || !p.charId || !api.memory || !api.memory.addTimeline) return;
     const th = threadOf(p.id); const last = th.msgs.filter(m => m.dir === "out").slice(-1)[0];
     api.memory.addTimeline({ characterId: p.charId, appLabel: "请回答2008", detail: "sms", summary: `${last ? `号码 ${S.meta.myNumber} 发来短信「${last.text.slice(0, 50)}」，` : ""}我发短信：${parts.map(t => `「${t.slice(0, 40)}」`).join("")}`, appEventId: uid("r2008") }).catch(() => {});
+  }
+
+  // ───────────────────────── 整段保存：把整个对话画成一张长图（像素字、绿屏），长按保存；也能复制文字 ─────────────────────────
+  async function exportConv(pid) {
+    const p = personById(pid); const msgs = threadOf(pid).msgs; if (!msgs.length) return toastLcd("还没有短信");
+    const who = p ? (p.label || p.number) : "对方";
+    const text = msgs.map(m => { const t = thereDate(new Date(m.at)); return `${m.dir === "out" ? "我" : who}：${m.text}　${ymd(t)} ${hm(t)}`; }).join("\n");
+    await document.fonts.ready;
+    const K = 2, W = 360, PAD = 18, FS = 24, LH = 34, cs = getComputedStyle(document.documentElement);
+    const lcd = cs.getPropertyValue("--lcd").trim() || "#9fd36a", ink = cs.getPropertyValue("--ink").trim() || "#1d2a12";
+    const cv = document.createElement("canvas"), ctx = cv.getContext("2d");
+    ctx.font = `${FS}px Px`;
+    // 先排版：每条「名字：内容」自动换行，日期变了插一行日期
+    const rows = []; let day = "";
+    rows.push({ t: `与 ${who} 的短信`, s: 18, c: true }, { gap: 8 });
+    for (const m of msgs) {
+      const t = thereDate(new Date(m.at)); const d = ymd(t);
+      if (d !== day) { day = d; rows.push({ gap: 6 }, { t: d, s: 12, c: true, dim: true }, { gap: 4 }); }
+      let line = ""; for (const ch of `${m.dir === "out" ? "我" : who}：${m.text}`) { if (ctx.measureText(line + ch).width > W - PAD * 2) { rows.push({ t: line }); line = ""; } line += ch; }
+      if (line) rows.push({ t: line });
+    }
+    rows.push({ gap: 12 }, { t: "请回答2008", s: 12, c: true, dim: true });
+    const H = rows.reduce((a, r) => a + (r.gap || (r.s ? r.s + 12 : LH)), PAD * 2);
+    cv.width = W * K; cv.height = H * K; ctx.scale(K, K); ctx.imageSmoothingEnabled = false;
+    ctx.fillStyle = lcd; ctx.fillRect(0, 0, W, H);
+    ctx.fillStyle = "rgba(0,0,0,.03)"; for (let y = 0; y < H; y += 3) ctx.fillRect(0, y, W, 1); for (let x = 0; x < W; x += 3) ctx.fillRect(x, 0, 1, H);
+    let y = PAD; ctx.textBaseline = "top";
+    for (const r of rows) {
+      if (r.gap) { y += r.gap; continue; }
+      const fs = r.s || FS; ctx.font = `${fs}px Px`; ctx.fillStyle = ink; ctx.globalAlpha = r.dim ? .7 : 1;
+      const x = r.c ? (W - ctx.measureText(r.t).width) / 2 : PAD; ctx.fillText(r.t, x, y + (r.s ? 2 : 4)); ctx.globalAlpha = 1;
+      y += r.s ? r.s + 12 : LH;
+    }
+    const url = cv.toDataURL("image/png");
+    sheetHtml(`<h3>整段保存</h3><p class="note">长按图片保存到相册；或者复制文字</p><img class="longshot" src="${url}" alt=""><div class="btns"><button data-v="copy">复制文字</button><button data-v="no" class="pri">关闭</button></div>`);
+    $("#sheet").onclick = async e => { const b = e.target.closest("[data-v]"); if (!b) return; if (b.dataset.v === "no") return closeSheet();
+      try { await navigator.clipboard.writeText(text); b.textContent = "已复制"; } catch (err) { const ta = document.createElement("textarea"); ta.value = text; document.body.appendChild(ta); ta.select(); try { document.execCommand("copy"); b.textContent = "已复制"; } catch (e2) { b.textContent = "复制失败"; } ta.remove(); } };
   }
 
   // ───────────────────────── 人物档案（屏幕外的纸卡片） ─────────────────────────

@@ -2105,15 +2105,16 @@ ${CALM_LINE}
     const a = dmAuthor(k); const meW = whoOf({ type: "user" });
     let quote = null, emoji = false, tall = false;
     const page = openPage(`dm:${k}`, pg => {
-      const w = whoOf(a); let lastAt = 0;
+      const w = whoOf(a); let lastAt = 0, prevMe = null;
       const rows = d.msgs.map(m => {
+        const gap = prevMe !== null && prevMe !== !!m.me; prevMe = !!m.me; // 换人说话多空一点
         const t = new Date(m.at).getTime(); const sep = t - lastAt > 30 * 60e3 ? `<div class="pm-sep">${esc(dmTime(m.at))}</div>` : ""; lastAt = t;
         const img = (m.images || [])[0];
         const bub = img ? (img.ref ? `<img class="pm-pic" ${refSrc(img.ref)} alt="" data-act="dm-pic" data-id="${esc(m.id)}">` : `<div class="pm-picdesc" data-act="dm-pic" data-id="${esc(m.id)}">${placeholderImg()}<span>${esc(img.desc || "")}</span></div>`) : "";
         const txt = m.text && m.text !== "[图片]" ? `<div class="pm-bub">${esc(m.text)}</div>` : "";
-        return `${sep}<div class="pm-row ${m.me ? "me" : ""}" data-mid="${esc(m.id)}">${m.me ? "" : `<div data-act="dm-person">${avatarHtml(w)}</div>`}<div class="pm-col">${bub}${txt}${m.quote ? `<div class="pm-quote">${esc(m.quote.text)}</div>` : ""}</div>${m.me ? avatarHtml(meW) : ""}</div>`;
+        return `${sep}<div class="pm-row ${m.me ? "me" : ""} ${gap ? "gap" : ""}" data-mid="${esc(m.id)}">${m.me ? "" : `<div data-act="dm-person">${avatarHtml(w)}</div>`}<div class="pm-col">${bub}${txt}${m.quote ? `<div class="pm-quote">${esc(m.quote.text)}</div>` : ""}</div>${m.me ? avatarHtml(meW) : ""}</div>`;
       }).join("");
-      body(pg, `<div class="pm-list">${rows || `<div class="pm-sep">打个招呼吧</div>`}${d._typing ? `<div class="pm-row"><div>${avatarHtml(w)}</div><div class="pm-col"><div class="pm-bub pm-typing"><i></i><i></i><i></i></div></div></div>` : ""}</div>`);
+      body(pg, `<div class="pm-list">${rows || `<div class="pm-sep">打个招呼吧</div>`}${d._typing ? `<div class="pm-row ${prevMe ? "gap" : ""}"><div>${avatarHtml(w)}</div><div class="pm-col"><div class="pm-bub pm-typing"><i></i><i></i><i></i></div></div></div>` : ""}</div>`);
       $(".page-title", pg.el).innerHTML = `<span class="pm-head">${avatarHtml(w)}<b>${esc(w.name)}</b></span>`;
       const qb = $(".pm-quotebar", pg.el); qb.classList.toggle("hidden", !quote); if (quote) qb.innerHTML = `<span class="cell-main">${esc(quote.text)}</span><button data-act="dm-unquote">✕</button>`;
       $(".pm-emoji", pg.el).classList.toggle("hidden", !emoji); $(".pm-input", pg.el).classList.toggle("tall", tall);

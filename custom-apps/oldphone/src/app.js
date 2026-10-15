@@ -336,11 +336,14 @@
       kind === "wrong" ? "你本来想给你生活里的某个人发短信（按你那边的生活来定是谁、要说什么），结果按错了号码，发到了用户这个号码上。你还不知道自己发错了。写你发出的这条短信。" : "",
       kind === "owner" ? "这个号码以前是你一个朋友在用（按你那边的生活来定是谁），你像往常一样给这个号码发短信找他/她。你还不知道号码已经换了主人。写你发出的这条短信。" : "",
       hist ? `你们之前的短信：\n${hist}` : "",
+      kind === "reply" && (p.opening === "wrong" || p.opening === "owner") ? `你们的第一条短信是你发的，本来是想发给${p.meant ? `「${p.meant}」` : "你生活里的一个人"}；${p.opening === "wrong" ? "可你按错了号码" : "可这个号码早就不是他在用了"}，现在拿着这个号码的用户，你根本不认识。` : "",
       kind === "reply" ? `用户刚刚${pending.length > 1 ? "连着" : ""}发来：${pending.map(m => `「${m.text}」`).join("")}` : "",
       futures.length ? `用户提到的「${futures.join("」「")}」，是你那边还没有的东西，你没听说过。` : "",
       SMS_FMT,
+      kind === "wrong" || kind === "owner" ? "最后再写一个备注（不会发出去，只是记下来）：\n===备注===\n本来想发给：那个人是谁（名字或外号，和你是什么关系）\n===结束===" : "",
     ].filter(Boolean).join("\n\n");
     let parts = await callAi(p, lines);
+    if ((kind === "wrong" || kind === "owner") && S._lastRaw) { const m = S._lastRaw.match(/本来想发给\s*[：:]\s*([^\n=]+)/); if (m) { p.meant = m[1].trim().slice(0, 40); savePerson(p); } }
     if (parts && parts.length) { const leak = futureIn(parts.join(" ")).filter(w => !futures.includes(w)); // 他说漏嘴了：重写一次
       if (leak.length) { const again = await callAi(p, `${lines}\n\n你刚才写了「${leak.join("」「")}」，这是你那边还没有的东西，你不可能知道。重写。`); if (again && again.length) parts = again; } }
     return parts;
@@ -349,11 +352,11 @@
     try {
       if (p.source === "char" && p.charId) {
         const r = await api.ai.generate({ characterId: p.charId, appTags: ["nox_reply2008", "sms"], instruction: `${instruction}\n\n【输出要求】只输出短信块，不要解释、不要旁白。` });
-        return parseSms(r && r.text);
+        S._lastRaw = (r && r.text) || ""; return parseSms(r && r.text);
       }
       const system = [`你在扮演一个人：${p.name || "无名"}${p.age ? `，${p.age}岁` : ""}${p.city ? `，在${p.city}` : ""}。`, p.persona ? `性格和说话方式：${p.persona}` : "", p.life ? `你那边的生活：${p.life}` : "", "只输出短信，不要任何解释。"].filter(Boolean).join("\n");
       const r = await api.ai.chat({ system, prompt: instruction, timeoutMs: 180000 });
-      return parseSms(r && r.text);
+      S._lastRaw = (r && r.text) || ""; return parseSms(r && r.text);
     } catch (e) { console.warn(e); logErr(`${personName(p)}：${(e && e.message) || e}`); return null; }
   }
   /** 出错记下来（关于这部手机里能看到最近几条） */

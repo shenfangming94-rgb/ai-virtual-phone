@@ -1065,7 +1065,7 @@
 - 不描写场景，不罗列物件和动作，不写成有画面感的小短文。带图的博，图自己会说话，字只是一句配文，不再描述图里的东西。
 - 本轮说明里有角色的「发博参考」：形态和题材从候选里挑最像他的一个，长度照写的来；候选都不合适就自己想一个他会发的，但别写他此刻在干嘛。
 - 微博是对着空气自言自语，不是说给用户或某个具体的人听的：不报备、不交代、不提醒，不对她喊话、下命令，不预设她看到后的反应。秀恩爱、想她可以，那是分享自己的幸福，不是在跟她说话，也不用每次都 @ 她。
-- 提到或吐槽别人时，要让刷到的路人也看得懂在说谁：写清楚关系（同桌、室友、家里人、隔壁班的）或直接 @ 他；只有当事人看得懂的阴阳不发。暗恋、心动这种不想让人知道的心事例外：可以不点名、说得含糊，但「发博原因」里要写清楚是谁。吐槽的是用户的话，要么像朋友公开互损那样大方 @ 她，要么就别发。他自己的生活、路上遇到的陌生人可以自由编。
+- 提到或吐槽别人时，要让刷到的路人也看得懂在说谁：写清楚关系（同桌、室友、家里人、隔壁班的）或直接 @ 他；只有当事人看得懂的阴阳不发。暗恋、心动这种不想让人知道的心事例外：可以不点名、说得含糊，但「发博原因」里要写清楚是谁。他自己的生活、路上遇到的陌生人可以自由编。
 - 他的聊天记录、日程、记忆只是背景，不复述最近和用户聊过的事；题材要和此刻的日期、他的日程对得上（上课时间人不会在外面玩，可以是想去、在等、抢票）。
 - 同一批里每条博的事情和情绪都不一样，口吻要比路人更有他的个人色彩。
 - 事情多大，情绪就多大：一个头衔、随口一句玩笑、群里一点小互动这种小事，最多轻轻带一句，不要放大成「好累」「好辛苦」「受宠若惊」；一件事他最近发过博就别再提。
@@ -1115,7 +1115,7 @@
     const scene = (payload.appTags || [])[1];
     const inline = typeof INLINE_RULES === "object" && INLINE_RULES[scene];
     if (inline) payload = { ...payload, instruction: `【微博：${scene === "charalt" ? "角色小号" : scene}规则】\n${inline}\n\n${payload.instruction}` };
-    const who = `用户的名字是「${S.identity.name || "用户"}」，微博昵称是「${S.meta.nickname}」。${scene === "hot" ? "" : `\n${nameLine()}`}` + (scene === "hot" ? "" : `\n${publicLine(false)}`) + (loveLine() ? `\n${loveLine()}` : "") + (scene === "hot" || !isAlt() ? "" : `\n${altLine()}`);
+    const who = `用户的名字是「${S.identity.name || "用户"}」，微博昵称是「${S.meta.nickname}」。事情多大情绪就多大，不放大、不戏剧化。提到用户时禁止无缘无故贬低、嘲讽、阴阳、吐槽她。${scene === "hot" ? "" : `\n${nameLine()}`}` + (scene === "hot" ? "" : `\n${publicLine(false)}`) + (loveLine() ? `\n${loveLine()}` : "") + (scene === "hot" || !isAlt() ? "" : `\n${altLine()}`);
     const wx = scene === "hot" ? "" : await weatherLine(payload.characterIds || (payload.characterId ? [payload.characterId] : []));
     if (scene === "dm") payload = { ...payload, instruction: [
       who, payload.instruction, wx,

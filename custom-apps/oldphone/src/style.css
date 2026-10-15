@@ -49,3 +49,6 @@ button { border: 0; background: none; font: inherit; color: inherit; cursor: poi
 .keys button:active, .side button:active, .dpad .ok:active { filter: brightness(1.6); }
 .foot { text-align: center; margin-top: 10px; font-size: 11px; color: #8a8d90; letter-spacing: 2px; }
 .stk { position: absolute; filter: drop-shadow(0 2px 2px rgba(0,0,0,.25)); pointer-events: none; }
+.bold { text-shadow: 1px 0 0 currentColor; letter-spacing: 1px; }
+.s48.bold { text-shadow: 2px 0 0 currentColor; }
+.op { text-align: center; margin-top: 4px; }

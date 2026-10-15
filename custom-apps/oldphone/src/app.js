@@ -1,4 +1,4 @@
-/* 旧手机 · 小手机自定义 APP：一部捡来的按键机，能收发 2008 年的短信（两边永远差 18 年，同月同日同一时刻） */
+/* 请回答2008 · 小手机自定义 APP：一部捡来的按键机，能收发 2008 年的短信（两边永远差 18 年，同月同日同一时刻） */
 (function () {
   "use strict";
   const api = window.AiPhone || window.AiPhoneApp;
@@ -23,7 +23,7 @@
   };
 
   // ───────────────────────── 状态 ─────────────────────────
-  const S = { view: "boot", sel: 0, unread: 0, battery: 4 };
+  const S = { view: "boot", sel: 0, unread: 0, battery: 4, meta: { operator: true } };
   const MENU = [["✉", "信息"], ["☎", "电话本"], ["↺", "通话记录"], ["✿", "外观"], ["?", "关于这部手机"]];
 
   // ───────────────────────── 外壳（只画一次） ─────────────────────────
@@ -60,9 +60,9 @@
   const bar = () => `<div class="bar">${ICON.signal}${S.unread ? `<span class="blink" style="display:flex">${ICON.mail}</span>` : ""}${ICON.bat(S.battery)}</div>`;
   const soft = (l, r) => `<div class="soft"><span>${esc(l || "")}</span><span>${esc(r || "")}</span></div>`;
   const VIEWS = {
-    boot: () => `<div class="center">${S.bootStep === 0 ? `<div class="s36">TINY<br>TYPE</div>` : S.bootStep === 1 ? `<div class="s18">正在搜索网络…</div>` : `<div class="s18">已连接</div><div class="s36">2008</div>`}</div>`,
+    boot: () => `<div class="center">${S.bootStep === 0 ? `<div class="s36 bold">TINY<br>TYPE</div>` : S.bootStep === 1 ? `<div class="s18 bold">正在搜索网络…</div>` : `<div class="s18 bold">已连接</div><div class="s36 bold">2008</div>`}</div>`,
     standby: () => { const now = new Date(); const th = thereDate(now);
-      return `${bar()}<div class="center"><div class="s48">${hm(now)}</div><div class="s18">${ymd(now)} ${week(now)}</div><div class="s18" style="margin-top:14px;opacity:.75">那边 ${ymd(th)} ${week(th)}</div></div>${soft("菜单", "电话本")}`; },
+      return `${bar()}${S.meta && S.meta.operator !== false ? `<div class="op s18">中国移动</div>` : ""}<div class="center"><div class="s48 bold">${hm(th)}</div><div class="s18">${ymd(th)} ${week(th)}</div></div>${soft("菜单", "电话本")}`; },
     menu: () => `${bar()}<div class="title">菜单</div><div class="list">${MENU.map(([i, t], n) => `<div class="${n === S.sel ? "on" : ""}"><i>${i}</i>${t}</div>`).join("")}</div>${soft("选择", "返回")}`,
     todo: () => `${bar()}<div class="title">${esc(S.todo)}</div><div class="center"><div class="s18">还在做<br>马上就好</div></div>${soft("", "返回")}`,
   };

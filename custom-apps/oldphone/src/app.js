@@ -307,7 +307,7 @@
   /** 她发完一批（停几秒没再发）他才回；回复本身还要等一会儿（不秒回） */
   function queueReply(pid) {
     S.meta.queue = S.meta.queue.filter(q => !(q.pid === pid && q.kind === "reply"));
-    S.meta.queue.push({ pid, kind: "reply", due: new Date(Date.now() + rand(15, 60) * 1000 * TS()).toISOString() }); saveMeta();
+    S.meta.queue.push({ pid, kind: "reply", due: new Date(Date.now() + rand(10, 30) * 1000 * TS()).toISOString() }); saveMeta();
   }
   const wait = ms => new Promise(r => setTimeout(r, ms));
   const TS = () => window.__TIME_SCALE || 1; // 测试页用来把等待时间缩短

@@ -1,0 +1,51 @@
+@font-face { font-family: Px; src: url(/*__FONT__*/) format("woff2"); }
+:root { --lcd: #9fd36a; --ink: #1d2a12; --shell-a: #b9bcbf; --shell-b: #e9ebec; --shell-c: #cfd2d4; --shell-d: #f2f3f3; --key: #2b2d2f; }
+* { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+html, body { height: 100%; overflow: hidden; }
+body { background: #e9e6e1; font-family: -apple-system, "PingFang SC", sans-serif; -webkit-user-select: none; user-select: none; }
+button { border: 0; background: none; font: inherit; color: inherit; cursor: pointer; }
+/* 手机按 350×800 设计，整体按屏幕缩放 */
+.stage { position: absolute; inset: 0; display: flex; justify-content: center; align-items: center; padding-top: 34px; }
+.phone { position: relative; flex: none; width: 350px; height: 800px; border-radius: 46px 46px 60px 60px; padding: 30px 22px; transform-origin: center;
+  background: linear-gradient(100deg, var(--shell-a) 0%, var(--shell-b) 18%, var(--shell-c) 45%, var(--shell-d) 70%, var(--shell-a) 100%);
+  box-shadow: inset 0 3px 2px rgba(255,255,255,.9), inset 0 -6px 10px rgba(0,0,0,.18), 0 14px 30px rgba(0,0,0,.25); }
+.speaker { width: 120px; height: 12px; margin: 0 auto; border-radius: 8px; background: linear-gradient(#222, #444); box-shadow: 0 1px 0 #fff; }
+.brand { text-align: center; margin: 14px 0 12px; font: 900 26px/1 "Arial Black", Arial, sans-serif; letter-spacing: 2px; color: #3b3b3b; text-shadow: 0 1px 0 #fff; }
+/* 屏幕 */
+.screen { position: relative; height: 330px; border-radius: 16px; padding: 12px 16px; background-color: var(--lcd); border: 5px solid #b5b8ba; overflow: hidden;
+  box-shadow: inset 0 2px 6px rgba(0,0,0,.35), 0 1px 0 #fff; font-family: Px, monospace; color: var(--ink); -webkit-font-smoothing: none; font-size: 24px; line-height: 1.4; display: flex; flex-direction: column;
+  background-image: linear-gradient(rgba(0,0,0,.025) 1px, transparent 1px), linear-gradient(90deg, rgba(0,0,0,.025) 1px, transparent 1px); background-size: 3px 3px; transition: filter .4s; }
+.screen.off { filter: brightness(.55) saturate(.6); }
+.screen.dim { filter: brightness(.8); }
+.bar { flex: none; display: flex; align-items: center; gap: 6px; height: 24px; }
+.bar svg { height: 20px; }
+.bar .bat { margin-left: auto; }
+.bar .blink { animation: blink 1s steps(1) infinite; }
+@keyframes blink { 50% { opacity: 0; } }
+.body { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.soft { flex: none; display: flex; justify-content: space-between; font-size: 18px; height: 24px; align-items: flex-end; }
+.s12 { font-size: 12px; line-height: 1.5; } .s18 { font-size: 18px; } .s36 { font-size: 36px; line-height: 1.2; } .s48 { font-size: 48px; line-height: 1.1; }
+.center { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; gap: 4px; }
+.title { font-size: 18px; text-align: center; border-bottom: 2px solid var(--ink); padding-bottom: 2px; margin: 2px 0 6px; }
+.list { flex: 1; min-height: 0; overflow: hidden; }
+.list div { padding: 0 6px; height: 34px; display: flex; align-items: center; gap: 8px; white-space: nowrap; overflow: hidden; }
+.list div.on { background: var(--ink); color: var(--lcd); }
+.list i { font-style: normal; flex: none; width: 24px; text-align: center; }
+/* 按键 */
+.row1 { display: flex; align-items: center; gap: 10px; margin: 20px 0 14px; }
+.side { flex: 1; height: 92px; border-radius: 18px; background: var(--key); box-shadow: inset 0 2px 1px #555, 0 2px 0 #9a9da0; display: flex; flex-direction: column; overflow: hidden; }
+.side button { flex: 1; display: flex; align-items: center; justify-content: center; }
+.side button + button { border-top: 3px solid #1b1c1d; }
+.side .dash { width: 36px; height: 4px; border-radius: 2px; background: #3aa0e8; }
+.dpad { position: relative; width: 108px; height: 78px; border-radius: 30px; background: linear-gradient(#eef0f1, #9ea2a5); padding: 9px; box-shadow: 0 2px 3px rgba(0,0,0,.3); }
+.dpad .ok { width: 100%; height: 100%; border-radius: 22px; background: linear-gradient(#3a3c3e, #1f2021); box-shadow: inset 0 2px 1px #555; }
+.dpad .arr { position: absolute; }
+.dpad .up { left: 20px; right: 20px; top: 0; height: 22px; } .dpad .down { left: 20px; right: 20px; bottom: 0; height: 22px; }
+.dpad .left { left: 0; top: 14px; bottom: 14px; width: 24px; } .dpad .right { right: 0; top: 14px; bottom: 14px; width: 24px; }
+.dpad .ok { position: relative; z-index: 0; }
+.keys { display: grid; grid-template-columns: repeat(3, 1fr); border-radius: 18px; overflow: hidden; background: #1b1c1d; gap: 3px; box-shadow: 0 2px 0 #9a9da0; }
+.keys button { height: 54px; background: var(--key); color: #eceeef; display: flex; align-items: center; justify-content: center; gap: 8px; font: 700 30px/1 Arial, sans-serif; box-shadow: inset 0 2px 1px #4a4c4e; }
+.keys small { font-size: 17px; letter-spacing: 1px; }
+.keys button:active, .side button:active, .dpad .ok:active { filter: brightness(1.6); }
+.foot { text-align: center; margin-top: 10px; font-size: 11px; color: #8a8d90; letter-spacing: 2px; }
+.stk { position: absolute; filter: drop-shadow(0 2px 2px rgba(0,0,0,.25)); pointer-events: none; }

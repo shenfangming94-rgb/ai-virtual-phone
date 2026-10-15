@@ -1,0 +1,20 @@
+{
+  "sdkVersion": "1.0",
+  "id": "nox.oldphone",
+  "name": "旧手机",
+  "version": "0.0.1",
+  "author": "Nox for Flora",
+  "description": "一部捡来的旧按键手机，能收发 2008 年的短信：两边永远差 18 年，同月同日同一时刻。",
+  "icon": "icon.png",
+  "entry": "index.html",
+  "permissions": [
+    "app.data.read",
+    "app.data.write",
+    "characters.read",
+    "user.profile.read",
+    "ai.generate",
+    "ai.chat",
+    "memory.write",
+    "ui.toast"
+  ]
+}

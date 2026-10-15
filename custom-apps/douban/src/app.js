@@ -873,7 +873,7 @@ ${CALM_LINE}
   }
   const topSearch = (ph, act, right) => `<div class="topbar-inner"><button class="db-search" data-act="${act}">${I.search}<span>${esc(ph)}</span></button>${right === "trash"
     ? `<button class="top-icon" data-act="wipe-all" aria-label="清空豆瓣" style="margin-left:0">${I.trash}</button>`
-    : `<button class="top-icon dm-entry" data-act="dm-list" aria-label="私信" style="margin-left:0">${I.mail}${dmUnread() ? `<i class="dm-dot">${dmUnread() > 99 ? "99+" : dmUnread()}</i>` : ""}</button>`}</div>`;
+    : `<button class="top-icon pm-entry" data-act="dm-list" aria-label="私信" style="margin-left:0">${I.mail}${dmUnread() ? `<i class="pm-dot">${dmUnread() > 99 ? "99+" : dmUnread()}</i>` : ""}</button>`}</div>`;
   /** 还没做的：写清楚第几期上线 */
   const COMING = {
     feed: ["关注的人的动态（广播）", "第三期", "豆瓣式的动态：char 发广播、转发你的标记、给你点赞，比微博安静"],
@@ -2041,8 +2041,8 @@ ${CALM_LINE}
 
   /**
    * char 主动私信：她实名发帖 / 实名回帖之后掷骰子。
-   * 她回的是他的帖子或他的楼：亲密的 25%、其他 15%；别的 char 刷到了但没在楼里回她：亲密的 8%、其他 3%，一次最多一个人。
-   * 他上一条私信她还没回，就不再主动找她；每天最多 3 次；掷中的过 10～90 分钟才来
+   * 她回的是他的帖子或他的楼：亲密的 50%、其他 30%；别的 char 刷到了但没在楼里回她：亲密的 25%、其他 10%，一次最多一个人。
+   * 他上一条私信她还没回，就不再主动找她；每天最多 3 次；掷中了一分钟内就来
    */
   function rollCharDm(t, mine, replied) {
     if (mine ? mine.author.anon : t.author.anon || t.author.type !== "user") return;
@@ -2052,11 +2052,12 @@ ${CALM_LINE}
     const target = mine && mine.quote ? t.floors.find(f => f.n === mine.quote) : null;
     const owner = target && target.author.type === "char" && !target.author.anon ? target.author.charId : mine && t.author.type === "char" && !t.author.anon ? t.author.charId : null;
     let hit = null;
-    if (owner) { const c = charById(owner); if (c && free(c) && Math.random() < (isClose(owner) ? 0.25 : 0.15)) hit = c; }
-    if (!hit) hit = shuffle(activeChars().filter(c => c.id !== owner && !replied.has(c.id) && free(c))).find(c => Math.random() < (isClose(c.id) ? 0.08 : 0.03));
+    if (owner) { const c = charById(owner); if (c && free(c) && Math.random() < (isClose(owner) ? 0.5 : 0.3)) hit = c; }
+    if (!hit) hit = shuffle(activeChars().filter(c => c.id !== owner && !replied.has(c.id) && free(c))).find(c => Math.random() < (isClose(c.id) ? 0.25 : 0.1));
     if (!hit) return;
-    S.meta.dmQueue = [...q, { charId: hit.id, topicId: t.id, n: mine ? mine.n : 0, his: hit.id === owner, due: new Date(Date.now() + rand(10, 90) * 60e3).toISOString() }];
+    S.meta.dmQueue = [...q, { charId: hit.id, topicId: t.id, n: mine ? mine.n : 0, his: hit.id === owner, due: new Date(Date.now() + rand(20, 60) * 1000).toISOString() }];
     S.meta.dmDay = day; S.meta.dmCount = today + 1; saveMeta();
+    setTimeout(() => runDmQueue().catch(e => console.warn(e)), 61e3); // 掷中了就来：一分钟内到（她关掉了就下次打开时到）
   }
   async function runDmQueue() {
     if (S._dqBusy) return; S._dqBusy = true;
@@ -2106,23 +2107,23 @@ ${CALM_LINE}
     const page = openPage(`dm:${k}`, pg => {
       const w = whoOf(a); let lastAt = 0;
       const rows = d.msgs.map(m => {
-        const t = new Date(m.at).getTime(); const sep = t - lastAt > 30 * 60e3 ? `<div class="dm-sep">${esc(dmTime(m.at))}</div>` : ""; lastAt = t;
+        const t = new Date(m.at).getTime(); const sep = t - lastAt > 30 * 60e3 ? `<div class="pm-sep">${esc(dmTime(m.at))}</div>` : ""; lastAt = t;
         const img = (m.images || [])[0];
-        const bub = img ? (img.ref ? `<img class="dm-pic" ${refSrc(img.ref)} alt="" data-act="dm-pic" data-id="${esc(m.id)}">` : `<div class="dm-picdesc" data-act="dm-pic" data-id="${esc(m.id)}">${placeholderImg()}<span>${esc(img.desc || "")}</span></div>`) : "";
-        const txt = m.text && m.text !== "[图片]" ? `<div class="dm-bub">${esc(m.text)}</div>` : "";
-        return `${sep}<div class="dm-row ${m.me ? "me" : ""}" data-mid="${esc(m.id)}">${m.me ? "" : `<div data-act="dm-person">${avatarHtml(w)}</div>`}<div class="dm-col">${bub}${txt}${m.quote ? `<div class="dm-quote">${esc(m.quote.text)}</div>` : ""}</div>${m.me ? avatarHtml(meW) : ""}</div>`;
+        const bub = img ? (img.ref ? `<img class="pm-pic" ${refSrc(img.ref)} alt="" data-act="dm-pic" data-id="${esc(m.id)}">` : `<div class="pm-picdesc" data-act="dm-pic" data-id="${esc(m.id)}">${placeholderImg()}<span>${esc(img.desc || "")}</span></div>`) : "";
+        const txt = m.text && m.text !== "[图片]" ? `<div class="pm-bub">${esc(m.text)}</div>` : "";
+        return `${sep}<div class="pm-row ${m.me ? "me" : ""}" data-mid="${esc(m.id)}">${m.me ? "" : `<div data-act="dm-person">${avatarHtml(w)}</div>`}<div class="pm-col">${bub}${txt}${m.quote ? `<div class="pm-quote">${esc(m.quote.text)}</div>` : ""}</div>${m.me ? avatarHtml(meW) : ""}</div>`;
       }).join("");
-      body(pg, `<div class="dm-list">${rows || `<div class="dm-sep">打个招呼吧</div>`}${d._typing ? `<div class="dm-row"><div>${avatarHtml(w)}</div><div class="dm-col"><div class="dm-bub dm-typing"><i></i><i></i><i></i></div></div></div>` : ""}</div>`);
-      $(".page-title", pg.el).innerHTML = `<span class="dm-head">${avatarHtml(w)}<b>${esc(w.name)}</b></span>`;
-      const qb = $(".dm-quotebar", pg.el); qb.classList.toggle("hidden", !quote); if (quote) qb.innerHTML = `<span class="cell-main">${esc(quote.text)}</span><button data-act="dm-unquote">✕</button>`;
-      $(".dm-emoji", pg.el).classList.toggle("hidden", !emoji); $(".dm-input", pg.el).classList.toggle("tall", tall);
+      body(pg, `<div class="pm-list">${rows || `<div class="pm-sep">打个招呼吧</div>`}${d._typing ? `<div class="pm-row"><div>${avatarHtml(w)}</div><div class="pm-col"><div class="pm-bub pm-typing"><i></i><i></i><i></i></div></div></div>` : ""}</div>`);
+      $(".page-title", pg.el).innerHTML = `<span class="pm-head">${avatarHtml(w)}<b>${esc(w.name)}</b></span>`;
+      const qb = $(".pm-quotebar", pg.el); qb.classList.toggle("hidden", !quote); if (quote) qb.innerHTML = `<span class="cell-main">${esc(quote.text)}</span><button data-act="dm-unquote">✕</button>`;
+      $(".pm-emoji", pg.el).classList.toggle("hidden", !emoji); $(".pm-input", pg.el).classList.toggle("tall", tall);
       const b = $(".page-body", pg.el); if (b.scrollHeight - b.scrollTop - b.clientHeight < 240 || !pg._scrolled) { b.scrollTop = b.scrollHeight; pg._scrolled = true; }
     }, { cls: "dmpage", action: `<button class="top-icon" data-act="dm-menu" aria-label="更多">${I.more}</button>`,
-      footer: `<div class="dm-quotebar hidden"></div><div class="dm-bar"><div class="dm-inbox"><textarea class="dm-input" rows="1" placeholder="发送消息" maxlength="500"></textarea><button class="dm-expand" data-act="dm-tall" aria-label="展开">${I.expand}</button></div>
-        <button class="dm-ico" data-act="dm-emoji" aria-label="表情">${I.smile}</button><button class="dm-ico" data-act="dm-img" aria-label="图片">${I.image}</button><button class="dm-send hidden" data-act="dm-send">发送</button></div>
-        <div class="dm-emoji hidden">${EMOJI.map(e => `<button data-act="dm-em" data-e="${e}">${e}</button>`).join("")}</div>` });
-    const input = $(".dm-input", page.el); const sendBtn = $(".dm-send", page.el);
-    const sync = () => { const has = !!input.value.trim(); sendBtn.classList.toggle("hidden", !has); page.el.querySelectorAll(".dm-ico").forEach(x => x.classList.toggle("hidden", has)); if (!tall) { input.style.height = "auto"; input.style.height = Math.min(96, input.scrollHeight) + "px"; } };
+      footer: `<div class="pm-quotebar hidden"></div><div class="pm-bar"><div class="pm-inbox"><textarea class="pm-input" rows="1" placeholder="发送消息" maxlength="500"></textarea><button class="pm-expand" data-act="dm-tall" aria-label="展开">${I.expand}</button></div>
+        <button class="pm-ico" data-act="dm-emoji" aria-label="表情">${I.smile}</button><button class="pm-ico" data-act="dm-img" aria-label="图片">${I.image}</button><button class="pm-send hidden" data-act="dm-send">发送</button></div>
+        <div class="pm-emoji hidden">${EMOJI.map(e => `<button data-act="dm-em" data-e="${e}">${e}</button>`).join("")}</div>` });
+    const input = $(".pm-input", page.el); const sendBtn = $(".pm-send", page.el);
+    const sync = () => { const has = !!input.value.trim(); sendBtn.classList.toggle("hidden", !has); page.el.querySelectorAll(".pm-ico").forEach(x => x.classList.toggle("hidden", has)); if (!tall) { input.style.height = "auto"; input.style.height = Math.min(96, input.scrollHeight) + "px"; } };
     input.addEventListener("input", sync);
     const push = m => {
       m.id = uid("dmm"); m.me = true; m.at = nowIso(); if (quote) m.quote = quote; quote = null;
@@ -2143,7 +2144,7 @@ ${CALM_LINE}
     page.dmMsg = id => d.msgs.find(m => m.id === id);
     // 长按气泡：引用 / 复制 / 删除
     const pb = $(".page-body", page.el); let timer = null;
-    pb.addEventListener("pointerdown", e => { const row = e.target.closest(".dm-row[data-mid]"); if (!row || !e.target.closest(".dm-bub,.dm-pic,.dm-picdesc")) return; timer = setTimeout(async () => {
+    pb.addEventListener("pointerdown", e => { const row = e.target.closest(".pm-row[data-mid]"); if (!row || !e.target.closest(".pm-bub,.pm-pic,.pm-picdesc")) return; timer = setTimeout(async () => {
       timer = null; const m = page.dmMsg(row.dataset.mid); if (!m) return;
       const v = await sheet("", [{ label: "引用", value: "q" }, ...(m.text && m.text !== "[图片]" ? [{ label: "复制", value: "c" }] : []), { label: "删除", value: "d", danger: true }]);
       if (v === "q") page.dmQuote(m);

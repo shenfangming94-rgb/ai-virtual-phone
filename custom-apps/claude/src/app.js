@@ -42,6 +42,7 @@
     file: sv('<path d="M20 11.5 12.2 19.3a5 5 0 0 1-7.1-7.1l8.1-8.1a3.3 3.3 0 0 1 4.7 4.7l-8.1 8.1a1.7 1.7 0 0 1-2.4-2.4l7.4-7.4"/>'),
     shield: sv('<path d="M12 3.5 5 6v5.5c0 4.3 3 7.7 7 9 4-1.3 7-4.7 7-9V6z"/><path d="M12 9v4M12 16h.01"/>'), ban: sv('<circle cx="12" cy="12" r="8.5"/><path d="m6 6 12 12"/>'),
     unban: sv('<circle cx="12" cy="12" r="8.5"/><path d="m8.5 12.5 2.5 2.5 4.5-5"/>'), check: sv('<path d="m5 12.5 4.5 4.5L19 7.5"/>', 2), chev: sv('<path d="m9 6 6 6-6 6"/>'), down: sv('<path d="m6 9 6 6 6-6"/>', 2),
+    dice: sv('<rect x="4" y="4" width="16" height="16" rx="3.5"/><path d="M8.5 8.5h.01M15.5 8.5h.01M12 12h.01M8.5 15.5h.01M15.5 15.5h.01"/>', 2.4),
     gear: sv('<circle cx="12" cy="12" r="3.1"/><path d="M12 2.8v2.4M12 18.8v2.4M2.8 12h2.4M18.8 12h2.4M5.5 5.5l1.7 1.7M16.8 16.8l1.7 1.7M5.5 18.5l1.7-1.7M16.8 7.2l1.7-1.7"/>'),
   };
   /** Claude 的小菊花：一圈长短交替的圆角花瓣 */
@@ -92,6 +93,8 @@
     if (!charId || !api.memory || !api.memory.addTimeline) return;
     api.memory.addTimeline({ characterId: charId, appLabel: "Claude", detail: "claude", summary, appEventId: eventId }).catch(e => console.warn(e));
   }
+  /** 封号/解封的记忆 id 带时间戳，记下来，全部删除时才找得到 */
+  function rememberKept(charId, summary, eventId) { remember(charId, summary, eventId); (S.meta.memIds = S.meta.memIds || []).push({ charId, eventId }); saveMeta(); }
   function forget(events) { if (!api.memory || !api.memory.deleteTimeline) return; for (const e of events) api.memory.deleteTimeline({ characterId: e.charId, appEventId: e.eventId }).catch(() => {}); }
 
   // ───────────────────────── 提示 ─────────────────────────
@@ -230,13 +233,13 @@
     if (await sheet(`停用 ${ch.name} 的 Claude 账号？他会记得自己被封号了（以后可以在设置里解封）`, [{ label: "封号", value: "yes", danger: true, icon: I.ban }]) !== "yes") return;
     S.meta.banned[charId] = nowIso(); saveMeta();
     for (const c of S.convs.filter(x => x.charId === charId)) { c.msgs.push({ role: "sys", text: "您的账户因违反使用政策已被停用。", at: nowIso() }); c.updatedAt = nowIso(); saveConv(c); }
-    remember(charId, "我用的 AI 助手 Claude 把我的账号封了，提示「您的账户因违反使用政策已被停用」，莫名其妙", `claude_ban_${charId}_${Date.now()}`);
+    rememberKept(charId, "我用的 AI 助手 Claude 把我的账号封了，提示「您的账户因违反使用政策已被停用」，莫名其妙", `claude_ban_${charId}_${Date.now()}`);
     refresh(); toast(`${ch.name} 已被封号`);
   }
   function unbanChar(charId) {
     const ch = charById(charId); if (!ch || !isBanned(charId)) return;
     delete S.meta.banned[charId]; saveMeta();
-    remember(charId, "我的 Claude 账号解封了，又能用了", `claude_unban_${charId}_${Date.now()}`);
+    rememberKept(charId, "我的 Claude 账号解封了，又能用了", `claude_unban_${charId}_${Date.now()}`);
     refresh(); toast(`${ch.name} 解封了`);
   }
 
@@ -267,8 +270,8 @@
     $("#home").innerHTML = `<header class="hd"><div class="hd-in"><button class="ic" data-act="settings">${I.menu}</button><div class="hd-t">Claude</div><button class="ic" data-act="ask-pick">${I.plus}</button></div></header>
       <div class="pb">
         <div class="greet">${SPARK}<span>${greet()}，Claude</span></div>
-        <button class="newb" data-act="ask-random">${asking ? `<span class="spinner"></span>有人正在打字…` : `${I.ask}<span>有人想问你问题… 点一下让 char 来提问</span>`}</button>
-        ${live.length ? `<div class="sec">最近</div>${live.map(row).join("")}` : `<div class="empty">还没有人来问过你<br>点上面那条，让一个 char 来提问</div>`}
+        ${asking ? `<div class="newb"><span class="spinner"></span>有人正在打字…</div>` : ""}
+        ${live.length ? `<div class="sec">最近</div>${live.map(row).join("")}` : `<div class="empty">还没有人来问过你<br>点右上角 ＋，让一个 char 来提问</div>`}
         ${dead.length ? `<div class="sec">已封禁</div><div class="dead">${dead.map(row).join("")}</div>` : ""}
       </div>`;
   }
@@ -315,6 +318,7 @@
         <div class="sec">你回答之后，他自己接着问的概率</div><div class="seg">${[0, 30, 50, 70, 100].map(v => `<button class="${(S.meta.follow ?? 50) === v ? "on" : ""}" data-act="follow" data-v="${v}">${v}%</button>`).join("")}</div>
         <div class="note">没接着问的时候，在对话右上角 ··· 里点「让他继续问」</div>
         <div class="sec">调试记录（最近 10 次）</div>${S.debug.map(e => `<div class="dbg"><b>${esc(e.label || "")}</b> <span>${fmtTime(e.at)}${e.ok ? "" : " 失败"}</span><pre>${esc(e.ok ? e.text : e.error)}</pre></div>`).join("") || `<div class="note">还没有 AI 调用</div>`}
+        <div class="sec">清空</div><button class="opt danger" data-act="wipe">${I.trash}<div class="cell-main">删除所有对话<small>连同他们关于这个 app 的记忆、封号状态一起删掉</small></div></button>
         <div class="note" style="text-align:center;padding:20px">Claude v${VERSION} · Nox for Flora</div>`);
     }, { title: "设置" });
   }
@@ -339,7 +343,9 @@
       }
       case "ask-pick": {
         const pool = activeChars().filter(c => !isBanned(c.id)); if (!pool.length) { toast("没有能来提问的角色"); return; }
-        const id = await sheet("让谁来问一个新问题", pool.map(c => ({ label: c.name, value: c.id }))); if (id) askFrom(id); return;
+        if (S.busy.size) { toast("有人正在打字…"); return; }
+        const id = await sheet("让谁来问一个新问题", [{ label: "随机叫一个人", value: "_random", icon: I.dice }, ...pool.map(c => ({ label: c.name, value: c.id }))]);
+        if (id) askFrom(id === "_random" ? pool[Math.floor(Math.random() * pool.length)].id : id); return;
       }
       case "send": {
         const c = conv(el.dataset.id); if (!c || !pg || !pg.take) return;
@@ -388,6 +394,18 @@
       case "copy": { const c = conv(pg.key.split(":")[1]); const m = c && c.msgs[+el.dataset.i]; if (m) { try { await navigator.clipboard.writeText(m.text); toast("已复制"); } catch (err) { toast("复制不了"); } } return; }
       case "toggle-char": { const id = el.dataset.id; S.meta.excluded = S.meta.excluded.includes(id) ? S.meta.excluded.filter(x => x !== id) : [...S.meta.excluded, id]; saveMeta(); refresh(); return; }
       case "unban": unbanChar(el.dataset.id); return;
+      case "wipe": {
+        if (await sheet("删除这个身份下所有 Claude 对话？他们关于这个 app 的记忆也会一起删掉，删了找不回来", [{ label: "全部删除", value: "yes", danger: true, icon: I.trash }]) !== "yes") return;
+        const evs = [];
+        for (const c of S.convs) for (let i = 1; i <= c.msgs.length; i++) for (const k of ["ans", "block", "think"]) evs.push({ charId: c.charId, eventId: `claude_${k}_${c.id}_${i}` });
+        for (const e of S.meta.memIds || []) evs.push(e);
+        // 记 memIds 之前的封号：时间戳和 banned 里存的时间差不了几毫秒
+        for (const [charId, at] of Object.entries(S.meta.banned)) { const t = Date.parse(at); for (let d = -2; d <= 30; d++) evs.push({ charId, eventId: `claude_ban_${charId}_${t + d}` }); }
+        forget(evs);
+        for (const c of S.convs) dbDelete(COL.convs, c.id);
+        S.convs = []; S.meta.banned = {}; S.meta.memIds = []; saveMeta();
+        closePage(); refresh(); toast("全部删除了"); return;
+      }
       case "follow": S.meta.follow = +el.dataset.v; saveMeta(); refresh(); return;
     }
   });

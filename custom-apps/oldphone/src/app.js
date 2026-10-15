@@ -470,6 +470,10 @@
     await wait(300); $("#lcd").classList.remove("off");
     for (const step of [1, 2]) { await wait(1000); S.bootStep = step; draw(); }
     await loading; await wait(700); home(); wake();
+    // 补救：最后一条是她发出去的、却没有在等他回的（以前出错被丢掉了）→ 重新排上
+    for (const t of S.threads) { const p = personById(t.id); const last = t.msgs[t.msgs.length - 1];
+      if (p && !p.ghost && last && last.dir === "out" && last.status !== "failed" && !S.meta.queue.some(q => q.pid === p.id)) S.meta.queue.push({ pid: p.id, kind: "reply", due: new Date(Date.now() + rand(5, 20) * 1000 * TS()).toISOString() }); }
+    saveMeta();
     if (unread()) { S.view = "newmsg"; draw(); }
     setInterval(() => { if (S.view === "standby") draw(); tick(); }, 3000);
     document.addEventListener("visibilitychange", () => { if (!document.hidden) tick(); });

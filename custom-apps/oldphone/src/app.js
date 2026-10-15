@@ -362,8 +362,9 @@
         const r = await api.ai.generate({ characterId: p.charId, appTags: ["nox_reply2008", "sms"], instruction: `${instruction}\n\n【输出要求】只输出短信块，不要解释、不要旁白。` });
         S._lastRaw = (r && r.text) || ""; return parseSms(r && r.text);
       }
-      const system = [`你在扮演一个人：${p.name || "无名"}${p.age ? `，${p.age}岁` : ""}${p.city ? `，在${p.city}` : ""}。`, p.persona ? `性格和说话方式：${p.persona}` : "", p.life ? `你那边的生活：${p.life}` : "", "只输出短信，不要任何解释。"].filter(Boolean).join("\n");
-      const r = await api.ai.chat({ system, prompt: instruction, timeoutMs: 180000 });
+      // 人设同时放进 system 和正文开头：有的接口会忽略 system，人设就丢了（她遇到 17 岁高二被说成大一）
+      const who = [`【你是谁】你是${p.name || "无名"}${p.age ? `，2008 年时${p.age}岁` : ""}${p.city ? `，在${p.city}` : ""}。`, p.persona ? `性格和说话方式：${p.persona}` : "", p.life ? `你那边的生活：${p.life}` : "", "人设里写的年龄、年级、身份、家庭都是定死的，不能改，也不能自己编一个不一样的。"].filter(Boolean).join("\n");
+      const r = await api.ai.chat({ system: `${who}\n只输出短信，不要任何解释。`, prompt: `${who}\n\n${instruction}`, timeoutMs: 180000 });
       S._lastRaw = (r && r.text) || ""; return parseSms(r && r.text);
     } catch (e) { console.warn(e); logErr(`${personName(p)}：${(e && e.message) || e}`); return null; }
   }

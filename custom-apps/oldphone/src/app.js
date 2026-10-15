@@ -182,7 +182,8 @@
       return `${bar()}<div class="title">${esc(p ? shown(p) : "")}</div><div class="scroll conv s18" id="convbox">${lines || "<p>（还没有短信）</p>"}</div>${soft("选项", "返回")}`; },
     after: () => { const b = $("#convbox"); if (!b) return; const max = b.scrollHeight - b.clientHeight; S.scroll = Math.max(0, Math.min(S.scroll, max)); b.scrollTop = S.scroll; },
     key: async k => { const step = 26; if (k === "up") { S.scroll -= step; return draw(); } if (k === "down") { S.scroll += step; return draw(); }
-      if (k === "ok" || k === "softL") { const v = await choose("选项", [["回复", "reply"], ["整段保存", "export"]]);
+      if (k === "ok") { S.compose = { to: S.conv, text: "" }; return open("compose"); } // 中间键：直接回复（连发几条更快）
+      if (k === "softL") { const v = await choose("选项", [["回复", "reply"], ["整段保存", "export"]]);
         if (v === "reply") { S.compose = { to: S.conv, text: "" }; return open("compose"); }
         if (v === "export") return exportConv(S.conv); }
       if (k === "softR") return back(); },

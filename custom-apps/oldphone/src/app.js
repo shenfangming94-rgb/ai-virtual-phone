@@ -354,11 +354,11 @@
     } catch (e) { console.warn(e); return null; }
   }
   /** 收到短信：收件箱满了就排队，删了旧的才进来 */
-  function receive(pid, texts) {
+  function receive(pid, texts, at) {
     const th = threadOf(pid);
-    for (const text of texts) {
+    for (const [i, text] of texts.entries()) {
       if (allIn().length >= INBOX_MAX) { S.meta.pendingIn.push({ pid, text }); continue; }
-      th.msgs.push({ id: uid("m"), dir: "in", text, at: new Date().toISOString(), read: false });
+      th.msgs.push({ id: uid("m"), dir: "in", text, at: new Date(new Date(at || Date.now()).getTime() + i * 20e3).toISOString(), read: false });
     }
     saveThread(th); saveMeta(); notify();
   }
@@ -378,7 +378,7 @@
         const p = personById(q.pid); if (!p) { S.meta.queue = S.meta.queue.filter(x => x !== q); continue; }
         const parts = await genSms(p, q.kind);
         S.meta.queue = S.meta.queue.filter(x => x !== q); saveMeta();
-        if (parts && parts.length) { if (q.kind !== "reply") { p.met = true; savePerson(p); } receive(p.id, parts); remember(p, parts); }
+        if (parts && parts.length) { if (q.kind !== "reply") { p.met = true; savePerson(p); } receive(p.id, parts, q.due); remember(p, parts); /* 她退出了也没关系：时间按他本来该回的那一刻算 */ }
       }
     } finally { busy = false; }
   }

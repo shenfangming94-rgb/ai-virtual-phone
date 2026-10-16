@@ -112,17 +112,8 @@
   const richText = t => esc(t).replace(FACE_RE, (_, n) => faceSvg(n, 20));
 
   // ───────────────────────── 企鹅（照她发的 QQ2011 登录图画的：黑身白肚、一只眼眨、大黄嘴、红围巾） ─────────────────────────
-  const PENGUIN = (w, h) => `<svg width="${w}" height="${h}" viewBox="0 0 100 112">
-<ellipse cx="34" cy="104" rx="14" ry="6" fill="#f7a21b"/><ellipse cx="66" cy="104" rx="14" ry="6" fill="#f7a21b"/>
-<ellipse cx="17" cy="70" rx="9" ry="20" fill="#111" transform="rotate(18 17 70)"/><ellipse cx="83" cy="70" rx="9" ry="20" fill="#111" transform="rotate(-18 83 70)"/>
-<ellipse cx="50" cy="58" rx="34" ry="46" fill="#111"/><ellipse cx="50" cy="76" rx="24" ry="27" fill="#fff"/>
-<ellipse cx="42" cy="31" rx="6.5" ry="8.5" fill="#fff"/><ellipse cx="58" cy="31" rx="6.5" ry="8.5" fill="#fff"/>
-<ellipse cx="43.5" cy="32.5" rx="3.2" ry="4.3" fill="#111"/><circle cx="44.5" cy="31" r="1.1" fill="#fff"/>
-<path d="M54 34 Q58 27 62 34" stroke="#111" stroke-width="2.6" fill="none" stroke-linecap="round"/>
-<ellipse cx="50" cy="45" rx="16" ry="6.8" fill="#f9b21d"/><path d="M35 45 Q50 50 65 45" stroke="#d98a00" stroke-width="1.5" fill="none"/>
-<path d="M17 52 Q50 64 83 52 L83 60 Q50 73 17 60 Z" fill="#e3261c"/>
-<path d="M63 61 L77 59 L79 84 L69 86 Z" fill="#e3261c"/><path d="M69 86 L71 81 M74 85 L75 80" stroke="#b81810" stroke-width="1.2"/>
-<path d="M21 55 Q50 66 79 55" stroke="#ff6a5a" stroke-width="1.5" fill="none" opacity=".6"/></svg>`;
+  const PENG_IMG = "/*__PENGUIN__*/"; // 她发的那张企鹅（白底抠掉），构建时内联
+  const PENGUIN = (w, h) => `<img class="peng" src="${PENG_IMG}" alt="" style="width:${w}px;height:${h}px;object-fit:contain">`;
 
   // ───────────────────────── 状态和存档 ─────────────────────────
   // meta：{ accts: { a08|a26: { nick, qq, sig, avatarRef, status, zone } }, cur, last, auto, font, music: [{id,name,ref}], queue, sound }
@@ -241,13 +232,13 @@
     if (S.view === "chat") { const log = $("#log"); if (log) log.scrollTop = log.scrollHeight; }
   }
   const V = {};
-  const titlebar = (title, back) => `<div class="tbar">${PENGUIN(18, 20)}<span>${esc(title)}</span><div class="x">${back ? `<button data-act="${back}" title="返回">‹</button>` : ""}<button data-act="${back || "logout"}" class="close">×</button></div></div>`;
+  const titlebar = (title, back) => `<div class="tbar">${PENGUIN(22, 22)}<span>${esc(title)}</span><div class="x">${back ? `<button data-act="${back}" title="返回">‹</button>` : ""}<button data-act="${back || "logout"}" class="close">×</button></div></div>`;
 
   V.login = () => {
     const sel = S.meta.last || "a08";
     return `<div class="login">
       ${titlebar("QQ2008 用户登录")}
-      <div class="logo">${PENGUIN(96, 108)}<b>QQ2008</b><small>弹指间 心无间</small></div>
+      <div class="logo">${PENGUIN(120, 118)}<b>QQ2008</b><small>弹指间 心无间</small></div>
       <div class="card">
         <div class="lab">选择要登录的号码</div>
         ${["a08", "a26"].map(k => { const a = S.meta.accts[k]; if (!a) return ""; return `<button class="acc ${sel === k ? "on" : ""}" data-act="pick-acct" data-k="${k}">${avatar({ ref: a.avatarRef, url: a.avatarRef ? "" : S.profile.avatarUrl, seed: "me" }, 40)}<div><b>${esc(a.nick)}</b><small>QQ：${esc(a.qq)}</small></div><span class="yr ${k === "a26" ? "n" : ""}">${ACCTS[k].label}</span></button>`; }).join("")}
@@ -258,7 +249,7 @@
       <div class="tip">· 2008 号里是 2008 年的人<br>· 2026 号里是现在的人<br>· 两个号的好友、空间、留言板都分开</div>
     </div>`;
   };
-  V.logging = () => `<div class="login">${titlebar("QQ2008")}<div class="logo">${PENGUIN(96, 108)}<b>正在登录…</b><div class="pbar"><i></i></div></div></div>`;
+  V.logging = () => `<div class="login">${titlebar("QQ2008")}<div class="logo">${PENGUIN(120, 118)}<b>正在登录…</b><div class="pbar"><i></i></div></div></div>`;
 
   V.main = () => {
     const a = A(); const lv = levelOf(S.meta.cur); const fs = myFriends();
@@ -718,7 +709,7 @@
   document.addEventListener("input", e => { if (e.target.id === "srch") { S.search = e.target.value; const pos = e.target.selectionStart; render(); const i = $("#srch"); i.focus(); i.setSelectionRange(pos, pos); } });
   document.addEventListener("keydown", e => { if (e.target.id === "inp" && e.key === "Enter" && (e.ctrlKey || e.metaKey)) { e.preventDefault(); ACT.send(); } });
   async function boot() {
-    $("#app").innerHTML = `<div class="login"><div class="logo" style="padding-top:160px">${PENGUIN(96, 108)}<b>QQ2008</b></div></div>`;
+    $("#app").innerHTML = `<div class="login"><div class="logo" style="padding-top:160px">${PENGUIN(120, 118)}<b>QQ2008</b></div></div>`;
     await loadAll();
     if (S.meta.auto && S.meta.cur) { S.view = "main"; render(); watchStatus(true); tick(); } else { S.meta.cur = null; S.view = "login"; render(); }
     setInterval(tick, 3000);

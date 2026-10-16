@@ -7,7 +7,8 @@ import { fileURLToPath } from "node:url";
 const root = dirname(fileURLToPath(import.meta.url));
 const read = p => readFileSync(join(root, p), "utf8");
 const version = JSON.parse(read("manifest.json")).version;
-const js = read("src/app.js").replace("/*__VERSION__*/", () => version);
+const peng = "data:image/png;base64," + readFileSync(join(root, "assets/penguin.png")).toString("base64");
+const js = read("src/app.js").replace("/*__VERSION__*/", () => version).replace("/*__PENGUIN__*/", () => peng);
 const css = read("src/style.css");
 const fill = mock => read("src/index.html").replace("/*__CSS__*/", () => css).replace("/*__JS__*/", () => js).replace("<!--__MOCK__-->", () => mock);
 

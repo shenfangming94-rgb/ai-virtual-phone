@@ -18,9 +18,15 @@
     characters: { async list() { return chars; }, async get(id) { return chars.find(c => c.id === id); } },
     ai: {
       async generate(p) { calls.push(p); await sleep(400); return { text: mock(p.appTags[1], "===短信===\n内容：你是谁啊\n===结束===") }; },
+      async generateImage(p) { calls.push({ image: p }); await sleep(300); const c = document.createElement("canvas"); c.width = 768; c.height = 1024; const g = c.getContext("2d"); g.fillStyle = "#6a8fb5"; g.fillRect(0, 0, 768, 600); g.fillStyle = "#3d6b35"; g.fillRect(0, 600, 768, 424); g.fillStyle = "#fff6c0"; g.beginPath(); g.arc(560, 220, 90, 0, 7); g.fill(); g.fillStyle = "#c33"; g.fillRect(150, 480, 220, 240); return { dataUrl: c.toDataURL("image/png") }; },
       async chat(p) { calls.push(p); await sleep(400); return { text: mock("chat", "===短信===\n内容：？？你哪位\n===结束===") }; },
     },
     memory: { async addTimeline(p) { calls.push({ memory: p }); return {}; }, async add(p) { calls.push({ longterm: p }); return true; }, async deleteTimeline(p) { calls.push({ forget: p }); return true; } },
+    media: {
+      async pick() { const c = document.createElement("canvas"); c.width = 640; c.height = 480; const g = c.getContext("2d"); const gr = g.createLinearGradient(0, 0, 640, 480); gr.addColorStop(0, "#f7a"); gr.addColorStop(1, "#39f"); g.fillStyle = gr; g.fillRect(0, 0, 640, 480); g.fillStyle = "#fff"; g.font = "bold 90px sans-serif"; g.fillText("2026", 160, 280); return { file: { dataUrl: c.toDataURL("image/jpeg") } }; },
+      async put({ dataUrl }) { const ref = "media-store://m" + Math.random().toString(36).slice(2); (window.__MEDIA = window.__MEDIA || {})[ref] = dataUrl; return { ref }; },
+      async get({ ref }) { return { ref, dataUrl: (window.__MEDIA || {})[ref] || "" }; },
+    },
     ui: { async toast() {} },
   };
 })();

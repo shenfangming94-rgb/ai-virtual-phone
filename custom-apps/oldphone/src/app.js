@@ -74,6 +74,8 @@
   const allSaved = () => S.threads.flatMap(t => t.msgs.filter(m => m.dir === "in" && m.saved).map(m => ({ ...m, pid: t.id }))).sort((a, b) => new Date(b.at) - new Date(a.at));
   const unread = () => allIn().filter(m => !m.read).length;
   const msgRef = x => { const th = threadOf(x.pid); return [th, th.msgs.find(m => m.id === x.id)]; };
+  // 一条短信给 AI / 记忆看的文字：彩信写成 [彩信：画面] 再接配的话
+  const textOf = m => `${m.mms ? (m.dir === "in" ? `[彩信：${m.mms.desc || "一张照片"}]` : `[彩信照片${m.mms.seen ? `：${m.mms.seen}` : ""}]`) : ""}${m.text || ""}`;
   const msgTime = iso => { const t = thereDate(new Date(iso)); return `${pad(t.getMonth() + 1)}/${pad(t.getDate())} ${hm(t)}`; };
   const LOOKS = () => [
     ["运营商", S.meta.operator !== false ? "开" : "关", () => { S.meta.operator = S.meta.operator === false; saveMeta(); }],
@@ -164,36 +166,38 @@
   V.drafts = {
     items: () => S.meta.drafts,
     draw: () => `${bar()}<div class="title">草稿箱</div>${list(S.meta.drafts.map(d => row(d.text || "（空）")), S.sel)}${soft(S.meta.drafts.length ? "编辑" : "", "返回")}`,
-    key: k => { const d = S.meta.drafts[S.sel]; if ((k === "ok" || k === "softL") && d) { S.compose = { to: d.to, number: d.number, text: d.text, draftId: d.id }; return open("compose"); } if (k === "softR") return back(); },
+    key: k => { const d = S.meta.drafts[S.sel]; if ((k === "ok" || k === "softL") && d) { S.compose = { to: d.to, number: d.number, text: d.text, mms: d.mms, draftId: d.id }; return open("compose"); } if (k === "softR") return back(); },
   };
   // 读一条：上下键滚动；选项：回复 / 查看对话 / 存入电话本 / 删除（发件箱的失败短信可以重发）
   V.read = {
     draw: () => { const r = S.reading; const p = personById(r.pid); const m = (threadOf(r.pid).msgs.find(x => x.id === r.id)) || {};
       if (m.dir === "in" && !m.read) { m.read = true; saveThread(threadOf(r.pid)); }
-      return `${bar()}<div class="title">${m.dir === "out" ? "发给 " : ""}${esc(p ? shown(p) : "未知号码")}</div><div class="scroll s18" id="readbox"><div>${esc(m.text || "")}</div><div class="s12" style="margin-top:6px">${m.status === "failed" ? "发送失败 · " : ""}${esc(m.at ? `${ymd(thereDate(new Date(m.at)))} ${hm(thereDate(new Date(m.at)))}` : "")}</div></div>${soft("选项", "返回")}`; },
+      return `${bar()}<div class="title">${m.dir === "out" ? "发给 " : ""}${esc(p ? shown(p) : "未知号码")}</div><div class="scroll s18" id="readbox">${mmsLcd(m)}<div>${esc(m.text || "")}</div><div class="s12" style="margin-top:6px">${m.status === "failed" ? "发送失败 · " : ""}${esc(m.at ? `${ymd(thereDate(new Date(m.at)))} ${hm(thereDate(new Date(m.at)))}` : "")}</div></div>${soft("选项", "返回")}`; },
     after: () => { const b = $("#readbox"); if (b) { S.scroll = Math.max(0, Math.min(S.scroll || 0, b.scrollHeight - b.clientHeight)); b.scrollTop = S.scroll; } },
     key: k => { if (k === "up") { S.scroll = (S.scroll || 0) - 26; return draw(); } if (k === "down") { S.scroll = (S.scroll || 0) + 26; return draw(); } if (k === "ok" || k === "softL") return open("readopt"); if (k === "softR") return back(); },
   };
   V.readopt = {
     items: () => { const r = S.reading; const p = personById(r.pid); const m = threadOf(r.pid).msgs.find(x => x.id === r.id) || {};
-      return [["回复", "reply"], ["查看对话", "conv"], ...(m.dir === "in" ? [[m.saved ? "移回收件箱" : "存进收藏夹", "fav"]] : []), ...(p && !p.label ? [["存入电话本", "save"]] : []), ...(m.status === "failed" ? [["重新发送", "resend"]] : []), ["删除", "del"]]; },
+      return [...(m.mms && m.mms.ref ? [["查看照片", "view"]] : m.mms && m.dir === "in" ? [["生成照片", "gen"]] : []), ["回复", "reply"], ["查看对话", "conv"], ...(m.dir === "in" ? [[m.saved ? "移回收件箱" : "存进收藏夹", "fav"]] : []), ...(p && !p.label ? [["存入电话本", "save"]] : []), ...(m.status === "failed" ? [["重新发送", "resend"]] : []), ["删除", "del"]]; },
     draw: () => `${bar()}<div class="title">选项</div>${list(V.readopt.items().map(x => x[0]), S.sel)}${soft("确定", "返回")}`,
     key: async k => {
       if (k === "softR") return back(); if (k !== "ok" && k !== "softL") return;
       const r = S.reading; const p = personById(r.pid); const th = threadOf(r.pid); const m = th.msgs.find(x => x.id === r.id);
       const act = V.readopt.items()[S.sel][1];
+      if (act === "view" && m) { back(); return viewPhoto(m); }
+      if (act === "gen" && m) { back(); return genPhoto(p, th, m); }
       if (act === "reply") { S.compose = { to: r.pid, text: "" }; return open("compose", true); }
       if (act === "fav" && m) { if (!m.saved || allIn().length < INBOX_MAX) { m.saved = !m.saved; saveThread(th); flushPending(); return toastLcd(m.saved ? "已存进收藏夹" : "已移回收件箱"); } return toastLcd("收件箱满了"); }
       if (act === "conv") { S.conv = r.pid; S.scroll = 9999; return open("conv", true); }
       if (act === "save") { const name = await ask("存入电话本", "名字", ""); if (name) { p.label = name.slice(0, 12); savePerson(p); toastLcd("已保存"); } return; }
-      if (act === "resend" && m) { th.msgs = th.msgs.filter(x => x !== m); saveThread(th); S.compose = { to: r.pid, text: m.text }; return sendNow(); }
+      if (act === "resend" && m) { th.msgs = th.msgs.filter(x => x !== m); saveThread(th); S.compose = { to: r.pid, text: m.text, mms: m.mms }; return sendNow(); }
       if (act === "del" && m) { th.msgs = th.msgs.filter(x => x !== m); saveThread(th); flushPending(); return toastLcd("已删除", () => { S.stack.pop(); back(); }); }
     },
   };
   // 对话：像截图那样一行一行（名字：内容），上下键滚
   V.conv = {
     draw: () => { const p = personById(S.conv); const who = p ? (p.label || "对方").slice(0, 4) : "对方";
-      const lines = threadOf(S.conv).msgs.map(m => `<p>${m.dir === "out" ? "我" : esc(who)}：${esc(m.text)}</p>`).join("");
+      const lines = threadOf(S.conv).msgs.map(m => `<p>${m.dir === "out" ? "我" : esc(who)}：${m.mms ? "[彩信]" : ""}${esc(m.text)}</p>`).join("");
       return `${bar()}<div class="title">${esc(p ? shown(p) : "")}</div><div class="scroll conv s18" id="convbox">${lines || "<p>（还没有短信）</p>"}</div>${soft("选项", "返回")}`; },
     after: () => { const b = $("#convbox"); if (!b) return; const max = b.scrollHeight - b.clientHeight; S.scroll = Math.max(0, Math.min(S.scroll, max)); b.scrollTop = S.scroll; },
     key: async k => { const step = 26; if (k === "up") { S.scroll -= step; return draw(); } if (k === "down") { S.scroll += step; return draw(); }
@@ -207,10 +211,13 @@
   V.compose = {
     draw: () => { const c = S.compose; const n = [...c.text].length; const parts = Math.max(1, Math.ceil(n / 70));
       const to = c.to ? shown(personById(c.to) || {}) : c.number || "";
-      return `${bar()}<div class="title"><span class="cut">${c.next ? "下一条" : to ? `给 ${esc(to)}` : "写信息"}</span><span class="r">${n % 70 || (n ? 70 : 0)}/${parts}</span></div><div class="scroll s18 typing">${esc(c.text)}<i class="caret"></i>${n ? "" : `<span class="hint">点这里打字</span>`}</div>${soft(n ? "发送" : "", n ? "存草稿" : c.next ? "完成" : "返回")}`; },
+      const has = n || c.mms;
+      return `${bar()}<div class="title"><span class="cut">${c.next ? "下一条" : to ? `给 ${esc(to)}` : "写信息"}</span><span class="r">${c.mms ? "彩信" : `${n % 70 || (n ? 70 : 0)}/${parts}`}</span></div><div class="scroll s18 typing">${c.mms ? `${mmsLcd({ dir: "out", mms: c.mms })}` : ""}${esc(c.text)}<i class="caret"></i>${n ? "" : `<span class="hint">${c.mms ? "配一句话，或者直接发送" : "点这里打字"}</span>`}</div>${soft(has ? "发送" : "照片", n ? "存草稿" : c.mms ? "去掉照片" : c.next ? "完成" : "返回")}`; },
     key: async k => {
       const c = S.compose;
-      if (k === "softL" || k === "ok" || k === "call") { if (![...c.text].length) return; if (!c.to && !c.number) return open("pickto"); return sendNow(); }
+      if (k === "softL" && ![...c.text].length && !c.mms) { $("#typer").blur(); const mm = await pickPhoto(); if (mm && S.compose === c) { c.mms = mm; draw(); } return; }
+      if (k === "softL" || k === "ok" || k === "call") { if (![...c.text].length && !c.mms) return; if (!c.to && !c.number) return open("pickto"); return sendNow(); }
+      if (k === "softR" && !c.text.trim() && c.mms) { c.mms = null; return draw(); }
       if (k === "softR" || k === "end") { const leave = () => (k === "end" ? home() : back()); if (c.text.trim()) { saveDraft(); return toastLcd("已存入草稿箱", leave); } return leave(); }
       if (/^[0-9*#]$/.test(k)) { c.text += k; syncTyper(); return draw(); }
     },
@@ -299,12 +306,12 @@
     t.addEventListener("input", () => { if (S.view !== "compose") return; S.compose.text = t.value; draw(); });
     t.addEventListener("keydown", e => { if (e.key === "Enter" && !e.shiftKey && S.view === "compose") { e.preventDefault(); } });
   }
-  function saveDraft() { const c = S.compose; const d = { id: c.draftId || uid("d"), to: c.to, number: c.number || "", text: c.text, at: new Date().toISOString() };
+  function saveDraft() { const c = S.compose; const d = { id: c.draftId || uid("d"), to: c.to, number: c.number || "", text: c.text, ...(c.mms ? { mms: c.mms } : {}), at: new Date().toISOString() };
     S.meta.drafts = [d, ...S.meta.drafts.filter(x => x.id !== d.id)].slice(0, 20); saveMeta(); }
 
   // ───────────────────────── 发短信 ─────────────────────────
   async function sendNow() {
-    const c = S.compose; const text = c.text.trim(); if (!text) return;
+    const c = S.compose; const text = c.text.trim(); if (!text && !c.mms) return;
     let p = c.to ? personById(c.to) : S.people.find(x => x.number === c.number);
     // 「我主动」：她随手按的号码 → 还没联系上的「我主动」的人里挑一个，这个号码从此就是他的
     if (!p && c.number) { const cand = S.people.filter(x => x.opening === "mine" && !x.met); if (cand.length) { p = cand[rand(0, cand.length - 1)]; p.number = c.number; savePerson(p); } }
@@ -318,7 +325,7 @@
       if (!personById(target.id)) { S.people.push({ ...target, ghost: true, opening: "none" }); savePerson(personById(target.id)); }
     }
     const th = threadOf(target.id);
-    th.msgs.push({ id: uid("m"), dir: "out", text, at: new Date().toISOString(), status: fail ? "failed" : "sent" }); saveThread(th);
+    th.msgs.push({ id: uid("m"), dir: "out", text, ...(c.mms ? { mms: c.mms } : {}), at: new Date().toISOString(), status: fail ? "failed" : "sent" }); saveThread(th);
     S.compose = null; $("#typer").value = "";
     await wait(900);
     S.stack = S.stack.filter(x => !["compose", "pickto", "dial", "readopt"].includes(x.view));
@@ -338,23 +345,30 @@
   // ───────────────────────── 他回短信 ─────────────────────────
   const OPEN_NAME = { wrong: "发错号码", owner: "找前机主", mine: "我主动", none: "" };
   const personName = p => p.source === "char" ? ((S.chars.find(c => c.id === p.charId) || {}).name || p.name || "档案角色") : (p.name || "未命名");
-  const SMS_FMT = "每条短信一个块（一次一到三条）：\n===短信===\n内容：一条短信（不超过 70 个字）\n===结束===";
+  const SMS_FMT = "每条短信一个块（一次一到三条）：\n===短信===\n内容：一条短信（不超过 70 个字）\n===结束===\n\n你的手机能拍照（30 万像素）。想让用户看看你拍的东西时，可以发彩信，一次最多一条，按你的人设和当时的心情决定发不发：\n===彩信===\n画面：照片里拍到了什么（场景、人物、物品、光线，客观写清楚，只能是你身边真实的东西）\n配的话：一句话，可以不写\n===结束===";
+  // 解析出来的每一条：短信是字符串，彩信是 { text, mms: { desc } }
   function parseSms(raw) {
-    const out = []; const re = /===\s*短信\s*===([\s\S]*?)(?====|$)/g; let m;
-    while ((m = re.exec(String(raw || "")))) { const t = m[1].replace(/^\s*内容\s*[：:]\s*/m, "").replace(/===\s*结束\s*===/g, "").trim(); if (t) out.push(t); }
+    const out = []; const re = /===\s*(短信|彩信)\s*===([\s\S]*?)(?====|$)/g; let m, mms = 0;
+    while ((m = re.exec(String(raw || "")))) {
+      const body = m[2].replace(/===\s*结束\s*===/g, "");
+      if (m[1] === "彩信") { const desc = ((body.match(/画面\s*[：:]\s*([^\n]+)/) || [])[1] || "").trim(); let cap = ((body.match(/配的话\s*[：:]\s*([^\n]*)/) || [])[1] || "").trim();
+        if (/^[（(]?(无|不写|没有|空)[)）]?$/.test(cap)) cap = ""; if (desc && !mms++) out.push({ text: [...cap].slice(0, 70).join(""), mms: { desc: desc.slice(0, 200) } }); continue; }
+      const t = body.replace(/^\s*内容\s*[：:]\s*/m, "").trim(); if (t) out.push(t);
+    }
     if (!out.length && raw && !/===/.test(raw)) out.push(String(raw).trim());
     // 超过 70 字的按 70 字切开（像老手机自动分条）
-    return out.flatMap(t => { const cs = [...t]; const parts = []; for (let i = 0; i < cs.length; i += 70) parts.push(cs.slice(i, i + 70).join("")); return parts; }).slice(0, 4);
+    return out.flatMap(t => { if (typeof t !== "string") return [t]; const cs = [...t]; const parts = []; for (let i = 0; i < cs.length; i += 70) parts.push(cs.slice(i, i + 70).join("")); return parts; }).slice(0, 4);
   }
+  const partText = t => (typeof t === "string" ? t : `${t.mms.desc} ${t.text}`);
   const KEEP = 40; // 每次回短信带最近 40 条原文；更早的总结进「他记得的事」
-  const historyText = msgs => msgs.slice(-KEEP).map(m => `[${msgTime(m.at)}] ${m.dir === "in" ? "你" : "用户"}：${m.text}`).join("\n");
+  const historyText = msgs => msgs.slice(-KEEP).map(m => `[${msgTime(m.at)}] ${m.dir === "in" ? "你" : "用户"}：${textOf(m)}`).join("\n");
   async function genSms(p, kind, at) {
     const th = threadOf(p.id);
     let s = th.msgs.length; while (s > 0 && th.msgs[s - 1].dir === "out") s--;
     const pending = th.msgs.slice(s).filter(m => m.dir === "out");
-    await updateMemo(p, th.msgs.slice(0, s));
+    await updateMemo(p, th.msgs.slice(0, s)); await seePhotos(p, pending);
     const hist = historyText(th.msgs.slice(0, s));
-    const futures = futureIn(pending.map(m => m.text).join(" "));
+    const futures = futureIn(pending.map(m => textOf(m)).join(" "));
     const lines = [
       ERA_RULE(at ? new Date(at) : undefined),
       `你在用自己的手机（号码 ${p.number}）收发短信。用户的号码是 ${S.meta.myNumber}${p.met ? "" : "，你不认识这个号码"}。`,
@@ -364,14 +378,14 @@
       p.memo ? `你记得的事（更早的短信里发生的）：\n${p.memo}` : "",
       hist ? `你们${p.memo ? "最近" : "之前"}的短信：\n${hist}` : "",
       kind === "reply" && (p.opening === "wrong" || p.opening === "owner") ? `你们的第一条短信是你发的，本来是想发给${p.meant ? `「${p.meant}」` : "你生活里的一个人"}；${p.opening === "wrong" ? "可你按错了号码" : "可这个号码早就不是他在用了"}，现在拿着这个号码的用户，你根本不认识。` : "",
-      kind === "reply" ? `用户刚刚${pending.length > 1 ? "连着" : ""}发来：${pending.map(m => `「${m.text}」`).join("")}` : "",
+      kind === "reply" ? `用户刚刚${pending.length > 1 ? "连着" : ""}发来：${pending.map(m => `「${textOf(m)}」`).join("")}${pending.some(m => m.mms) ? "（[彩信照片] 是用户用手机拍了发给你的照片，你在自己手机上看到的就是这样）" : ""}` : "",
       futures.length ? `用户提到的「${futures.join("」「")}」，是你那边还没有的东西，你没听说过。` : "",
       SMS_FMT,
       kind === "wrong" || kind === "owner" ? "最后再写一个备注（不会发出去，只是记下来）：\n===备注===\n本来想发给：那个人是谁（名字或外号，和你是什么关系）\n===结束===" : "",
     ].filter(Boolean).join("\n\n");
     let parts = await callAi(p, lines);
     if ((kind === "wrong" || kind === "owner") && S._lastRaw) { const m = S._lastRaw.match(/本来想发给\s*[：:]\s*([^\n=]+)/); if (m) { p.meant = m[1].trim().slice(0, 40); savePerson(p); } }
-    if (parts && parts.length) { const leak = futureIn(parts.join(" ")).filter(w => !futures.includes(w)); // 他说漏嘴了：重写一次
+    if (parts && parts.length) { const leak = futureIn(parts.map(partText).join(" ")).filter(w => !futures.includes(w)); // 他说漏嘴了：重写一次
       if (leak.length) { const again = await callAi(p, `${lines}\n\n你刚才写了「${leak.join("」「")}」，这是你那边还没有的东西，你不可能知道。重写。`); if (again && again.length) parts = again; } }
     return parts;
   }
@@ -397,7 +411,7 @@
     const old = msgs.slice(0, Math.max(0, msgs.length - KEEP)).filter(m => !p.memoAt || m.at > p.memoAt);
     if (old.length < 10) return;
     const name = personName(p);
-    const text = old.map(m => `[${msgTime(m.at)}] ${m.dir === "in" ? "你" : "用户"}：${m.text}`).join("\n");
+    const text = old.map(m => `[${msgTime(m.at)}] ${m.dir === "in" ? "你" : "用户"}：${textOf(m)}`).join("\n");
     try {
       const r = await api.ai.chat({ system: "你负责帮一个人整理短信笔记，只输出要点，不要任何解释。", timeoutMs: 180000,
         prompt: `下面是${name}（文中的「你」）和一个号码（文中的「用户」）之间的一段短信。${p.memo ? `之前已经记下的：\n${p.memo}\n\n` : ""}把这段短信整理成几条要点，用第二人称「你」写：发生了什么事；用户说过的关于自己的事；你说过的关于自己的事（名字、年龄、学校、家里这些原样记）；你们之间的称呼、约定和没说完的话。只写短信里真有的，不编，不评价。不超过 200 字，每条一行，开头写 -。\n\n${text}` });
@@ -409,14 +423,15 @@
   /** 收到短信：收件箱满了就排队，删了旧的才进来 */
   function receive(pid, texts, at, pro) {
     const th = threadOf(pid);
-    for (const [i, text] of texts.entries()) {
-      if (allIn().length >= INBOX_MAX) { S.meta.pendingIn.push({ pid, text }); continue; }
-      th.msgs.push({ id: uid("m"), dir: "in", text, at: new Date(new Date(at || Date.now()).getTime() + i * 20e3).toISOString(), read: false, ...(pro ? { pro: true } : {}) });
+    for (const [i, it] of texts.entries()) {
+      const { text, mms } = typeof it === "string" ? { text: it } : it;
+      if (allIn().length >= INBOX_MAX) { S.meta.pendingIn.push({ pid, text, ...(mms ? { mms } : {}) }); continue; }
+      th.msgs.push({ id: uid("m"), dir: "in", text, ...(mms ? { mms } : {}), at: new Date(new Date(at || Date.now()).getTime() + i * 20e3).toISOString(), read: false, ...(pro ? { pro: true } : {}) });
     }
     saveThread(th); saveMeta(); notify();
   }
   function flushPending() {
-    while (S.meta.pendingIn.length && allIn().length < INBOX_MAX) { const x = S.meta.pendingIn.shift(); const th = threadOf(x.pid); th.msgs.push({ id: uid("m"), dir: "in", text: x.text, at: new Date().toISOString(), read: false }); saveThread(th); }
+    while (S.meta.pendingIn.length && allIn().length < INBOX_MAX) { const x = S.meta.pendingIn.shift(); const th = threadOf(x.pid); th.msgs.push({ id: uid("m"), dir: "in", text: x.text, ...(x.mms ? { mms: x.mms } : {}), at: new Date().toISOString(), read: false }); saveThread(th); }
     saveMeta();
   }
   function notify() {
@@ -444,14 +459,94 @@
   function remember(p, parts) {
     if (p.source !== "char" || !p.charId || !api.memory || !api.memory.addTimeline) return;
     const th = threadOf(p.id); const last = th.msgs.filter(m => m.dir === "out").slice(-1)[0];
-    api.memory.addTimeline({ characterId: p.charId, appLabel: "请回答2008", detail: "sms", summary: `${last ? `号码 ${S.meta.myNumber} 发来短信「${last.text.slice(0, 50)}」，` : ""}我发短信：${parts.map(t => `「${t.slice(0, 40)}」`).join("")}`, appEventId: uid("r2008") }).catch(() => {});
+    api.memory.addTimeline({ characterId: p.charId, appLabel: "请回答2008", detail: "sms", summary: `${last ? `号码 ${S.meta.myNumber} 发来短信「${textOf(last).slice(0, 80)}」，` : ""}我发短信：${parts.map(t => typeof t === "string" ? `「${t.slice(0, 40)}」` : `彩信照片（${t.mms.desc.slice(0, 60)}）${t.text ? `「${t.text}」` : ""}`).join("")}`, appEventId: uid("r2008") }).catch(() => {});
   }
+
+  // ───────────────────────── 彩信：照片统一做旧成 2008 年 30 万像素手机拍的样子 ─────────────────────────
+  const mediaCache = new Map(), thumbCache = new Map();
+  const loadImg = src => new Promise((ok, no) => { const i = new Image(); i.onload = () => ok(i); i.onerror = no; i.src = src; });
+  async function mediaUrl(ref) {
+    if (!ref) return ""; if (mediaCache.has(ref)) return mediaCache.get(ref);
+    try { const r = await api.media.get({ ref }); const u = (r && r.dataUrl) || ""; if (u) mediaCache.set(ref, u); return u; } catch (e) { return ""; }
+  }
+  /** 做旧：缩到 320 宽、发灰偏黄绿、暗部发闷、高光过曝、噪点、压两遍 JPEG；有时右下角印日期（那边的日期） */
+  async function oldify(dataUrl, at) {
+    const img = await loadImg(dataUrl);
+    const k = 320 / Math.max(img.width, img.height), w = Math.round(img.width * k), h = Math.round(img.height * k);
+    const cv = document.createElement("canvas"); cv.width = w; cv.height = h; const g = cv.getContext("2d");
+    g.filter = "blur(0.6px)"; g.drawImage(img, 0, 0, w, h); g.filter = "none";
+    const d = g.getImageData(0, 0, w, h), px = d.data;
+    for (let i = 0; i < px.length; i += 4) {
+      const y = px[i] * 0.3 + px[i + 1] * 0.59 + px[i + 2] * 0.11, n = (Math.random() - 0.5) * 26;
+      const f = c => { let v = c * 0.7 + y * 0.3; v = 22 + v * 0.86; if (v > 215) v = 215 + (v - 215) * 2; return Math.max(0, Math.min(255, v + n)); };
+      px[i] = f(px[i] * 1.03); px[i + 1] = f(px[i + 1] * 1.05); px[i + 2] = f(px[i + 2] * 0.86);
+    }
+    g.putImageData(d, 0, 0);
+    const vg = g.createRadialGradient(w / 2, h / 2, Math.min(w, h) * 0.35, w / 2, h / 2, Math.max(w, h) * 0.75); vg.addColorStop(0, "rgba(0,0,0,0)"); vg.addColorStop(1, "rgba(0,0,0,.38)"); g.fillStyle = vg; g.fillRect(0, 0, w, h); // 四角发暗
+    if (at && Math.random() < 0.4) { const t = thereDate(new Date(at)); g.font = "bold 13px monospace"; g.fillStyle = "#ff9a2e"; g.textAlign = "right"; g.fillText(`'${String(t.getFullYear()).slice(2)} ${pad(t.getMonth() + 1)} ${pad(t.getDate())}`, w - 8, h - 8); }
+    const once = await loadImg(cv.toDataURL("image/jpeg", 0.35)); g.drawImage(once, 0, 0);
+    return cv.toDataURL("image/jpeg", 0.55);
+  }
+  /** 屏幕上的小图：单色绿屏只能显示点阵，抖动成两种颜色 */
+  async function lcdThumb(ref) {
+    if (thumbCache.has(ref)) return thumbCache.get(ref);
+    const url = await mediaUrl(ref); if (!url) return "";
+    const img = await loadImg(url); const w = 72, h = Math.max(1, Math.round(img.height * w / img.width));
+    const cv = document.createElement("canvas"); cv.width = w; cv.height = h; const g = cv.getContext("2d"); g.drawImage(img, 0, 0, w, h);
+    const d = g.getImageData(0, 0, w, h), px = d.data, B = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5];
+    for (let i = 0; i < px.length; i += 4) { const x = (i / 4) % w, y = Math.floor(i / 4 / w); const l = (px[i] * 0.3 + px[i + 1] * 0.59 + px[i + 2] * 0.11) / 255;
+      const dark = Math.min(1, Math.max(0, (l - 0.5) * 1.5 + 0.5)) < (B[(y % 4) * 4 + (x % 4)] + 0.5) / 16; px[i] = 29; px[i + 1] = 42; px[i + 2] = 18; px[i + 3] = dark ? 255 : 0; }
+    g.putImageData(d, 0, 0); const t = cv.toDataURL("image/png"); thumbCache.set(ref, t); return t;
+  }
+  /** 同步画屏幕时用：有缓存就给，没有就去取，取到了再画一遍 */
+  function thumbNow(ref) { if (thumbCache.has(ref)) return thumbCache.get(ref); lcdThumb(ref).then(u => { if (u) draw(); }); return ""; }
+  const SELFIE = /自拍|合照|合影|镜子|对镜|本人|我自己|我的脸/;
+  /** 他发的彩信：按画面描述生成照片（点了才生成，费生图 API） */
+  async function genPhoto(p, th, m) {
+    S.lcdMsg = "正在接收彩信…"; S.view = "msgline"; draw();
+    try {
+      const prompt = `${m.mms.desc}。2008 年的拍照手机随手拍的照片：30 万像素，画面模糊、有噪点、颜色发灰偏色、构图随意，没有美颜和滤镜，像真实生活里的抓拍，画面里的东西都是 2008 年的样子。`;
+      const r = await api.ai.generateImage({ prompt, ...(p.source === "char" && p.charId ? { characterId: p.charId, useReferenceImage: SELFIE.test(m.mms.desc) } : {}), timeoutMs: 120000 });
+      if (!r || !r.dataUrl) throw new Error("没有拿到图片");
+      const old = await oldify(r.dataUrl, m.at); const st = await api.media.put({ dataUrl: old });
+      mediaCache.set(st.ref, old); m.mms.ref = st.ref; saveThread(th);
+      S.view = "read"; draw();
+    } catch (e) { logErr(`生成照片：${(e && e.message) || e}`); S.view = "read"; toastLcd("接收失败"); }
+  }
+  /** 看大图（彩色）：像把照片导到电脑上看 */
+  async function viewPhoto(m) {
+    const url = await mediaUrl(m.mms.ref); if (!url) return toastLcd("照片找不到了");
+    const el = document.createElement("div"); el.className = "pview";
+    el.innerHTML = `<img src="${url}" alt="">${m.dir === "in" && m.mms.desc ? `<p>${esc(m.mms.desc)}</p>` : ""}<p class="tip">长按图片可以保存 · 点空白处关闭</p>`;
+    el.onclick = e => { if (e.target.tagName !== "IMG") el.remove(); };
+    document.body.appendChild(el);
+  }
+  /** 她发的照片：借一个档案库角色的识图看一眼，存成 mms.seen（他回短信时就知道照片里有什么）。每张只看一次 */
+  async function seePhotos(p, msgs) {
+    const cid = p.source === "char" && p.charId ? p.charId : (S.chars[0] || {}).id; if (!cid) return;
+    for (const m of msgs) {
+      if (!m.mms || !m.mms.ref || m.mms.seen) continue;
+      const url = await mediaUrl(m.mms.ref); if (!url) continue;
+      try {
+        const r = await api.ai.generate({ characterId: cid, appTags: ["nox_reply2008", "vision"], instruction: "这一轮不扮演任何人，只做一件事：用一两句话客观描述上面这张照片里有什么（人物、物品、场景、文字、光线），不评价、不加戏、不要任何格式，直接输出描述。", appMessages: [{ role: "user", content: "（要描述的照片）", image: url }] });
+        const t = String((r && r.text) || "").replace(/^[\s"「]+|[\s"」]+$/g, "").slice(0, 200); if (t) m.mms.seen = t;
+      } catch (e) { logErr(`看照片：${(e && e.message) || e}`); }
+    }
+  }
+  async function pickPhoto() {
+    try {
+      const r = await api.media.pick({ accept: "image/*" }); const f = r && (r.file || (r.files || [])[0]); if (!f || !f.dataUrl) return null;
+      const old = await oldify(f.dataUrl, new Date().toISOString()); const st = await api.media.put({ dataUrl: old }); mediaCache.set(st.ref, old); return { ref: st.ref };
+    } catch (e) { logErr(`选照片：${(e && e.message) || e}`); return null; }
+  }
+  const mmsLcd = m => { if (!m.mms) return ""; const t = m.mms.ref && thumbNow(m.mms.ref);
+    return t ? `<img class="lcdimg" src="${t}" alt="">` : `<div class="s12">[彩信]${m.dir === "in" && m.mms.desc ? ` ${esc(m.mms.desc)}` : m.mms.ref ? " 照片" : ""}</div>`; };
 
   // ───────────────────────── 整段保存：把整个对话画成一张长图（像素字、绿屏），长按保存；也能复制文字 ─────────────────────────
   async function exportConv(pid) {
     const p = personById(pid); const msgs = threadOf(pid).msgs; if (!msgs.length) return toastLcd("还没有短信");
     const who = p ? (p.label || p.number) : "对方";
-    const text = msgs.map(m => { const t = thereDate(new Date(m.at)); return `${m.dir === "out" ? "我" : who}：${m.text}　${ymd(t)} ${hm(t)}`; }).join("\n");
+    const text = msgs.map(m => { const t = thereDate(new Date(m.at)); return `${m.dir === "out" ? "我" : who}：${m.mms ? "[彩信]" : ""}${m.text}　${ymd(t)} ${hm(t)}`; }).join("\n");
     await document.fonts.ready;
     const K = 2, W = 360, PAD = 18, FS = 24, LH = 34, cs = getComputedStyle(document.documentElement);
     const lcd = cs.getPropertyValue("--lcd").trim() || "#9fd36a", ink = cs.getPropertyValue("--ink").trim() || "#1d2a12";
@@ -558,7 +653,7 @@
     let done = p.importDone || 0, i = 0; // 中途失败了，再点从断的地方接着写
     for (const [day, ms] of days) {
       const chunks = [[]]; let len = 0;
-      for (const m of ms) { const line = `[${hm(thereDate(new Date(m.at)))}] ${who(m)}：${m.text}`; if (len + line.length > 1800 && chunks[chunks.length - 1].length) { chunks.push([]); len = 0; } chunks[chunks.length - 1].push({ line, at: m.at }); len += line.length + 1; }
+      for (const m of ms) { const line = `[${hm(thereDate(new Date(m.at)))}] ${who(m)}：${textOf(m)}`; if (len + line.length > 1800 && chunks[chunks.length - 1].length) { chunks.push([]); len = 0; } chunks[chunks.length - 1].push({ line, at: m.at }); len += line.length + 1; }
       for (const c of chunks) {
         if (i++ < done) continue;
         await api.memory.addTimeline({ characterId: p.charId, appLabel: "请回答2008", detail: "sms", createdAt: c[c.length - 1].at, summary: `请回答2008 · ${day} 的短信：\n${c.map(x => x.line).join("\n")}`, appEventId: `r2008_imp_${p.id}_${i}` });

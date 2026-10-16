@@ -219,7 +219,10 @@
   }
   audio.addEventListener("ended", () => { if (bgmList.length) playBgm(bgmList.map(s => s.id), bgmIdx + 1); });
   function stopBgm() { audio.pause(); bgmList = []; bgmName = ""; }
-  function renderBgmBar() { const b = $("#bgmbar"); if (b) b.outerHTML = bgmBarHtml(); }
+  function renderBgmBar() { const b = $("#bgmbar"); if (b) b.outerHTML = bgmBarHtml(); const m = $("#minibar"); if (m) m.outerHTML = miniBarHtml(); }
+  audio.addEventListener("play", renderBgmBar); audio.addEventListener("pause", renderBgmBar);
+  /** 离开空间歌接着放：好友面板和聊天窗口里有个小播放条 */
+  const miniBarHtml = () => bgmList.length ? `<div class="minibar" id="minibar"><span>♫</span><div class="marq"><span>${esc(bgmName)}</span></div><button data-act="bgm-toggle">${audio.paused ? "▶" : "▮▮"}</button><button data-act="bgm-next">⏭</button><button data-act="bgm-stop">✕</button></div>` : `<div id="minibar"></div>`;
   function bgmBarHtml() {
     const z = curZone(); const mine = S.zoneOf === "me";
     const name = mine ? (bgmName || (z.bgm && z.bgm.length ? "" : "还没有背景音乐")) : (bgmName || (z.bgmName ? z.bgmName : "没有背景音乐"));
@@ -275,6 +278,7 @@
         ${S.tab === "friends" ? `<button class="grp" data-act="fold">${S.collapsed.f ? "▶" : "▼"} 我的好友 (${online}/${fs.length})</button>
           ${S.collapsed.f ? "" : sorted.map(row).join("") || `<div class="empty">还没有好友<br>点下面的「查找」加一个吧</div>`}` : recent.map(row).join("") || `<div class="empty">还没有聊过天</div>`}
       </div>
+      ${miniBarHtml()}
       <div class="bot"><button class="btn" data-act="menu">菜单</button><button class="btn" data-act="find">查找</button><button class="btn" data-act="open-zone" data-who="me">QQ空间</button></div>
     </div>`;
   };
@@ -305,6 +309,7 @@
     return `<div class="chat">
       <div class="ct"><button class="bk" data-act="back-main">‹</button>${fAv(f, 40, st === "offline")}<div class="ctn"><b>${esc(nameOf(f))}</b> <span>[${STATUS_NAME[st]}]</span><small>${esc(f.sig || "")}</small></div></div>
       <div class="tools"><button data-act="nope" data-t="对方没有安装摄像头">📹 视频</button><button data-act="nope" data-t="对方没有麦克风">🎤 语音</button><button data-act="nope" data-t="文件太大了，传了半天还是失败">📁 传文件</button><button data-act="open-zone" data-who="${esc(f.id)}">🌐 空间</button></div>
+      ${miniBarHtml()}
       <div class="log" id="log">${lines || `<div class="sys">${st === "offline" ? `${esc(nameOf(f))} 现在不在线，消息会在他上线后收到` : "开始聊天吧"}</div>`}${typing && st === "online" ? `<div class="sys">对方正在输入…</div>` : ""}</div>
       <div class="itools"><button data-act="font"><b style="color:${S.meta.font.color}">A</b> 字体</button><button data-act="faces">${faceSvg("微笑", 16)} 表情</button><button data-act="shake">〰 抖动</button><span class="sp"></span><button data-act="history">消息记录</button></div>
       <div class="pop-wrap" id="popwrap"></div>
@@ -381,7 +386,7 @@
     ac(); S.view = "logging"; render(); await wait(1100); S.view = "main"; render(); lastStatus = {}; watchStatus(true); tick();
   };
   ACT.logout = () => { stopBgm(); S.meta.cur = null; S.meta.auto = false; saveMeta(); S.view = "login"; render(); };
-  ACT["back-main"] = () => { stopBgm(); S.view = "main"; S.fid = null; S.zoneOf = null; render(); };
+  ACT["back-main"] = () => { S.view = "main"; S.fid = null; S.zoneOf = null; render(); };
   ACT.tab = b => { S.tab = b.dataset.t; render(); };
   ACT.fold = () => { S.collapsed.f = !S.collapsed.f; render(); };
   ACT["edit-sig"] = async () => { const r = await ask("编辑个性签名", [{ label: "个性签名", value: A().sig, max: 60 }]); if (r) { A().sig = r[0]; saveMeta(); render(); } };
@@ -395,9 +400,10 @@
   };
   ACT.remark = async () => { const fr = friendById(S.zoneOf); const r = await ask("修改备注", [{ label: "备注名（不填就显示他的名字）", value: fr.remark, max: 16 }]); if (r) { fr.remark = r[0]; saveFriend(fr); render(); } };
   ACT.menu = () => sheet(`<h3>菜单</h3><div class="mlist">
-      <button data-v="nick">修改昵称</button><button data-v="sound">声音：${S.meta.sound !== false ? "开" : "关"}</button><button data-v="music">我的音乐（${S.meta.music.length} 首）</button><button data-v="switch">切换帐号</button><button data-v="about">关于</button></div><div class="btns"><button data-v="no">关闭</button></div>`,
+      <button data-v="nick">修改昵称</button><button data-v="qq">修改 QQ 号（现在：${esc(A().qq)}）</button><button data-v="sound">声音：${S.meta.sound !== false ? "开" : "关"}</button><button data-v="music">我的音乐（${S.meta.music.length} 首）</button><button data-v="switch">切换帐号</button><button data-v="about">关于</button></div><div class="btns"><button data-v="no">关闭</button></div>`,
     async v => { closeSheet();
       if (v === "nick") { const r = await ask("修改昵称", [{ label: "昵称", value: A().nick, max: 16 }]); if (r && r[0]) { A().nick = r[0]; saveMeta(); render(); } }
+      if (v === "qq") { const r = await ask("修改 QQ 号", [{ label: `QQ 号（5 到 11 位数字）`, value: A().qq, max: 11 }]); if (r) { const n = r[0].replace(/\D/g, ""); if (n.length < 5) return toast("QQ 号要 5 到 11 位数字"); A().qq = n; saveMeta(); render(); toast("QQ 号改好了"); } }
       if (v === "sound") { S.meta.sound = S.meta.sound === false; saveMeta(); }
       if (v === "music") musicSheet();
       if (v === "switch") ACT.logout();
@@ -442,13 +448,15 @@
     const z = curZone();
     if (who !== "me") { // 去他的空间：记一条访客（他能看到「你 刚刚来过」）
       const f = friendById(who); z.visitors = [{ who: "me", at: new Date().toISOString() }, ...(z.visitors || []).filter(v => v.who !== "me")].slice(0, 30); saveFriend(f);
-      if (z.bgm && z.bgm.length) playBgm(z.bgm); else stopBgm();
-    } else if (z.bgm && z.bgm.length) playBgm(z.bgm); else stopBgm();
+    }
+    // 进有歌的空间就放这个空间的歌（同一份歌单就接着放）；没歌的空间不打断正在放的
+    if (z.bgm && z.bgm.length && z.bgm.join() !== bgmList.map(x => x.id).join()) playBgm(z.bgm);
     render();
   };
-  ACT["back-chat"] = () => { stopBgm(); S.view = "chat"; S.zoneOf = null; render(); };
+  ACT["back-chat"] = () => { S.view = "chat"; S.zoneOf = null; render(); };
   ACT["zone-tab"] = b => { S.zoneTab = b.dataset.t; render(); };
   ACT["bgm-toggle"] = () => { const z = curZone(); if (!bgmList.length) { if (z.bgm && z.bgm.length) playBgm(z.bgm); return; } if (audio.paused) audio.play().catch(() => {}); else audio.pause(); renderBgmBar(); };
+  ACT["bgm-stop"] = () => { stopBgm(); renderBgmBar(); };
   ACT["bgm-next"] = () => { if (bgmList.length) playBgm(bgmList.map(s => s.id), bgmIdx + 1); };
   ACT["bgm-set"] = () => pickBgm();
   ACT["edit-zone"] = async () => { const z = A().zone; const r = await ask("修改空间", [{ label: "空间名字", value: z.name, max: 20 }, { label: "空间签名", value: z.sig, max: 40 }]); if (r) { z.name = r[0] || z.name; z.sig = r[1]; saveMeta(); render(); } };

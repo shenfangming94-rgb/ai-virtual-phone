@@ -44,8 +44,9 @@
   // ───────────────────────── 状态和存档 ─────────────────────────
   // people：人物档案（她写的 2008 年的人）{ id, source: char|local, charId, name, age, city, persona, life, opening: wrong|owner|mine, number, met, label（存进电话本的名字）}
   // threads：每个人一条 { id: 人物 id, msgs: [{ id, dir: in|out, text, at, read, status: sent|failed }] }；草稿存在 meta.drafts
-  const S = { view: "boot", sel: 0, top: 0, battery: 4, people: [], threads: [], chars: [], meta: { id: "meta", operator: true, drafts: [], queue: [], pendingIn: [], myNumber: "" }, stack: [] };
-  const COL = { meta: "meta", people: "people", threads: "threads" };
+  // letters：信 { id, pid, dir: in|out, text, at, read }
+  const S = { view: "boot", sel: 0, top: 0, battery: 4, people: [], threads: [], letters: [], chars: [], meta: { id: "meta", operator: true, drafts: [], queue: [], pendingIn: [], myNumber: "" }, stack: [] };
+  const COL = { meta: "meta", people: "people", threads: "threads", letters: "letters" };
   const INBOX_MAX = 100; // 原来 30，她说没多久就满了
   const uid = p => `${p}_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
   const rand = (a, b) => Math.floor(a + Math.random() * (b - a + 1));
@@ -56,8 +57,10 @@
   function saveMeta() { clearTimeout(metaT); metaT = setTimeout(() => dbPut(COL.meta, S.meta), 200); }
   const savePerson = p => dbPut(COL.people, p);
   const saveThread = t => dbPut(COL.threads, t);
+  const saveLetter = l => dbPut(COL.letters, l);
   async function loadAll() {
-    const [metas, people, threads] = await Promise.all([dbList(COL.meta), dbList(COL.people), dbList(COL.threads)]);
+    const [metas, people, threads, letters] = await Promise.all([dbList(COL.meta), dbList(COL.people), dbList(COL.threads), dbList(COL.letters)]);
+    S.letters = letters;
     const m = metas.find(r => r.id === "meta"); if (m) S.meta = { ...S.meta, ...m };
     for (const k of ["drafts", "queue", "pendingIn"]) if (!Array.isArray(S.meta[k])) S.meta[k] = [];
     if (!S.meta.myNumber) { S.meta.myNumber = phoneNo(); saveMeta(); }
@@ -73,6 +76,8 @@
   const allOut = () => S.threads.flatMap(t => t.msgs.filter(m => m.dir === "out").map(m => ({ ...m, pid: t.id }))).sort((a, b) => new Date(b.at) - new Date(a.at));
   const allSaved = () => S.threads.flatMap(t => t.msgs.filter(m => m.dir === "in" && m.saved).map(m => ({ ...m, pid: t.id }))).sort((a, b) => new Date(b.at) - new Date(a.at));
   const unread = () => allIn().filter(m => !m.read).length;
+  const unreadLetters = () => S.letters.filter(l => l.dir === "in" && !l.read).length;
+  const lettersOf = pid => S.letters.filter(l => l.pid === pid).sort((a, b) => a.at.localeCompare(b.at));
   const msgRef = x => { const th = threadOf(x.pid); return [th, th.msgs.find(m => m.id === x.id)]; };
   // 一条短信给 AI / 记忆看的文字：彩信写成 [彩信：画面] 再接配的话
   const textOf = m => `${m.mms ? (m.dir === "in" ? `[彩信：${m.mms.desc || "一张照片"}]` : `[彩信照片${m.mms.seen ? `：${m.mms.seen}` : ""}]`) : ""}${m.text || ""}`;
@@ -129,11 +134,11 @@
   V.boot = { draw: () => `<div class="center">${S.bootStep === 0 ? `<div class="s36 bold">TINY<br>TYPE</div>` : S.bootStep === 1 ? `<div class="s18 bold">正在搜索网络…</div>` : `<div class="s18 bold">已连接</div><div class="s36 bold">2008</div>`}</div>`, key: () => {} };
   V.standby = {
     draw: () => { const th = thereDate();
-      return `${bar()}${S.meta.operator !== false ? `<div class="op s18">中国移动</div>` : ""}<div class="center"><div class="s48 bold">${hm(th)}</div><div class="s18">${ymd(th)} ${week(th)}</div>${S.meta.pendingIn.length ? `<div class="s18" style="margin-top:8px">收件箱已满</div>` : unread() ? `<div class="s18" style="margin-top:8px">${unread()} 条新信息</div>` : ""}</div>${soft(unread() ? "阅读" : "菜单", "电话本")}`; },
-    key: k => { if (k === "softL" || k === "ok") return unread() ? open("inbox") : open("menu"); if (k === "softR") return open("book"); if (/^[0-9*#]$/.test(k)) { S.dial = k; return open("dial"); } },
+      return `${bar()}${S.meta.operator !== false ? `<div class="op s18">中国移动</div>` : ""}<div class="center"><div class="s48 bold">${hm(th)}</div><div class="s18">${ymd(th)} ${week(th)}</div>${S.meta.pendingIn.length ? `<div class="s18" style="margin-top:8px">收件箱已满</div>` : unread() ? `<div class="s18" style="margin-top:8px">${unread()} 条新信息</div>` : ""}${unreadLetters() ? `<div class="s18">${unreadLetters()} 封新来信</div>` : ""}</div>${soft(unread() || unreadLetters() ? "阅读" : "菜单", "电话本")}`; },
+    key: k => { if (k === "softL" || k === "ok") return unread() ? open("inbox") : unreadLetters() ? open("letters") : open("menu"); if (k === "softR") return open("book"); if (/^[0-9*#]$/.test(k)) { S.dial = k; return open("dial"); } },
   };
   V.menu = {
-    items: () => [["✉", "信息", "sms"], ["☎", "电话本", "book"], ["✎", "人物档案", "cast"], ["✿", "外观", "looks"], ["?", "关于这部手机", "about"]],
+    items: () => [["✉", "信息", "sms"], ["◇", "信箱", "letters"], ["☎", "电话本", "book"], ["✎", "人物档案", "cast"], ["✿", "外观", "looks"], ["?", "关于这部手机", "about"]],
     draw: () => `${bar()}<div class="title">菜单</div>${list(V.menu.items().map(([i, t]) => `<i>${i}</i>${t}`), S.sel)}${soft("选择", "返回")}`,
     key: k => { const it = V.menu.items(); if (/^[1-9]$/.test(k) && +k <= it.length) { S.sel = +k - 1; k = "ok"; } if (k === "ok" || k === "softL") return open(it[S.sel][2]); if (k === "softR") return back(); },
   };
@@ -157,6 +162,15 @@
     items: () => allSaved(),
     draw: () => `${bar()}<div class="title">收藏夹 ${allSaved().length}</div>${list(allSaved().map(m => row(shown(personById(m.pid) || { number: "未知号码" }), msgTime(m.at).slice(0, 5))), S.sel)}${soft(allSaved().length ? "阅读" : "", "返回")}`,
     key: k => { const m = allSaved()[S.sel]; if ((k === "ok" || k === "softL") && m) { S.reading = { pid: m.pid, id: m.id }; return open("read"); } if (k === "softR") return back(); },
+  };
+  // 信箱：他寄来的信、她寄出去的信；信纸在屏幕外面单独展开
+  V.letters = {
+    items: () => [{ write: true }, ...[...S.letters].sort((a, b) => b.at.localeCompare(a.at))],
+    draw: () => `${bar()}<div class="title">信箱</div>${list(V.letters.items().map(l => l.write ? "＋写信" : row(`${l.dir === "in" ? (l.read ? "　" : "✉") : "→"}${shown(personById(l.pid) || { number: "未知" })}`, msgTime(l.at).slice(0, 5))), S.sel)}${soft("确定", "返回")}`,
+    key: async k => { if (k === "softR") return back(); if (k !== "ok" && k !== "softL") return; const l = V.letters.items()[S.sel];
+      if (!l.write) return openLetter(l);
+      const ps = S.people.filter(p => p.met && !p.ghost); if (!ps.length) return toastLcd("还没有能写信的人");
+      const pid = ps.length === 1 ? ps[0].id : await choose("写给谁", ps.map(p => [shown(p), p.id])); if (pid) writeLetter(personById(pid)); },
   };
   V.outbox = {
     items: () => allOut(),
@@ -260,7 +274,7 @@
     key: k => { if (k === "softR") return back(); if (k === "ok" || k === "softL") { const f = LOOKS()[S.sel][2]; if (f) { f(); draw(); } else toastLcd("还在做"); } },
   };
   V.about = {
-    draw: () => `${bar()}<div class="title">关于这部手机</div><div class="scroll s18"><p>本机号码</p><p>${esc(S.meta.myNumber)}</p><p class="s12" style="margin-top:8px">请回答2008 · ${esc(VERSION)}</p>${S.meta.queue.length ? `<p class="s12">等回复：${S.meta.queue.map(q => `${esc(personName(personById(q.pid) || {}))} ${hm(new Date(q.due))}${q.tries ? ` 第${q.tries}次重试` : ""}`).join("；")}</p>` : ""}${(S.meta.errors || []).map(e => `<p class="s12">❗${esc(e)}</p>`).join("")}</div>${soft("", "返回")}`,
+    draw: () => `${bar()}<div class="title">关于这部手机</div><div class="scroll s18"><p>本机号码</p><p>${esc(S.meta.myNumber)}</p><p class="s12" style="margin-top:8px">请回答2008 · ${esc(VERSION)}</p>${S.meta.queue.length ? `<p class="s12">等回复：${S.meta.queue.map(q => `${esc(personName(personById(q.pid) || {}))}${/letter/i.test(q.kind) ? "（信）" : ""} ${hm(new Date(q.due))}${q.tries ? ` 第${q.tries}次重试` : ""}`).join("；")}</p>` : ""}${(S.meta.errors || []).map(e => `<p class="s12">❗${esc(e)}</p>`).join("")}</div>${soft("", "返回")}`,
     after: () => { const b = $("#lcd .scroll"); if (b) b.scrollTop = S.scroll || 0; },
     key: k => { if (k === "up") { S.scroll = Math.max(0, (S.scroll || 0) - 26); return draw(); } if (k === "down") { S.scroll = (S.scroll || 0) + 26; return draw(); } if (k === "softR" || k === "ok") return back(); },
   };
@@ -271,8 +285,8 @@
   };
   // 新信息提醒
   V.newmsg = {
-    draw: () => `${bar()}<div class="center"><div class="blink" style="display:flex;justify-content:center;height:30px">${ICON.mail}</div><div class="s18 bold">${unread()} 条新信息</div></div>${soft("阅读", "退出")}`,
-    key: k => { if (k === "softL" || k === "ok") { S.stack = [{ view: "standby" }]; return open("inbox", false, true); } if (k === "softR" || k === "end") return home(); },
+    draw: () => `${bar()}<div class="center"><div class="blink" style="display:flex;justify-content:center;height:30px">${ICON.mail}</div><div class="s18 bold">${unread() ? `${unread()} 条新信息` : "收到一封信"}</div></div>${soft("阅读", "退出")}`,
+    key: k => { if (k === "softL" || k === "ok") { S.stack = [{ view: "standby" }]; return open(unread() ? "inbox" : "letters", false, true); } if (k === "softR" || k === "end") return home(); },
   };
   V.msgline = { draw: () => `${bar()}<div class="center"><div class="s18 bold">${esc(S.lcdMsg || "")}</div></div>${soft("", "")}`, key: () => {} };
 
@@ -345,7 +359,7 @@
   // ───────────────────────── 他回短信 ─────────────────────────
   const OPEN_NAME = { wrong: "发错号码", owner: "找前机主", mine: "我主动", none: "" };
   const personName = p => p.source === "char" ? ((S.chars.find(c => c.id === p.charId) || {}).name || p.name || "档案角色") : (p.name || "未命名");
-  const SMS_FMT = "每条短信一个块（一次一到三条）：\n===短信===\n内容：一条短信（不超过 70 个字）\n===结束===\n\n你的手机能拍照（30 万像素）。想让用户看看你拍的东西时，可以发彩信，一次最多一条，按你的人设和当时的心情决定发不发：\n===彩信===\n画面：照片里拍到了什么（场景、人物、物品、光线，客观写清楚，只能是你身边真实的东西）\n配的话：一句话，可以不写\n===结束===";
+  const SMS_FMT = "每条短信一个块（一次一到三条）：\n===短信===\n内容：一条短信（不超过 70 个字）\n===结束===\n\n你的手机能拍照（30 万像素）。想让用户看看你拍的东西时，可以发彩信，一次最多一条，按你的人设和当时的心情决定发不发：\n===彩信===\n画面：照片里拍到了什么（场景、人物、物品、光线，客观写清楚，只能是你身边真实的东西）\n配的话：一句话，可以不写\n===结束===\n\n如果你打算给用户写一封信（你自己想写，或者你们约好了），在最后加上（信不用现在写，写好了会寄过去）：\n===写信===\n想写什么：一句话\n===结束===";
   // 解析出来的每一条：短信是字符串，彩信是 { text, mms: { desc } }
   function parseSms(raw) {
     const out = []; const re = /===\s*(短信|彩信)\s*===([\s\S]*?)(?====|$)/g; let m, mms = 0;
@@ -377,6 +391,7 @@
       kind === "owner" ? "这个号码以前是你一个朋友在用（按你那边的生活来定是谁），你像往常一样给这个号码发短信找他/她。你还不知道号码已经换了主人。写你发出的这条短信。" : "",
       p.memo ? `你记得的事（更早的短信里发生的）：\n${p.memo}` : "",
       hist ? `你们${p.memo ? "最近" : "之前"}的短信：\n${hist}` : "",
+      letterCtx(p),
       kind === "reply" && (p.opening === "wrong" || p.opening === "owner") ? `你们的第一条短信是你发的，本来是想发给${p.meant ? `「${p.meant}」` : "你生活里的一个人"}；${p.opening === "wrong" ? "可你按错了号码" : "可这个号码早就不是他在用了"}，现在拿着这个号码的用户，你根本不认识。` : "",
       kind === "reply" ? `用户刚刚${pending.length > 1 ? "连着" : ""}发来：${pending.map(m => `「${textOf(m)}」`).join("")}${pending.some(m => m.mms) ? "（[彩信照片] 是用户用手机拍了发给你的照片，你在自己手机上看到的就是这样）" : ""}` : "",
       futures.length ? `用户提到的「${futures.join("」「")}」，是你那边还没有的东西，你没听说过。` : "",
@@ -384,21 +399,28 @@
       kind === "wrong" || kind === "owner" ? "最后再写一个备注（不会发出去，只是记下来）：\n===备注===\n本来想发给：那个人是谁（名字或外号，和你是什么关系）\n===结束===" : "",
     ].filter(Boolean).join("\n\n");
     let parts = await callAi(p, lines);
+    const wl = (S._lastRaw || "").match(/===\s*写信\s*===([\s\S]*?)(?====|$)/); // 他说要写信：过一阵信写好寄来
+    if (parts && parts.length && wl && !S.meta.queue.some(q => q.pid === p.id && q.kind === "letter")) {
+      const note = (wl[1].replace(/想写什么\s*[：:]/, "").trim() || "").slice(0, 100); const due = new Date(Date.now() + rand(40, 180) * 60e3 * TS()).toISOString();
+      S.meta.queue.push({ pid: p.id, kind: "letter", note, at: due, due }); saveMeta();
+    }
     if ((kind === "wrong" || kind === "owner") && S._lastRaw) { const m = S._lastRaw.match(/本来想发给\s*[：:]\s*([^\n=]+)/); if (m) { p.meant = m[1].trim().slice(0, 40); savePerson(p); } }
     if (parts && parts.length) { const leak = futureIn(parts.map(partText).join(" ")).filter(w => !futures.includes(w)); // 他说漏嘴了：重写一次
       if (leak.length) { const again = await callAi(p, `${lines}\n\n你刚才写了「${leak.join("」「")}」，这是你那边还没有的东西，你不可能知道。重写。`); if (again && again.length) parts = again; } }
     return parts;
   }
-  async function callAi(p, instruction) {
+  async function callAi(p, instruction) { const t = await callRaw(p, instruction); return t == null ? null : parseSms(t); }
+  /** 调 AI 拿原文：档案库角色走 generate，写在这里的走 chat（what = 短信 / 信） */
+  async function callRaw(p, instruction, what = "短信") {
     try {
       if (p.source === "char" && p.charId) {
-        const r = await api.ai.generate({ characterId: p.charId, appTags: ["nox_reply2008", "sms"], instruction: `${instruction}\n\n【输出要求】只输出短信块，不要解释、不要旁白。` });
-        S._lastRaw = (r && r.text) || ""; return parseSms(r && r.text);
+        const r = await api.ai.generate({ characterId: p.charId, appTags: ["nox_reply2008", what === "信" ? "letter" : "sms"], instruction: `${instruction}\n\n【输出要求】只输出${what}块，不要解释、不要旁白。` });
+        return (S._lastRaw = (r && r.text) || "");
       }
       // 人设同时放进 system 和正文开头：有的接口会忽略 system，人设就丢了（她遇到 17 岁高二被说成大一）
       const who = [`【你是谁】你是${p.name || "无名"}${p.age ? `，2008 年时${p.age}岁` : ""}${p.city ? `，在${p.city}` : ""}。`, p.persona ? `性格和说话方式：${p.persona}` : "", p.life ? `你那边的生活：${p.life}` : "", "人设里写的年龄、年级、身份、家庭都是定死的，不能改，也不能自己编一个不一样的。"].filter(Boolean).join("\n");
-      const r = await api.ai.chat({ system: `${who}\n只输出短信，不要任何解释。`, prompt: `${who}\n\n${instruction}`, timeoutMs: 180000 });
-      S._lastRaw = (r && r.text) || ""; return parseSms(r && r.text);
+      const r = await api.ai.chat({ system: `${who}\n只输出${what}，不要任何解释。`, prompt: `${who}\n\n${instruction}`, timeoutMs: 180000 });
+      return (S._lastRaw = (r && r.text) || "");
     } catch (e) { console.warn(e); logErr(`${personName(p)}：${(e && e.message) || e}`); return null; }
   }
   /** 出错记下来（关于这部手机里能看到最近几条） */
@@ -445,6 +467,13 @@
       const writing = S.view === "compose" && S.compose ? S.compose.to : S.view === "sending" ? S.sendingTo : null; // 正在给他写下一条 / 正在发：先等她写完
       for (const q of S.meta.queue.filter(q => new Date(q.due) <= new Date() && q.pid !== writing)) {
         const p = personById(q.pid); if (!p) { S.meta.queue = S.meta.queue.filter(x => x !== q); continue; }
+        if (q.kind === "letter" || q.kind === "letterReply") { // 信
+          const text = await genLetter(p, q);
+          if (!text) { q.tries = (q.tries || 0) + 1; if (q.tries < 3) { q.due = new Date(Date.now() + 60e3).toISOString(); saveMeta(); continue; } }
+          S.meta.queue = S.meta.queue.filter(x => x !== q); saveMeta();
+          if (text) { const l = { id: uid("l"), pid: p.id, dir: "in", text, at: q.at || new Date().toISOString(), read: false }; S.letters.push(l); saveLetter(l); rememberLetter(p, l); notify(); }
+          continue;
+        }
         const parts = await genSms(p, q.kind, q.at);
         if (!parts || !parts.length) { // 没回出来：过一会儿再试，最多试 3 次
           q.tries = (q.tries || 0) + 1; if (!parts) {} else logErr(`${personName(p)}：回了空白`);
@@ -460,6 +489,63 @@
     if (p.source !== "char" || !p.charId || !api.memory || !api.memory.addTimeline) return;
     const th = threadOf(p.id); const last = th.msgs.filter(m => m.dir === "out").slice(-1)[0];
     api.memory.addTimeline({ characterId: p.charId, appLabel: "请回答2008", detail: "sms", summary: `${last ? `号码 ${S.meta.myNumber} 发来短信「${textOf(last).slice(0, 80)}」，` : ""}我发短信：${parts.map(t => typeof t === "string" ? `「${t.slice(0, 40)}」` : `彩信照片（${t.mms.desc.slice(0, 60)}）${t.text ? `「${t.text}」` : ""}`).join("")}`, appEventId: uid("r2008") }).catch(() => {});
+  }
+
+  // ───────────────────────── 信：不限字数，他想写就写 / 约好了写；她也能写信寄过去，他会回信 ─────────────────────────
+  const dateOf = (l, there) => { const t = there ? thereDate(new Date(l.at)) : new Date(l.at); return `${t.getFullYear()} 年 ${t.getMonth() + 1} 月 ${t.getDate()} 日`; };
+  /** 短信和信里互相带：最近两封信 */
+  function letterCtx(p) {
+    const ls = lettersOf(p.id).slice(-2); if (!ls.length) return "";
+    return `你们之间最近的信：\n${ls.map(l => `【${l.dir === "in" ? "你写给用户的信" : "用户写给你的信"} · ${msgTime(l.at)}】\n${l.text.slice(0, 600)}`).join("\n\n")}`;
+  }
+  async function genLetter(p, q) {
+    const th = threadOf(p.id); const at = q.at ? new Date(q.at) : new Date();
+    const her = q.kind === "letterReply" ? S.letters.find(l => l.id === q.lid) : null;
+    const lines = [
+      ERA_RULE(at),
+      "这一次不是发短信，是写信：上面关于短信字数、条数的规矩这次不用管。",
+      p.memo ? `你记得的事（更早的短信里发生的）：\n${p.memo}` : "",
+      th.msgs.length ? `你们最近的短信：\n${historyText(th.msgs)}` : "",
+      letterCtx(p),
+      her ? `用户给你寄来了一封信：\n${her.text}\n\n你给用户回一封信。` : `你决定给用户写一封信。${q.note ? `你之前说过想写：${q.note}` : ""}`,
+      "信不受字数限制，可以写短信里说不完、说不出口的话。按你的人设、你们聊到哪了来写，像那时候的你真的拿笔写的信：有开头的称呼，结尾有落款。300 到 800 字。",
+      "===信===\n信的正文\n===结束===",
+    ].filter(Boolean).join("\n\n");
+    const raw = await callRaw(p, lines, "信"); if (raw == null) return null;
+    const m = raw.match(/===\s*信\s*===([\s\S]*?)(?:===\s*结束\s*===|$)/);
+    return ((m ? m[1] : /===/.test(raw) ? "" : raw) || "").trim().slice(0, 3000) || null;
+  }
+  function rememberLetter(p, l) {
+    if (p.source !== "char" || !p.charId || !api.memory || !api.memory.addTimeline) return;
+    api.memory.addTimeline({ characterId: p.charId, appLabel: "请回答2008", detail: "letter", createdAt: l.at, summary: l.dir === "in" ? `我给号码 ${S.meta.myNumber} 写了一封信：\n${l.text.slice(0, 1500)}` : `号码 ${S.meta.myNumber} 给我寄来一封信：\n${l.text.slice(0, 1500)}`, appEventId: uid("r2008l") }).catch(() => {});
+  }
+  /** 展开信纸看信 */
+  function openLetter(l) {
+    const p = personById(l.pid) || {}; if (l.dir === "in" && !l.read) { l.read = true; saveLetter(l); }
+    const el = document.createElement("div"); el.className = "letter";
+    el.innerHTML = `<div class="lt-paper"><div class="lt-head">${l.dir === "in" ? `${esc(shown(p))} 的来信` : `寄给 ${esc(shown(p))} 的信`}</div><div class="lt-date">${dateOf(l, l.dir === "in")}</div><div class="lt-body">${esc(l.text)}</div></div>
+      <div class="lt-btns"><button data-v="close">收好</button>${l.dir === "in" && p.id ? `<button data-v="reply" class="pri">回信</button>` : ""}</div>`;
+    el.onclick = e => { const b = e.target.closest("[data-v]"); if (!b) return; el.remove(); if (b.dataset.v === "reply") return writeLetter(p); draw(); };
+    document.body.appendChild(el); draw();
+  }
+  /** 写信：信纸上打字；存着（草稿）/ 寄出 */
+  function writeLetter(p) {
+    const drafts = S.meta.letterDrafts || (S.meta.letterDrafts = {});
+    const el = document.createElement("div"); el.className = "letter";
+    el.innerHTML = `<div class="lt-paper"><div class="lt-head">写给 ${esc(shown(p))}</div><div class="lt-date">${dateOf({ at: new Date().toISOString() })}</div><textarea class="lt-body" placeholder="${esc(shown(p))}：">${esc(drafts[p.id] || "")}</textarea></div>
+      <div class="lt-btns"><button data-v="keep">先存着</button><button data-v="send" class="pri">寄出</button></div>`;
+    const ta = el.querySelector("textarea");
+    el.onclick = e => { const b = e.target.closest("[data-v]"); if (!b) return; const text = ta.value.trim();
+      if (b.dataset.v === "keep") { if (text) drafts[p.id] = ta.value; else delete drafts[p.id]; saveMeta(); el.remove(); return text ? toastLcd("信先存着了") : draw(); }
+      if (!text) return ta.focus();
+      const l = { id: uid("l"), pid: p.id, dir: "out", text: text.slice(0, 5000), at: new Date().toISOString(), read: true };
+      S.letters.push(l); saveLetter(l); rememberLetter(p, l); delete drafts[p.id];
+      // 他收到信、写回信要一阵子
+      const due = new Date(Date.now() + rand(60, 300) * 60e3 * TS()).toISOString();
+      S.meta.queue = S.meta.queue.filter(q => !(q.pid === p.id && q.kind === "letter"));
+      S.meta.queue.push({ pid: p.id, kind: "letterReply", lid: l.id, at: due, due }); saveMeta();
+      el.remove(); toastLcd("信寄出去了"); };
+    document.body.appendChild(el); setTimeout(() => ta.focus(), 50);
   }
 
   // ───────────────────────── 彩信：照片统一做旧成 2008 年 30 万像素手机拍的样子 ─────────────────────────
@@ -613,7 +699,7 @@
       const b = e.target.closest("[data-v]"); if (!b) return;
       if (b.dataset.v === "no") return closeSheet();
       if (b.dataset.v === "imp") return askImport(personById(p.id));
-      if (b.dataset.v === "del") { if (!confirmInline(b)) return; S.people = S.people.filter(x => x.id !== p.id); S.threads = S.threads.filter(x => x.id !== p.id); dbDel(COL.people, p.id); dbDel(COL.threads, p.id); S.meta.queue = S.meta.queue.filter(q => q.pid !== p.id); saveMeta(); closeSheet(); return draw(); }
+      if (b.dataset.v === "del") { if (!confirmInline(b)) return; S.people = S.people.filter(x => x.id !== p.id); S.threads = S.threads.filter(x => x.id !== p.id); dbDel(COL.people, p.id); dbDel(COL.threads, p.id); for (const l of lettersOf(p.id)) dbDel(COL.letters, l.id); S.letters = S.letters.filter(l => l.pid !== p.id); S.meta.queue = S.meta.queue.filter(q => q.pid !== p.id); saveMeta(); closeSheet(); return draw(); }
       p.charId = $("#f-charid") ? $("#f-charid").value : ""; p.name = $("#f-name").value.trim(); p.age = $("#f-age").value.trim(); p.city = $("#f-city").value.trim();
       p.persona = $("#f-persona").value.trim(); p.life = $("#f-life").value.trim(); p.memo = $("#f-memo").value.trim(); p.opening = $("#f-open").value; p.number = ($("#f-num").value.replace(/\D/g, "") || p.number);
       if (p.source === "char" && !p.charId) return alertInline("先选一个档案库角色");
@@ -721,6 +807,11 @@
       let at = null;
       for (let i = 0; i < 12 && !at; i++) { const t = new Date(last + 30 * 60e3 + Math.random() * Math.max(0, now - last - 35 * 60e3)); const hh = t.getHours() + t.getMinutes() / 60; if (hh >= 7 && hh <= 23.5) at = t; }
       S.meta.queue.push({ pid: p.id, kind: "pro", at: (at || new Date(now - 60e3)).toISOString(), due: new Date(now + rand(2, 6) * 1000).toISOString() }); n++;
+    }
+    // 他自己想写信：聊过 30 条以上、上一封信过了 5 天，离开一阵再打开时 6%
+    for (const p of S.people.filter(p => p.met && !p.ghost && threadOf(p.id).msgs.length >= 30 && !S.meta.queue.some(q => q.pid === p.id && /letter/i.test(q.kind)))) {
+      const last = lettersOf(p.id).filter(l => l.dir === "in").slice(-1)[0]; if (last && now - new Date(last.at).getTime() < 5 * 864e5) continue;
+      if (Math.random() < 0.06) { const due = new Date(now + rand(5, 15) * 1000).toISOString(); S.meta.queue.push({ pid: p.id, kind: "letter", at: due, due }); break; }
     }
   }
   boot();

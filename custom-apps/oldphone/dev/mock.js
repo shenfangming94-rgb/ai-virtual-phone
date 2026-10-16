@@ -20,7 +20,7 @@
       async generate(p) { calls.push(p); await sleep(400); return { text: mock(p.appTags[1], "===短信===\n内容：你是谁啊\n===结束===") }; },
       async chat(p) { calls.push(p); await sleep(400); return { text: mock("chat", "===短信===\n内容：？？你哪位\n===结束===") }; },
     },
-    memory: { async addTimeline(p) { calls.push({ memory: p }); return {}; }, async deleteTimeline(p) { calls.push({ forget: p }); return true; } },
+    memory: { async addTimeline(p) { calls.push({ memory: p }); return {}; }, async add(p) { calls.push({ longterm: p }); return true; }, async deleteTimeline(p) { calls.push({ forget: p }); return true; } },
     ui: { async toast() {} },
   };
 })();

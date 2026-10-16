@@ -2,7 +2,7 @@
   "sdkVersion": "1.0",
   "id": "nox.reply2008",
   "name": "请回答2008",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "author": "Nox for Flora",
   "description": "一部捡来的旧按键手机，能收发 2008 年的短信：两边永远差 18 年，同月同日同一时刻。",
   "icon": "icon.png",

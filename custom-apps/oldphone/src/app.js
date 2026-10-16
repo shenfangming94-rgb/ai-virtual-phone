@@ -46,7 +46,7 @@
   // threads：每个人一条 { id: 人物 id, msgs: [{ id, dir: in|out, text, at, read, status: sent|failed }] }；草稿存在 meta.drafts
   const S = { view: "boot", sel: 0, top: 0, battery: 4, people: [], threads: [], chars: [], meta: { id: "meta", operator: true, drafts: [], queue: [], pendingIn: [], myNumber: "" }, stack: [] };
   const COL = { meta: "meta", people: "people", threads: "threads" };
-  const INBOX_MAX = 30;
+  const INBOX_MAX = 100; // 原来 30，她说没多久就满了
   const uid = p => `${p}_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
   const rand = (a, b) => Math.floor(a + Math.random() * (b - a + 1));
   async function dbList(c) { try { return (await api.db.list(c, { limit: 500 })) || []; } catch (e) { console.warn(e); return []; } }
@@ -68,7 +68,7 @@
   const personById = id => S.people.find(p => p.id === id);
   const threadOf = pid => { let t = S.threads.find(x => x.id === pid); if (!t) { t = { id: pid, msgs: [] }; S.threads.push(t); } return t; };
   const shown = p => (p.label ? p.label : p.number); // 存进电话本之前只显示号码
-  // 收件箱不算收藏夹里的（收藏夹不占收件箱的 30 条）
+  // 收件箱不算收藏夹里的（收藏夹不占收件箱的位置）
   const allIn = () => S.threads.flatMap(t => t.msgs.filter(m => m.dir === "in" && !m.saved).map(m => ({ ...m, pid: t.id }))).sort((a, b) => new Date(b.at) - new Date(a.at));
   const allOut = () => S.threads.flatMap(t => t.msgs.filter(m => m.dir === "out").map(m => ({ ...m, pid: t.id }))).sort((a, b) => new Date(b.at) - new Date(a.at));
   const allSaved = () => S.threads.flatMap(t => t.msgs.filter(m => m.dir === "in" && m.saved).map(m => ({ ...m, pid: t.id }))).sort((a, b) => new Date(b.at) - new Date(a.at));
@@ -391,7 +391,7 @@
   function logErr(t) { S.meta.errors = [`${hm(new Date())} ${String(t).slice(0, 120)}`, ...(S.meta.errors || [])].slice(0, 5); saveMeta(); }
   /**
    * 长期记忆：最近 40 条以前的短信，攒够 10 条就总结成几句要点，接在 p.memo 后面（按时间记到哪了：p.memoAt）。
-   * 太长了再压一遍。人物档案里能看到、能改
+   * 只往后接，不压缩（压缩会把细节删掉，她不要）。人物档案里能看到、能改
    */
   async function updateMemo(p, msgs) {
     const old = msgs.slice(0, Math.max(0, msgs.length - KEEP)).filter(m => !p.memoAt || m.at > p.memoAt);
@@ -403,10 +403,6 @@
         prompt: `下面是${name}（文中的「你」）和一个号码（文中的「用户」）之间的一段短信。${p.memo ? `之前已经记下的：\n${p.memo}\n\n` : ""}把这段短信整理成几条要点，用第二人称「你」写：发生了什么事；用户说过的关于自己的事；你说过的关于自己的事（名字、年龄、学校、家里这些原样记）；你们之间的称呼、约定和没说完的话。只写短信里真有的，不编，不评价。不超过 200 字，每条一行，开头写 -。\n\n${text}` });
       const add = String((r && r.text) || "").trim(); if (!add) return;
       p.memo = [p.memo, add].filter(Boolean).join("\n"); p.memoAt = old[old.length - 1].at;
-      if (p.memo.length > 1500) { // 太长了：压成 600 字以内
-        const r2 = await api.ai.chat({ system: "你负责帮一个人整理笔记，只输出要点。", timeoutMs: 180000, prompt: `把下面的笔记压缩到 600 字以内，保留名字、年龄、学校、约定这些具体信息和重要的事，删掉重复的，每条一行，开头写 -：\n\n${p.memo}` });
-        const c = String((r2 && r2.text) || "").trim(); if (c) p.memo = c;
-      }
       savePerson(p);
     } catch (e) { logErr(`整理记忆：${(e && e.message) || e}`); }
   }
@@ -508,9 +504,10 @@
         <label>名字<input id="f-name" maxlength="12" value="${esc(p.name || "")}"></label>
         <div class="two"><label>2008 年几岁<input id="f-age" maxlength="3" inputmode="numeric" value="${esc(p.age || "")}"></label><label>在哪个城市<input id="f-city" maxlength="12" value="${esc(p.city || "")}"></label></div>
         <label>性格和说话方式<textarea id="f-persona" rows="3" maxlength="600">${esc(p.persona || "")}</textarea></label>
-        <label>他记得的事<textarea id="f-memo" rows="3" maxlength="2000" placeholder="聊多了以后，更早的短信会自动总结到这里，你也可以自己改">${esc(p.memo || "")}</textarea></label>
         <label>他那边的生活<textarea id="f-life" rows="3" maxlength="600" placeholder="在读书还是工作、家里什么样、最近在忙什么">${esc(p.life || "")}</textarea></label>
       </div>
+      <label>他记得的事<textarea id="f-memo" rows="3" placeholder="聊多了以后，更早的短信会自动总结到这里，你也可以自己改">${esc(p.memo || "")}</textarea></label>
+      ${canImport(p) ? `<button class="wide" data-v="imp">把以前的 ${importable(p).length} 条短信写进他的记忆</button>` : ""}
       <label>怎么联系上<select id="f-open">${Object.entries({ wrong: "他发错号码，发到了这部手机", owner: "他找这部手机的前机主", mine: "我主动：在待机屏随手按号码发出去" }).map(([k, v]) => `<option value="${k}" ${p.opening === k ? "selected" : ""}>${v}</option>`).join("")}</select></label>
       <label>他的号码<input id="f-num" maxlength="11" inputmode="numeric" value="${esc(p.number || "")}"></label>
       <p class="note">${p.met ? "已经联系上了：改人设会影响之后的短信。" : "「我主动」的话，你发出去的号码会变成他的号码。"}</p>
@@ -520,17 +517,56 @@
       const sb = e.target.closest("[data-s]"); if (sb) { p.source = sb.dataset.s; sh.querySelectorAll("#src button").forEach(b => b.classList.toggle("on", b === sb)); $("#f-char").classList.toggle("hide", p.source !== "char"); $("#f-local").classList.toggle("hide", p.source !== "local"); return; }
       const b = e.target.closest("[data-v]"); if (!b) return;
       if (b.dataset.v === "no") return closeSheet();
+      if (b.dataset.v === "imp") return askImport(personById(p.id));
       if (b.dataset.v === "del") { if (!confirmInline(b)) return; S.people = S.people.filter(x => x.id !== p.id); S.threads = S.threads.filter(x => x.id !== p.id); dbDel(COL.people, p.id); dbDel(COL.threads, p.id); S.meta.queue = S.meta.queue.filter(q => q.pid !== p.id); saveMeta(); closeSheet(); return draw(); }
       p.charId = $("#f-charid") ? $("#f-charid").value : ""; p.name = $("#f-name").value.trim(); p.age = $("#f-age").value.trim(); p.city = $("#f-city").value.trim();
       p.persona = $("#f-persona").value.trim(); p.life = $("#f-life").value.trim(); p.memo = $("#f-memo").value.trim(); p.opening = $("#f-open").value; p.number = ($("#f-num").value.replace(/\D/g, "") || p.number);
       if (p.source === "char" && !p.charId) return alertInline("先选一个档案库角色");
       if (p.source === "local" && !p.name) return alertInline("写个名字吧");
-      const old = personById(p.id); if (old) Object.assign(old, p); else S.people.push(p);
+      const old = personById(p.id);
+      const linked = old && old.source === "local" && p.source === "char"; // 写在这里 → 换成档案库角色：短信照旧，以前的可以写进他的记忆
+      if (linked && !p.linkedAt) p.linkedAt = new Date().toISOString();
+      if (old) Object.assign(old, p); else S.people.push(p);
       savePerson(personById(p.id));
+      if (linked && canImport(personById(p.id))) return askImport(personById(p.id));
       // 发错号码 / 找前机主：存好后过一会儿他的第一条短信就来了
       if (isNew && p.opening !== "mine") { S.meta.queue.push({ pid: p.id, kind: p.opening, due: new Date(Date.now() + rand(10, 40) * 1000 * TS()).toISOString() }); saveMeta(); }
       closeSheet(); draw();
     };
+  }
+  /**
+   * 写在这里换成档案库角色以后：把换之前的短信一字不改写进他的 float 记忆。
+   * 一天一条事件（时间用当天最后一条短信的时间），太长就分段；「他记得的事」另存一条长期记忆。只写一次（p.importedAt）
+   */
+  const importable = p => threadOf(p.id).msgs.filter(m => m.status !== "failed" && p.linkedAt && m.at < p.linkedAt);
+  const canImport = p => !!(p && p.source === "char" && p.charId && p.linkedAt && !p.importedAt && importable(p).length && api.memory && api.memory.addTimeline);
+  function askImport(p) {
+    const n = importable(p).length;
+    sheetHtml(`<h3>写进他的记忆</h3><p class="note">你们换过来之前的 ${n} 条短信，会一字不改、带着当时的时间写进 ${esc(personName(p))} 的 float 记忆，他在别的 app 里也记得。${p.memo ? "「他记得的事」也会另存一份进长期记忆。" : ""}只写一次。</p><div class="btns"><button data-v="no">以后再说</button><button data-v="ok" class="pri">写进去</button></div>`);
+    $("#sheet").onclick = async e => {
+      const b = e.target.closest("[data-v]"); if (!b) return;
+      if (b.dataset.v === "no") { closeSheet(); return draw(); }
+      if (b.disabled) return; b.disabled = true; b.textContent = "正在写…";
+      try { await importHistory(p); closeSheet(); draw(); toastLcd("写好了"); }
+      catch (err) { b.disabled = false; b.textContent = "再试一次"; alertInline(`没写进去：${(err && err.message) || err}`); }
+    };
+  }
+  async function importHistory(p) {
+    const who = m => m.dir === "in" ? "我" : `号码 ${S.meta.myNumber}`;
+    const days = new Map();
+    for (const m of importable(p)) { const k = ymd(thereDate(new Date(m.at))); if (!days.has(k)) days.set(k, []); days.get(k).push(m); }
+    let done = p.importDone || 0, i = 0; // 中途失败了，再点从断的地方接着写
+    for (const [day, ms] of days) {
+      const chunks = [[]]; let len = 0;
+      for (const m of ms) { const line = `[${hm(thereDate(new Date(m.at)))}] ${who(m)}：${m.text}`; if (len + line.length > 1800 && chunks[chunks.length - 1].length) { chunks.push([]); len = 0; } chunks[chunks.length - 1].push({ line, at: m.at }); len += line.length + 1; }
+      for (const c of chunks) {
+        if (i++ < done) continue;
+        await api.memory.addTimeline({ characterId: p.charId, appLabel: "请回答2008", detail: "sms", createdAt: c[c.length - 1].at, summary: `请回答2008 · ${day} 的短信：\n${c.map(x => x.line).join("\n")}`, appEventId: `r2008_imp_${p.id}_${i}` });
+        p.importDone = ++done; savePerson(p);
+      }
+    }
+    if (p.memo && api.memory.add) await api.memory.add({ characterId: p.charId, type: "long_term", importance: 0.7, content: `请回答2008 里，我和号码 ${S.meta.myNumber} 发短信时记下的要点（里面的「你」是我自己，「用户」是那个号码）：\n${p.memo}`, reason: "从请回答2008 接过来" });
+    p.importedAt = new Date().toISOString(); delete p.importDone; savePerson(p);
   }
   function confirmInline(b) { if (b.dataset.sure) return true; b.dataset.sure = "1"; b.textContent = "再点一次删除"; return false; }
   function alertInline(t) { let n = $("#sheet .warn"); if (!n) { n = document.createElement("p"); n.className = "warn"; $("#sheet .btns").before(n); } n.textContent = t; }

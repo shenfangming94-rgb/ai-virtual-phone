@@ -210,7 +210,7 @@
     return `<div class="${cls}" style="${st}"><i style="background:${gradFor(who.seed || who.name || "x")}"></i></div>`;
   }
   const myAv = size => avatar({ ref: A().avatarRef, url: A().avatarRef ? "" : S.profile.avatarUrl, seed: "me" }, size);
-  const fAv = (f, size, gray) => avatar({ url: charOf(f.charId).avatar, seed: f.charId, name: nameOf(f) }, size, gray);
+  const fAv = (f, size, gray) => avatar({ ref: f.avatarRef, url: f.avatarRef ? "" : charOf(f.charId).avatar, seed: f.charId, name: nameOf(f) }, size, gray);
   async function pickFile(accept) { const r = await api.media.pick({ accept }); return r && (r.file || (r.files || [])[0]); }
   async function compressImage(dataUrl, max = 256) {
     return new Promise(res => { const i = new Image(); i.onload = () => { const k = Math.min(1, max / Math.max(i.width, i.height)); const c = document.createElement("canvas"); c.width = Math.round(i.width * k); c.height = Math.round(i.height * k); c.getContext("2d").drawImage(i, 0, 0, c.width, c.height); res(c.toDataURL("image/jpeg", 0.85)); }; i.onerror = () => res(dataUrl); i.src = dataUrl; });
@@ -347,7 +347,7 @@
     const boardTab = `${mine ? "" : `<div class="box"><h3><span>给 ${esc(ownerName)} 留言</span></h3><textarea class="zin" id="boardin" placeholder="踩踩~"></textarea><div class="zbtn"><button class="btn s" data-act="leave-msg">发表</button></div></div>`}
       <div class="box"><h3><span>留言板</span><span>(${board.length})</span></h3>${board.map(boardHtml).join("") || `<div class="empty">还没有留言</div>`}</div>`;
     const prof = mine ? A() : f;
-    const profTab = `<div class="box"><h3><span>个人档</span></h3><div class="prof">${mine ? myAv(64) : fAv(f, 64)}<div><p><b>${esc(ownerName)}</b></p><p>QQ：${esc(mine ? A().qq : f.qq || "")}</p><p>等级：${mine ? levelOf(acct) : f.lv || 20}</p><p>签名：${richText(prof.sig || "")}</p></div></div>${mine ? `<div class="zbtn"><button class="btn" data-act="edit-zone">修改空间名字和签名</button></div>` : ""}</div>`;
+    const profTab = `<div class="box"><h3><span>个人档</span></h3><div class="prof">${mine ? myAv(64) : fAv(f, 64)}<div><p><b>${esc(ownerName)}</b></p><p>QQ：${esc(mine ? A().qq : f.qq || "")}</p><p>等级：${mine ? levelOf(acct) : f.lv || 20}</p><p>签名：${richText(prof.sig || "")}</p></div></div><div class="zbtn">${mine ? `<button class="btn" data-act="my-avatar">换头像</button>&nbsp;<button class="btn" data-act="edit-zone">修改空间名字和签名</button>` : `<button class="btn" data-act="his-avatar">换 QQ 头像</button>&nbsp;<button class="btn" data-act="remark">修改备注</button>`}</div></div>`;
     return `<div class="zone">
       ${titlebar(`${ownerName}的QQ空间`, S.zoneBack || "back-main")}
       <div class="banner">${CLOUDS}<span class="yz">黄钻 LV${mine ? 3 : 1 + (hash(f.id) % 5)}</span><h1>${esc(z.name || `${ownerName}的空间`)}</h1><p>${esc(z.sig ? `[ ${z.sig} ]` : "")}</p>${bgmBarHtml()}</div>
@@ -397,6 +397,11 @@
     const f = await pickFile("image/*").catch(() => null); if (!f || !f.dataUrl) return;
     const st = await api.media.put({ dataUrl: await compressImage(f.dataUrl, 256) }); A().avatarRef = st.ref; saveMeta(); render();
   };
+  ACT["his-avatar"] = async () => {
+    const fr = friendById(S.zoneOf); const f = await pickFile("image/*").catch(() => null); if (!f || !f.dataUrl) return;
+    const st = await api.media.put({ dataUrl: await compressImage(f.dataUrl, 256) }); fr.avatarRef = st.ref; saveFriend(fr); render(); toast("头像换好了");
+  };
+  ACT.remark = async () => { const fr = friendById(S.zoneOf); const r = await ask("修改备注", [{ label: "备注名（不填就显示他的名字）", value: fr.remark, max: 16 }]); if (r) { fr.remark = r[0]; saveFriend(fr); render(); } };
   ACT.menu = () => sheet(`<h3>菜单</h3><div class="mlist">
       <button data-v="nick">修改昵称</button><button data-v="sound">声音：${S.meta.sound !== false ? "开" : "关"}</button><button data-v="music">我的音乐（${S.meta.music.length} 首）</button><button data-v="switch">切换帐号</button><button data-v="about">关于</button></div><div class="btns"><button data-v="no">关闭</button></div>`,
     async v => { closeSheet();

@@ -1,0 +1,208 @@
+<!doctype html>
+<html lang="zh"><head><meta charset="utf-8"><title>QQ 界面草图</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:#d9d6cf;font-family:-apple-system,"PingFang SC",sans-serif;padding:30px;display:flex;gap:34px;align-items:flex-start}
+.col{display:flex;flex-direction:column;align-items:center;gap:12px}
+.cap{font-size:20px;font-weight:600;color:#333}
+.phone{width:375px;height:780px;border-radius:44px;overflow:hidden;position:relative;box-shadow:0 10px 30px rgba(0,0,0,.25);border:8px solid #111;background:#fff}
+.sb{height:40px;display:flex;justify-content:space-between;align-items:center;padding:0 26px;font-size:14px;font-weight:600}
+/* ───── A：2008 ───── */
+.a{font-family:"SimSun","Songti SC",serif;font-size:12px;color:#000;background:#dfeefb}
+.a .sb{background:#2d74c4;color:#fff}
+.a .tbar{height:30px;background:linear-gradient(#5aa3ea,#2d74c4);color:#fff;display:flex;align-items:center;gap:6px;padding:0 8px;font-weight:bold;font-size:13px;font-family:"Microsoft YaHei","PingFang SC",sans-serif}
+.a .tbar .x{margin-left:auto;display:flex;gap:4px}.a .tbar .x i{width:16px;height:14px;border:1px solid #cfe3f7;border-radius:3px;background:linear-gradient(#7bb7f0,#3b80cf);display:block}
+.a .tbar .x i:last-child{background:linear-gradient(#f08a6a,#c9442a)}
+.a .me{display:flex;gap:8px;padding:10px;background:linear-gradient(#f4f9ff,#d4e7fa);border-bottom:1px solid #9cc3ea}
+.a .av{width:46px;height:46px;border:1px solid #7aa7d6;background:#fff;padding:2px}
+.a .av div{width:100%;height:100%;background:linear-gradient(135deg,#ffc9de,#ff8fb7)}
+.a .nick{font-weight:bold;font-size:13px}.a .st{color:#2c8a2c;font-size:12px}
+.a .sig{color:#666;margin-top:3px;border:1px dashed #b7d1ea;padding:1px 4px;background:#fff}
+.a .lv{display:flex;gap:2px;margin-top:4px;align-items:center;font-size:11px;color:#555}
+.sun{width:12px;height:12px;border-radius:50%;background:radial-gradient(#ffe066,#f5a400);box-shadow:0 0 0 1px #e08a00}
+.moon{width:11px;height:11px;border-radius:50%;box-shadow:inset -4px -1px 0 0 #f2c400}
+.star{color:#f2b600;font-size:12px;line-height:1}
+.a .search{margin:6px 8px;border:1px solid #8fb6de;background:#fff;height:22px;display:flex;align-items:center;padding:0 6px;color:#999}
+.a .tabs{display:flex;margin:0 8px;gap:2px}
+.a .tabs span{flex:1;text-align:center;padding:5px 0;border:1px solid #9cc3ea;border-bottom:0;background:linear-gradient(#fff,#e2effb);border-radius:4px 4px 0 0}
+.a .tabs span.on{background:#fff;font-weight:bold}
+.a .list{margin:0 8px;background:#fff;border:1px solid #9cc3ea;height:430px;overflow:hidden}
+.a .grp{padding:4px 6px;font-weight:bold;color:#1d4f8c;background:#f1f7fd}
+.a .fr{display:flex;gap:6px;align-items:center;padding:5px 8px}
+.a .fr.sel{background:#cfe5fb;border:1px solid #8cbcec}
+.a .fr .pic{width:30px;height:30px;border:1px solid #9cb9d8;flex:none}
+.a .fr b{font-weight:bold;font-size:12px}.a .fr small{display:block;color:#777;font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:230px}
+.a .gray{filter:grayscale(1);opacity:.55}
+.a .bot{display:flex;justify-content:space-between;padding:8px 10px;align-items:center}
+.a .btn{border:1px solid #6f9fd2;border-radius:3px;padding:3px 10px;background:linear-gradient(#fff,#d6e8fa);font-size:12px}
+.peng{width:22px;height:24px}
+/* A 空间 */
+.az{background:#2a1838;font-family:"SimSun","Songti SC",serif;font-size:12px}
+.az .sb{background:#000;color:#fff}
+.az .banner{height:150px;background:radial-gradient(circle at 20% 30%,#fff8 1px,transparent 2px) 0 0/22px 22px,radial-gradient(circle at 70% 60%,#fff6 1px,transparent 2px) 0 0/31px 31px,linear-gradient(#4b1f6e,#d6589a 70%,#ffb2d2);position:relative;color:#fff}
+.az .banner h1{position:absolute;left:14px;top:22px;font-size:24px;font-family:"Kaiti SC","STKaiti",serif;text-shadow:0 0 6px #ff7ac0,0 0 2px #fff;letter-spacing:2px}
+.az .banner p{position:absolute;left:16px;top:62px;font-size:12px;color:#ffe3f1}
+.az .yz{position:absolute;right:10px;top:10px;background:linear-gradient(#ffe36b,#f0a800);color:#8a4b00;font-weight:bold;padding:1px 6px;border-radius:8px;font-size:11px}
+.az .music{position:absolute;left:12px;right:12px;bottom:10px;background:#0008;border:1px solid #ff9ccd;border-radius:3px;padding:4px 6px;display:flex;gap:6px;align-items:center;font-size:11px}
+.az .music i{font-style:normal;color:#ff9ccd}.az .marq{flex:1;overflow:hidden;white-space:nowrap}
+.az .nav{display:flex;background:#ff9ccd;font-weight:bold}.az .nav span{flex:1;text-align:center;padding:5px 0;color:#5a1840;border-right:1px solid #ffc4e0}.az .nav span.on{background:#fff;color:#c2185b}
+.az .box{margin:8px;background:#fff9fc;border:1px solid #ff9ccd}
+.az .box h3{background:linear-gradient(#ffd2e8,#ffb0d4);color:#a3155d;font-size:12px;padding:3px 6px;display:flex;justify-content:space-between}
+.az .vis{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;padding:8px}
+.az .vis div{text-align:center;font-size:11px;color:#555}.az .vis div i{display:block;width:44px;height:44px;margin:0 auto 2px;border:1px solid #f3a5ca}
+.az .msg{padding:6px 8px;border-bottom:1px dashed #f5b5d4;line-height:1.6}
+.az .msg b{color:#1a4fa0}.az .msg em{font-style:normal;color:#999;font-size:11px;float:right}
+.az .msg .re{color:#c2185b;margin-top:2px}
+.az .cai{display:flex;gap:8px;padding:8px}
+.az .cai span{flex:1;text-align:center;padding:6px 0;border-radius:3px;font-weight:bold;color:#fff;background:linear-gradient(#ff8cc0,#e0408a);border:1px solid #c62f74}
+/* ───── B：现在 ───── */
+.b{background:#f5f6f8;font-size:15px;color:#1a1a1a}
+.b .top{display:flex;align-items:center;gap:10px;padding:6px 16px 10px;background:#fff}
+.b .top .av{width:38px;height:38px;border-radius:50%;background:linear-gradient(135deg,#ffc9de,#ff8fb7)}
+.b .top .nm{font-weight:600;font-size:16px}.b .top .on{font-size:11px;color:#8a8f99;display:flex;align-items:center;gap:4px}.b .top .on i{width:7px;height:7px;border-radius:50%;background:#2fcf6c}
+.b .top .plus{margin-left:auto;font-size:28px;font-weight:300;color:#222}
+.b .srch{margin:0 16px 8px;background:#eef0f3;border-radius:8px;height:34px;display:flex;align-items:center;justify-content:center;color:#a0a4ab;font-size:14px}
+.b .wrap{background:#fff;padding-top:8px}
+.b .row{display:flex;gap:12px;align-items:center;padding:10px 16px}
+.b .row .ph{width:50px;height:50px;border-radius:50%;flex:none;position:relative}
+.b .row .mid{flex:1;min-width:0}.b .row .t{display:flex;align-items:center;gap:4px;font-size:16px}
+.b .row .s{color:#8a8f99;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:3px}
+.b .row .r{text-align:right;font-size:12px;color:#a0a4ab}.b .row .r b{display:inline-block;margin-top:6px;background:#f74c31;color:#fff;border-radius:9px;min-width:18px;height:18px;font-size:11px;line-height:18px;text-align:center;font-weight:500}
+.fire{font-size:13px}
+.tag08{font-size:10px;color:#8a6d3b;background:#fbf0d9;border-radius:4px;padding:0 4px;margin-left:2px}
+.b .tabbar{position:absolute;bottom:0;left:0;right:0;height:78px;background:#fff;border-top:1px solid #eee;display:flex;justify-content:space-around;padding-top:8px;font-size:11px;color:#8a8f99}
+.b .tabbar div{text-align:center}.b .tabbar svg{display:block;margin:0 auto 2px}.b .tabbar .on{color:#0099ff}
+/* B 空间 */
+.bz{background:#fff}
+.bz .cover{height:230px;background:linear-gradient(160deg,#b9d7ff,#ffd6e8);position:relative}
+.bz .cover .sb{color:#fff}
+.bz .who{position:absolute;left:16px;bottom:-34px;display:flex;align-items:flex-end;gap:12px}
+.bz .who .av{width:74px;height:74px;border-radius:50%;border:3px solid #fff;background:linear-gradient(135deg,#ffc9de,#ff8fb7)}
+.bz .who .nm{font-size:20px;font-weight:700;color:#fff;margin-bottom:40px;text-shadow:0 1px 4px #0003}
+.bz .stats{display:flex;gap:18px;padding:44px 16px 10px;font-size:13px;color:#666}.bz .stats b{color:#111;font-size:15px;margin-right:3px}
+.bz .sig{padding:0 16px 12px;color:#444;font-size:14px}
+.bz .acts{display:flex;gap:10px;padding:0 16px 14px}
+.bz .acts span{flex:1;text-align:center;padding:8px 0;border-radius:18px;background:#f2f4f7;font-size:14px}
+.bz .acts span.p{background:#0099ff;color:#fff}
+.bz .seg{display:flex;gap:22px;padding:0 16px;border-bottom:1px solid #f0f0f0;font-size:15px}.bz .seg span{padding:10px 0;color:#888}.bz .seg span.on{color:#111;font-weight:600;border-bottom:3px solid #0099ff}
+.bz .vis{display:flex;gap:10px;padding:12px 16px;align-items:center;font-size:13px;color:#666}
+.bz .vis i{width:34px;height:34px;border-radius:50%;display:block;margin-left:-14px;border:2px solid #fff}.bz .vis i:first-child{margin-left:0}
+.bz .note{margin:0 16px 10px;padding:12px;border-radius:12px;background:#f7f8fa;font-size:14px;line-height:1.55}
+.bz .note .h{display:flex;gap:8px;align-items:center;margin-bottom:4px}.bz .note .h i{width:26px;height:26px;border-radius:50%}.bz .note .h b{font-size:13px}.bz .note .h em{font-style:normal;color:#aaa;font-size:11px;margin-left:auto}
+.c1{background:linear-gradient(135deg,#9ad0ff,#4b8fe0)}.c2{background:linear-gradient(135deg,#ffe08a,#f2a33a)}.c3{background:linear-gradient(135deg,#b6e3b0,#4fae6a)}.c4{background:linear-gradient(135deg,#d6c4ff,#8b6ee0)}.c5{background:linear-gradient(135deg,#ffb7a8,#e0604b)}
+
+/* 柔和空间皮肤 */
+.zs{font-family:"SimSun","Songti SC",serif;font-size:12px;color:#333}
+.zs .sb{color:#fff}
+.zs .banner{height:140px;position:relative}
+.zs .banner h1{position:absolute;left:16px;top:24px;font-size:22px;font-family:"Kaiti SC","STKaiti",serif;letter-spacing:2px}
+.zs .banner p{position:absolute;left:18px;top:60px;font-size:12px}
+.zs .yz{position:absolute;right:10px;top:10px;background:#fff8;color:#8a5a00;font-weight:bold;padding:1px 6px;border-radius:8px;font-size:11px;border:1px solid #e7c060}
+.zs .music{position:absolute;left:12px;right:12px;bottom:10px;background:#ffffffc0;border-radius:3px;padding:4px 6px;display:flex;gap:6px;align-items:center;font-size:11px}
+.zs .marq{flex:1;white-space:nowrap;overflow:hidden}
+.zs .nav{display:flex;font-weight:bold}.zs .nav span{flex:1;text-align:center;padding:5px 0}
+.zs .box{margin:8px;background:#fff;border:1px solid var(--line)}
+.zs .box h3{font-size:12px;padding:3px 6px;display:flex;justify-content:space-between;background:var(--soft);color:var(--deep)}
+.zs .vis{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;padding:8px}
+.zs .vis div{text-align:center;font-size:11px;color:#666}.zs .vis div i{display:block;width:44px;height:44px;margin:0 auto 2px;border:1px solid var(--line)}
+.zs .msg{padding:6px 8px;border-bottom:1px dashed var(--line);line-height:1.6}.zs .msg b{color:#1a4fa0}.zs .msg em{font-style:normal;color:#999;font-size:11px;float:right}.zs .msg .re{color:var(--deep);margin-top:2px}
+.zs .cai{display:flex;gap:8px;padding:0 8px}.zs .cai span{flex:1;text-align:center;padding:6px 0;border-radius:3px;font-weight:bold;border:1px solid var(--line);background:linear-gradient(#fff,var(--soft));color:var(--deep)}
+.sky{--line:#b8d6ef;--soft:#e8f3fc;--deep:#2f6ea8;background:#f3f8fd}
+.sky .sb{background:#7fb6e6}
+.sky .banner{background:radial-gradient(ellipse 60px 22px at 75% 40%,#fff 60%,transparent 62%),radial-gradient(ellipse 44px 16px at 88% 48%,#fff 60%,transparent 62%),radial-gradient(ellipse 50px 18px at 30% 78%,#ffffffd0 60%,transparent 62%),linear-gradient(#8ec3ee,#cfe6f8);color:#245a8c}
+.sky .nav{background:#dcecf9}.sky .nav span{color:#2f6ea8;border-right:1px solid #fff}.sky .nav span.on{background:#fff}
+.flo{--line:#ead8c4;--soft:#fbf2e6;--deep:#9a6136;background:#fffaf2}
+.flo .sb{background:#c9a27c}
+.flo .banner{background:radial-gradient(circle at 10px 10px,#f4b8c5 3px,transparent 4px) 0 0/34px 34px,radial-gradient(circle at 27px 25px,#f9dd9a 2.5px,transparent 3.5px) 0 0/34px 34px,#fdf3e3;color:#8a5530}
+.flo .nav{background:#f3e3cf}.flo .nav span{color:#8a5530;border-right:1px solid #fff}.flo .nav span.on{background:#fff}
+.mint{--line:#c3e2cf;--soft:#ecf7f0;--deep:#3b7d55;background:#f5fbf7}
+.mint .sb{background:#8fc9a5}
+.mint .banner{background:linear-gradient(170deg,transparent 60%,#bfe3cb 61%),radial-gradient(circle at 80% 30%,#fffbe0 18px,transparent 19px),linear-gradient(#d8f0e0,#f2faf5);color:#2f6b47}
+.mint .nav{background:#dcefe3}.mint .nav span{color:#3b7d55;border-right:1px solid #fff}.mint .nav span.on{background:#fff}
+
+.sky2 .banner{background:linear-gradient(#86bde9,#cde5f8)}
+.login{background:linear-gradient(#cfe6fa,#f2f8fe);font-family:"Microsoft YaHei","PingFang SC",sans-serif;font-size:13px;color:#234}
+.login .sb{background:#2d74c4;color:#fff}
+.login .lbar{height:30px;background:linear-gradient(#5aa3ea,#2d74c4);color:#fff;display:flex;align-items:center;gap:6px;padding:0 8px;font-weight:bold}
+.login .logo{text-align:center;padding:40px 0 18px}
+.login .logo b{display:block;font-size:22px;color:#1d5ea8;margin-top:8px;letter-spacing:1px}
+.login .card{margin:0 26px;background:#fff;border:1px solid #9cc3ea;border-radius:4px;padding:14px}
+.login .lab{color:#567;font-size:12px;margin-bottom:6px}
+.login .acc{display:flex;gap:10px;align-items:center;padding:8px;border:1px solid #cfe0f2;border-radius:3px;margin-bottom:8px}
+.login .acc.on{border-color:#5a9be0;background:#eaf4fd}
+.login .acc i{width:38px;height:38px;border:1px solid #9cb9d8;display:block}
+.login .acc b{font-size:14px}.login .acc small{display:block;color:#789;font-size:11px;margin-top:2px}
+.login .acc .yr{margin-left:auto;font-size:11px;padding:1px 6px;border-radius:8px;background:#fff3d6;color:#8a5a00;border:1px solid #e9c97a}
+.login .acc .yr.n{background:#e6f2ff;color:#2d74c4;border-color:#a9cdf2}
+.login .add{color:#2d74c4;font-size:12px;text-align:center;padding:4px 0 2px}
+.login .opt{display:flex;justify-content:space-between;color:#567;font-size:12px;margin:12px 2px}
+.login .go{display:block;text-align:center;padding:8px 0;border:1px solid #2d6fb8;border-radius:3px;background:linear-gradient(#6fb2f0,#2d74c4);color:#fff;font-weight:bold;font-size:14px}
+.login .st{margin-top:10px;font-size:12px;color:#567}
+.login .tip{margin:18px 26px 0;font-size:12px;color:#678;line-height:1.7}
+
+.chat{background:#e4f0fb;font-family:"Microsoft YaHei","PingFang SC",sans-serif;font-size:13px;color:#222;display:flex;flex-direction:column}
+.chat .sb{background:#2d74c4;color:#fff}
+.chat .ct{background:linear-gradient(#69adec,#2f78c8);color:#fff;padding:8px 10px;display:flex;gap:8px;align-items:center}
+.chat .ct i{width:38px;height:38px;border:2px solid #cfe5fa;display:block;flex:none}
+.chat .ct b{font-size:14px}.chat .ct small{display:block;font-size:11px;color:#dcecfb;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:220px}
+.chat .ct .x{margin-left:auto;align-self:flex-start;display:flex;gap:4px}.chat .ct .x span{width:18px;height:15px;border:1px solid #cfe3f7;border-radius:3px;background:linear-gradient(#7bb7f0,#3b80cf)}.chat .ct .x span:last-child{background:linear-gradient(#f08a6a,#c9442a)}
+.chat .tools{display:flex;gap:14px;padding:5px 10px;background:linear-gradient(#f4f9ff,#d9eafa);border-bottom:1px solid #a9c9ea;font-size:11px;color:#2d5f96}
+.chat .log{flex:1;background:#fff;margin:6px 6px 0;border:1px solid #9cc3ea;padding:8px 10px;overflow:hidden;line-height:1.55}
+.chat .m{margin-bottom:9px}.chat .m .h{font-size:12px}.chat .m.o .h{color:#008040}.chat .m.i .h{color:#0047b3}.chat .m .t{padding-left:12px;font-size:14px}
+.chat .sys{text-align:center;color:#888;font-size:11px;margin:6px 0 10px}
+.chat .shake{color:#c0392b;font-size:12px;padding-left:12px}
+.face{display:inline-block;width:18px;height:18px;border-radius:50%;background:radial-gradient(circle at 35% 40%,#222 1.4px,transparent 1.6px),radial-gradient(circle at 65% 40%,#222 1.4px,transparent 1.6px),radial-gradient(#ffe36b,#f5b400);vertical-align:-4px;box-shadow:inset 0 0 0 1px #d99a00;position:relative}
+.face::after{content:"";position:absolute;left:5px;top:9px;width:8px;height:4px;border-bottom:1.5px solid #222;border-radius:0 0 8px 8px}
+.chat .itools{display:flex;gap:12px;padding:5px 10px;margin:0 6px;background:linear-gradient(#f4f9ff,#dfedfb);border:1px solid #9cc3ea;border-top:0;font-size:11px;color:#2d5f96;align-items:center}
+.chat .inp{margin:0 6px;height:70px;background:#fff;border:1px solid #9cc3ea;border-top:0;padding:6px 8px;font-size:14px;color:#222}
+.chat .send{display:flex;justify-content:flex-end;gap:8px;padding:8px 6px 26px}
+.chat .send span{border:1px solid #6f9fd2;border-radius:3px;padding:4px 14px;background:linear-gradient(#fff,#d6e8fa);font-size:12px}
+.chat .send span.s{background:linear-gradient(#7fbaf2,#3b80cf);color:#fff;border-color:#2d6fb8;font-weight:bold}
+.pop{position:absolute;right:10px;bottom:120px;width:170px;background:#fffbe6;border:1px solid #e0c060;border-radius:3px;box-shadow:0 2px 8px #0002;font-size:12px}
+.pop .ph{background:linear-gradient(#ffe9a0,#f6d160);padding:3px 6px;font-weight:bold;color:#7a5a00}
+.pop .pb{padding:6px;display:flex;gap:6px;align-items:center}
+</style></head><body>
+<div class="col"><div class="cap">登录（新企鹅）</div><div class="phone login">
+  <div class="sb"><span>21:08</span><span>●●● 3G</span></div>
+  <div class="lbar">QQ2008 用户登录</div>
+  <div class="logo"><svg width="96" height="108" viewBox="0 0 100 112">
+<ellipse cx="34" cy="104" rx="14" ry="6" fill="#f7a21b"/><ellipse cx="66" cy="104" rx="14" ry="6" fill="#f7a21b"/>
+<ellipse cx="17" cy="70" rx="9" ry="20" fill="#111" transform="rotate(18 17 70)"/><ellipse cx="83" cy="70" rx="9" ry="20" fill="#111" transform="rotate(-18 83 70)"/>
+<ellipse cx="50" cy="58" rx="34" ry="46" fill="#111"/>
+<ellipse cx="50" cy="76" rx="24" ry="27" fill="#fff"/>
+<ellipse cx="42" cy="34" rx="6.5" ry="8.5" fill="#fff"/><ellipse cx="58" cy="34" rx="6.5" ry="8.5" fill="#fff"/>
+<ellipse cx="43.5" cy="35.5" rx="3.2" ry="4.3" fill="#111"/><circle cx="44.5" cy="34" r="1.1" fill="#fff"/>
+<path d="M54 37 Q58 30 62 37" stroke="#111" stroke-width="2.6" fill="none" stroke-linecap="round"/>
+<ellipse cx="50" cy="49" rx="17" ry="7.5" fill="#f9b21d"/><path d="M34 49 Q50 54 66 49" stroke="#d98a00" stroke-width="1.6" fill="none"/>
+<path d="M16 59 Q50 72 84 59 L84 67 Q50 81 16 67 Z" fill="#e3261c"/>
+<path d="M64 68 L78 66 L80 92 L70 94 Z" fill="#e3261c"/><path d="M70 94 L72 89 M75 93 L76 88" stroke="#b81810" stroke-width="1.2"/>
+<path d="M20 62 Q50 74 80 62" stroke="#ff6a5a" stroke-width="1.5" fill="none" opacity=".6"/>
+</svg><b>QQ2008</b></div>
+  <div class="card">
+    <div class="lab">选择要登录的号码</div>
+    <div class="acc on"><i class="c1" style="background:linear-gradient(135deg,#ffc9de,#ff8fb7)"></i><div><b>林小满</b><small>QQ：5201314</small></div><span class="yr">2008</span></div>
+    <div class="acc"><i style="background:linear-gradient(135deg,#ffd6e8,#b9d7ff)"></i><div><b>满满</b><small>QQ：2026101</small></div><span class="yr n">2026</span></div>
+    <div class="add">＋ 添加帐号</div>
+    <div class="opt"><span>☑ 记住密码</span><span>☐ 自动登录</span></div>
+    <span class="go">登　录</span>
+    <div class="st">状态：<span style="color:#2c8a2c">● 我在线上</span> ▾</div>
+  </div>
+  </div></div>
+<div class="col"><div class="cap">聊天窗口</div><div class="phone chat">
+  <div class="sb"><span>21:08</span><span>●●● 3G</span></div>
+  <div class="ct"><i style="background:linear-gradient(135deg,#9ad0ff,#4b8fe0)"></i><div><b>李想</b> <span style="font-size:11px">[在线]</span><small>周杰伦的新歌好听到炸 &lt;魔杰座&gt;</small></div><div class="x"><span></span><span></span></div></div>
+  <div class="tools"><span>📹 视频</span><span>🎤 语音</span><span>📁 传文件</span><span>🌐 空间</span></div>
+  <div class="log">
+    <div class="sys">—— 2008-10-16 ——</div>
+    <div class="m i"><div class="h">李想　21:02:13</div><div class="t">在吗 我刚踩了你空间 <span class="face"></span></div></div>
+    <div class="m i"><div class="h">李想　21:02:40</div><div class="t">你那个背景音乐是稻香吧 我也在听</div></div>
+    <div class="m o"><div class="h">林小满　21:05:02</div><div class="t">被你发现了哈哈哈</div></div>
+    <div class="m i"><div class="h">李想　21:06:51</div><div class="t">给你发了个窗口抖动</div><div class="shake">李想 给您发送了一个窗口抖动。</div></div>
+    <div class="m o"><div class="h">林小满　21:07:30</div><div class="t">你好幼稚啊 <span class="face"></span></div></div>
+  </div>
+  <div class="itools"><span><b>A</b> 字体</span><span><span class="face" style="transform:scale(.8)"></span> 表情</span><span>〰 抖动</span><span>✂ 截图</span><span style="margin-left:auto">消息记录 ▾</span></div>
+  <div class="inp">明天的晚自习你还上吗</div>
+  <div class="send"><span>关闭(C)</span><span class="s">发送(S)</span></div>
+  <div class="pop"><div class="ph">QQ 提示</div><div class="pb"><i style="width:28px;height:28px;display:block;background:linear-gradient(135deg,#b6e3b0,#4fae6a);border:1px solid #9cb9d8"></i><div><b>胖子</b><br>上线了</div></div></div>
+</div></div>
+</body></html>

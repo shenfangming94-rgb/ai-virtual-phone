@@ -1,0 +1,163 @@
+<!doctype html>
+<html lang="zh"><head><meta charset="utf-8"><title>QQ 界面草图</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:#d9d6cf;font-family:-apple-system,"PingFang SC",sans-serif;padding:30px;display:flex;gap:34px;align-items:flex-start}
+.col{display:flex;flex-direction:column;align-items:center;gap:12px}
+.cap{font-size:20px;font-weight:600;color:#333}
+.phone{width:375px;height:780px;border-radius:44px;overflow:hidden;position:relative;box-shadow:0 10px 30px rgba(0,0,0,.25);border:8px solid #111;background:#fff}
+.sb{height:40px;display:flex;justify-content:space-between;align-items:center;padding:0 26px;font-size:14px;font-weight:600}
+/* ───── A：2008 ───── */
+.a{font-family:"SimSun","Songti SC",serif;font-size:12px;color:#000;background:#dfeefb}
+.a .sb{background:#2d74c4;color:#fff}
+.a .tbar{height:30px;background:linear-gradient(#5aa3ea,#2d74c4);color:#fff;display:flex;align-items:center;gap:6px;padding:0 8px;font-weight:bold;font-size:13px;font-family:"Microsoft YaHei","PingFang SC",sans-serif}
+.a .tbar .x{margin-left:auto;display:flex;gap:4px}.a .tbar .x i{width:16px;height:14px;border:1px solid #cfe3f7;border-radius:3px;background:linear-gradient(#7bb7f0,#3b80cf);display:block}
+.a .tbar .x i:last-child{background:linear-gradient(#f08a6a,#c9442a)}
+.a .me{display:flex;gap:8px;padding:10px;background:linear-gradient(#f4f9ff,#d4e7fa);border-bottom:1px solid #9cc3ea}
+.a .av{width:46px;height:46px;border:1px solid #7aa7d6;background:#fff;padding:2px}
+.a .av div{width:100%;height:100%;background:linear-gradient(135deg,#ffc9de,#ff8fb7)}
+.a .nick{font-weight:bold;font-size:13px}.a .st{color:#2c8a2c;font-size:12px}
+.a .sig{color:#666;margin-top:3px;border:1px dashed #b7d1ea;padding:1px 4px;background:#fff}
+.a .lv{display:flex;gap:2px;margin-top:4px;align-items:center;font-size:11px;color:#555}
+.sun{width:12px;height:12px;border-radius:50%;background:radial-gradient(#ffe066,#f5a400);box-shadow:0 0 0 1px #e08a00}
+.moon{width:11px;height:11px;border-radius:50%;box-shadow:inset -4px -1px 0 0 #f2c400}
+.star{color:#f2b600;font-size:12px;line-height:1}
+.a .search{margin:6px 8px;border:1px solid #8fb6de;background:#fff;height:22px;display:flex;align-items:center;padding:0 6px;color:#999}
+.a .tabs{display:flex;margin:0 8px;gap:2px}
+.a .tabs span{flex:1;text-align:center;padding:5px 0;border:1px solid #9cc3ea;border-bottom:0;background:linear-gradient(#fff,#e2effb);border-radius:4px 4px 0 0}
+.a .tabs span.on{background:#fff;font-weight:bold}
+.a .list{margin:0 8px;background:#fff;border:1px solid #9cc3ea;height:430px;overflow:hidden}
+.a .grp{padding:4px 6px;font-weight:bold;color:#1d4f8c;background:#f1f7fd}
+.a .fr{display:flex;gap:6px;align-items:center;padding:5px 8px}
+.a .fr.sel{background:#cfe5fb;border:1px solid #8cbcec}
+.a .fr .pic{width:30px;height:30px;border:1px solid #9cb9d8;flex:none}
+.a .fr b{font-weight:bold;font-size:12px}.a .fr small{display:block;color:#777;font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:230px}
+.a .gray{filter:grayscale(1);opacity:.55}
+.a .bot{display:flex;justify-content:space-between;padding:8px 10px;align-items:center}
+.a .btn{border:1px solid #6f9fd2;border-radius:3px;padding:3px 10px;background:linear-gradient(#fff,#d6e8fa);font-size:12px}
+.peng{width:22px;height:24px}
+/* A 空间 */
+.az{background:#2a1838;font-family:"SimSun","Songti SC",serif;font-size:12px}
+.az .sb{background:#000;color:#fff}
+.az .banner{height:150px;background:radial-gradient(circle at 20% 30%,#fff8 1px,transparent 2px) 0 0/22px 22px,radial-gradient(circle at 70% 60%,#fff6 1px,transparent 2px) 0 0/31px 31px,linear-gradient(#4b1f6e,#d6589a 70%,#ffb2d2);position:relative;color:#fff}
+.az .banner h1{position:absolute;left:14px;top:22px;font-size:24px;font-family:"Kaiti SC","STKaiti",serif;text-shadow:0 0 6px #ff7ac0,0 0 2px #fff;letter-spacing:2px}
+.az .banner p{position:absolute;left:16px;top:62px;font-size:12px;color:#ffe3f1}
+.az .yz{position:absolute;right:10px;top:10px;background:linear-gradient(#ffe36b,#f0a800);color:#8a4b00;font-weight:bold;padding:1px 6px;border-radius:8px;font-size:11px}
+.az .music{position:absolute;left:12px;right:12px;bottom:10px;background:#0008;border:1px solid #ff9ccd;border-radius:3px;padding:4px 6px;display:flex;gap:6px;align-items:center;font-size:11px}
+.az .music i{font-style:normal;color:#ff9ccd}.az .marq{flex:1;overflow:hidden;white-space:nowrap}
+.az .nav{display:flex;background:#ff9ccd;font-weight:bold}.az .nav span{flex:1;text-align:center;padding:5px 0;color:#5a1840;border-right:1px solid #ffc4e0}.az .nav span.on{background:#fff;color:#c2185b}
+.az .box{margin:8px;background:#fff9fc;border:1px solid #ff9ccd}
+.az .box h3{background:linear-gradient(#ffd2e8,#ffb0d4);color:#a3155d;font-size:12px;padding:3px 6px;display:flex;justify-content:space-between}
+.az .vis{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;padding:8px}
+.az .vis div{text-align:center;font-size:11px;color:#555}.az .vis div i{display:block;width:44px;height:44px;margin:0 auto 2px;border:1px solid #f3a5ca}
+.az .msg{padding:6px 8px;border-bottom:1px dashed #f5b5d4;line-height:1.6}
+.az .msg b{color:#1a4fa0}.az .msg em{font-style:normal;color:#999;font-size:11px;float:right}
+.az .msg .re{color:#c2185b;margin-top:2px}
+.az .cai{display:flex;gap:8px;padding:8px}
+.az .cai span{flex:1;text-align:center;padding:6px 0;border-radius:3px;font-weight:bold;color:#fff;background:linear-gradient(#ff8cc0,#e0408a);border:1px solid #c62f74}
+/* ───── B：现在 ───── */
+.b{background:#f5f6f8;font-size:15px;color:#1a1a1a}
+.b .top{display:flex;align-items:center;gap:10px;padding:6px 16px 10px;background:#fff}
+.b .top .av{width:38px;height:38px;border-radius:50%;background:linear-gradient(135deg,#ffc9de,#ff8fb7)}
+.b .top .nm{font-weight:600;font-size:16px}.b .top .on{font-size:11px;color:#8a8f99;display:flex;align-items:center;gap:4px}.b .top .on i{width:7px;height:7px;border-radius:50%;background:#2fcf6c}
+.b .top .plus{margin-left:auto;font-size:28px;font-weight:300;color:#222}
+.b .srch{margin:0 16px 8px;background:#eef0f3;border-radius:8px;height:34px;display:flex;align-items:center;justify-content:center;color:#a0a4ab;font-size:14px}
+.b .wrap{background:#fff;padding-top:8px}
+.b .row{display:flex;gap:12px;align-items:center;padding:10px 16px}
+.b .row .ph{width:50px;height:50px;border-radius:50%;flex:none;position:relative}
+.b .row .mid{flex:1;min-width:0}.b .row .t{display:flex;align-items:center;gap:4px;font-size:16px}
+.b .row .s{color:#8a8f99;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:3px}
+.b .row .r{text-align:right;font-size:12px;color:#a0a4ab}.b .row .r b{display:inline-block;margin-top:6px;background:#f74c31;color:#fff;border-radius:9px;min-width:18px;height:18px;font-size:11px;line-height:18px;text-align:center;font-weight:500}
+.fire{font-size:13px}
+.tag08{font-size:10px;color:#8a6d3b;background:#fbf0d9;border-radius:4px;padding:0 4px;margin-left:2px}
+.b .tabbar{position:absolute;bottom:0;left:0;right:0;height:78px;background:#fff;border-top:1px solid #eee;display:flex;justify-content:space-around;padding-top:8px;font-size:11px;color:#8a8f99}
+.b .tabbar div{text-align:center}.b .tabbar svg{display:block;margin:0 auto 2px}.b .tabbar .on{color:#0099ff}
+/* B 空间 */
+.bz{background:#fff}
+.bz .cover{height:230px;background:linear-gradient(160deg,#b9d7ff,#ffd6e8);position:relative}
+.bz .cover .sb{color:#fff}
+.bz .who{position:absolute;left:16px;bottom:-34px;display:flex;align-items:flex-end;gap:12px}
+.bz .who .av{width:74px;height:74px;border-radius:50%;border:3px solid #fff;background:linear-gradient(135deg,#ffc9de,#ff8fb7)}
+.bz .who .nm{font-size:20px;font-weight:700;color:#fff;margin-bottom:40px;text-shadow:0 1px 4px #0003}
+.bz .stats{display:flex;gap:18px;padding:44px 16px 10px;font-size:13px;color:#666}.bz .stats b{color:#111;font-size:15px;margin-right:3px}
+.bz .sig{padding:0 16px 12px;color:#444;font-size:14px}
+.bz .acts{display:flex;gap:10px;padding:0 16px 14px}
+.bz .acts span{flex:1;text-align:center;padding:8px 0;border-radius:18px;background:#f2f4f7;font-size:14px}
+.bz .acts span.p{background:#0099ff;color:#fff}
+.bz .seg{display:flex;gap:22px;padding:0 16px;border-bottom:1px solid #f0f0f0;font-size:15px}.bz .seg span{padding:10px 0;color:#888}.bz .seg span.on{color:#111;font-weight:600;border-bottom:3px solid #0099ff}
+.bz .vis{display:flex;gap:10px;padding:12px 16px;align-items:center;font-size:13px;color:#666}
+.bz .vis i{width:34px;height:34px;border-radius:50%;display:block;margin-left:-14px;border:2px solid #fff}.bz .vis i:first-child{margin-left:0}
+.bz .note{margin:0 16px 10px;padding:12px;border-radius:12px;background:#f7f8fa;font-size:14px;line-height:1.55}
+.bz .note .h{display:flex;gap:8px;align-items:center;margin-bottom:4px}.bz .note .h i{width:26px;height:26px;border-radius:50%}.bz .note .h b{font-size:13px}.bz .note .h em{font-style:normal;color:#aaa;font-size:11px;margin-left:auto}
+.c1{background:linear-gradient(135deg,#9ad0ff,#4b8fe0)}.c2{background:linear-gradient(135deg,#ffe08a,#f2a33a)}.c3{background:linear-gradient(135deg,#b6e3b0,#4fae6a)}.c4{background:linear-gradient(135deg,#d6c4ff,#8b6ee0)}.c5{background:linear-gradient(135deg,#ffb7a8,#e0604b)}
+</style></head><body>
+
+<div class="col"><div class="cap">A · 2008 · 好友列表</div>
+<div class="phone a">
+  <div class="sb"><span>21:08</span><span>●●● 3G</span></div>
+  <div class="tbar"><svg class="peng" viewBox="0 0 22 24"><ellipse cx="11" cy="13" rx="8" ry="10" fill="#111"/><ellipse cx="11" cy="15" rx="5.5" ry="7.5" fill="#fff"/><circle cx="8.5" cy="8" r="1.6" fill="#fff"/><circle cx="13.5" cy="8" r="1.6" fill="#fff"/><path d="M8 11h6l-3 2.5z" fill="#f5a400"/><path d="M4 18c3 2 11 2 14 0" stroke="#e02020" stroke-width="2.4" fill="none"/></svg>QQ2008<div class="x"><i></i><i></i></div></div>
+  <div class="me"><div class="av"><div></div></div><div><div class="nick">林小满 <span class="st">● 在线</span></div><div class="sig">今天也是想你的一天~</div><div class="lv"><span class="sun"></span><span class="moon"></span><span class="moon"></span><span class="star">★</span><span class="star">★</span>&nbsp;LV 23</div></div></div>
+  <div class="search">🔍 搜索：联系人、群、网页</div>
+  <div class="tabs"><span class="on">联系人</span><span>群/讨论组</span><span>最近联系人</span></div>
+  <div class="list">
+    <div class="grp">▼ 我的好友 (2/5)</div>
+    <div class="fr sel"><div class="pic c1"></div><div><b>李想</b> <span style="color:#2c8a2c">[在线]</span><small>周杰伦的新歌好听到炸 &lt;魔杰座&gt;</small></div></div>
+    <div class="fr"><div class="pic c3"></div><div><b>胖子</b> <span style="color:#d17a00">[离开]</span><small>饿死了 谁带饭</small></div></div>
+    <div class="fr gray"><div class="pic c2"></div><div><b>小雨</b><small>考试考试考试</small></div></div>
+    <div class="fr gray"><div class="pic c4"></div><div><b>阿杰</b><small>非主流不是罪</small></div></div>
+    <div class="fr gray"><div class="pic c5"></div><div><b>班长</b><small>周五交作业！！</small></div></div>
+    <div class="grp">▶ 同学 (0/12)</div>
+    <div class="grp">▶ 陌生人 (0/3)</div>
+    <div class="grp">▶ 黑名单</div>
+  </div>
+  <div class="bot"><span class="btn">菜单</span><span class="btn">查找</span><span class="btn">QQ空间</span></div>
+</div></div>
+
+<div class="col"><div class="cap">A · 2008 · QQ空间</div>
+<div class="phone az">
+  <div class="sb"><span>21:08</span><span>●●● 3G</span></div>
+  <div class="banner"><span class="yz">黄钻 LV3</span><h1>满满の小窝</h1><p>[ 沵若不離，莪必不棄 ]</p>
+    <div class="music"><i>♫</i><div class="marq">正在播放：周杰伦 - 稻香</div><i>▮▮</i></div></div>
+  <div class="nav"><span class="on">主页</span><span>日志</span><span>相册</span><span>留言板</span><span>个人档</span></div>
+  <div class="box"><h3><span>最近访客</span><span>共 128 人</span></h3>
+    <div class="vis"><div><i class="c1"></i>李想<br>刚刚</div><div><i class="c3"></i>胖子<br>3小时前</div><div><i class="c2"></i>小雨<br>昨天</div><div><i class="c4"></i>阿杰<br>10-14</div></div></div>
+  <div class="cai"><span>👣 踩一踩</span><span>✎ 留言</span></div>
+  <div class="box"><h3><span>留言板</span><span>(37)</span></h3>
+    <div class="msg"><b>李想</b><em>21:02</em><br>踩踩~ 今天怎么没上线 (^_^)</div>
+    <div class="msg"><b>胖子</b><em>10-15</em><br>路过 留个脚印 回踩哦~<div class="re">主人回复：踩回去了！</div></div>
+  </div>
+</div></div>
+
+<div class="col"><div class="cap">B · 现在 · 消息</div>
+<div class="phone b">
+  <div class="sb" style="background:#fff"><span>21:08</span><span>●●● 5G</span></div>
+  <div class="top"><div class="av"></div><div><div class="nm">林小满</div><div class="on"><i></i>在线 · 今天也是想你的一天</div></div><div class="plus">＋</div></div>
+  <div class="srch">🔍 搜索</div>
+  <div class="wrap">
+    <div class="row"><div class="ph c1"></div><div class="mid"><div class="t">李想 <span class="tag08">2008</span> <span class="fire">🔥12</span></div><div class="s">在吗 我刚踩了你空间</div></div><div class="r">21:02<br><b>2</b></div></div>
+    <div class="row"><div class="ph c4"></div><div class="mid"><div class="t">沈砚 <span class="fire">🔥87</span></div><div class="s">[戳一戳] 沈砚戳了戳你</div></div><div class="r">20:41</div></div>
+    <div class="row"><div class="ph c3"></div><div class="mid"><div class="t">我们仨</div><div class="s">陆明远：周末去不去</div></div><div class="r">19:10<br><b>5</b></div></div>
+    <div class="row"><div class="ph c2"></div><div class="mid"><div class="t">QQ空间</div><div class="s">李想 访问了你的空间</div></div><div class="r">18:55</div></div>
+    <div class="row"><div class="ph c5"></div><div class="mid"><div class="t">特别关心</div><div class="s">沈砚 上线了</div></div><div class="r">17:30</div></div>
+  </div>
+  <div class="tabbar">
+    <div class="on"><svg width="26" height="26" viewBox="0 0 24 24" fill="#0099ff"><path d="M12 3C6.5 3 2 6.8 2 11.5c0 2.6 1.4 4.9 3.6 6.5L5 21l3.6-1.8c1.1.3 2.2.5 3.4.5 5.5 0 10-3.8 10-8.5S17.5 3 12 3z"/></svg>消息</div>
+    <div><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#8a8f99" stroke-width="1.8"><circle cx="12" cy="8" r="4"/><path d="M4 21c1-4.5 4.5-6.5 8-6.5s7 2 8 6.5"/></svg>联系人</div>
+    <div><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#8a8f99" stroke-width="1.8"><path d="M12 3l2.6 5.6 6 .7-4.5 4.1 1.2 6L12 16.4 6.7 19.4l1.2-6L3.4 9.3l6-.7z"/></svg>空间</div>
+  </div>
+</div></div>
+
+<div class="col"><div class="cap">B · 现在 · 李想的空间</div>
+<div class="phone bz">
+  <div class="cover"><div class="sb"><span>21:08</span><span>●●● 5G</span></div>
+    <div class="who"><div class="av c1" style="background:linear-gradient(135deg,#9ad0ff,#4b8fe0)"></div><div class="nm">李想</div></div></div>
+  <div class="stats"><span><b>1,204</b>访客</span><span><b>36</b>说说</span><span><b>12</b>日志</span><span style="margin-left:auto;color:#8a6d3b">2008 年的空间</span></div>
+  <div class="sig">「等长大了好罩着你」</div>
+  <div class="acts"><span class="p">👣 踩一踩</span><span>✎ 留言</span><span>💬 发消息</span></div>
+  <div class="seg"><span class="on">说说</span><span>留言板</span><span>日志</span><span>相册</span></div>
+  <div class="vis"><i class="c2"></i><i class="c3"></i><i class="c5"></i>&nbsp;最近访客：你、胖子、小雨</div>
+  <div class="note"><div class="h"><i class="c1"></i><b>李想</b><em>2008-10-16 22:41</em></div>晚自习停电了 全班点蜡烛 有种拍电影的感觉 ^_^</div>
+  <div class="note"><div class="h"><i class="c1"></i><b>李想</b><em>2008-10-15 07:12</em></div>早上的豆浆又是凉的 食堂阿姨你变了</div>
+</div></div>
+
+</body></html>

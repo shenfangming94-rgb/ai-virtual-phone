@@ -232,7 +232,8 @@
     if (S.view === "chat") { const log = $("#log"); if (log) log.scrollTop = log.scrollHeight; }
   }
   const V = {};
-  const titlebar = (title, back) => `<div class="tbar">${PENGUIN(22, 22)}<span>${esc(title)}</span><div class="x">${back ? `<button data-act="${back}" title="返回">‹</button>` : ""}<button data-act="${back || "logout"}" class="close">×</button></div></div>`;
+  // 右上角是小手机自己的胶囊按钮：标题栏让开右边，返回键放左边
+  const titlebar = (title, back) => `<div class="tbar">${back ? `<button class="bk" data-act="${back}">‹</button>` : ""}${PENGUIN(22, 22)}<span>${esc(title)}</span></div>`;
 
   V.login = () => {
     const sel = S.meta.last || "a08";
@@ -302,7 +303,7 @@
     if (c.msgs.some(m => m.from === "him" && !m.read)) { c.msgs.forEach(m => { m.read = true; }); saveChat(c); }
     const typing = S.meta.queue.some(q => q.fid === f.id && q.kind === "reply" && q.typing);
     return `<div class="chat">
-      <div class="ct">${fAv(f, 40, st === "offline")}<div class="ctn"><b>${esc(nameOf(f))}</b> <span>[${STATUS_NAME[st]}]</span><small>${esc(f.sig || "")}</small></div><div class="x"><button data-act="back-main" class="close">×</button></div></div>
+      <div class="ct"><button class="bk" data-act="back-main">‹</button>${fAv(f, 40, st === "offline")}<div class="ctn"><b>${esc(nameOf(f))}</b> <span>[${STATUS_NAME[st]}]</span><small>${esc(f.sig || "")}</small></div></div>
       <div class="tools"><button data-act="nope" data-t="对方没有安装摄像头">📹 视频</button><button data-act="nope" data-t="对方没有麦克风">🎤 语音</button><button data-act="nope" data-t="文件太大了，传了半天还是失败">📁 传文件</button><button data-act="open-zone" data-who="${esc(f.id)}">🌐 空间</button></div>
       <div class="log" id="log">${lines || `<div class="sys">${st === "offline" ? `${esc(nameOf(f))} 现在不在线，消息会在他上线后收到` : "开始聊天吧"}</div>`}${typing && st === "online" ? `<div class="sys">对方正在输入…</div>` : ""}</div>
       <div class="itools"><button data-act="font"><b style="color:${S.meta.font.color}">A</b> 字体</button><button data-act="faces">${faceSvg("微笑", 16)} 表情</button><button data-act="shake">〰 抖动</button><span class="sp"></span><button data-act="history">消息记录</button></div>

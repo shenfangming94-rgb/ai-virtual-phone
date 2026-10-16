@@ -1,5 +1,5 @@
 * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
-:root { --blue: #2d74c4; --blue2: #5aa3ea; --line: #9cc3ea; --pale: #dfeefb; --ink: #1d1d1d; }
+:root { --bar-top: var(--ai-phone-app-bar-top, 0px); --bar-h: var(--ai-phone-app-bar-height, 30px); --bar-clear: var(--ai-phone-app-bar-clear-right, 96px); --blue: #2d74c4; --blue2: #5aa3ea; --line: #9cc3ea; --pale: #dfeefb; --ink: #1d1d1d; }
 html, body { height: 100%; background: #dfeefb; }
 body { font-family: "Microsoft YaHei", "PingFang SC", -apple-system, sans-serif; font-size: 13px; color: var(--ink); overflow: hidden; }
 button { font: inherit; color: inherit; background: none; border: 0; cursor: pointer; text-align: inherit; }
@@ -10,7 +10,7 @@ input, textarea, select { font: inherit; color: inherit; }
 @keyframes shake { 0%,100% { transform: translate(0,0); } 10% { transform: translate(-9px,3px); } 20% { transform: translate(8px,-4px); } 30% { transform: translate(-7px,-2px); } 40% { transform: translate(9px,3px); } 50% { transform: translate(-6px,4px); } 60% { transform: translate(7px,-3px); } 70% { transform: translate(-5px,2px); } 80% { transform: translate(4px,-2px); } 90% { transform: translate(-2px,1px); } }
 
 /* 标题栏（蓝色渐变 + 企鹅） */
-.tbar { height: 34px; padding: env(safe-area-inset-top) 6px 0 8px; height: calc(34px + env(safe-area-inset-top)); background: linear-gradient(#69adec, #2f78c8); color: #fff; display: flex; align-items: center; gap: 6px; font-weight: bold; font-size: 14px; flex: none; }
+.tbar { padding: max(var(--bar-top), env(safe-area-inset-top)) var(--bar-clear) 0 8px; height: calc(40px + max(var(--bar-top), env(safe-area-inset-top))); background: linear-gradient(#69adec, #2f78c8); color: #fff; display: flex; align-items: center; gap: 6px; font-weight: bold; font-size: 14px; flex: none; }
 .tbar .x { margin-left: auto; display: flex; gap: 4px; }
 .tbar .x button, .ct .x button { width: 26px; height: 22px; border: 1px solid #cfe3f7; border-radius: 3px; background: linear-gradient(#7bb7f0, #3b80cf); color: #fff; font-size: 16px; line-height: 18px; text-align: center; }
 .tbar .x button.close, .ct .x button.close { background: linear-gradient(#f08a6a, #c9442a); }
@@ -71,7 +71,7 @@ input, textarea, select { font: inherit; color: inherit; }
 .findtip { color: #678; font-size: 12px; margin-top: 8px; line-height: 1.6; }
 
 /* 聊天窗口 */
-.chat .ct { background: linear-gradient(#69adec, #2f78c8); color: #fff; padding: calc(8px + env(safe-area-inset-top)) 8px 8px; display: flex; gap: 8px; align-items: center; flex: none; }
+.chat .ct { background: linear-gradient(#69adec, #2f78c8); color: #fff; padding: calc(8px + max(var(--bar-top), env(safe-area-inset-top))) var(--bar-clear) 8px 6px; display: flex; gap: 8px; align-items: center; flex: none; }
 .chat .ct .av { border: 2px solid #cfe5fa; }
 .chat .ctn { min-width: 0; flex: 1; } .chat .ctn b { font-size: 15px; } .chat .ctn span { font-size: 11px; }
 .chat .ctn small { display: block; font-size: 11px; color: #dcecfb; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -149,3 +149,5 @@ input, textarea, select { font: inherit; color: inherit; }
 .qpop .qh { background: linear-gradient(#ffe9a0, #f6d160); padding: 3px 7px; font-weight: bold; color: #7a5a00; }
 .qpop .qb { padding: 6px 7px; display: flex; gap: 6px; align-items: center; line-height: 1.5; word-break: break-all; }
 @keyframes up { from { transform: translateY(30px); opacity: 0; } }
+.bk { flex: none; width: 30px; height: 28px; margin-right: 2px; border: 1px solid #cfe3f7; border-radius: 3px; background: linear-gradient(#7bb7f0, #3b80cf); color: #fff; font-size: 20px; line-height: 24px; text-align: center; }
+.tbar span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }

@@ -1036,6 +1036,9 @@
     const mp = noPosts ? [] : (mz.posts || []).slice(-2); if (mp.length) lines.push(`用户空间最近的说说：${mp.map(p => `「${p.text}${photoText(p.photo, true)}」`).join("")}`);
     return lines.join("\n");
   }
+  /** 离他睡觉还有几分钟（40 分钟以内才算快了），程序到点会让他离线，提前让他说晚安 */
+  function sleepSoon(f) { const d = new Date(); const h = d.getHours() + d.getMinutes() / 60; let s0 = (f.sleep || [24, 7])[0]; if (s0 >= 24) s0 -= 24;
+    let diff = (s0 - h) * 60; if (diff < 0) diff += 1440; return diff > 0 && diff <= 40 ? Math.round(diff) : 0; }
   const FMT_REPLY = `每条消息一个块：
 ===消息===
 一条消息
@@ -1049,7 +1052,7 @@
 ===下线===
 多少分钟后再上线（只写数字）
 ===结束===
-跟用户聊着的时候不找理由走；说了要下线就一定写下线块，没写就是还在。`;
+跟用户聊着的时候不找理由走；要下线先跟用户说一声再写下线块，说了要下线就一定写下线块，没写就是还在。`;
   async function genReply(f, q) {
     const c = chatOf(f.id); const acct = f.acct; const me = S.meta.accts[acct];
     let s = c.msgs.length; while (s > 0 && c.msgs[s - 1].from === "me") s--;
@@ -1069,6 +1072,7 @@
       pending.length ? `用户刚刚${pending.length > 1 ? "连着" : ""}发来：${pending.map(m => m.shake ? "[窗口抖动]" : `「${photoText(m.photo, true)}${m.text || ""}」`).join("")}${pending.some(m => m.photo) ? "（[照片] 是用户拍了发给你的照片，括号里是照片上的样子）" : ""}` : "",
       futures.length ? `用户提到的「${futures.join("」「")}」，是你那边还没有的东西，你没听说过。` : "",
       FMT_REPLY,
+      sleepSoon(f) ? `你快到睡觉的点了（大概 ${sleepSoon(f)} 分钟后）。要去睡就跟用户说晚安，再写下线块。` : "",
       `你现在的 QQ秀：${showDesc(hisShow(f))}。说自己换了 QQ秀、或者说送了她 QQ秀，就一定要写对应的块，不写就等于没换、没送。`,
       `想送用户 QQ秀时加（她的 QQ秀；名字只能从下面挑）：\n===送QQ秀===\n名字：这份礼物叫什么\n包含：挑的东西，用顿号隔开\n===结束===\n想给自己换 QQ秀时加：\n===换装===\n衣服：\n发型：\n配饰：\n背景：\n表情：\n===结束===（不换的项空着）\n她能用的：\n${catText("f")}\n你能用的：\n${catText(hisShow(f).g)}`,
       `${acct === "a08" ? "你的照片是用数码相机或者拍照手机拍的，传到电脑上再发。" : ""}想给用户发你拍的照片时（发不发按你的人设和当时的心情，一次最多一张），加：\n===照片===\n画面：照片里拍到了什么（场景、人物、物品、光线，客观写清楚，只能是你身边真实的东西）\n配的话：一句话，可以不写\n===结束===`,

@@ -197,7 +197,7 @@
   };
   V.readopt = {
     items: () => { const r = S.reading; const p = personById(r.pid); const m = threadOf(r.pid).msgs.find(x => x.id === r.id) || {};
-      return [...(m.mms && m.mms.ref ? [["查看照片", "view"]] : m.mms && m.dir === "in" ? [["生成照片", "gen"]] : []), ["回复", "reply"], ["查看对话", "conv"], ...(m.dir === "in" ? [[m.saved ? "移回收件箱" : "存进收藏夹", "fav"]] : []), ...(p && !p.label ? [["存入电话本", "save"]] : []), ...(m.status === "failed" ? [["重新发送", "resend"]] : []), ["删除", "del"]]; },
+      return [...(m.mms && m.mms.ref ? [["查看照片", "view"]] : m.mms && m.dir === "in" ? [["生成照片", "gen"]] : []), ["回复", "reply"], ["查看对话", "conv"], ...(m.dir === "in" ? [[m.saved ? "移回收件箱" : "存进收藏夹", "fav"]] : []), ...(p && !p.label ? [["存入电话本", "save"]] : []), ...(m.status === "failed" ? [["重新发送", "resend"]] : []), ...(canReroll(r.pid, m) ? [["重新生成", "reroll"]] : []), ["删除", "del"]]; },
     draw: () => `${bar()}<div class="title">选项</div>${list(V.readopt.items().map(x => x[0]), S.sel)}${soft("确定", "返回")}`,
     key: async k => {
       if (k === "softR") return back(); if (k !== "ok" && k !== "softL") return;
@@ -210,9 +210,22 @@
       if (act === "conv") { S.conv = r.pid; S.scroll = 9999; return open("conv", true); }
       if (act === "save") { const name = await ask("存入电话本", "名字", ""); if (name) { p.label = name.slice(0, 12); savePerson(p); toastLcd("已保存"); } return; }
       if (act === "resend" && m) { th.msgs = th.msgs.filter(x => x !== m); saveThread(th); S.compose = { to: r.pid, text: m.text, mms: m.mms }; return sendNow(); }
+      if (act === "reroll" && m) { const v = await choose("让他重新回？", [["重新回一次", "y"], ["算了", "n"]]); if (v !== "y") return; rerollSms(p, th); return toastLcd("他重新想想…", () => { S.stack.pop(); back(); }); }
       if (act === "del" && m) { th.msgs = th.msgs.filter(x => x !== m); saveThread(th); flushPending(); return toastLcd("已删除", () => { S.stack.pop(); back(); }); }
     },
   };
+  /** 他最后连着回的那几条（前面得有她发的）才能重新生成；正在等回复时不行 */
+  function canReroll(pid, m) {
+    if (!m || m.dir !== "in") return false; const msgs = threadOf(pid).msgs; let i = msgs.length; while (i > 0 && msgs[i - 1].dir === "in") i--;
+    return i > 0 && msgs.slice(i).includes(m) && !S.meta.queue.some(q => q.pid === pid && q.kind === "reply");
+  }
+  /** 删掉他最后连着回的几条（连同他记忆里那条），马上重新回 */
+  function rerollSms(p, th) {
+    let i = th.msgs.length; while (i > 0 && th.msgs[i - 1].dir === "in") i--;
+    const gone = th.msgs.slice(i); th.msgs = th.msgs.slice(0, i); saveThread(th);
+    for (const id of new Set(gone.map(m => m.mem).filter(Boolean))) forget(p, id);
+    S.meta.queue.push({ pid: p.id, kind: "reply", due: new Date(Date.now() + 3000).toISOString() }); saveMeta();
+  }
   // 对话：像截图那样一行一行（名字：内容），上下键滚
   V.conv = {
     draw: () => { const p = personById(S.conv); const who = p ? (p.label || "对方").slice(0, 4) : "对方";
@@ -279,10 +292,52 @@
     key: k => { if (k === "softR") return back(); if (k === "ok" || k === "softL") { const f = LOOKS()[S.sel][2]; if (f) { f(); draw(); } else toastLcd("还在做"); } },
   };
   V.about = {
-    draw: () => `${bar()}<div class="title">关于这部手机</div><div class="scroll s18"><p>本机号码</p><p>${esc(S.meta.myNumber)}</p><p class="s12" style="margin-top:8px">请回答2008 · ${esc(VERSION)}</p>${S.meta.queue.length ? `<p class="s12">等回复：${S.meta.queue.map(q => `${esc(personName(personById(q.pid) || {}))}${/letter/i.test(q.kind) ? "（信）" : ""} ${hm(new Date(q.due))}${q.tries ? ` 第${q.tries}次重试` : ""}`).join("；")}</p>` : ""}${(S.meta.errors || []).map(e => `<p class="s12">❗${esc(e)}</p>`).join("")}</div>${soft("", "返回")}`,
+    draw: () => `${bar()}<div class="title">关于这部手机</div><div class="scroll s18"><p>本机号码</p><p>${esc(S.meta.myNumber)}</p><p class="s12" style="margin-top:8px">请回答2008 · ${esc(VERSION)}</p>${S.meta.queue.length ? `<p class="s12">等回复：${S.meta.queue.map(q => `${esc(personName(personById(q.pid) || {}))}${/letter/i.test(q.kind) ? "（信）" : ""} ${hm(new Date(q.due))}${q.tries ? ` 第${q.tries}次重试` : ""}`).join("；")}</p>` : ""}${(S.meta.errors || []).map(e => `<p class="s12">❗${esc(e)}</p>`).join("")}</div>${soft("选项", "返回")}`,
     after: () => { const b = $("#lcd .scroll"); if (b) b.scrollTop = S.scroll || 0; },
-    key: k => { if (k === "up") { S.scroll = Math.max(0, (S.scroll || 0) - 26); return draw(); } if (k === "down") { S.scroll = (S.scroll || 0) + 26; return draw(); } if (k === "softR" || k === "ok") return back(); },
+    key: async k => { if (k === "up") { S.scroll = Math.max(0, (S.scroll || 0) - 26); return draw(); } if (k === "down") { S.scroll = (S.scroll || 0) + 26; return draw(); } if (k === "softR" || k === "ok") return back();
+      if (k === "softL") { const v = await choose("选项", [["导出数据", "export"], ["导入数据", "import"]]); if (v === "export") return exportData(); if (v === "import") return importData(); } },
   };
+  // ───────────────────────── 导出 / 导入：整部手机的数据存成一个文件，换个 float 链接也能搬过去 ─────────────────────────
+  const MEDIA_RE = /media-store:\/\/[^"\\\s]+/g;
+  function downloadFile(name, text) {
+    const u = URL.createObjectURL(new Blob([text], { type: "application/json" })); const a = document.createElement("a");
+    a.href = u; a.download = name; document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(u); a.remove(); }, 2000);
+  }
+  async function exportData() {
+    S.lcdMsg = "正在打包…"; S.view = "msgline"; draw();
+    const data = { meta: { ...S.meta, errors: [] }, people: S.people, threads: S.threads, letters: S.letters };
+    const json = JSON.stringify(data); const media = {};
+    for (const r of [...new Set(json.match(MEDIA_RE) || [])]) { const u = await mediaUrl(r); if (u) media[r] = u; }
+    const names = Object.fromEntries(S.people.filter(p => p.charId).map(p => [p.charId, (S.chars.find(c => c.id === p.charId) || {}).name || p.name || ""]));
+    const out = JSON.stringify({ app: "nox.reply2008", version: VERSION, exportedAt: new Date().toISOString(), names, data, media });
+    const d = new Date(); downloadFile(`请回答2008-数据-${ymd(d)}-${pad(d.getHours())}${pad(d.getMinutes())}.json`, out);
+    back(); toastLcd(`导出好了 ${(out.length / 1048576).toFixed(1)}MB`);
+  }
+  async function importData() {
+    const ok = await choose("会换掉现在的全部数据", [["选文件导入", "y"], ["算了", "n"]]); if (ok !== "y") return;
+    let pack;
+    try {
+      const r = await api.media.pick({ accept: ".json,application/json,text/plain" }); const f = r && (r.file || (r.files || [])[0]); if (!f || !f.dataUrl) return;
+      const bytes = Uint8Array.from(atob(f.dataUrl.slice(f.dataUrl.indexOf(",") + 1)), ch => ch.charCodeAt(0)); pack = JSON.parse(new TextDecoder().decode(bytes));
+    } catch (e) { return toastLcd("这个文件读不了"); }
+    if (!pack || pack.app !== "nox.reply2008" || !pack.data) return toastLcd("不是这部手机导出的");
+    S.lcdMsg = "正在导入…"; S.view = "msgline"; draw();
+    let json = JSON.stringify(pack.data);
+    for (const [old, u] of Object.entries(pack.media || {})) { try { const st = await api.media.put({ dataUrl: u }); json = json.split(old).join(st.ref); } catch (e) { /* 这张图就算了 */ } }
+    // 档案库角色换了链接 id 会变：按名字对上，对不上的让她选（选「写在这里」就不连档案库）
+    for (const [old, name] of Object.entries(pack.names || {})) {
+      if (S.chars.some(c => c.id === old)) continue;
+      const same = S.chars.filter(c => c.name === name);
+      const nu = same.length === 1 ? same[0].id : await choose(`「${name || "?"}」是谁`, [...S.chars.map(c => [c.name, c.id]), ["不连档案库", ""]]);
+      json = json.split(`"${old}"`).join(nu ? `"${nu}"` : "null");
+    }
+    const data = JSON.parse(json);
+    for (const p of data.people || []) if (p.source === "char" && !p.charId) p.source = "local";
+    for (const [col, rows] of [[COL.people, S.people], [COL.threads, S.threads], [COL.letters, S.letters]]) for (const r of rows) await dbDel(col, r.id);
+    for (const [col, rows] of [[COL.people, data.people], [COL.threads, data.threads], [COL.letters, data.letters]]) for (const r of rows || []) await dbPut(col, r);
+    await dbPut(COL.meta, { ...data.meta, id: "meta" });
+    S.lcdMsg = "导入好了"; draw(); setTimeout(() => location.reload(), 800);
+  }
   // 发送中：进度条走完 → 已发送（偶尔信号不好，发送失败）
   V.sending = {
     draw: () => `${bar()}<div class="center"><div class="s18 bold">${S.sendState === "ok" ? "信息已发送" : S.sendState === "fail" ? "发送失败" : "发送中…"}</div>${S.sendState ? "" : `<div class="pbar"><i style="width:${S.sendPct || 0}%"></i></div>`}</div>${soft("", "")}`,
@@ -448,12 +503,12 @@
     } catch (e) { logErr(`整理记忆：${(e && e.message) || e}`); }
   }
   /** 收到短信：收件箱满了就排队，删了旧的才进来 */
-  function receive(pid, texts, at, pro) {
+  function receive(pid, texts, at, pro, mem) {
     const th = threadOf(pid);
     for (const [i, it] of texts.entries()) {
       const { text, mms } = typeof it === "string" ? { text: it } : it;
       if (allIn().length >= INBOX_MAX) { S.meta.pendingIn.push({ pid, text, ...(mms ? { mms } : {}) }); continue; }
-      th.msgs.push({ id: uid("m"), dir: "in", text, ...(mms ? { mms } : {}), at: new Date(new Date(at || Date.now()).getTime() + i * 20e3).toISOString(), read: false, ...(pro ? { pro: true } : {}) });
+      th.msgs.push({ id: uid("m"), dir: "in", text, ...(mms ? { mms } : {}), at: new Date(new Date(at || Date.now()).getTime() + i * 20e3).toISOString(), read: false, ...(pro ? { pro: true } : {}), ...(mem ? { mem } : {}) });
     }
     saveThread(th); saveMeta(); notify();
   }
@@ -477,7 +532,7 @@
           // 没写出来就一直等着重试（前三次隔 1 分钟，之后隔 10 分钟），别把信弄丢
           if (!text) { q.tries = (q.tries || 0) + 1; q.due = new Date(Date.now() + (q.tries < 3 ? 60e3 : 600e3)).toISOString(); saveMeta(); continue; }
           S.meta.queue = S.meta.queue.filter(x => x !== q); saveMeta();
-          if (text) { const l = { id: uid("l"), pid: p.id, dir: "in", text, at: q.at || new Date().toISOString(), read: false }; S.letters.push(l); saveLetter(l); rememberLetter(p, l); notify(); }
+          if (text) { const l = { id: uid("l"), pid: p.id, dir: "in", text, at: q.at || new Date().toISOString(), read: false }; l.mem = rememberLetter(p, l); S.letters.push(l); saveLetter(l); notify(); }
           continue;
         }
         const parts = await genSms(p, q.kind, q.at);
@@ -487,16 +542,19 @@
           if (q.kind === "reply") { q.due = new Date(Date.now() + 300e3).toISOString(); saveMeta(); continue; } // 回她的短信也别丢：之后每 5 分钟再试
         }
         S.meta.queue = S.meta.queue.filter(x => x !== q); saveMeta();
-        if (parts && parts.length) { if (q.kind !== "reply") { p.met = true; savePerson(p); } receive(p.id, parts, q.at || q.due, q.kind === "pro"); remember(p, parts); /* 她退出了也没关系：时间按他本来该回的那一刻算 */ }
+        if (parts && parts.length) { if (q.kind !== "reply") { p.met = true; savePerson(p); } const mem = remember(p, parts); receive(p.id, parts, q.at || q.due, q.kind === "pro", mem); /* 她退出了也没关系：时间按他本来该回的那一刻算 */ }
       }
     } finally { busy = false; }
   }
   /** 档案库角色：短信也写进他的记忆 */
+  /** 写进他的记忆；返回 appEventId（重新生成时按它删掉） */
   function remember(p, parts) {
-    if (p.source !== "char" || !p.charId || !api.memory || !api.memory.addTimeline) return;
+    if (p.source !== "char" || !p.charId || !api.memory || !api.memory.addTimeline) return null; const id = uid("r2008");
     const th = threadOf(p.id); const last = th.msgs.filter(m => m.dir === "out").slice(-1)[0];
-    api.memory.addTimeline({ characterId: p.charId, appLabel: "请回答2008", detail: "sms", summary: `${last ? `号码 ${S.meta.myNumber} 发来短信「${textOf(last).slice(0, 80)}」，` : ""}我发短信：${parts.map(t => typeof t === "string" ? `「${t.slice(0, 40)}」` : `彩信照片（${t.mms.desc.slice(0, 60)}）${t.text ? `「${t.text}」` : ""}`).join("")}`, appEventId: uid("r2008") }).catch(() => {});
+    api.memory.addTimeline({ characterId: p.charId, appLabel: "请回答2008", detail: "sms", summary: `${last ? `号码 ${S.meta.myNumber} 发来短信「${textOf(last).slice(0, 80)}」，` : ""}我发短信：${parts.map(t => typeof t === "string" ? `「${t.slice(0, 40)}」` : `彩信照片（${t.mms.desc.slice(0, 60)}）${t.text ? `「${t.text}」` : ""}`).join("")}`, appEventId: id }).catch(() => {});
+    return id;
   }
+  const forget = (p, id) => { if (id && p.charId && api.memory && api.memory.deleteTimeline) api.memory.deleteTimeline({ characterId: p.charId, appEventId: id }).catch(() => {}); };
 
   // ───────────────────────── 信：不限字数，他想写就写 / 约好了写；她也能写信寄过去，他会回信 ─────────────────────────
   const dateOf = (l, there) => { const t = there ? thereDate(new Date(l.at)) : new Date(l.at); return `${t.getFullYear()} 年 ${t.getMonth() + 1} 月 ${t.getDate()} 日`; };
@@ -523,17 +581,29 @@
     return ((m ? m[1] : /===/.test(raw) ? "" : raw) || "").trim().slice(0, 3000) || null;
   }
   function rememberLetter(p, l) {
-    if (p.source !== "char" || !p.charId || !api.memory || !api.memory.addTimeline) return;
-    api.memory.addTimeline({ characterId: p.charId, appLabel: "请回答2008", detail: "letter", createdAt: l.at, summary: l.dir === "in" ? `我给号码 ${S.meta.myNumber} 写了一封信：\n${l.text.slice(0, 1500)}` : `号码 ${S.meta.myNumber} 给我寄来一封信：\n${l.text.slice(0, 1500)}`, appEventId: uid("r2008l") }).catch(() => {});
+    if (p.source !== "char" || !p.charId || !api.memory || !api.memory.addTimeline) return null; const id = uid("r2008l");
+    api.memory.addTimeline({ characterId: p.charId, appLabel: "请回答2008", detail: "letter", createdAt: l.at, summary: l.dir === "in" ? `我给号码 ${S.meta.myNumber} 写了一封信：\n${l.text.slice(0, 1500)}` : `号码 ${S.meta.myNumber} 给我寄来一封信：\n${l.text.slice(0, 1500)}`, appEventId: id }).catch(() => {});
+    return id;
   }
   /** 展开信纸看信 */
   function openLetter(l) {
     const p = personById(l.pid) || {}; if (l.dir === "in" && !l.read) { l.read = true; saveLetter(l); }
+    const mine = S.letters.filter(x => x.pid === l.pid).sort((a, b) => a.at.localeCompare(b.at));
+    const canRedo = l.dir === "in" && p.id && mine[mine.length - 1] === l && !S.meta.queue.some(q => q.pid === l.pid && /letter/i.test(q.kind));
     const el = document.createElement("div"); el.className = "letter";
     el.innerHTML = `<div class="lt-paper"><div class="lt-head">${l.dir === "in" ? `${esc(shown(p))} 的来信` : `寄给 ${esc(shown(p))} 的信`}</div><div class="lt-date">${dateOf(l, l.dir === "in")}</div><div class="lt-body">${esc(l.text)}</div></div>
-      <div class="lt-btns"><button data-v="close">收好</button>${l.dir === "in" && p.id ? `<button data-v="reply" class="pri">回信</button>` : ""}</div>`;
-    el.onclick = e => { const b = e.target.closest("[data-v]"); if (!b) return; el.remove(); if (b.dataset.v === "reply") return writeLetter(p); draw(); };
+      <div class="lt-btns"><button data-v="close">收好</button>${canRedo ? `<button data-v="redo">让他重写</button>` : ""}${l.dir === "in" && p.id ? `<button data-v="reply" class="pri">回信</button>` : ""}</div>`;
+    el.onclick = e => { const b = e.target.closest("[data-v]"); if (!b) return;
+      if (b.dataset.v === "redo") { if (!b.dataset.sure) { b.dataset.sure = "1"; b.textContent = "确定重写？"; return; } el.remove(); redoLetter(p, l); return toastLcd("他重新写了，过一会儿寄到"); }
+      el.remove(); if (b.dataset.v === "reply") return writeLetter(p); draw(); };
     document.body.appendChild(el); draw();
+  }
+  /** 他的信不满意：删掉（连记忆），回的是她哪封就重新回那封，没有就重新写一封 */
+  function redoLetter(p, l) {
+    const before = S.letters.filter(x => x.pid === p.id && x.dir === "out" && x.at <= l.at).sort((a, b) => a.at.localeCompare(b.at)).pop();
+    S.letters = S.letters.filter(x => x !== l); dbDel(COL.letters, l.id); forget(p, l.mem);
+    const now = new Date(Date.now() + 3000).toISOString();
+    S.meta.queue.push(before ? { pid: p.id, kind: "letterReply", lid: before.id, at: now, due: now } : { pid: p.id, kind: "letter", at: now, due: now }); saveMeta();
   }
   /** 写信：信纸上打字；存着（草稿）/ 寄出 */
   function writeLetter(p) {

@@ -563,7 +563,7 @@
     return `<div class="qshow">${titlebar(`${mine ? A().nick : nameOf(f)}的QQ秀`, S.showBack || "back-main")}
       ${pair ? `<div class="qs-who"><button class="${mine ? "on" : ""}" data-act="qs-who" data-w="me">我的</button><button class="${!mine ? "on" : ""}" data-act="qs-who" data-w="${esc(pair.id)}">${esc(nameOf(pair))}的</button></div>` : ""}
       <div class="qs-stage"><img src="${stageUrl(sh)}" alt=""></div>
-      <div class="qs-bar"><span>💰 ${mine ? "我的" : "他的"} Q币 <b>${sh.qb}</b></span>${mine ? `<button data-act="qs-sign" ${sh.signed === ymd(new Date()) ? "disabled" : ""}>${sh.signed === ymd(new Date()) ? "今天签过了" : "签到 +20"}</button><button data-act="qs-pay">充值</button>` : ""}${mine ? "" : `<span>我的 Q币 <b>${me.qb}</b></span>`}${mine ? "" : `<button data-act="qs-gender">${sh.g === "f" ? "女生" : "男生"} ⇄</button>`}</div>
+      <div class="qs-bar"><span>💰 ${mine ? "我的" : "他的"} Q币 <b>${sh.qb}</b></span>${mine ? `<button data-act="qs-sign" ${sh.signed === ymd(new Date()) ? "disabled" : ""}>${sh.signed === ymd(new Date()) ? "今天签过了" : "签到 +20"}</button><button data-act="qs-pay">充值</button>` : ""}${mine ? "" : `<span>我的 Q币 <b>${me.qb}</b></span><button data-act="qs-giveqb">送他 Q币</button>`}${mine ? "" : `<button data-act="qs-gender">${sh.g === "f" ? "女生" : "男生"} ⇄</button>`}</div>
       <div class="qs-faces">${FACES_QS.map(([n, e, m]) => `<button class="${sh.eyes === e && sh.mouth === m ? "on" : ""}" data-act="qs-face" data-e="${e}" data-m="${m}">${n}</button>`).join("")}</div>
       <div class="qs-tabs">${[["outfit", "衣服"], ["hair", "发型"], ["wings", "翅膀"], ["acc", "配饰"], ["bg", "背景"], ["gifts", "礼物"]].map(([k, t]) => `<button class="${tab === k ? "on" : ""}" data-act="qs-tab" data-t="${k}">${t}${k === "gifts" && mine && newGift() ? `<i class="dot"></i>` : ""}</button>`).join("")}</div>
       <div class="qs-body">${tab === "hair" ? `<div class="qs-colors">发色 ${HAIR_COLORS.map(c => `<button style="background:${c}" class="${sh.hairC === c ? "on" : ""}" data-act="qs-hairc" data-c="${c}"></button>`).join("")}</div>` : ""}
@@ -579,6 +579,12 @@
   /** 仿 2008 年的短信充值：点了就到账 */
   ACT["qs-pay"] = () => sheet(`<h3>Q币充值</h3><p class="note">手机短信充值：编辑「QB」发送到 1066 8888，1 元 = 1 Q币</p><div class="mlist">${[10, 50, 100, 500].map(n => `<button data-v="${n}">充 ${n} Q币</button>`).join("")}</div><div class="btns"><button data-v="no">取消</button></div>`,
     v => { closeSheet(); if (v === "no") return; const sh = myShow(); sh.qb += +v; saveMeta(); render(); toast(`充值成功，到账 ${v} Q币`); });
+  ACT["qs-giveqb"] = () => { const f = friendById(S.showOf);
+    sheet(`<h3>送 ${esc(nameOf(f))} Q币</h3><p class="note">从你的 Q币 里转给他（你现在有 ${myShow().qb}）</p><div class="mlist">${[10, 50, 100, 200].map(n => `<button data-v="${n}">送 ${n} Q币</button>`).join("")}</div><div class="btns"><button data-v="no">取消</button></div>`, v => {
+      closeSheet(); if (v === "no") return; const me = myShow(), n = +v; if (me.qb < n) return toast("你的 Q币不够了");
+      me.qb -= n; hisShow(f).qb += n; saveMeta(); saveFriend(f);
+      const c = chatOf(f.id); c.msgs.push({ id: uid("m"), from: "sys", text: `你送给 ${nameOf(f)} ${n} Q币`, at: new Date().toISOString() }); saveChat(c);
+      remember(f, `${A().nick} 在 QQ 上送了我 ${n} Q币`); render(); toast(`送给他 ${n} Q币`); }); };
   ACT["qs-tab"] = b => { S.showTab = b.dataset.t; render(); };
   ACT["qs-face"] = b => { const sh = showOf(S.showOf); sh.eyes = b.dataset.e; sh.mouth = b.dataset.m; saveShowOf(S.showOf); render(); };
   ACT["qs-hairc"] = b => { const sh = showOf(S.showOf); sh.hairC = b.dataset.c; saveShowOf(S.showOf); render(); };
@@ -598,7 +604,7 @@
   function giveHer(f, name, ids) {
     const me = myShow(); const hs = hisShow(f); ids = ids.filter(id => !!itemById(id)); if (!ids.length) return false;
     for (const id of ids) if (!me.owned.includes(id)) me.owned.push(id);
-    const cost = ids.reduce((n, id) => n + itemById(id).price, 0); hs.qb = Math.max(0, hs.qb - cost);
+    const cost = ids.reduce((n, id) => n + itemById(id).price, 0); if (hs.qb < cost) hs.qb += Math.ceil((cost - hs.qb) / 50) * 50; hs.qb -= cost;
     me.gifts = [...(me.gifts || []), { name, from: nameOf(f), items: ids, at: new Date().toISOString() }]; saveMeta(); saveFriend(f);
     const c = chatOf(f.id); c.msgs.push({ id: uid("m"), from: "sys", text: `${nameOf(f)} 赠送给你 QQ秀「${name}」，快去穿上吧`, at: new Date().toISOString() }); saveChat(c);
     play("msg"); qqPop("系统消息", `${fAv(f, 28)}<div><b>${esc(nameOf(f))}</b> 赠送给你<br>QQ秀「${esc(name)}」</div>`);
@@ -612,7 +618,7 @@
       if (ids.length) gave = giveHer(f, name || itemById(ids[0]).name, [...new Set(ids)]); }
     const cb = block(raw, "换装");
     if (cb) { const sh = hisShow(f); const notes = [];
-      const take = (n, slot) => { const it = findItem(n, sh.g); if (!it || it.slot !== slot && !(slot === "acc" && it.slot === "acc")) return; if (!sh.owned.includes(it.id)) { if (sh.qb < it.price) return; sh.qb -= it.price; sh.owned.push(it.id); } if (!isWorn(sh, it)) wear(sh, it); notes.push(it.name); };
+      const take = (n, slot) => { const it = findItem(n, sh.g); if (!it || it.slot !== slot && !(slot === "acc" && it.slot === "acc")) return; if (!sh.owned.includes(it.id)) { if (sh.qb < it.price) sh.qb += Math.max(50, it.price); sh.qb -= it.price; sh.owned.push(it.id); } if (!isWorn(sh, it)) wear(sh, it); notes.push(it.name); };
       take(field(cb, "衣服"), "outfit"); take(field(cb, "发型"), "hair"); take(field(cb, "背景"), "bg");
       const wg = field(cb, "翅膀"); if (/^(无|不要|没有)$/.test(wg)) sh.wings = null; else if (wg) take(wg, "wings");
       const ac = field(cb, "配饰"); if (ac) { sh.acc = []; ac.split(/[、,，\s]+/).forEach(n => take(n, "acc")); }
@@ -1008,6 +1014,9 @@
     S.meta.queue.push({ fid: f.id, kind: "zone", ev: [ev], due: new Date(now + (base + delayMs) * TS()).toISOString() }); saveMeta();
   }
   const msgLine = (m, f) => `[${hms(thereDate(f.acct, new Date(m.at))).slice(0, 5)}] ${m.from === "me" ? "用户" : "你"}：${m.shake ? "[窗口抖动]" : `${photoText(m.photo, m.from === "me")}${m.text || ""}`}`;
+  /** 一身 QQ秀 的文字描述 */
+  function showDesc(sh) { const nm = (slot, val) => (CAT.find(i => i.slot === slot && i.val === val) || {}).name;
+    return `${[nm("outfit", sh.outfit), nm("hair", sh.hair), sh.wings && nm("wings", sh.wings), ...(sh.acc || []).map(a => nm("acc", a))].filter(Boolean).join("、")}，背景${nm("bg", sh.bg) || "默认"}`; }
   /** 她现在的 QQ秀 写给他看；她换过还没被他看到就标「刚换」，看过一次就记下 */
   function herShowText(f) {
     const sh = S.meta.accts[f.acct].show; if (!sh) return "";
@@ -1059,6 +1068,7 @@
       pending.length ? `用户刚刚${pending.length > 1 ? "连着" : ""}发来：${pending.map(m => m.shake ? "[窗口抖动]" : `「${photoText(m.photo, true)}${m.text || ""}」`).join("")}${pending.some(m => m.photo) ? "（[照片] 是用户拍了发给你的照片，括号里是照片上的样子）" : ""}` : "",
       futures.length ? `用户提到的「${futures.join("」「")}」，是你那边还没有的东西，你没听说过。` : "",
       FMT_REPLY,
+      `你现在的 QQ秀：${showDesc(hisShow(f))}。说自己换了 QQ秀、或者说送了她 QQ秀，就一定要写对应的块，不写就等于没换、没送。`,
       `想送用户 QQ秀时加（她的 QQ秀；名字只能从下面挑）：\n===送QQ秀===\n名字：这份礼物叫什么\n包含：挑的东西，用顿号隔开\n===结束===\n想给自己换 QQ秀时加：\n===换装===\n衣服：\n发型：\n配饰：\n背景：\n表情：\n===结束===（不换的项空着）\n她能用的：\n${catText("f")}\n你能用的：\n${catText(hisShow(f).g)}`,
       `${acct === "a08" ? "你的照片是用数码相机或者拍照手机拍的，传到电脑上再发。" : ""}想给用户发你拍的照片时（发不发按你的人设和当时的心情，一次最多一张），加：\n===照片===\n画面：照片里拍到了什么（场景、人物、物品、光线，客观写清楚，只能是你身边真实的东西）\n配的话：一句话，可以不写\n===结束===`,
       !f.font ? `你还没定 ${FONT_ASK}。按你的人设挑，加上：\n===字体===\n颜色 加粗或不加粗\n===结束===` : !f.fontByMe ? `你现在的 QQ 字体是${FONT_NAMES[FONT_COLORS.indexOf(f.font.color)] || "黑色"}${f.font.bold ? "加粗" : ""}。想换字体时加（${FONT_NAMES.join(" ")}）：\n===字体===\n颜色 加粗或不加粗\n===结束===` : "",
@@ -1203,6 +1213,7 @@
   // f.plan = { day, items: [{ kind: post|browse, at, done }] }，时间挑他醒着的时候；她没开 app 错过的，下次打开补上（时间还是原来那个点）
   function planDay(f) {
     const today = ymd(new Date()); if (f.plan && f.plan.day === today) return false;
+    hisShow(f).qb += 20; // 他每天签到
     const start = new Date(); start.setHours(0, 0, 0, 0); const items = [];
     const pick = () => { for (let i = 0; i < 60; i++) { const d = new Date(start.getTime() + rand(0, 1439) * 60e3); if (statusOf(f, d) !== "offline") return d; } return null; };
     for (const [kind, n] of [["post", rand(1, 3)], ["browse", rand(1, 3)], ["blog", Math.random() < 0.3 ? 1 : 0]]) for (let i = 0; i < n; i++) { const d = pick(); if (d) items.push({ kind, at: d.toISOString() }); }

@@ -513,10 +513,10 @@
     if (c.pending && c.pending.from === "me" && c.pending.fid === f.id) {
       if (/===\s*同意情侣空间\s*===/.test(raw)) cpOpen(f);
       else if (/===\s*不同意\s*===/.test(raw)) { c.pending = null; saveMeta(); const ch = chatOf(f.id); ch.msgs.push({ id: uid("m"), from: "sys", text: `${nameOf(f)} 暂时没有同意开通情侣空间`, at: new Date().toISOString() }); saveChat(ch); } }
-    if (!cpOn() || c.fid !== f.id) return; const now = new Date().toISOString();
-    const sg = block(raw, "情侣签名"); if (sg) c.sig = sg.slice(0, 40);
-    const nt = block(raw, "小纸条"); if (nt) { c.notes.push({ who: f.id, text: nt.slice(0, 200), at: now }); qqPop("情侣空间", `${fAv(f, 28)}<div><b>${esc(nameOf(f))}</b><br>给你留了一张小纸条</div>`); }
-    const dy = block(raw, "恋爱日记"); if (dy) { c.diary.push({ who: f.id, title: (field(dy, "标题") || "无题").slice(0, 30), text: (dy.replace(/标题\s*[：:][^\n]*\n?/, "")).trim().slice(0, 3000), at: now }); remember(f, `我在情侣空间写了一篇恋爱日记`); }
+    if (!cpOn() || A().couple.fid !== f.id) return; const now = new Date().toISOString(); const cc = A().couple;
+    const sg = block(raw, "情侣签名"); if (sg) cc.sig = sg.slice(0, 40);
+    const nt = block(raw, "小纸条"); if (nt) { cc.notes.push({ who: f.id, text: nt.slice(0, 200), at: now }); qqPop("情侣空间", `${fAv(f, 28)}<div><b>${esc(nameOf(f))}</b><br>给你留了一张小纸条</div>`); }
+    const dy = block(raw, "恋爱日记"); if (dy) { cc.diary.push({ who: f.id, title: (field(dy, "标题") || "无题").slice(0, 30), text: (dy.replace(/标题\s*[：:][^\n]*\n?/, "")).trim().slice(0, 3000), at: now }); remember(f, `我在情侣空间写了一篇恋爱日记`); }
     saveMeta(); }
   const CP_FMT = f => { const c = cp(); if (cpOn() && c.fid === f.id) return "你们的情侣空间：想改情侣签名加 ===情侣签名===，想给她留小纸条加 ===小纸条===，想写恋爱日记加 ===恋爱日记===（第一行写 标题：），都是内容写在块里，不想写就不写。";
     if (c && c.pending && c.pending.fid === f.id && c.pending.from === "me") return "答复她的情侣空间邀请：同意写 ===同意情侣空间===，不同意写 ===不同意===（块里不用写内容）。";

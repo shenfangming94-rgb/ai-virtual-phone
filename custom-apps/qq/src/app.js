@@ -566,7 +566,7 @@
   V.pet = () => { petTick(); const p = pet(); const f = friendById(p.fid); const bar = (n, v, c) => `<div class="pt-bar"><span>${n}</span><i><b style="width:${Math.round(v)}%;background:${c}"></b></i><em>${Math.round(v)}</em></div>`;
     const st = petMood(p); const who = w => w === "me" ? A().nick : nameOf(friendById(w) || {});
     return `<div class="petv">${titlebar(`QQ宠物 · ${esc(p.name)}`, S.petBack || "back-main")}
-      <div class="pt-stage ${st === "很开心" ? "happy" : ""}"><div class="pt-say">${{ 饿了: "肚子好饿…🍙", 脏兮兮的: "身上脏脏的…🛁", 不开心: "陪我玩嘛…", 很开心: "最喜欢你们啦！♡", 还不错: "嘎～" }[st]}</div><img class="pt-img ${p.clean < 25 ? "dirty" : ""}" src="${PENG_IMG}" alt=""><div class="pt-name">${esc(p.name)} · ${petLv(p)} 级 · 和 ${esc(nameOf(f))} 一起养</div></div>
+      <div class="pt-stage ${{ 很开心: "happy", 饿了: "hungry", 不开心: "sad" }[st] || ""}"><div class="pt-say">${{ 饿了: "肚子好饿…🍙", 脏兮兮的: "身上脏脏的…🛁", 不开心: "陪我玩嘛…", 很开心: "最喜欢你们啦！♡", 还不错: "嘎～" }[st]}</div><img class="pt-img ${p.clean < 25 ? "dirty" : ""}" src="${PENG_IMG}" alt=""><div class="pt-name">${esc(p.name)} · ${petLv(p)} 级 · 和 ${esc(nameOf(f))} 一起养</div></div>
       <div class="pt-bars">${bar("饱", p.hunger, "#ffb347")}${bar("干净", p.clean, "#5ab4ff")}${bar("开心", p.mood, "#ff7aa8")}</div>
       <div class="pt-acts">${Object.entries(PET_ACTS).map(([k, [n, , , e]]) => `<button data-act="pet-do" data-k="${k}">${e} ${n}</button>`).join("")}</div>
       <div class="qs-body"><div class="pt-log">${[...(p.log || [])].reverse().slice(0, 15).map(l => `<p>${esc(who(l.who))} ${PET_ACTS[l.act][0]}了${esc(p.name)} <small>${esc(ago(S.meta.cur, l.at))}</small></p>`).join("") || `<p class="empty">刚领养，快照顾它吧</p>`}</div></div></div>`; };
@@ -576,7 +576,11 @@
       A().pet = { fid: f.id, name: r[0], born: new Date().toISOString(), hunger: 70, clean: 80, mood: 70, exp: 0, last: new Date().toISOString(), log: [] }; saveMeta();
       const ch = chatOf(f.id); ch.msgs.push({ id: uid("m"), from: "sys", text: `你和 ${nameOf(f)} 一起领养了 QQ宠物小企鹅「${r[0]}」🐧`, at: new Date().toISOString() }); saveChat(ch); remember(f, `${A().nick} 和我在 QQ 上一起领养了一只 QQ宠物小企鹅，叫「${r[0]}」`); }
     S.view = "pet"; render(); };
-  ACT["pet-do"] = b => { petDo("me", b.dataset.k); render(); toast(`${PET_ACTS[b.dataset.k][0]}了${pet().name}`); };
+  /** 喂：饭团飞过去嚼几下；洗澡：冒泡泡抖一抖；玩：跳起来转一圈冒爱心 */
+  ACT["pet-do"] = b => { const k = b.dataset.k; petDo("me", k); render(); const st = $(".pt-stage"), img = $(".pt-img"); if (!st || !img) return;
+    img.classList.add(`do-${k}`); const fx = { feed: ["🍙"], bath: ["🫧", "🫧", "🫧", "🫧", "🫧"], play: ["💗", "💕", "💗"] }[k];
+    fx.forEach((e, i) => { const el = document.createElement("i"); el.className = `pt-fx fx-${k}`; el.textContent = e; el.style.left = `${k === "feed" ? 20 : 30 + i * 10}%`; el.style.animationDelay = `${i * .15}s`; st.appendChild(el); setTimeout(() => el.remove(), 1800); });
+    setTimeout(() => img.classList.remove(`do-${k}`), 1600); };
   // ───────────────────────── QQ秀：像素小人（src/qqshow.js 画），衣柜、Q币、送礼、他自己换装 ─────────────────────────
   // show = { g: f|m, hair, hairC, eyeC, outfit, wings, acc: [], bg, eyes, mouth, owned: [物品 id], qb: Q币, gifts: [{ name, from, items, at }] }
   const CAT = [

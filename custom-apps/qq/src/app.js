@@ -451,7 +451,7 @@
       ${S.draftBlogPhoto ? `<div class="dph"><img data-ref="${esc(S.draftBlogPhoto.ref)}" alt=""><button data-act="blog-photo-del">✕</button></div>` : ""}
       <div class="zbtn"><button class="btn" data-act="zone-tab" data-t="blog">取消</button>&nbsp;<button class="btn" data-act="blog-photo">📷 插图</button>&nbsp;<button class="btn s" data-act="blog-post">发表</button></div></div></div>`;
     const prof = mine ? A() : f;
-    const profTab = `<div class="box"><h3><span>QQ秀</span></h3><div class="qs-mini" data-act="open-show" data-who="${mine ? "me" : esc(f.id)}"><img src="${stageUrl(showOf(mine ? "me" : f.id))}" alt=""><span>点这里换装 ›</span></div></div><div class="box"><h3><span>个人档</span></h3><div class="prof">${mine ? myAv(64) : fAv(f, 64)}<div><p><b>${esc(ownerName)}</b></p><p>QQ：${esc(mine ? A().qq : f.qq || "")}</p><p>等级：${mine ? levelOf(acct) : f.lv || 20}</p><p>签名：${richText(prof.sig || "")}</p></div></div><div class="zbtn">${mine ? `<button class="btn" data-act="my-avatar">换头像</button>&nbsp;<button class="btn" data-act="edit-zone">修改空间名字和签名</button>` : `<button class="btn" data-act="his-avatar">换 QQ 头像</button>&nbsp;<button class="btn" data-act="remark">修改备注</button>&nbsp;<button class="btn" data-act="his-font">他的字体</button>`}</div></div>`;
+    const profTab = `<div class="box"><h3><span>QQ秀</span></h3><div class="qs-mini" data-act="open-show" data-who="${mine ? "me" : esc(f.id)}"><img src="${stageUrl(showOf(mine ? "me" : f.id))}" alt=""><span>点这里换装 ›</span></div></div><div class="box"><h3><span>个人档</span></h3><div class="prof">${mine ? myAv(64) : fAv(f, 64)}<div><p><b>${esc(ownerName)}</b></p><p>QQ：${esc(mine ? A().qq : f.qq || "")}</p><p>等级：${mine ? levelOf(acct) : f.lv || 20}</p><p>签名：${richText(prof.sig || "")}</p></div></div><div class="zbtn">${mine ? `<button class="btn" data-act="my-avatar">换头像</button>&nbsp;<button class="btn" data-act="edit-zone">修改空间名字和签名</button>` : `<button class="btn" data-act="his-avatar">换 QQ 头像</button>&nbsp;<button class="btn" data-act="remark">修改备注</button>&nbsp;<button class="btn" data-act="his-font">他的字体</button>`}</div></div>` + (mine ? "" : `<div class="box"><h3><span>他记得的事</span><span>QQ 里 ${KEEP} 条以前的聊天</span></h3><div class="memo">${f.memo ? esc(f.memo).replace(/\n/g, "<br>") : `<span class="empty">聊天多过 ${KEEP + 10} 条以后会自动整理</span>`}</div><div class="zbtn"><button class="btn" data-act="edit-memo">改一改</button>&nbsp;<button class="btn s" data-act="import-mem">${f.importedAt ? "已写进他的记忆 · 再写一次" : f.importDone ? "接着写进他的记忆" : "把 QQ 聊天写进他的记忆"}</button></div></div>`);
     return `<div class="zone">
       ${titlebar(`${ownerName}的QQ空间`, S.zoneBack || "back-main")}
       <div class="banner${z.cover ? " has-cover" : ""}">${z.cover ? `<img class="cov" data-ref="${esc(z.cover)}" alt="">` : CLOUDS}<button class="covbtn" data-act="cover">换背景</button><span class="yz">黄钻 LV${mine ? 3 : 1 + (hash(f.id) % 5)}</span><h1>${esc(z.name || `${ownerName}的空间`)}</h1><p>${esc(z.sig ? `[ ${z.sig} ]` : "")}</p>${bgmBarHtml()}</div>
@@ -655,6 +655,11 @@
     const fr = friendById(S.zoneOf); const f = await pickFile("image/*").catch(() => null); if (!f || !f.dataUrl) return;
     const st = await api.media.put({ dataUrl: await compressImage(f.dataUrl, 256) }); fr.avatarRef = st.ref; saveFriend(fr); render(); toast("头像换好了");
   };
+  ACT["edit-memo"] = async () => { const f = friendById(S.zoneOf); const r = await ask("他记得的事", [{ label: "每条一行（他回你的时候会看到这些）", value: f.memo || "", long: true, max: 4000 }]); if (r) { f.memo = r[0]; saveFriend(f); render(); } };
+  ACT["import-mem"] = () => { const f = friendById(S.zoneOf); const n = chatOf(f.id).msgs.filter(m => m.from !== "sys").length;
+    sheet(`<h3>写进 ${esc(nameOf(f))} 的记忆</h3><p class="note">把你们在 QQ 上的 ${n} 条聊天按日期整理好，写进 float 里他的记忆（时间按原来的算），「他记得的事」也一起写进长期记忆。<br>换了新链接、短期记忆没带过来的时候用。<b>旧链接里不用点</b>，那边他本来就记得，点了会重复。</p><div class="btns"><button data-v="no">算了</button><button data-v="ok" class="pri">写进去</button></div>`, async (v, b) => {
+      if (v === "no") return closeSheet(); if (b.disabled) return; b.disabled = true; b.textContent = "正在写…";
+      try { await importHistory(f); closeSheet(); render(); toast("写好了"); } catch (e) { b.disabled = false; b.textContent = "再试一次"; toast(`没写进去：${(e && e.message) || e}`.slice(0, 40)); } }); };
   /** 给他设字体：她设过就固定，他不再自己换；选「让他自己挑」就还给他 */
   ACT["his-font"] = () => {
     const fr = friendById(S.zoneOf); const cur = fr.font || { color: "#000000", bold: false };
@@ -1063,11 +1068,40 @@
 多少分钟后再上线（只写数字）
 ===结束===
 跟用户聊着的时候不找理由走；要下线先跟用户说一声再写下线块，说了要下线就一定写下线块，没写就是还在。`;
+  // ───────────────────────── 他记得的事：最近 40 条以前的聊天，攒够 10 条就整理成要点存在 app 里（跟着导出走） ─────────────────────────
+  const KEEP = 40;
+  async function updateMemo(f) {
+    for (let round = 0; round < 3; round++) { // 第一次可能攒了很多，一次最多整理 150 条，最多三轮
+      const all = chatOf(f.id).msgs.filter(m => m.from !== "sys");
+      const old = all.slice(0, Math.max(0, all.length - KEEP)).filter(m => !f.memoAt || m.at > f.memoAt).slice(0, 150);
+      if (old.length < 10) return;
+      const text = old.map(m => `${msgLine(m, f).replace(/\] 你：/, "] 你：").replace(/\] 用户：/, "] 用户：")}`).join("\n");
+      const r = await gen(f, "memo", `这一轮不扮演任何人，只做一件事：整理笔记。下面是你（文中的「你」）和用户在 QQ 上的一段聊天。${f.memo ? `之前已经记下的：\n${f.memo}\n\n` : ""}把这段聊天整理成几条要点，用第二人称「你」写：发生了什么事；用户说过的关于自己的事；你说过的关于自己的事；你们之间的称呼、约定和没说完的话。只写聊天里真有的，不编，不评价。不超过 200 字，每条一行，开头写 -。\n\n${text}`);
+      const add = String(r || "").trim(); if (!add) return;
+      f.memo = [f.memo, add].filter(Boolean).join("\n"); f.memoAt = old[old.length - 1].at; saveFriend(f);
+    }
+  }
+  /** 把 QQ 聊天按天写进他的记忆（换了 float 链接、短期记忆没带过来时用）；中途失败再点从断的地方接着写 */
+  async function importHistory(f) {
+    const nick = S.meta.accts[f.acct].nick; const days = new Map();
+    for (const m of chatOf(f.id).msgs.filter(m => m.from !== "sys")) { const k = ymd(thereDate(f.acct, new Date(m.at))); if (!days.has(k)) days.set(k, []); days.get(k).push(m); }
+    let done = f.importDone || 0, i = 0;
+    for (const [day, ms] of days) {
+      const chunks = [[]]; let len = 0;
+      for (const m of ms) { const line = `[${hm(thereDate(f.acct, new Date(m.at)))}] ${m.from === "me" ? nick : "我"}：${m.shake ? "[窗口抖动]" : `${photoText(m.photo, m.from === "me")}${m.text || ""}`}`; if (len + line.length > 1800 && chunks[chunks.length - 1].length) { chunks.push([]); len = 0; } chunks[chunks.length - 1].push({ line, at: m.at }); len += line.length; }
+      for (const c of chunks) { if (i++ < done) continue;
+        await api.memory.addTimeline({ characterId: f.charId, appLabel: "QQ", detail: "qq", createdAt: c[c.length - 1].at, summary: `QQ · ${day} 和 ${nick} 的聊天：\n${c.map(x => x.line).join("\n")}`, appEventId: `qq_imp_${f.id}_${i}` });
+        f.importDone = ++done; saveFriend(f); }
+    }
+    if (f.memo && api.memory.add) await api.memory.add({ characterId: f.charId, type: "long_term", importance: 0.7, content: `QQ 上我和 ${nick} 聊天时记下的要点（里面的「你」是我自己，「用户」是 ${nick}）：\n${f.memo}`, reason: "从 QQ 接过来" });
+    f.importedAt = new Date().toISOString(); delete f.importDone; saveFriend(f);
+  }
   async function genReply(f, q) {
     const c = chatOf(f.id); const acct = f.acct; const me = S.meta.accts[acct];
     let s = c.msgs.length; if (!q.ping) while (s > 0 && c.msgs[s - 1].from === "me") s--;
     const pending = q.ping ? [] : c.msgs.slice(s).filter(m => m.from === "me");
-    const hist = c.msgs.slice(0, s).filter(m => m.from !== "sys").slice(-40).map(m => msgLine(m, f)).join("\n");
+    await updateMemo(f);
+    const hist = c.msgs.slice(0, s).filter(m => m.from !== "sys").slice(-KEEP).map(m => msgLine(m, f)).join("\n");
     for (const m of pending) if (m.photo) await seePhoto(f, m.photo); if (pending.some(m => m.photo)) saveChat(c);
     const futures = futureIn(acct, pending.map(m => m.text).join(" "));
     const late = q.wasOffline && !q.ping ? `用户是在你不在线的时候发来的（${pending[0] ? hm(thereDate(acct, new Date(pending[0].at))) : ""}），你刚上线才看到。` : "";
@@ -1077,7 +1111,8 @@
       COMMON_RULE,
       `你的 QQ 个性签名：${f.sig || "（空）"}。用户的 QQ 昵称是「${me.nick}」，个性签名：${me.sig || "（空）"}。`,
       zoneCtx(f),
-      hist ? `你们之前在 QQ 上的聊天：\n${hist}` : "这是你们在 QQ 上第一次聊天。你们之前可能用别的方式联系过，按你的记忆来。",
+      f.memo ? `你记得的事（更早的 QQ 聊天里）：\n${f.memo}` : "",
+      hist ? `你们${f.memo ? "最近" : "之前"}在 QQ 上的聊天：\n${hist}` : "这是你们在 QQ 上第一次聊天。你们之前可能用别的方式联系过，按你的记忆来。",
       late,
       q.ping ? `你想主动在 QQ 上找用户聊几句。说什么按你的人设、你们最近聊到哪、你记得的事来（你在别处说过要在 QQ 上找她的话，现在就是来找她了）。${q.note ? `你之前说过：${q.note}。` : ""}不用交代为什么来找她，也不要追问她为什么没找你。${q.force ? "" : "这会儿不想找她的话，只写 ===不发===。"}` : "",
       pending.length ? `用户刚刚${pending.length > 1 ? "连着" : ""}发来：${pending.map(m => m.shake ? "[窗口抖动]" : `「${photoText(m.photo, true)}${m.text || ""}」`).join("")}${pending.some(m => m.photo) ? "（[照片] 是用户拍了发给你的照片，括号里是照片上的样子）" : ""}` : "",

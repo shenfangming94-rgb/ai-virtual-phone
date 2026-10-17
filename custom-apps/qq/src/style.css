@@ -212,3 +212,4 @@ input, textarea, select { font: inherit; color: inherit; }
 .qs-who { flex: none; display: flex; gap: 6px; padding: 6px 10px; background: #fff; } .qs-who button { flex: 1; text-align: center; padding: 5px 0; border-radius: 14px; border: 1px solid #ffb3d1; color: #a0156a; font-size: 13px; } .qs-who button.on { background: #ff8fbf; color: #fff; border-color: #ff8fbf; font-weight: bold; }
 .dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: #f74c31; margin-left: 3px; vertical-align: 4px; }
 .main .qsbtn { margin-left: auto; font-size: 11px; color: #e0218a; padding: 1px 6px; border: 1px solid #ffb3d1; border-radius: 10px; background: #fff; }
+.zone .memo { padding: 8px 10px; font-size: 12px; line-height: 1.8; color: #555; white-space: normal; }

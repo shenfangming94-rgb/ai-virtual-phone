@@ -519,7 +519,7 @@
   const myShow = () => A().show || (A().show = defaultShow("f"));
   const hisShow = f => f.show || (f.show = defaultShow("m"));
   const showOf = who => who === "me" ? myShow() : hisShow(friendById(who));
-  const saveShowOf = who => who === "me" ? saveMeta() : saveFriend(friendById(who));
+  const saveShowOf = who => { if (who === "me") { myShow().changedAt = new Date().toISOString(); saveMeta(); } else saveFriend(friendById(who)); };
   /** 这一身对应的小人参数 */
   const dollOf = (sh, extra = {}) => ({ g: sh.g, hair: sh.hair, hairC: sh.hairC, eyeC: sh.eyeC, outfit: sh.outfit, wings: sh.wings, acc: sh.acc || [], eyes: sh.eyes, mouth: sh.mouth, blush: sh.eyes === "shy" || sh.eyes === "closed", extra: sh.eyes === "shy" ? "heart" : sh.eyes === "wink" ? "sparkle" : sh.eyes === "wide" ? "sweat" : "", ...extra });
   const pixCache = new Map();
@@ -586,7 +586,7 @@
     sheet(`<h3>把 ${esc(nameOf(f))} 的 QQ秀 换成${g === "f" ? "女生" : "男生"}？</h3><p class="note">换了以后衣柜会变成${g === "f" ? "女生" : "男生"}的衣服，现在穿的会换回默认。</p><div class="btns"><button data-v="no">算了</button><button data-v="ok" class="pri">换</button></div>`, v => { closeSheet(); if (v !== "ok") return; f.show = { ...defaultShow(g), qb: f.show.qb, gifts: f.show.gifts }; saveFriend(f); render(); }); };
   ACT["qs-wear"] = b => { const sh = showOf(S.showOf); wear(sh, itemById(b.dataset.id)); saveShowOf(S.showOf); render(); };
   ACT["qs-wearset"] = b => { const sh = showOf(S.showOf); const gf = sh.gifts[+b.dataset.i]; for (const id of gf.items) { const it = itemById(id); if (it && !isWorn(sh, it)) wear(sh, it); } saveShowOf(S.showOf); render(); toast("整套穿上了"); };
-  ACT["qs-buy"] = b => { const sh = myShow(); const it = itemById(b.dataset.id); if (sh.qb < it.price) return toast("Q币不够了"); sh.qb -= it.price; sh.owned.push(it.id); wear(sh, it); saveMeta(); render(); toast(`买下了「${it.name}」`); };
+  ACT["qs-buy"] = b => { const sh = myShow(); const it = itemById(b.dataset.id); if (sh.qb < it.price) return toast("Q币不够了"); sh.qb -= it.price; sh.owned.push(it.id); wear(sh, it); saveShowOf("me"); render(); toast(`买下了「${it.name}」`); };
   ACT["qs-give"] = b => { const f = friendById(S.showOf); const sh = hisShow(f), me = myShow(); const it = itemById(b.dataset.id);
     if (me.qb < it.price) return toast("你的 Q币不够了");
     me.qb -= it.price; sh.owned.push(it.id); sh.gifts = [...(sh.gifts || []), { name: it.name, from: A().nick, items: [it.id], at: new Date().toISOString() }]; saveMeta(); saveFriend(f);
@@ -1008,8 +1008,20 @@
     S.meta.queue.push({ fid: f.id, kind: "zone", ev: [ev], due: new Date(now + (base + delayMs) * TS()).toISOString() }); saveMeta();
   }
   const msgLine = (m, f) => `[${hms(thereDate(f.acct, new Date(m.at))).slice(0, 5)}] ${m.from === "me" ? "用户" : "你"}：${m.shake ? "[窗口抖动]" : `${photoText(m.photo, m.from === "me")}${m.text || ""}`}`;
+  /** 她现在的 QQ秀 写给他看；她换过还没被他看到就标「刚换」，看过一次就记下 */
+  function herShowText(f) {
+    const sh = S.meta.accts[f.acct].show; if (!sh) return "";
+    const nm = (slot, val) => (CAT.find(i => i.slot === slot && i.val === val) || {}).name;
+    const parts = [nm("outfit", sh.outfit), nm("hair", sh.hair), sh.wings && nm("wings", sh.wings), ...(sh.acc || []).map(a => nm("acc", a))].filter(Boolean);
+    const face = (FACES_QS.find(x => x[1] === sh.eyes && x[2] === sh.mouth) || [])[0];
+    const gift = (sh.gifts || []).filter(g => g.from === nameOf(f)).find(g => g.items.every(id => { const it = itemById(id); return it && isWorn(sh, it); }));
+    const fresh = sh.changedAt && (!f.sawShowAt || sh.changedAt > f.sawShowAt);
+    if (fresh) { f.sawShowAt = new Date().toISOString(); saveFriend(f); }
+    return `用户的 QQ秀${fresh ? "（她刚换的）" : ""}：${parts.join("、")}，背景是${nm("bg", sh.bg) || "默认"}${face ? `，表情${face}` : ""}${gift ? `。她穿的是你送的「${gift.name}」` : ""}。`;
+  }
   function zoneCtx(f, noPosts) {
     const z = f.zone, mz = S.meta.accts[f.acct].zone; const lines = [];
+    const hs = herShowText(f); if (hs) lines.push(hs);
     const v = (z.visitors || []).find(x => x.who === "me"); if (v) lines.push(`用户${ago(f.acct, v.at)}${v.step ? "在你空间踩了一脚" : "来过你的空间"}。`);
     const myBoard = (z.board || []).filter(b => b.who === "me").slice(-3); if (myBoard.length) lines.push(`用户在你留言板上写过：${myBoard.map(b => `「${b.text}」${b.reply ? `（你回了「${b.reply}」）` : ""}`).join("")}`);
     const mp = noPosts ? [] : (mz.posts || []).slice(-2); if (mp.length) lines.push(`用户空间最近的说说：${mp.map(p => `「${p.text}${photoText(p.photo, true)}」`).join("")}`);

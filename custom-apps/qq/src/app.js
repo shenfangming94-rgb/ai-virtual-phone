@@ -341,7 +341,7 @@
         <button class="avbtn" data-act="my-avatar">${myAv(50)}</button>
         <div class="mi"><div><b>${esc(a.nick)}</b> <select class="stsel" data-act="status">${["online", "away", "hidden"].map(s => `<option value="${s}" ${a.status === s ? "selected" : ""}>${STATUS_NAME[s]}</option>`).join("")}</select></div>
           <button class="sig" data-act="edit-sig">${a.sig ? richText(a.sig) : `<span class="ph">编辑个性签名</span>`}</button>
-          <div class="lv">${lvIcons(lv)}<span>LV ${lv}</span></div></div>
+          <div class="lv">${lvIcons(lv)}<span>LV ${lv}</span><button class="qsbtn" data-act="open-show" data-who="me">👗 QQ秀${newGift() ? `<i class="dot"></i>` : ""}</button></div></div>
       </div>
       <div class="search"><input id="srch" placeholder="🔍 搜索联系人" value="${esc(S.search)}"></div>
       <div class="tabs"><button class="${S.tab === "friends" ? "on" : ""}" data-act="tab" data-t="friends">联系人</button><button class="${S.tab === "recent" ? "on" : ""}" data-act="tab" data-t="recent">最近联系人</button></div>
@@ -558,21 +558,28 @@
         : mine ? `<button data-act="qs-buy" data-id="${it.id}">${it.price} Q币</button>` : `<button data-act="qs-give" data-id="${it.id}">送他 ${it.price}</button>`;
       return `<div class="qs-it ${worn ? "on" : ""}"><img src="${thumbUrl(sh, it)}" alt=""><b>${esc(it.name)}</b>${btn}</div>`; };
     const gifts = (sh.gifts || []).slice().reverse().map(gf => `<div class="qs-gift"><b>🎁 ${esc(gf.name)}</b><small>${esc(gf.from)} 送的 · ${esc(ago(S.meta.cur, gf.at))}</small><div>${gf.items.map(id => esc((itemById(id) || {}).name || "")).join("、")}</div><button data-act="qs-wearset" data-i="${sh.gifts.indexOf(gf)}">整套穿上</button></div>`).join("") || `<div class="empty">还没有收到礼物</div>`;
+    if (mine && tab === "gifts") { let ch = false; (sh.gifts || []).forEach(gf => { if (!gf.seen) { gf.seen = true; ch = true; } }); if (ch) saveMeta(); }
+    const pair = S.showPair && friendById(S.showPair);
     return `<div class="qshow">${titlebar(`${mine ? A().nick : nameOf(f)}的QQ秀`, S.showBack || "back-main")}
+      ${pair ? `<div class="qs-who"><button class="${mine ? "on" : ""}" data-act="qs-who" data-w="me">我的</button><button class="${!mine ? "on" : ""}" data-act="qs-who" data-w="${esc(pair.id)}">${esc(nameOf(pair))}的</button></div>` : ""}
       <div class="qs-stage"><img src="${stageUrl(sh)}" alt=""></div>
       <div class="qs-bar"><span>💰 ${mine ? "我的" : "他的"} Q币 <b>${sh.qb}</b></span>${mine ? "" : `<span>我的 Q币 <b>${me.qb}</b></span>`}${mine ? "" : `<button data-act="qs-gender">${sh.g === "f" ? "女生" : "男生"} ⇄</button>`}</div>
       <div class="qs-faces">${FACES_QS.map(([n, e, m]) => `<button class="${sh.eyes === e && sh.mouth === m ? "on" : ""}" data-act="qs-face" data-e="${e}" data-m="${m}">${n}</button>`).join("")}</div>
-      <div class="qs-tabs">${[["outfit", "衣服"], ["hair", "发型"], ["wings", "翅膀"], ["acc", "配饰"], ["bg", "背景"], ["gifts", "礼物"]].map(([k, t]) => `<button class="${tab === k ? "on" : ""}" data-act="qs-tab" data-t="${k}">${t}</button>`).join("")}</div>
+      <div class="qs-tabs">${[["outfit", "衣服"], ["hair", "发型"], ["wings", "翅膀"], ["acc", "配饰"], ["bg", "背景"], ["gifts", "礼物"]].map(([k, t]) => `<button class="${tab === k ? "on" : ""}" data-act="qs-tab" data-t="${k}">${t}${k === "gifts" && mine && newGift() ? `<i class="dot"></i>` : ""}</button>`).join("")}</div>
       <div class="qs-body">${tab === "hair" ? `<div class="qs-colors">发色 ${HAIR_COLORS.map(c => `<button style="background:${c}" class="${sh.hairC === c ? "on" : ""}" data-act="qs-hairc" data-c="${c}"></button>`).join("")}</div>` : ""}
         ${tab === "gifts" ? gifts : `<div class="qs-grid">${items.map(cell).join("")}</div>`}</div>
     </div>`;
   };
-  ACT["open-show"] = b => { S.showOf = b.dataset.who; S.showBack = S.view === "chat" ? "back-chat" : S.view === "zone" ? "back-zone" : "back-main"; S.showTab = "outfit"; S.lastZone = S.zoneOf; S.view = "show"; render(); };
+  /** 有他送的、还没穿过的礼物 */
+  const newGift = () => (myShow().gifts || []).some(gf => !gf.seen);
+  ACT["open-show"] = b => { S.showPair = b.dataset.who !== "me" ? b.dataset.who : (S.view === "chat" ? S.fid : S.showPair); S.showOf = S.view === "chat" ? "me" : b.dataset.who; S.showBack = S.view === "chat" ? "back-chat" : S.view === "zone" ? "back-zone" : "back-main"; S.showTab = "outfit"; S.lastZone = S.zoneOf; S.view = "show"; render(); };
   ACT["back-zone"] = () => { S.zoneOf = S.lastZone; S.view = "zone"; render(); };
+  ACT["qs-who"] = b => { S.showOf = b.dataset.w; S.showTab = "outfit"; render(); };
   ACT["qs-tab"] = b => { S.showTab = b.dataset.t; render(); };
   ACT["qs-face"] = b => { const sh = showOf(S.showOf); sh.eyes = b.dataset.e; sh.mouth = b.dataset.m; saveShowOf(S.showOf); render(); };
   ACT["qs-hairc"] = b => { const sh = showOf(S.showOf); sh.hairC = b.dataset.c; saveShowOf(S.showOf); render(); };
-  ACT["qs-gender"] = () => { const f = friendById(S.showOf); const g = hisShow(f).g === "m" ? "f" : "m"; f.show = { ...defaultShow(g), qb: f.show.qb, gifts: f.show.gifts }; saveFriend(f); render(); };
+  ACT["qs-gender"] = () => { const f = friendById(S.showOf); const g = hisShow(f).g === "m" ? "f" : "m";
+    sheet(`<h3>把 ${esc(nameOf(f))} 的 QQ秀 换成${g === "f" ? "女生" : "男生"}？</h3><p class="note">换了以后衣柜会变成${g === "f" ? "女生" : "男生"}的衣服，现在穿的会换回默认。</p><div class="btns"><button data-v="no">算了</button><button data-v="ok" class="pri">换</button></div>`, v => { closeSheet(); if (v !== "ok") return; f.show = { ...defaultShow(g), qb: f.show.qb, gifts: f.show.gifts }; saveFriend(f); render(); }); };
   ACT["qs-wear"] = b => { const sh = showOf(S.showOf); wear(sh, itemById(b.dataset.id)); saveShowOf(S.showOf); render(); };
   ACT["qs-wearset"] = b => { const sh = showOf(S.showOf); const gf = sh.gifts[+b.dataset.i]; for (const id of gf.items) { const it = itemById(id); if (it && !isWorn(sh, it)) wear(sh, it); } saveShowOf(S.showOf); render(); toast("整套穿上了"); };
   ACT["qs-buy"] = b => { const sh = myShow(); const it = itemById(b.dataset.id); if (sh.qb < it.price) return toast("Q币不够了"); sh.qb -= it.price; sh.owned.push(it.id); wear(sh, it); saveMeta(); render(); toast(`买下了「${it.name}」`); };

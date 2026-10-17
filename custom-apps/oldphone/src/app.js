@@ -66,6 +66,11 @@
     if (!S.meta.myNumber) { S.meta.myNumber = phoneNo(); saveMeta(); }
     S.people = people; S.threads = threads.map(t => ({ ...t, msgs: t.msgs || [] }));
     S.chars = await api.characters.list().catch(() => []) || [];
+    // 以前的版本 AI 连着失败三次就把回信从队列里删了：她寄出去的信还没回、也不在等，就补回去
+    for (const p of S.people) {
+      const ls = S.letters.filter(l => l.pid === p.id).sort((a, b) => a.at.localeCompare(b.at)); const last = ls[ls.length - 1];
+      if (last && last.dir === "out" && !S.meta.queue.some(q => q.pid === p.id && (q.kind === "letterReply" || q.kind === "letter"))) { const now = new Date().toISOString(); S.meta.queue.push({ pid: p.id, kind: "letterReply", lid: last.id, at: now, due: now }); saveMeta(); }
+    }
   }
   const phoneNo = () => `1${["34", "35", "36", "37", "38", "39", "50", "51", "52", "58", "59"][rand(0, 10)]}${String(rand(0, 99999999)).padStart(8, "0")}`;
   const personById = id => S.people.find(p => p.id === id);
@@ -469,7 +474,8 @@
         const p = personById(q.pid); if (!p) { S.meta.queue = S.meta.queue.filter(x => x !== q); continue; }
         if (q.kind === "letter" || q.kind === "letterReply") { // 信
           const text = await genLetter(p, q);
-          if (!text) { q.tries = (q.tries || 0) + 1; if (q.tries < 3) { q.due = new Date(Date.now() + 60e3).toISOString(); saveMeta(); continue; } }
+          // 没写出来就一直等着重试（前三次隔 1 分钟，之后隔 10 分钟），别把信弄丢
+          if (!text) { q.tries = (q.tries || 0) + 1; q.due = new Date(Date.now() + (q.tries < 3 ? 60e3 : 600e3)).toISOString(); saveMeta(); continue; }
           S.meta.queue = S.meta.queue.filter(x => x !== q); saveMeta();
           if (text) { const l = { id: uid("l"), pid: p.id, dir: "in", text, at: q.at || new Date().toISOString(), read: false }; S.letters.push(l); saveLetter(l); rememberLetter(p, l); notify(); }
           continue;
@@ -478,6 +484,7 @@
         if (!parts || !parts.length) { // 没回出来：过一会儿再试，最多试 3 次
           q.tries = (q.tries || 0) + 1; if (!parts) {} else logErr(`${personName(p)}：回了空白`);
           if (q.tries < 3) { q.due = new Date(Date.now() + 20e3).toISOString(); saveMeta(); continue; }
+          if (q.kind === "reply") { q.due = new Date(Date.now() + 300e3).toISOString(); saveMeta(); continue; } // 回她的短信也别丢：之后每 5 分钟再试
         }
         S.meta.queue = S.meta.queue.filter(x => x !== q); saveMeta();
         if (parts && parts.length) { if (q.kind !== "reply") { p.met = true; savePerson(p); } receive(p.id, parts, q.at || q.due, q.kind === "pro"); remember(p, parts); /* 她退出了也没关系：时间按他本来该回的那一刻算 */ }

@@ -384,7 +384,7 @@
       <div class="tools"><button data-act="nope" data-t="对方没有安装摄像头">📹 视频</button><button data-act="nope" data-t="对方没有麦克风">🎤 语音</button><button data-act="nope" data-t="文件太大了，传了半天还是失败">📁 传文件</button><button data-act="open-zone" data-who="${esc(f.id)}">🌐 空间</button><button data-act="open-show" data-who="${esc(f.id)}">👗 QQ秀</button></div>
       ${miniBarHtml()}
       <div class="log" id="log">${lines || `<div class="sys">${st === "offline" ? `${esc(nameOf(f))} 现在不在线，消息会在他上线后收到` : "开始聊天吧"}</div>`}${typing && st === "online" ? `<div class="sys">对方正在输入…</div>` : ""}</div>
-      <div class="itools"><button data-act="font"><b style="color:${S.meta.font.color}">A</b> 字体</button><button data-act="faces">${faceSvg("微笑", 16)} 表情</button><button data-act="shake">〰 抖动</button><button data-act="send-photo">📷 图片</button>${c.msgs.length && c.msgs[c.msgs.length - 1].from === "him" && c.msgs.some(m => m.from === "me") && !S.meta.queue.some(q => q.fid === f.id && q.kind === "reply") ? `<button data-act="reroll">↻ 重新回复</button>` : ""}<span class="sp"></span><button data-act="history">消息记录</button></div>
+      <div class="itools"><button data-act="font"><b style="color:${S.meta.font.color}">A</b> 字体</button><button data-act="faces">${faceSvg("微笑", 16)} 表情</button><button data-act="shake">〰 抖动</button><button data-act="send-photo">📷 图片</button>${canReroll(f) ? `<button data-act="reroll">↻ 重新回复</button>` : ""}<span class="sp"></span><button data-act="history">消息记录</button></div>
       <div class="pop-wrap" id="popwrap"></div>
       <div class="ibar"><textarea class="inp" id="inp" style="color:${S.meta.font.color};${S.meta.font.bold ? "font-weight:bold" : ""}" placeholder=""></textarea>
       <div class="send"><button class="btn" data-act="back-main">关闭(C)</button><button class="btn s" data-act="send">发送(S)</button></div></div>
@@ -707,13 +707,15 @@
     c.msgs.push({ id: uid("m"), from: "me", text, at: new Date().toISOString(), color: S.meta.font.color, bold: S.meta.font.bold }); saveChat(c);
     i.value = ""; queueReply(f); render(); $("#inp").focus();
   };
+  /** 最后一条真人消息是他的（系统提示不算），前面有她发的，而且没在等他回 */
+  const canReroll = f => { const ms = chatOf(f.id).msgs.filter(m => m.from !== "sys"); return ms.length && ms[ms.length - 1].from === "him" && ms.some(m => m.from === "me") && !S.meta.queue.some(q => q.fid === f.id && q.kind === "reply"); };
   /** 不满意他最后这几条：删掉（连他记忆里那条），马上重新回 */
   ACT.reroll = () => {
     const f = friendById(S.fid); const c = chatOf(f.id);
     sheet(`<h3>重新回复</h3><p class="note">把 ${esc(nameOf(f))} 最后回的这几条删掉，让他重新回一次。他也不会记得删掉的这几条。</p><div class="btns"><button data-v="no">算了</button><button data-v="ok" class="pri">重新回复</button></div>`, v => {
       closeSheet(); if (v !== "ok") return;
-      let i = c.msgs.length; while (i > 0 && c.msgs[i - 1].from === "him") i--;
-      const gone = c.msgs.slice(i); c.msgs = c.msgs.slice(0, i); saveChat(c);
+      let i = c.msgs.length; while (i > 0 && c.msgs[i - 1].from !== "me") i--; // 他最后那几条（中间夹的系统提示留着）
+      const gone = c.msgs.slice(i).filter(m => m.from === "him"); c.msgs = c.msgs.filter(m => !gone.includes(m)); saveChat(c);
       for (const id of new Set(gone.map(m => m.mem).filter(Boolean))) forget(f, id);
       S.meta.queue = S.meta.queue.filter(q => !(q.fid === f.id && q.kind === "reply"));
       S.meta.queue.push({ fid: f.id, kind: "reply", due: new Date(Date.now() + 3000).toISOString(), typing: true }); saveMeta(); render();

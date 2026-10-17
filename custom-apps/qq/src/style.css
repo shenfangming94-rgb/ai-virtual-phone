@@ -160,3 +160,9 @@ input, textarea, select { font: inherit; color: inherit; }
 .zone .lk { font-size: 11px; color: #888; margin: 2px 0 3px; } .zone .lk b { color: #2f6ea8; font-weight: normal; }
 .zone .cm { cursor: pointer; }
 .zone .msg .rbtn { color: #2f6ea8; font-size: 12px; margin-top: 2px; }
+.pic { margin: 4px 0 4px 12px; } .zone .pic { margin: 4px 0; } .pic img { display: block; max-width: 70%; max-height: 260px; border: 1px solid #b8d6ef; background: #eef5fb; cursor: zoom-in; }
+.pic.none { display: flex; align-items: center; gap: 8px; max-width: 86%; padding: 8px 10px; border: 1px dashed #9cc0e0; background: #f3f8fd; color: #557; font-size: 13px; line-height: 1.5; }
+.pic.none span { flex: 1; } .pic.none button { flex: none; padding: 3px 8px; border: 1px solid #9cc0e0; border-radius: 3px; background: linear-gradient(#fff, #e8f3fc); color: #2f6ea8; font-size: 12px; } .pic.none button:disabled { color: #999; }
+.zone .dph { position: relative; display: inline-block; margin: 6px 8px 0; } .zone .dph img { display: block; max-height: 90px; border: 1px solid #b8d6ef; } .zone .dph button { position: absolute; top: -6px; right: -6px; width: 20px; height: 20px; border-radius: 50%; background: #666; color: #fff; font-size: 11px; }
+.pview { position: fixed; inset: 0; z-index: 99; background: rgba(0,0,0,.86); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; padding: 16px; }
+.pview img { max-width: 100%; max-height: 80vh; } .pview .tip { color: #bbb; font-size: 12px; }

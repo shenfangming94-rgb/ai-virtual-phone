@@ -290,7 +290,7 @@
   }
 
   // ───────────────────────── 皮肤：每套是一整套设计（themes.css 里按 html[data-theme] 写） ─────────────────────────
-  const THEMES = [["classic", "经典蓝天", "2008 原版"], ["fzl", "非主流", "黑底蕾丝闪星星"], ["memo", "手账日记", "横格纸和胶带"], ["xp", "Windows XP", "网吧的蓝天绿地"], ["pixel", "像素绿屏", "手机 QQ"], ["dark", "炫酷黑", "磨砂玻璃"], ["fresh", "小清新", "白底和木头"]];
+  const THEMES = [["classic", "经典蓝天", "2008 原版"], ["fzl", "非主流", "黑底蕾丝闪星星"], ["memo", "手账日记", "横格纸和胶带"], ["xp", "Windows XP", "网吧的蓝天绿地"], ["pixel", "像素绿屏", "手机 QQ"], ["dark", "炫酷黑", "磨砂玻璃"], ["fresh", "小清新", "白底和木头"], ["modern", "现代", "现在的 QQ 和 iOS 气泡"]];
   const applyTheme = k => { document.documentElement.dataset.theme = THEMES.some(t => t[0] === k) ? k : "classic"; };
 
   // ───────────────────────── 画界面 ─────────────────────────
@@ -334,7 +334,7 @@
     const online = fs.filter(f => statusOf(f) !== "offline").length;
     const recent = [...fs].filter(f => chatOf(f.id).msgs.length).sort((x, y) => (chatOf(y.id).msgs.slice(-1)[0].at).localeCompare(chatOf(x.id).msgs.slice(-1)[0].at));
     const row = f => { const st = statusOf(f); const n = unreadOf(f.id); const last = chatOf(f.id).msgs.filter(m => m.from !== "sys").slice(-1)[0];
-      return `<button class="fr ${n ? "blink" : ""}" data-act="open-chat" data-id="${esc(f.id)}">${fAv(f, 34, st === "offline")}<div class="fm"><b>${esc(nameOf(f))}</b>${st !== "offline" ? ` <span style="color:${statusColor(st)}">[${STATUS_NAME[st]}]</span>` : ""}${n ? ` <em>(${n})</em>` : ""}<small>${S.tab === "recent" && last ? richText(last.text || (last.shake ? "[窗口抖动]" : "")) : esc(f.sig || "")}</small></div></button>`; };
+      return `<button class="fr ${n ? "blink" : ""}" data-act="open-chat" data-id="${esc(f.id)}">${fAv(f, 34, st === "offline")}<div class="fm"><b>${esc(nameOf(f))}</b>${st !== "offline" ? ` <span style="color:${statusColor(st)}">[${STATUS_NAME[st]}]</span>` : ""}${n ? ` <em>(${n})</em>` : ""}<small>${S.tab === "recent" && last ? richText(last.text || (last.shake ? "[窗口抖动]" : last.photo ? "[图片]" : "")) : esc(f.sig || "")}</small></div>${last ? `<i class="ft">${esc(ago(S.meta.cur, last.at))}</i>` : ""}</button>`; };
     return `<div class="main">
       ${titlebar(`QQ${ACCTS[S.meta.cur].label === "2008" ? "2008" : "2008 · 2026 号"}`)}
       <div class="me">
@@ -368,24 +368,26 @@
   V.chat = () => {
     const f = friendById(S.fid); const st = statusOf(f); const c = chatOf(f.id);
     let lastDay = ""; const me = A();
-    const lines = c.msgs.map(m => {
+    const lastHim = c.msgs.map(m => m.from).lastIndexOf("him");
+    const lines = c.msgs.map((m, idx) => {
       const d = thereDate(S.meta.cur, new Date(m.at)); const day = ymd(d); const sep = day !== lastDay ? `<div class="sys">—— ${day} ——</div>` : ""; lastDay = day;
       if (m.from === "sys") return `${sep}<div class="sys">${esc(m.text)}</div>`;
       const who = m.from === "me" ? me.nick : nameOf(f);
       const body = m.shake ? `<div class="shk">${m.from === "me" ? "您发送了一个窗口抖动。" : `${esc(who)} 给您发送了一个窗口抖动。`}</div>` : `${photoHtml(m.photo, `data-kind="chat" data-fid="${esc(f.id)}" data-mid="${esc(m.id)}"`, m.id)}${m.text || !m.photo ? `<div class="t" style="${m.color ? `color:${m.color};` : ""}${m.bold ? "font-weight:bold;" : ""}">${richText(m.text)}</div>` : ""}`;
-      return `${sep}<div class="m ${m.from === "me" ? "o" : "i"}"><div class="h">${esc(who)}　${hms(d)}</div>${body}</div>`;
+      // .mav（头像）和 .mt（时间、已读）平时藏着，「现代」皮肤才露出来
+      return `${sep}<div class="m ${m.from === "me" ? "o" : "i"}"><span class="mav">${m.from === "me" ? myAv(40) : fAv(f, 40)}</span><div class="mb2"><div class="h">${esc(who)}　${hms(d)}</div>${body}<div class="mt">${m.from === "me" ? `<span>${idx < lastHim ? "已读" : "送达"}</span><span>${hm(d)}</span>` : `<span>${hm(d)}</span><span>已读</span>`}</div></div></div>`;
     }).join("");
     if (c.msgs.some(m => m.from === "him" && !m.read)) { c.msgs.forEach(m => { m.read = true; }); saveChat(c); }
     const typing = S.meta.queue.some(q => q.fid === f.id && q.kind === "reply" && q.typing);
     return `<div class="chat">
-      <div class="ct"><button class="bk" data-act="back-main">‹</button>${fAv(f, 40, st === "offline")}<div class="ctn"><b>${esc(nameOf(f))}</b> <span>[${STATUS_NAME[st]}]</span><small>${esc(f.sig || "")}</small></div></div>
+      <div class="ct"><button class="bk" data-act="back-main">‹</button>${fAv(f, 40, st === "offline")}<div class="ctn"><b>${esc(nameOf(f))}</b> <span>[${STATUS_NAME[st]}]</span><small>${esc(f.sig || "")}</small></div><button class="more" data-act="open-zone" data-who="${esc(f.id)}">更多</button></div>
       <div class="tools"><button data-act="nope" data-t="对方没有安装摄像头">📹 视频</button><button data-act="nope" data-t="对方没有麦克风">🎤 语音</button><button data-act="nope" data-t="文件太大了，传了半天还是失败">📁 传文件</button><button data-act="open-zone" data-who="${esc(f.id)}">🌐 空间</button></div>
       ${miniBarHtml()}
       <div class="log" id="log">${lines || `<div class="sys">${st === "offline" ? `${esc(nameOf(f))} 现在不在线，消息会在他上线后收到` : "开始聊天吧"}</div>`}${typing && st === "online" ? `<div class="sys">对方正在输入…</div>` : ""}</div>
       <div class="itools"><button data-act="font"><b style="color:${S.meta.font.color}">A</b> 字体</button><button data-act="faces">${faceSvg("微笑", 16)} 表情</button><button data-act="shake">〰 抖动</button><button data-act="send-photo">📷 图片</button><span class="sp"></span><button data-act="history">消息记录</button></div>
       <div class="pop-wrap" id="popwrap"></div>
-      <textarea class="inp" id="inp" style="color:${S.meta.font.color};${S.meta.font.bold ? "font-weight:bold" : ""}" placeholder=""></textarea>
-      <div class="send"><button class="btn" data-act="back-main">关闭(C)</button><button class="btn s" data-act="send">发送(S)</button></div>
+      <div class="ibar"><textarea class="inp" id="inp" style="color:${S.meta.font.color};${S.meta.font.bold ? "font-weight:bold" : ""}" placeholder=""></textarea>
+      <div class="send"><button class="btn" data-act="back-main">关闭(C)</button><button class="btn s" data-act="send">发送(S)</button></div></div>
     </div>`;
   };
 

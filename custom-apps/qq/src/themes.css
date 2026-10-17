@@ -12,6 +12,7 @@
 .sw-xp { background: radial-gradient(ellipse 80% 40% at 40% 100%, #5fae3a 0 60%, transparent 61%), linear-gradient(#0058ee 0 22%, #3a8ef0 22% 60%, #a7d3ff 60%); }
 .sw-pixel { background: #c7d39f; box-shadow: inset 0 0 0 4px #2b2b2b; background-image: repeating-linear-gradient(90deg, #0000 0 2px, #00000010 2px 3px), repeating-linear-gradient(#0000 0 2px, #00000010 2px 3px); }
 .sw-dark { background: linear-gradient(135deg, #1b1e26, #2a2f3c 60%, #3ad0ff 60% 64%, #1b1e26 64%); }
+.sw-modern { background: linear-gradient(#f3f6fa 0 24%, #e4eaf2 24% 76%, #ccd4de 76%); }
 .sw-fresh { background: linear-gradient(#fff 0 30%, #f6f3ec 30% 70%, #a9c9a4 70%); }
 
 /* ─────────────── 非主流：黑底、粉紫、蕾丝、闪星星、╰☆╮ ─────────────── */
@@ -316,3 +317,97 @@
 [data-theme=memo] .bk { background: #fffaf0; border: 1px solid #fffaf0; color: var(--mkraft); border-radius: 2px; box-shadow: 1px 1px 0 #0002; }
 [data-theme=pixel] .bk { background: var(--lcd); border: 2px solid var(--lcd); border-radius: 0; color: var(--ink2); }
 [data-theme=dark] .bk, [data-theme=fresh] .bk { background: transparent; border: 0; }
+
+/* ─────────────── 现代：好友列表和空间照现在的 QQ；聊天照 iOS 拟物风（灰按钮、白气泡、两边头像、线稿涂鸦底） ─────────────── */
+[data-theme=modern] { --mq: #12b7f5; --mq2: #0d9fe0; --line: #e6e8ec; --pale: #f5f6f8; --ink: #1f2329; }
+[data-theme=modern] body, [data-theme=modern] #app { background: #f5f6f8; font-family: -apple-system, "PingFang SC", "Helvetica Neue", sans-serif; color: var(--ink); }
+[data-theme=modern] .tbar { background: linear-gradient(#e6f4ff, #f5f6f8); color: var(--ink); font-size: 17px; }
+[data-theme=modern] .bk { background: linear-gradient(#f7f8fa, #c9cfd8); border: 1px solid #8e98a6; border-radius: 8px; color: #445; box-shadow: inset 0 1px #fff, 0 1px 1px #0002; font-size: 0; width: auto; padding: 0 12px; height: 32px; }
+[data-theme=modern] .bk::after { content: "返回"; font-size: 14px; line-height: 30px; text-shadow: 0 1px #fff; }
+[data-theme=modern] .btn, [data-theme=modern] .paper .btns button { background: #fff; border: 1px solid #dfe2e6; border-radius: 18px; color: var(--ink); }
+[data-theme=modern] .btn.s, [data-theme=modern] .paper .btns button.pri, [data-theme=modern] .login .go { background: var(--mq); border: 0; border-radius: 18px; color: #fff; font-weight: 600; }
+[data-theme=modern] .av { border: 0; padding: 0; border-radius: 50%; } [data-theme=modern] .av img, [data-theme=modern] .av i { border-radius: 50%; }
+[data-theme=modern] .login { background: #fff; } [data-theme=modern] .login .logo b { color: var(--ink); } [data-theme=modern] .login .logo small { color: #8a9099; }
+[data-theme=modern] .login .card { border: 0; background: #f5f6f8; border-radius: 14px; } [data-theme=modern] .login .acc { border: 0; background: #fff; border-radius: 10px; } [data-theme=modern] .login .acc.on { box-shadow: 0 0 0 2px var(--mq); background: #fff; }
+[data-theme=modern] .login .go { border-radius: 24px; padding: 11px 0; }
+/* 好友列表 */
+[data-theme=modern] .main .me { background: transparent; border: 0; padding: 4px 16px 10px; }
+[data-theme=modern] .main .me .av { width: 52px !important; height: 52px !important; }
+[data-theme=modern] .main .mi b { font-size: 18px; }
+[data-theme=modern] .main .sig { border: 0; background: transparent; padding: 2px 0; color: #8a9099; }
+[data-theme=modern] .stsel { color: #2bc26a; }
+[data-theme=modern] .main .search { margin: 0 12px 8px; } [data-theme=modern] .main .search input { border: 0; background: #e9ebee; border-radius: 18px; height: 34px; text-align: center; }
+[data-theme=modern] .main .tabs { margin: 0; padding: 0 16px; gap: 22px; background: #fff; }
+[data-theme=modern] .main .tabs button { flex: none; background: transparent; border: 0; border-radius: 0; padding: 10px 0 8px; color: #8a9099; font-size: 15px; }
+[data-theme=modern] .main .tabs button.on { color: var(--ink); font-weight: 600; box-shadow: inset 0 -3px 0 var(--mq); }
+[data-theme=modern] .main .list { margin: 0; border: 0; background: #fff; }
+[data-theme=modern] .grp { background: #fff; color: #8a9099; font-weight: normal; font-size: 13px; padding: 10px 16px 4px; }
+[data-theme=modern] .fr { padding: 10px 16px; gap: 12px; border-bottom: 0; position: relative; }
+[data-theme=modern] .fr::after { content: ""; position: absolute; left: 74px; right: 0; bottom: 0; height: 1px; background: #f0f1f3; }
+[data-theme=modern] .fr .av { width: 48px !important; height: 48px !important; }
+[data-theme=modern] .fr b { font-size: 16px; font-weight: 500; } [data-theme=modern] .fr small { font-size: 13px; color: #8a9099; margin-top: 3px; }
+[data-theme=modern] .fr em { position: absolute; right: 16px; bottom: 14px; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9px; background: #f74c31; color: #fff; font-size: 11px; line-height: 18px; text-align: center; font-weight: normal; }
+[data-theme=modern] .fr .ft { display: block; position: absolute; right: 16px; top: 12px; font-style: normal; font-size: 12px; color: #b0b5bc; }
+[data-theme=modern] .fr:active { background: #f2f3f5; }
+[data-theme=modern] .main .bot { background: #fff; border-top: 1px solid #eceef1; padding: 6px 24px calc(6px + env(safe-area-inset-bottom)); }
+[data-theme=modern] .main .bot .btn { border: 0; background: transparent; color: #5a6270; font-size: 12px; padding: 4px 8px; display: flex; flex-direction: column; align-items: center; gap: 2px; }
+[data-theme=modern] .main .bot .btn::before { font-size: 20px; line-height: 1; }
+[data-theme=modern] .main .bot .btn:nth-child(1)::before { content: "☰"; } [data-theme=modern] .main .bot .btn:nth-child(2)::before { content: "＋"; } [data-theme=modern] .main .bot .btn:nth-child(3)::before { content: "★"; color: var(--mq); }
+[data-theme=modern] .findbox { background: #fff; border: 0; border-radius: 14px; }
+/* 聊天：iOS 拟物 */
+[data-theme=modern] .chat { background: #e4eaf2 url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20width%3D%22240%22%20height%3D%22240%22%20viewBox%3D%220%200%20240%20240%22%3E%3Cg%20fill%3D%22none%22%20stroke%3D%22%23d2dae5%22%20stroke-width%3D%221.6%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpath%20d%3D%22M22%2070%20L26%2044%20L40%2058%20Q50%2054%2060%2058%20L74%2044%20L78%2070%20Q80%2096%2050%2098%20Q20%2096%2022%2070Z%22/%3E%3Ccircle%20cx%3D%2240%22%20cy%3D%2274%22%20r%3D%222%22/%3E%3Ccircle%20cx%3D%2260%22%20cy%3D%2274%22%20r%3D%222%22/%3E%3Cpath%20d%3D%22M46%2084%20Q50%2088%2054%2084%22/%3E%3Cpath%20d%3D%22M14%2078%20h14%20M14%2086%20h14%20M72%2078%20h14%20M72%2086%20h14%22/%3E%3Ccircle%20cx%3D%22170%22%20cy%3D%2240%22%20r%3D%2220%22/%3E%3Cpath%20d%3D%22M150%2040%20h40%20M170%2020%20v40%20M156%2026%20Q170%2040%20156%2054%20M184%2026%20Q170%2040%20184%2054%22/%3E%3Cpath%20d%3D%22M120%20130%20q-12%20-14%200%20-22%20q12%20-8%2012%206%20q0%20-14%2012%20-6%20q12%208%200%2022%20l-12%2012%20z%22/%3E%3Cpath%20d%3D%22M30%20170%20l26%20-22%20l26%2022%20v34%20h-52z%20M48%20204%20v-18%20h16%20v18%20M24%20172%20l32%20-28%20l32%2028%22/%3E%3Cpath%20d%3D%22M150%20190%20l70%20-24%20l-28%2052%20l-10%20-18%20z%20M182%20200%20l38%20-34%22/%3E%3Cpath%20d%3D%22M190%20120%20q0%20-14%2014%20-14%20q4%20-10%2016%20-6%20q14%200%2012%2014%20q10%202%206%2012%20h-46%20q-8%20-2%20-2%20-6z%22/%3E%3Cpath%20d%3D%22M100%2040%20l4%209%20l10%201%20l-7%207%20l2%2010%20l-9%20-5%20l-9%205%20l2%20-10%20l-7%20-7%20l10%20-1%20z%22/%3E%3Ccircle%20cx%3D%22100%22%20cy%3D%22210%22%20r%3D%226%22/%3E%3Cpath%20d%3D%22M106%20210%20q20%20-4%2022%20-26%20M128%20184%20l6%20-4%22/%3E%3C/g%3E%3C/svg%3E") 0 0 / 240px 240px; }
+[data-theme=modern] .chat .ct { background: linear-gradient(#f3f6fa, #d8e0ea); border-bottom: 1px solid #b4bfcd; box-shadow: 0 1px 0 #fff8 inset; color: #2c3a58; padding-top: calc(10px + max(var(--bar-top), env(safe-area-inset-top))); padding-bottom: 10px; }
+[data-theme=modern] .chat .ct > .av { display: none; }
+[data-theme=modern] .chat .ctn { text-align: center; } [data-theme=modern] .chat .ctn b { font-size: 22px; font-weight: 700; letter-spacing: .5px; } [data-theme=modern] .chat .ctn span { display: none; }
+[data-theme=modern] .chat .ctn small { color: #fff; text-shadow: 0 1px 1px #5a6a8088; font-size: 13px; } [data-theme=modern] .chat .ctn small::before { content: "@ "; }
+[data-theme=modern] .chat .ct .more { display: block; flex: none; background: linear-gradient(#f7f8fa, #c9cfd8); border: 1px solid #8e98a6; border-radius: 8px; color: #445; box-shadow: inset 0 1px #fff, 0 1px 1px #0002; padding: 0 12px; height: 32px; font-size: 14px; text-shadow: 0 1px #fff; }
+[data-theme=modern] .chat .tools { display: none; }
+[data-theme=modern] .chat .log { background: transparent; border: 0; margin: 0; padding: 14px 12px; }
+[data-theme=modern] .chat .m { display: flex; gap: 10px; align-items: flex-start; margin-bottom: 18px; }
+[data-theme=modern] .chat .m.o { flex-direction: row-reverse; }
+[data-theme=modern] .chat .mav { display: block; flex: none; } [data-theme=modern] .chat .mav .av { width: 44px !important; height: 44px !important; border-radius: 8px; box-shadow: 0 1px 2px #0003; } [data-theme=modern] .chat .mav .av img, [data-theme=modern] .chat .mav .av i { border-radius: 8px; }
+[data-theme=modern] .chat .mb2 { display: flex; flex-direction: column; align-items: flex-start; max-width: 72%; min-width: 0; }
+[data-theme=modern] .chat .m.o .mb2 { align-items: flex-end; }
+[data-theme=modern] .chat .m .h { display: none; }
+[data-theme=modern] .chat .m .t, [data-theme=modern] .chat .shk { padding: 10px 14px; background: linear-gradient(#fff, #f6f8fb); border: 1px solid #cfd6e0; box-shadow: 0 1px 2px #0000001f; border-radius: 3px; font-size: 16px; line-height: 1.5; }
+[data-theme=modern] .chat .m.o .t { background: linear-gradient(#fbfdff, #eef3f9); }
+[data-theme=modern] .chat .pic { margin: 0; } [data-theme=modern] .chat .pic img { max-width: 100%; border: 4px solid #fff; box-shadow: 0 1px 3px #0003; border-radius: 3px; }
+[data-theme=modern] .chat .m .pic + .t { margin-top: 6px; }
+[data-theme=modern] .chat .mt { display: flex; gap: 14px; margin-top: 6px; font-size: 12px; color: #99a3b1; }
+[data-theme=modern] .chat .sys { color: #8794a6; } [data-theme=modern] .chat .sys:not(:empty) { background: #0000000d; border-radius: 10px; width: fit-content; margin: 6px auto 12px; padding: 1px 10px; }
+[data-theme=modern] .chat .itools { margin: 0; background: linear-gradient(#eef1f6, #dde3eb); border: 0; border-top: 1px solid #b4bfcd; color: #4a5568; padding: 6px 10px 0; gap: 8px; }
+[data-theme=modern] .chat .itools button { background: linear-gradient(#f7f8fa, #cfd5dd); border: 1px solid #9aa4b2; border-radius: 6px; padding: 3px 8px; box-shadow: inset 0 1px #fff; text-shadow: 0 1px #fff; font-size: 12px; }
+[data-theme=modern] .chat .itools .sp { display: none; }
+[data-theme=modern] .chat .pop-wrap { margin: 0; }
+[data-theme=modern] .chat .ibar { display: flex; gap: 8px; align-items: center; padding: 8px 10px calc(10px + env(safe-area-inset-bottom)); background: linear-gradient(#dde3eb, #ccd4de); flex: none; }
+[data-theme=modern] .chat .inp { flex: 1; margin: 0; height: 44px; border: 1px solid #a9b3c1; border-radius: 10px; box-shadow: inset 0 1px 3px #0002; padding: 10px 12px; font-size: 16px; background: #fff; }
+[data-theme=modern] .chat .send { padding: 0; gap: 0; } [data-theme=modern] .chat .send .btn:not(.s) { display: none; }
+[data-theme=modern] .chat .send .btn.s { height: 44px; padding: 0 16px; border-radius: 10px; background: linear-gradient(#f7f8fa, #c3cad4); border: 1px solid #8e98a6; color: #3a4556; box-shadow: inset 0 1px #fff, 0 1px 1px #0002; text-shadow: 0 1px #fff; font-weight: 600; font-size: 0; }
+[data-theme=modern] .chat .send .btn.s::after { content: "发送"; font-size: 16px; }
+[data-theme=modern] .facegrid, [data-theme=modern] .fontbar { border: 0; background: #f3f5f8; }
+/* 空间：现在的 QQ 空间 */
+[data-theme=modern] .zone { background: #f2f3f5; font-family: inherit; color: var(--ink); }
+[data-theme=modern] .zone .banner { height: 170px; background: linear-gradient(160deg, #9fd3ff, #c8b6ff 55%, #ffc6dc); color: #fff; }
+[data-theme=modern] .zone .banner svg { opacity: .55; }
+[data-theme=modern] .zone .banner::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 60px; background: linear-gradient(transparent, #0000002a); }
+[data-theme=modern] .zone .banner h1 { font-family: inherit; font-weight: 700; color: #fff; text-shadow: 0 1px 4px #0004; letter-spacing: 1px; z-index: 1; }
+[data-theme=modern] .zone .banner p { color: #fff; text-shadow: 0 1px 3px #0004; z-index: 1; }
+[data-theme=modern] .zone .yz { background: #ffffffcc; border: 0; }
+[data-theme=modern] .zone .music { background: #ffffffd9; border-radius: 16px; z-index: 1; } [data-theme=modern] .zone .music button { color: var(--mq); }
+[data-theme=modern] .zone .nav { background: #fff; font-weight: normal; padding: 0 8px; }
+[data-theme=modern] .zone .nav button { color: #8a9099; border: 0; padding: 11px 0 9px; font-size: 14px; } [data-theme=modern] .zone .nav button.on { color: var(--ink); font-weight: 600; background: transparent; box-shadow: inset 0 -3px 0 var(--mq); }
+[data-theme=modern] .zone .box { background: #fff; border: 0; border-radius: 12px; margin: 10px; box-shadow: 0 1px 2px #0000000a; }
+[data-theme=modern] .zone .box h3 { background: transparent; color: var(--ink); font-size: 15px; padding: 12px 14px 4px; }
+[data-theme=modern] .zone .post, [data-theme=modern] .zone .msg, [data-theme=modern] .zone .bl { border-bottom: 1px solid #f0f1f3; padding: 12px 14px; }
+[data-theme=modern] .zone .post .ph .av { width: 38px !important; height: 38px !important; }
+[data-theme=modern] .zone .post .ph b, [data-theme=modern] .zone .msg b, [data-theme=modern] .zone .bl .t, [data-theme=modern] .zone .art h2 { color: #2b5a94; font-weight: 600; }
+[data-theme=modern] .zone .post .pt { font-size: 15px; margin: 8px 0; }
+[data-theme=modern] .zone .cm, [data-theme=modern] .zone .lk, [data-theme=modern] .zone .fb, [data-theme=modern] .zone .art .bgm { background: #f6f7f9; border: 0; }
+[data-theme=modern] .zone .lk { border-radius: 6px 6px 0 0; margin-top: 6px; } [data-theme=modern] .zone .cm { margin-top: 0; } [data-theme=modern] .zone .cm b, [data-theme=modern] .zone .lk b { color: #2b5a94; }
+[data-theme=modern] .zone .pa button, [data-theme=modern] .zone .cmform button, [data-theme=modern] .zone .lnk, [data-theme=modern] .zone .msg .re { color: #5a6270; } [data-theme=modern] .zone .pa button.on { color: var(--mq); }
+[data-theme=modern] .zone .cmform input, [data-theme=modern] .zone .zin, [data-theme=modern] .zone .bw input, [data-theme=modern] .zone .bw textarea, [data-theme=modern] .zone .bw select { border: 0; background: #f2f3f5; border-radius: 16px; padding: 6px 12px; }
+[data-theme=modern] .zone .zin { border-radius: 10px; }
+[data-theme=modern] .zone .cai button { background: #fff; border: 0; border-radius: 18px; color: var(--mq); box-shadow: 0 1px 2px #0000000f; }
+[data-theme=modern] .zone .tag { border-color: var(--mq); color: var(--mq); border-radius: 8px; }
+[data-theme=modern] .paper { background: #fff; border-top: 0; border-radius: 16px 16px 0 0; } [data-theme=modern] .paper h3 { color: var(--ink); }
+[data-theme=modern] .paper input:not([type=checkbox]), [data-theme=modern] .paper textarea { border: 0; background: #f2f3f5; border-radius: 10px; }

@@ -179,3 +179,7 @@ input, textarea, select { font: inherit; color: inherit; }
 .zone .bw { padding: 8px; display: flex; flex-direction: column; gap: 8px; font-size: 13px; } .zone .bw input, .zone .bw textarea, .zone .bw select { border: 1px solid #b8d6ef; padding: 5px 6px; font-size: 14px; outline: 0; background: #fff; }
 .zone .bw textarea { height: 260px; line-height: 1.8; resize: vertical; } .zone .bw .row { display: flex; gap: 6px; align-items: center; color: #2f6ea8; } .zone .bw .row .sp { flex: 1; } .zone .bw select { font-size: 12px; padding: 2px; }
 .zone .bw .zbtn { padding: 0; } .zone .bw .dph { margin: 0; }
+
+/* 只给「现代」皮肤用的：消息头像、时间已读、聊天右上「更多」、列表时间；平时不显示 */
+.chat .mav, .chat .mt, .chat .ct .more, .fr .ft { display: none; }
+.chat .mb2, .chat .ibar { display: contents; }

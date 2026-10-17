@@ -245,3 +245,4 @@ input, textarea, select { font: inherit; color: inherit; }
 .pt-fx { position: absolute; font-style: normal; font-size: 26px; bottom: 60px; pointer-events: none; }
 .fx-feed { animation: fxf 1s ease-in forwards; } @keyframes fxf { from { left: 15%; bottom: 150px; } to { left: 46%; bottom: 90px; opacity: 0; transform: scale(.5); } }
 .fx-bath, .fx-play { animation: fxu 1.6s ease-out forwards; opacity: 0; } @keyframes fxu { 0% { opacity: 0; transform: translateY(0); } 20% { opacity: 1; } 100% { opacity: 0; transform: translateY(-110px); } }
+.chat .sys.rc { cursor: pointer; } .chat .sys.rc small { display: block; color: #aaa; font-size: 11px; margin-top: 2px; }

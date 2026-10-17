@@ -375,7 +375,8 @@
       const who = m.from === "me" ? me.nick : nameOf(f);
       const body = m.shake ? `<div class="shk">${m.from === "me" ? "您发送了一个窗口抖动。" : `${esc(who)} 给您发送了一个窗口抖动。`}</div>` : `${photoHtml(m.photo, `data-kind="chat" data-fid="${esc(f.id)}" data-mid="${esc(m.id)}"`, m.id)}${m.text || !m.photo ? `<div class="t" style="${m.color ? `color:${m.color};` : ""}${m.bold ? "font-weight:bold;" : ""}">${richText(m.text)}</div>` : ""}`;
       // .mav（头像）和 .mt（时间、已读）平时藏着，「现代」皮肤才露出来
-      return `${sep}<div class="m ${m.from === "me" ? "o" : "i"}"><span class="mav">${m.from === "me" ? myAv(40) : fAv(f, 40)}</span><div class="mb2"><div class="h">${esc(who)}　${hms(d)}</div>${body}<div class="mt">${m.from === "me" ? `<span>${idx < lastHim ? "已读" : "送达"}</span><span>${hm(d)}</span>` : `<span>${hm(d)}</span><span>已读</span>`}</div></div></div>`;
+      if (m.recalled) return `${sep}<div class="sys rc" data-act="msg-menu" data-id="${esc(m.id)}">${esc(m.recalled.note || `${m.from === "me" ? "你" : nameOf(f)}撤回了一条消息`)}${m.from === "him" && m.recalled.glimpse ? `<small>（你眼疾手快看到了：${richText(m.recalled.text)}）</small>` : ""}</div>`;
+      return `${sep}<div class="m ${m.from === "me" ? "o" : "i"}" data-act="msg-menu" data-id="${esc(m.id)}"><span class="mav">${m.from === "me" ? myAv(40) : fAv(f, 40)}</span><div class="mb2"><div class="h">${esc(who)}　${hms(d)}</div>${body}<div class="mt">${m.from === "me" ? `<span>${idx < lastHim ? "已读" : "送达"}</span><span>${hm(d)}</span>` : `<span>${hm(d)}</span><span>已读</span>`}</div></div></div>`;
     }).join("");
     if (c.msgs.some(m => m.from === "him" && !m.read)) { c.msgs.forEach(m => { m.read = true; }); saveChat(c); }
     const typing = S.meta.queue.some(q => q.fid === f.id && q.kind === "reply" && q.typing);
@@ -808,6 +809,24 @@
   const queuePing = (f, delayMs, extra = {}) => { S.meta.queue.push({ fid: f.id, kind: "ping", due: new Date(Date.now() + delayMs * TS()).toISOString(), typing: true, ...extra }); saveMeta(); };
   /** 最后一条真人消息是他的（系统提示不算），前面有她发的，而且没在等他回 */
   const canReroll = f => { const ms = chatOf(f.id).msgs.filter(m => m.from !== "sys"); return ms.length && ms[ms.length - 1].from === "him" && ms.some(m => m.from === "me") && !S.meta.queue.some(q => q.fid === f.id && q.kind === "reply"); };
+  /** 删掉一句后，他记忆里那一批重写一遍（他那批回复的 mem 是一条，按剩下的内容重写） */
+  function rememo(f, mem) { if (!mem) return; const c = chatOf(f.id); const batch = c.msgs.filter(m => m.mem === mem && !m.recalled); forget(f, mem); if (!batch.length) return;
+    const i = c.msgs.indexOf(batch[0]); const before = []; for (let j = i - 1; j >= 0 && c.msgs[j].from !== "him"; j--) if (c.msgs[j].from === "me" && !c.msgs[j].recalled) before.unshift(c.msgs[j]);
+    remember(f, `在 QQ 上，${S.meta.accts[f.acct].nick} 说${before.map(m => `「${(m.text || "").slice(0, 60)}」`).join("")}，我回：${batch.map(m => `「${(m.text || "").slice(0, 60)}」`).join("")}`, mem); }
+  /** 她的话删了/撤回了：后面那批他的回复的记忆跟着重写 */
+  const nextMem = (c, m) => { const i = c.msgs.indexOf(m); const n = c.msgs.slice(i + 1).find(x => x.from === "him" && x.mem); return n && n.mem; };
+  ACT["msg-menu"] = b => { const f = friendById(S.fid); const c = chatOf(f.id); const m = c.msgs.find(x => x.id === b.dataset.id); if (!m) return;
+    const opts = [["del", "删除这条（他也不记得了）"], ...(m.from === "me" && !m.recalled ? [["recall", "撤回"]] : []), ...(m.recalled && m.from === "me" ? [["note", "改撤回提示"]] : [])];
+    sheet(`<h3>${m.recalled ? "撤回的消息" : esc((m.text || "[图片]").slice(0, 30))}</h3><div class="mlist">${opts.map(([v, t]) => `<button data-v="${v}">${t}</button>`).join("")}</div><div class="btns"><button data-v="no">取消</button></div>`, async v => {
+      closeSheet(); if (v === "no") return;
+      if (v === "del") { const mem = m.from === "him" ? m.mem : nextMem(c, m); c.msgs = c.msgs.filter(x => x !== m); saveChat(c); rememo(f, mem); render(); return toast("删掉了"); }
+      if (v === "recall" || v === "note") { const r = await ask(v === "recall" ? "撤回" : "改撤回提示", [{ label: "撤回提示（不填就是「你撤回了一条消息」）", value: m.recalled ? m.recalled.note : "", ph: `${A().nick}因为太可爱了撤回了一条消息`, max: 40 }], v === "recall" ? "撤回" : "好了"); if (!r) return;
+        if (v === "note") { m.recalled.note = r[0]; saveChat(c); return render(); }
+        // 他已经回过这句了就肯定看到了；没回过：他在线的话一半机会撤回前已经看到
+        const replied = c.msgs.slice(c.msgs.indexOf(m) + 1).some(x => x.from === "him");
+        m.recalled = { text: m.text || "", note: r[0], seen: replied || (statusOf(f) === "online" && Math.random() < .5) }; saveChat(c); rememo(f, nextMem(c, m));
+        if (!replied && !S.meta.queue.some(q => q.fid === f.id && q.kind === "reply") && c.msgs.slice(c.msgs.indexOf(m) + 1).every(x => x.from !== "me")) {} // 没别的话就不催他回
+        render(); } }); };
   /** 不满意他最后这几条：删掉（连他记忆里那条），马上重新回 */
   /** 她不想先开口：让他马上主动来找她（他不知道是她按的）。她最后发的还没回的话，就是催他回 */
   ACT.ping = () => { const f = friendById(S.fid); const c = chatOf(f.id); const ms = c.msgs.filter(m => m.from !== "sys");
@@ -1119,7 +1138,7 @@
     const now = Date.now(); const st = statusOf(f); const base = st === "offline" ? nextOnline(f).getTime() - now : 0;
     S.meta.queue.push({ fid: f.id, kind: "zone", ev: [ev], due: new Date(now + (base + delayMs) * TS()).toISOString() }); saveMeta();
   }
-  const msgLine = (m, f) => `[${hms(thereDate(f.acct, new Date(m.at))).slice(0, 5)}] ${m.from === "me" ? "用户" : "你"}：${m.shake ? "[窗口抖动]" : `${photoText(m.photo, m.from === "me")}${m.text || ""}`}`;
+  const msgLine = (m, f) => `[${hms(thereDate(f.acct, new Date(m.at))).slice(0, 5)}] ${m.from === "me" ? "用户" : "你"}：${m.recalled ? (m.from === "me" ? (m.recalled.seen ? `[撤回了一条消息，你撤回前看到了：${m.recalled.text}]` : "[撤回了一条消息]") : `[你撤回了：${m.recalled.text}]${m.recalled.glimpse ? "（她看到了）" : ""}`) : m.shake ? "[窗口抖动]" : `${photoText(m.photo, m.from === "me")}${m.text || ""}`}`;
   /** 一身 QQ秀 的文字描述 */
   function showDesc(sh) { const nm = (slot, val) => (CAT.find(i => i.slot === slot && i.val === val) || {}).name;
     return `${[nm("outfit", sh.outfit), nm("hair", sh.hair), sh.wings && nm("wings", sh.wings), ...(sh.acc || []).map(a => nm("acc", a))].filter(Boolean).join("、")}，背景${nm("bg", sh.bg) || "默认"}`; }
@@ -1210,6 +1229,7 @@
       futures.length ? `用户提到的「${futures.join("」「")}」，是你那边还没有的东西，你没听说过。` : "",
       FMT_REPLY,
       CP_FMT(f),
+      "说错话想撤回自己这次发的最后一条，在最后加：\n===撤回===\n撤回提示（可以不写）\n===结束===",
       petCtx(f),
       "说了过一会儿再来找用户的话，在最后加：\n===待会找你===\n多少分钟后（只写数字）\n===结束===",
       sleepSoon(f) ? `你快到睡觉的点了（大概 ${sleepSoon(f)} 分钟后）。要去睡就跟用户说晚安，再写下线块。` : "",
@@ -1333,7 +1353,8 @@
       parts.push(`${photoText({ desc: r.photo.desc })}${r.photo.caption}`); play("msg");
       if (S.view === "chat" && S.fid === f.id) render(); else qqPop("QQ 消息", `${fAv(f, 28)}<div><b>${esc(nameOf(f))}</b><br>[图片]</div>`);
     }
-    if (r.raw) { applyShowBlocks(f, r.raw); applyCouple(f, r.raw); applyPet(f, r.raw); }
+    if (r.raw) { applyShowBlocks(f, r.raw); applyCouple(f, r.raw); applyPet(f, r.raw);
+      if (/===\s*撤回\s*===/.test(r.raw)) { const last = [...c.msgs].reverse().find(m => m.from === "him" && !m.recalled && !m.shake); if (last) { await wait(rand(2, 6) * 1000 * TS()); last.recalled = { text: last.text, note: (block(r.raw, "撤回") || "").slice(0, 40), glimpse: Math.random() < .5 }; saveChat(c); if (S.view === "chat" && S.fid === f.id) render(); } } }
     if (r.sig) { f.sig = r.sig.slice(0, 60); saveFriend(f); }
     if (r.off > 0) { f.offUntil = new Date(Date.now() + Math.min(600, r.off) * 60e3 * TS()).toISOString(); saveFriend(f); }
     const mine = c.msgs.filter(m => m.from === "me").slice(-3).map(m => m.shake ? "[窗口抖动]" : `「${photoText(m.photo, true)}${(m.text || "").slice(0, 60)}」`).join("");

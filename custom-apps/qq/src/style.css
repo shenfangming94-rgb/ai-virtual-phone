@@ -226,3 +226,15 @@ input, textarea, select { font: inherit; color: inherit; }
 .cp-photos { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; } .cp-photos img { width: 100%; border-radius: 6px; border: 3px solid #fff; box-shadow: 0 1px 4px #0002; }
 .cp-entry { display: flex; gap: 10px; align-items: center; padding: 8px; cursor: pointer; background: #fff0f6 !important; } .cp-entry .px { width: 110px; border-radius: 6px; } .cp-entry b { display: block; color: #c2187a; font-size: 14px; } .cp-entry span { font-size: 12px; color: #a0607a; }
 .cp-note.npc { background: #e8f3ff; margin: 0 15px 10px 15px; transform: rotate(-1.2deg); }
+
+/* QQ宠物 */
+.petv { background: #eef7ff; }
+.pt-stage { flex: none; position: relative; height: 230px; background: linear-gradient(#bfe4ff, #e9f6ff 70%, #cdeaa8 70%); display: flex; flex-direction: column; align-items: center; justify-content: flex-end; padding-bottom: 10px; }
+.pt-img { width: 130px; height: 130px; object-fit: contain; animation: ptb 1.6s ease-in-out infinite; } .pt-stage.happy .pt-img { animation: ptj .7s ease-in-out infinite; }
+.pt-img.dirty { filter: sepia(.5) brightness(.85); }
+@keyframes ptb { 50% { transform: translateY(-4px) scale(1.02, .98); } } @keyframes ptj { 50% { transform: translateY(-16px) rotate(-4deg); } }
+.pt-say { position: absolute; top: 18px; background: #fff; border-radius: 14px; padding: 5px 12px; font-size: 13px; color: #456; box-shadow: 0 1px 4px #0002; }
+.pt-name { font-size: 12px; color: #3a6a3a; margin-top: 4px; }
+.pt-bars { flex: none; padding: 8px 14px; background: #fff; } .pt-bar { display: flex; align-items: center; gap: 8px; font-size: 12px; color: #456; margin: 3px 0; } .pt-bar span { width: 30px; } .pt-bar i { flex: 1; height: 8px; background: #edf2f7; border-radius: 4px; overflow: hidden; } .pt-bar b { display: block; height: 100%; border-radius: 4px; } .pt-bar em { width: 24px; font-style: normal; text-align: right; color: #789; }
+.pt-acts { flex: none; display: flex; gap: 8px; padding: 8px 12px; background: #fff; border-top: 1px solid #e5eef7; } .pt-acts button { flex: 1; text-align: center; padding: 9px 0; border-radius: 18px; background: linear-gradient(#7cc4ff, #3a8fe0); color: #fff; font-size: 14px; font-weight: bold; }
+.pt-log p { font-size: 12px; color: #456; padding: 4px 2px; border-bottom: 1px dashed #d8e6f4; } .pt-log small { color: #9ab; margin-left: 6px; }

@@ -381,7 +381,7 @@
     const typing = S.meta.queue.some(q => q.fid === f.id && q.kind === "reply" && q.typing);
     return `<div class="chat">
       <div class="ct"><button class="bk" data-act="back-main">‹</button>${fAv(f, 40, st === "offline")}<div class="ctn"><b>${esc(nameOf(f))}</b> <span>[${STATUS_NAME[st]}]</span><small>${esc(f.sig || "")}</small></div><button class="more" data-act="open-zone" data-who="${esc(f.id)}">更多</button></div>
-      <div class="tools"><button data-act="nope" data-t="对方没有安装摄像头">📹 视频</button><button data-act="nope" data-t="对方没有麦克风">🎤 语音</button><button data-act="nope" data-t="文件太大了，传了半天还是失败">📁 传文件</button><button data-act="open-zone" data-who="${esc(f.id)}">🌐 空间</button><button data-act="open-show" data-who="${esc(f.id)}">👗 QQ秀</button>${cpOn() && cp().fid === f.id ? `<button data-act="open-couple">💕 情侣</button>` : ""}</div>
+      <div class="tools"><button data-act="nope" data-t="对方没有安装摄像头">📹 视频</button><button data-act="nope" data-t="对方没有麦克风">🎤 语音</button><button data-act="nope" data-t="文件太大了，传了半天还是失败">📁 传文件</button><button data-act="open-zone" data-who="${esc(f.id)}">🌐 空间</button><button data-act="open-show" data-who="${esc(f.id)}">👗 QQ秀</button>${cpOn() && cp().fid === f.id ? `<button data-act="open-couple">💕 情侣</button>` : ""}${!pet() || pet().fid === f.id ? `<button data-act="open-pet">🐧 宠物</button>` : ""}</div>
       ${miniBarHtml()}
       <div class="log" id="log">${lines || `<div class="sys">${st === "offline" ? `${esc(nameOf(f))} 现在不在线，消息会在他上线后收到` : "开始聊天吧"}</div>`}${typing && st === "online" ? `<div class="sys">对方正在输入…</div>` : ""}</div>
       <div class="itools"><button data-act="font"><b style="color:${S.meta.font.color}">A</b> 字体</button><button data-act="faces">${faceSvg("微笑", 16)} 表情</button><button data-act="shake">〰 抖动</button><button data-act="send-photo">📷 图片</button>${canReroll(f) ? `<button data-act="reroll">↻ 重新回复</button>` : ""}<button data-act="ping">💭 让他来找我</button><span class="sp"></span><button data-act="history">消息记录</button></div>
@@ -548,6 +548,35 @@
   ACT["cp-note"] = () => { const t = ($("#cpnote").value || "").trim(); if (!t) return; cp().notes.push({ who: "me", text: t, at: new Date().toISOString() }); saveMeta(); queueZone(cpFriend(), { kind: "cpNote" }, rand(2, 20) * 60e3); render(); };
   ACT["cp-diary"] = async () => { const r = await ask("写恋爱日记", [{ label: "标题", max: 30 }, { label: "正文", long: true, max: 3000 }], "写好了"); if (!r || !r[1]) return; cp().diary.push({ who: "me", title: r[0] || "无题", text: r[1], at: new Date().toISOString() }); saveMeta(); queueZone(cpFriend(), { kind: "cpDiary" }, rand(10, 90) * 60e3); render(); };
   ACT["cp-photo"] = async () => { const ph = await pickPhotoFor(S.meta.cur); if (!ph) return; cp().photos = [...(cp().photos || []), ph.ref]; saveMeta(); render(); };
+  // ───────────────────────── QQ宠物：和他一起养那只企鹅（她发的图）；饱/干净/开心随时间掉，喂/洗/玩，他每天也来照顾 ─────────────────────────
+  // A().pet = { fid, name, born, hunger, clean, mood, exp, last, log: [{ who, act, at }] }
+  const PET_ACTS = { feed: ["喂", "hunger", 30, "🍙"], bath: ["洗澡", "clean", 40, "🛁"], play: ["陪它玩", "mood", 30, "🎾"] };
+  const pet = () => A().pet || null;
+  /** 按过去了多久往下掉（每小时：饱 -4、干净 -3、开心 -3） */
+  function petTick() { const p = pet(); if (!p) return; const h = (Date.now() - new Date(p.last).getTime()) / 3600e3; if (h < .05) return;
+    p.hunger = Math.max(0, p.hunger - h * 4); p.clean = Math.max(0, p.clean - h * 3); p.mood = Math.max(0, p.mood - h * 3); p.last = new Date().toISOString(); }
+  const petLv = p => 1 + Math.floor((p.exp || 0) / 100);
+  const petMood = p => p.hunger < 25 ? "饿了" : p.clean < 25 ? "脏兮兮的" : p.mood < 25 ? "不开心" : p.hunger + p.clean + p.mood > 220 ? "很开心" : "还不错";
+  function petDo(who, act) { petTick(); const p = pet(); const [name, k, n] = PET_ACTS[act]; p[k] = Math.min(100, p[k] + n); p.exp = (p.exp || 0) + 10; p.log = [...(p.log || []), { who, act, at: new Date().toISOString() }].slice(-30); saveMeta(); }
+  const petCtx = f => { const p = pet(); if (!p || p.fid !== f.id) return ""; petTick();
+    return `你和用户在 QQ 上一起养了一只 QQ宠物小企鹅「${p.name}」，${petLv(p)} 级，现在${petMood(p)}（饱 ${Math.round(p.hunger)}、干净 ${Math.round(p.clean)}、开心 ${Math.round(p.mood)}，满分 100）。想照顾它就在最后加 ===喂企鹅=== / ===给企鹅洗澡=== / ===陪企鹅玩===（块里不用写内容）。`; };
+  function applyPet(f, raw) { const p = pet(); if (!p || p.fid !== f.id || !raw) return; const done = [];
+    for (const [act, re] of [["feed", /===\s*喂企鹅\s*===/], ["bath", /===\s*给企鹅洗澡\s*===/], ["play", /===\s*陪企鹅玩\s*===/]]) if (re.test(raw)) { petDo(f.id, act); done.push(PET_ACTS[act][0]); }
+    if (done.length) { qqPop("QQ宠物", `<img src="${PENG_IMG}" style="width:28px;height:28px;object-fit:contain"><div><b>${esc(nameOf(f))}</b><br>${done.join("、")}了${esc(p.name)}</div>`); remember(f, `我给 QQ宠物${p.name}${done.join("、")}了`); } }
+  V.pet = () => { petTick(); const p = pet(); const f = friendById(p.fid); const bar = (n, v, c) => `<div class="pt-bar"><span>${n}</span><i><b style="width:${Math.round(v)}%;background:${c}"></b></i><em>${Math.round(v)}</em></div>`;
+    const st = petMood(p); const who = w => w === "me" ? A().nick : nameOf(friendById(w) || {});
+    return `<div class="petv">${titlebar(`QQ宠物 · ${esc(p.name)}`, S.petBack || "back-main")}
+      <div class="pt-stage ${st === "很开心" ? "happy" : ""}"><div class="pt-say">${{ 饿了: "肚子好饿…🍙", 脏兮兮的: "身上脏脏的…🛁", 不开心: "陪我玩嘛…", 很开心: "最喜欢你们啦！♡", 还不错: "嘎～" }[st]}</div><img class="pt-img ${p.clean < 25 ? "dirty" : ""}" src="${PENG_IMG}" alt=""><div class="pt-name">${esc(p.name)} · ${petLv(p)} 级 · 和 ${esc(nameOf(f))} 一起养</div></div>
+      <div class="pt-bars">${bar("饱", p.hunger, "#ffb347")}${bar("干净", p.clean, "#5ab4ff")}${bar("开心", p.mood, "#ff7aa8")}</div>
+      <div class="pt-acts">${Object.entries(PET_ACTS).map(([k, [n, , , e]]) => `<button data-act="pet-do" data-k="${k}">${e} ${n}</button>`).join("")}</div>
+      <div class="qs-body"><div class="pt-log">${[...(p.log || [])].reverse().slice(0, 15).map(l => `<p>${esc(who(l.who))} ${PET_ACTS[l.act][0]}了${esc(p.name)} <small>${esc(ago(S.meta.cur, l.at))}</small></p>`).join("") || `<p class="empty">刚领养，快照顾它吧</p>`}</div></div></div>`; };
+  ACT["open-pet"] = async () => { S.petBack = S.view === "chat" ? "back-chat" : "back-main";
+    if (!pet()) { const f = S.view === "chat" ? friendById(S.fid) : myFriends()[0]; if (!f) return toast("先加个好友一起养吧");
+      const r = await ask(`和 ${nameOf(f)} 一起领养一只小企鹅`, [{ label: "给它起个名字", value: "嘎嘎", max: 8 }], "领养"); if (!r || !r[0]) return;
+      A().pet = { fid: f.id, name: r[0], born: new Date().toISOString(), hunger: 70, clean: 80, mood: 70, exp: 0, last: new Date().toISOString(), log: [] }; saveMeta();
+      const ch = chatOf(f.id); ch.msgs.push({ id: uid("m"), from: "sys", text: `你和 ${nameOf(f)} 一起领养了 QQ宠物小企鹅「${r[0]}」🐧`, at: new Date().toISOString() }); saveChat(ch); remember(f, `${A().nick} 和我在 QQ 上一起领养了一只 QQ宠物小企鹅，叫「${r[0]}」`); }
+    S.view = "pet"; render(); };
+  ACT["pet-do"] = b => { petDo("me", b.dataset.k); render(); toast(`${PET_ACTS[b.dataset.k][0]}了${pet().name}`); };
   // ───────────────────────── QQ秀：像素小人（src/qqshow.js 画），衣柜、Q币、送礼、他自己换装 ─────────────────────────
   // show = { g: f|m, hair, hairC, eyeC, outfit, wings, acc: [], bg, eyes, mouth, owned: [物品 id], qb: Q币, gifts: [{ name, from, items, at }] }
   const CAT = [
@@ -727,7 +756,7 @@
   };
   ACT.remark = async () => { const fr = friendById(S.zoneOf); const r = await ask("修改备注", [{ label: "备注名（不填就显示他的名字）", value: fr.remark, max: 16 }]); if (r) { fr.remark = r[0]; saveFriend(fr); render(); } };
   ACT.menu = () => sheet(`<h3>菜单</h3><div class="mlist">
-      <button data-v="nick">修改昵称</button><button data-v="qq">修改 QQ 号（现在：${esc(A().qq)}）</button><button data-v="show">我的QQ秀</button><button data-v="theme">更换皮肤</button><button data-v="sound">声音：${S.meta.sound !== false ? "开" : "关"}</button><button data-v="music">我的音乐（${S.meta.music.length} 首）</button><button data-v="export">导出数据</button><button data-v="import">导入数据</button><button data-v="switch">切换帐号</button><button data-v="about">关于</button></div><div class="btns"><button data-v="no">关闭</button></div>`,
+      <button data-v="nick">修改昵称</button><button data-v="qq">修改 QQ 号（现在：${esc(A().qq)}）</button><button data-v="show">我的QQ秀</button><button data-v="pet">QQ宠物</button><button data-v="theme">更换皮肤</button><button data-v="sound">声音：${S.meta.sound !== false ? "开" : "关"}</button><button data-v="music">我的音乐（${S.meta.music.length} 首）</button><button data-v="export">导出数据</button><button data-v="import">导入数据</button><button data-v="switch">切换帐号</button><button data-v="about">关于</button></div><div class="btns"><button data-v="no">关闭</button></div>`,
     async v => { closeSheet();
       if (v === "nick") { const r = await ask("修改昵称", [{ label: "昵称", value: A().nick, max: 16 }]); if (r && r[0]) { A().nick = r[0]; saveMeta(); render(); } }
       if (v === "qq") { const r = await ask("修改 QQ 号", [{ label: `QQ 号（5 到 11 位数字）`, value: A().qq, max: 11 }]); if (r) { const n = r[0].replace(/\D/g, ""); if (n.length < 5) return toast("QQ 号要 5 到 11 位数字"); A().qq = n; saveMeta(); render(); toast("QQ 号改好了"); } }
@@ -735,6 +764,7 @@
       if (v === "music") musicSheet();
       if (v === "theme") themeSheet();
       if (v === "show") ACT["open-show"]({ dataset: { who: "me" } });
+      if (v === "pet") ACT["open-pet"]();
       if (v === "export") exportData();
       if (v === "import") importData();
       if (v === "switch") ACT.logout();
@@ -1176,6 +1206,7 @@
       futures.length ? `用户提到的「${futures.join("」「")}」，是你那边还没有的东西，你没听说过。` : "",
       FMT_REPLY,
       CP_FMT(f),
+      petCtx(f),
       "说了过一会儿再来找用户的话，在最后加：\n===待会找你===\n多少分钟后（只写数字）\n===结束===",
       sleepSoon(f) ? `你快到睡觉的点了（大概 ${sleepSoon(f)} 分钟后）。要去睡就跟用户说晚安，再写下线块。` : "",
       `你现在的 QQ秀：${showDesc(hisShow(f))}。说自己换了 QQ秀、或者说送了她 QQ秀，就一定要写对应的块，不写就等于没换、没送。`,
@@ -1269,6 +1300,7 @@
         if (planDay(f)) saveFriend(f);
         const it = f.plan.items.find(x => !x.done && new Date(x.at) <= new Date()); if (!it) continue;
         if (it.kind === "ping") { it.done = true; saveFriend(f); if (Date.now() - new Date(it.at).getTime() < 3600e3 && statusOf(f) !== "offline" && mayPing(f)) queuePing(f, rand(5, 60) * 1000); continue; }
+        if (it.kind === "petcare") { it.done = true; saveFriend(f); const p = pet(); if (p && p.fid === f.id && Date.now() - new Date(it.at).getTime() < 6 * 3600e3) { petTick(); const act = p.hunger <= p.clean && p.hunger <= p.mood ? "feed" : p.clean <= p.mood ? "bath" : "play"; petDo(f.id, act); if (recentAt(it.at)) qqPop("QQ宠物", `<img src="${PENG_IMG}" style="width:28px;height:28px;object-fit:contain"><div><b>${esc(nameOf(f))}</b><br>${PET_ACTS[act][0]}了${esc(p.name)}</div>`); } continue; }
         if (it.kind === "cpvisit") { it.done = true; saveFriend(f); if (cpOn() && cp().fid === f.id) await cpVisit(f, it); continue; }
         it.tries = (it.tries || 0) + 1;
         const ok = it.kind === "post" ? await selfPost(f, it) : it.kind === "blog" ? await selfBlog(f, it) : await browse(f, it);
@@ -1297,7 +1329,7 @@
       parts.push(`${photoText({ desc: r.photo.desc })}${r.photo.caption}`); play("msg");
       if (S.view === "chat" && S.fid === f.id) render(); else qqPop("QQ 消息", `${fAv(f, 28)}<div><b>${esc(nameOf(f))}</b><br>[图片]</div>`);
     }
-    if (r.raw) { applyShowBlocks(f, r.raw); applyCouple(f, r.raw); }
+    if (r.raw) { applyShowBlocks(f, r.raw); applyCouple(f, r.raw); applyPet(f, r.raw); }
     if (r.sig) { f.sig = r.sig.slice(0, 60); saveFriend(f); }
     if (r.off > 0) { f.offUntil = new Date(Date.now() + Math.min(600, r.off) * 60e3 * TS()).toISOString(); saveFriend(f); }
     const mine = c.msgs.filter(m => m.from === "me").slice(-3).map(m => m.shake ? "[窗口抖动]" : `「${photoText(m.photo, true)}${(m.text || "").slice(0, 60)}」`).join("");
@@ -1337,7 +1369,7 @@
     hisShow(f).qb += 20; // 他每天签到
     const start = new Date(); start.setHours(0, 0, 0, 0); const items = [];
     const pick = () => { for (let i = 0; i < 60; i++) { const d = new Date(start.getTime() + rand(0, 1439) * 60e3); if (statusOf(f, d) !== "offline") return d; } return null; };
-    for (const [kind, n] of [["post", rand(1, 3)], ["browse", rand(1, 3)], ["blog", Math.random() < 0.3 ? 1 : 0], ["ping", rand(1, 2)], ["cpvisit", cpOn() && cp().fid === f.id && Math.random() < .5 ? 1 : 0]]) for (let i = 0; i < n; i++) { const d = pick(); if (d) items.push({ kind, at: d.toISOString() }); }
+    for (const [kind, n] of [["post", rand(1, 3)], ["browse", rand(1, 3)], ["blog", Math.random() < 0.3 ? 1 : 0], ["ping", rand(1, 2)], ["cpvisit", cpOn() && cp().fid === f.id && Math.random() < .5 ? 1 : 0], ["petcare", pet() && pet().fid === f.id ? rand(1, 2) : 0]]) for (let i = 0; i < n; i++) { const d = pick(); if (d) items.push({ kind, at: d.toISOString() }); }
     f.plan = { day: today, items: items.sort((a, b) => a.at.localeCompare(b.at)) }; return true;
   }
   const recentAt = iso => Date.now() - new Date(iso).getTime() < 30 * 60e3; // 刚刚发生的才弹提示，补上的不吵她

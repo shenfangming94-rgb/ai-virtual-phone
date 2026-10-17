@@ -339,11 +339,11 @@
     const own = mine ? "me" : f.id;
     const postHtml = (owner, p) => {
       const of = owner === "me" ? null : friendById(owner);
-      const likes = (p.likes || []).filter(shown); const iLike = likes.some(l => l.who === "me");
+      const likes = (p.likes || []).filter(shown); const iLike = likes.some(l => l.who === "me"); const cms = (p.comments || []).filter(shown);
       return `<div class="post"><div class="ph">${of ? fAv(of, 26) : myAv(26)}<b>${esc(of ? nameOf(of) : A().nick)}</b><em>${esc(ago(acct, p.at))}</em></div><div class="pt">${richText(p.text)}</div>
-      <div class="pa"><button class="${iLike ? "on" : ""}" data-act="like" data-owner="${esc(owner)}" data-post="${esc(p.id)}">👍 ${iLike ? "取消赞" : "赞"}${likes.length ? `(${likes.length})` : ""}</button></div>
-      ${likes.length ? `<div class="lk">👍 ${likes.map(l => esc(whoName(l.who))).join("、")} 觉得很赞</div>` : ""}
-      ${(p.comments || []).filter(shown).map(cm => `<div class="cm" data-act="reply-cm" data-post="${esc(p.id)}" data-who="${esc(cm.who)}"><b>${esc(whoName(cm.who))}</b>${cm.to ? ` 回复 <b>${esc(whoName(cm.to))}</b>` : ""}：${richText(cm.text)}</div>`).join("")}
+      <div class="pa"><button class="${iLike ? "on" : ""}" data-act="like" data-owner="${esc(owner)}" data-post="${esc(p.id)}">${iLike ? "已赞" : "赞"}(${likes.length})</button><span>|</span><button data-act="focus-cm" data-post="${esc(p.id)}">评论(${cms.length})</button></div>
+      ${likes.length ? `<div class="lk">${[...likes].sort((x, y) => (y.who === "me") - (x.who === "me")).map(l => `<b>${esc(l.who === "me" ? "我" : whoName(l.who))}</b>`).join("、")} 觉得很赞</div>` : ""}
+      ${cms.map(cm => `<div class="cm" data-act="reply-cm" data-post="${esc(p.id)}" data-who="${esc(cm.who)}"><b>${esc(whoName(cm.who))}</b>${cm.to ? ` 回复 <b>${esc(whoName(cm.to))}</b>` : ""}：${richText(cm.text)}</div>`).join("")}
       <div class="cmform"><input placeholder="评论…" data-post="${esc(p.id)}"><button data-act="comment" data-owner="${esc(owner)}" data-post="${esc(p.id)}">评论</button></div></div>`;
     };
     const boardHtml = b => `<div class="msg">${whoAv(b.who, 30)}<div class="mb"><b>${esc(whoName(b.who))}</b><em>${esc(ago(acct, b.at))}</em><div>${richText(b.text)}</div>${b.reply ? `<div class="re">主人回复：${richText(b.reply)}</div>` : ""}</div></div>`;
@@ -495,6 +495,7 @@
     if (!had && o !== "me") remember(friendById(o), `${A().nick} 在 QQ 空间赞了我的说说「${p.text.slice(0, 60)}」`);
     render();
   };
+  ACT["focus-cm"] = b => { const i = $(`.cmform input[data-post="${b.dataset.post}"]`); if (i) { i.dataset.to = ""; i.placeholder = "评论…"; i.focus(); } };
   /** 点一条评论 = 回复这个人 */
   ACT["reply-cm"] = b => {
     const inp = $(`.cmform input[data-post="${b.dataset.post}"]`); if (!inp) return; const w = b.dataset.who;

@@ -159,3 +159,4 @@ input, textarea, select { font: inherit; color: inherit; }
 .zone .pa { display: flex; justify-content: flex-end; align-items: center; font-size: 12px; margin: 2px 0; } .zone .pa button { color: #2f6ea8; font-size: 12px; } .zone .pa button.on { color: #999; font-weight: bold; } .zone .pa span { color: #bbb; margin: 0 5px; }
 .zone .lk { font-size: 11px; color: #888; margin: 2px 0 3px; } .zone .lk b { color: #2f6ea8; font-weight: normal; }
 .zone .cm { cursor: pointer; }
+.zone .msg .rbtn { color: #2f6ea8; font-size: 12px; margin-top: 2px; }

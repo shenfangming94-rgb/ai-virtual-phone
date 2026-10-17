@@ -346,7 +346,7 @@
       ${cms.map(cm => `<div class="cm" data-act="reply-cm" data-post="${esc(p.id)}" data-who="${esc(cm.who)}"><b>${esc(whoName(cm.who))}</b>${cm.to ? ` 回复 <b>${esc(whoName(cm.to))}</b>` : ""}：${richText(cm.text)}</div>`).join("")}
       <div class="cmform"><input placeholder="评论…" data-post="${esc(p.id)}"><button data-act="comment" data-owner="${esc(owner)}" data-post="${esc(p.id)}">评论</button></div></div>`;
     };
-    const boardHtml = b => `<div class="msg">${whoAv(b.who, 30)}<div class="mb"><b>${esc(whoName(b.who))}</b><em>${esc(ago(acct, b.at))}</em><div>${richText(b.text)}</div>${b.reply ? `<div class="re">主人回复：${richText(b.reply)}</div>` : ""}</div></div>`;
+    const boardHtml = b => `<div class="msg">${whoAv(b.who, 30)}<div class="mb"><b>${esc(whoName(b.who))}</b><em>${esc(ago(acct, b.at))}</em><div>${richText(b.text)}</div>${b.reply ? `<div class="re">主人回复：${richText(b.reply)}</div>` : mine && b.who !== "me" ? `<button class="rbtn" data-act="board-reply" data-id="${esc(b.id)}">回复</button>` : ""}</div></div>`;
     const tab = S.zoneTab;
     const visBox = `<div class="box"><h3><span>最近访客</span><span>共 ${(z.visitors || []).length} 人</span></h3>
         <div class="vis">${visitors.map(v => `<div>${whoAv(v.who, 44)}<span>${esc(whoName(v.who))}</span><small>${esc(ago(acct, v.at))}</small></div>`).join("") || `<div class="empty" style="grid-column:1/-1">还没有人来过</div>`}</div></div>`;
@@ -514,6 +514,13 @@
     const t = ($("#boardin").value || "").trim(); if (!t) return; const f = friendById(S.zoneOf);
     f.zone.board.push({ id: uid("b"), who: "me", text: t, at: new Date().toISOString() }); saveFriend(f);
     queueZone(f, { kind: "board" }, rand(2, 10) * 60e3); render(); toast("留言成功");
+  };
+  /** 她在自己留言板上回别人的留言；留言的是好友就让他知道 */
+  ACT["board-reply"] = async b => {
+    const m = A().zone.board.find(x => x.id === b.dataset.id); if (!m) return;
+    const r = await ask(`回复 ${whoName(m.who)}`, [{ label: "主人回复", long: true, max: 200 }], "回复"); if (!r || !r[0]) return;
+    m.reply = r[0]; m.replyAt = new Date().toISOString(); saveMeta(); render();
+    const f = m.who.startsWith("f:") && friendById(m.who.slice(2)); if (f) { remember(f, `${A().nick} 在 QQ 空间回复了我的留言「${m.text.slice(0, 60)}」：「${m.reply}」`); queueZone(f, { kind: "boardReply", bid: m.id }, rand(2, 15) * 60e3); }
   };
   ACT.step = () => {
     const f = friendById(S.zoneOf); const z = f.zone;
@@ -693,6 +700,7 @@
     for (const e of evs.filter(e => e.kind === "hisPostComment")) { const p = z.posts.find(x => x.id === e.pid); const mine = p && (p.comments || []).filter(cm => cm.who === "me").slice(-1)[0];
       if (mine) { others = true; todo.push(`你的说说「${p.text.slice(0, 80)}」下面的评论：\n${cmText(p)}\n用户刚评论${mine.to && mine.to !== `f:${f.id}` ? `（回复 ${whoName(mine.to)}）` : ""}：「${mine.text}」。回不回、怎么回按你的人设来。`); } }
     for (const e of evs.filter(e => e.kind === "myPost")) { const p = mz.posts.find(x => x.id === e.pid); if (p) todo.push(`你刷到用户在她空间新发的说说：「${p.text}」。赞不赞、评不评论按你们的关系和你的人设决定，也可以都不做。`); }
+    for (const e of evs.filter(e => e.kind === "boardReply")) { const m = (mz.board || []).find(x => x.id === e.bid); if (m && m.reply) todo.push(`你在用户留言板上留过言：「${m.text}」，她回复了：「${m.reply}」。想接着说就在她留言板上再留一条，不想也可以不写。`); }
     for (const e of evs.filter(e => e.kind === "myPostReply")) { const p = mz.posts.find(x => x.id === e.pid); const mine = p && (p.comments || []).filter(cm => cm.who === "me" && cm.to === `f:${f.id}`).slice(-1)[0]; if (mine) todo.push(`用户在她自己的说说「${p.text.slice(0, 80)}」下回复了你：「${mine.text}」。回不回按你的人设来。`); }
     if (!todo.length) return {};
     const raw = await gen(f, "zone", [ERA_RULE(acct), COMMON_RULE, `这是 QQ 空间里的事。用户的 QQ 昵称是「${S.meta.accts[acct].nick}」。`, zoneCtx(f), others ? circleLine(f) : "", ...todo,

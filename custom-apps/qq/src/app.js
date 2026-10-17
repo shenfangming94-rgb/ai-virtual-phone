@@ -502,7 +502,7 @@
   function cpCtx(f) { const c = cp(); if (!c) return "";
     if (c.pending && c.pending.fid === f.id) return c.pending.from === "me" ? "用户邀请你在 QQ 上开通情侣空间，你还没答复。" : "你邀请用户开通情侣空间，她还没答复。";
     if (!c.since || c.fid !== f.id) return "";
-    const notes = (c.notes || []).slice(-4).map(n => `${n.who === "me" ? "她" : "你"}：${n.text}`).join("；");
+    const notes = (c.notes || []).filter(shown).slice(-4).map(n => `${n.who === "me" ? "她" : n.who === f.id ? "你" : n.who}：${n.text}`).join("；");
     return `你和用户开通了 QQ 情侣空间，今天是在一起第 ${cpDays()} 天。情侣签名：${c.sig || "（还没写）"}。${notes ? `最近的小纸条：${notes}` : ""}`; }
   function cpOpen(f) { const c = A().couple = { ...(A().couple || {}), fid: f.id, since: new Date().toISOString(), pending: null, notes: (A().couple || {}).notes || [], diary: (A().couple || {}).diary || [], photos: (A().couple || {}).photos || [] }; saveMeta();
     const ch = chatOf(f.id); ch.msgs.push({ id: uid("m"), from: "sys", text: `你和 ${nameOf(f)} 开通了情侣空间，今天是第 1 天 💕`, at: new Date().toISOString() }); saveChat(ch);
@@ -518,12 +518,21 @@
     const nt = block(raw, "小纸条"); if (nt) { cc.notes.push({ who: f.id, text: nt.slice(0, 200), at: now }); qqPop("情侣空间", `${fAv(f, 28)}<div><b>${esc(nameOf(f))}</b><br>给你留了一张小纸条</div>`); }
     const dy = block(raw, "恋爱日记"); if (dy) { cc.diary.push({ who: f.id, title: (field(dy, "标题") || "无题").slice(0, 30), text: (dy.replace(/标题\s*[：:][^\n]*\n?/, "")).trim().slice(0, 3000), at: now }); remember(f, `我在情侣空间写了一篇恋爱日记`); }
     saveMeta(); }
+  /** 他身边的人逛到情侣空间，在小纸条墙上起哄（谁来、说什么按关系，可以没人） */
+  async function cpVisit(f, it) {
+    const c = cp(); const d = new Date(it.at);
+    const raw = await gen(f, "cpvisit", [ERA_RULE(f.acct, d), COMMON_RULE, `你和 QQ 昵称「${A().nick}」的用户开通了情侣空间，在一起第 ${cpDays()} 天，情侣签名：${c.sig || "（没写）"}。${circleLine(f)}`,
+      "你身边的人逛到了你们的情侣空间，在小纸条墙上留言（谁来、来不来按你们的关系定，可以没人；只写他们，不写你自己和用户）：\n===留言===\n一行一条：昵称：留言的话\n===结束==="].join("\n\n"));
+    if (raw == null) return; let t = d.getTime();
+    for (const n of parseCm(f, block(raw, "留言")).filter(x => !x.who.startsWith("f:")).slice(0, 4)) { t += rand(10, 120) * 60e3; c.notes.push({ who: n.who, text: n.text, at: new Date(t).toISOString() }); }
+    saveMeta();
+  }
   const CP_FMT = f => { const c = cp(); if (cpOn() && c.fid === f.id) return "你们的情侣空间：想改情侣签名加 ===情侣签名===，想给她留小纸条加 ===小纸条===，想写恋爱日记加 ===恋爱日记===（第一行写 标题：），都是内容写在块里，不想写就不写。";
     if (c && c.pending && c.pending.fid === f.id && c.pending.from === "me") return "答复她的情侣空间邀请：同意写 ===同意情侣空间===，不同意写 ===不同意===（块里不用写内容）。";
     if (!cpOn() && !(c && c.pending)) return "想邀请用户开通 QQ 情侣空间的话，加 ===情侣空间邀请===（块里不用写内容）。"; return ""; };
 
   V.couple = () => { const c = cp(), f = cpFriend(); const tab = S.cpTab || "home";
-    const notes = [...(c.notes || [])].reverse().map(n => `<div class="cp-note ${n.who === "me" ? "me" : ""}"><p>${richText(n.text)}</p><small>${n.who === "me" ? esc(A().nick) : esc(nameOf(f))} · ${esc(ago(S.meta.cur, n.at))}</small></div>`).join("") || `<div class="empty">还没有小纸条</div>`;
+    const notes = [...(c.notes || [])].filter(shown).reverse().map(n => `<div class="cp-note ${n.who === "me" ? "me" : n.who === f.id ? "" : "npc"}"><p>${richText(n.text)}</p><small>${n.who === "me" ? esc(A().nick) : n.who === f.id ? esc(nameOf(f)) : `${esc(n.who)} 来过`} · ${esc(ago(S.meta.cur, n.at))}</small></div>`).join("") || `<div class="empty">还没有小纸条</div>`;
     const diary = [...(c.diary || [])].reverse().map(d => `<div class="cp-diary"><b>${esc(d.title)}</b><small>${d.who === "me" ? esc(A().nick) : esc(nameOf(f))} · ${esc(ymd(thereDate(S.meta.cur, new Date(d.at))))}</small><p>${richText(d.text)}</p></div>`).join("") || `<div class="empty">还没有恋爱日记</div>`;
     const photos = `<div class="cp-photos"><img class="px" src="${coupleUrl(myShow(), hisShow(f), myShow().bg)}" alt="">${(c.photos || []).map(r => `<img data-ref="${esc(r)}" data-act="view-photo" alt="">`).join("")}</div><div class="zbtn"><button class="btn s" data-act="cp-photo">＋ 传一张合影</button></div>`;
     return `<div class="couple">${titlebar(`${esc(A().nick)} ❤ ${esc(nameOf(f))}`, "back-main")}
@@ -1260,6 +1269,7 @@
         if (planDay(f)) saveFriend(f);
         const it = f.plan.items.find(x => !x.done && new Date(x.at) <= new Date()); if (!it) continue;
         if (it.kind === "ping") { it.done = true; saveFriend(f); if (Date.now() - new Date(it.at).getTime() < 3600e3 && statusOf(f) !== "offline" && mayPing(f)) queuePing(f, rand(5, 60) * 1000); continue; }
+        if (it.kind === "cpvisit") { it.done = true; saveFriend(f); if (cpOn() && cp().fid === f.id) await cpVisit(f, it); continue; }
         it.tries = (it.tries || 0) + 1;
         const ok = it.kind === "post" ? await selfPost(f, it) : it.kind === "blog" ? await selfBlog(f, it) : await browse(f, it);
         if (ok || it.tries >= 3) it.done = true; saveFriend(f);
@@ -1327,7 +1337,7 @@
     hisShow(f).qb += 20; // 他每天签到
     const start = new Date(); start.setHours(0, 0, 0, 0); const items = [];
     const pick = () => { for (let i = 0; i < 60; i++) { const d = new Date(start.getTime() + rand(0, 1439) * 60e3); if (statusOf(f, d) !== "offline") return d; } return null; };
-    for (const [kind, n] of [["post", rand(1, 3)], ["browse", rand(1, 3)], ["blog", Math.random() < 0.3 ? 1 : 0], ["ping", rand(1, 2)]]) for (let i = 0; i < n; i++) { const d = pick(); if (d) items.push({ kind, at: d.toISOString() }); }
+    for (const [kind, n] of [["post", rand(1, 3)], ["browse", rand(1, 3)], ["blog", Math.random() < 0.3 ? 1 : 0], ["ping", rand(1, 2)], ["cpvisit", cpOn() && cp().fid === f.id && Math.random() < .5 ? 1 : 0]]) for (let i = 0; i < n; i++) { const d = pick(); if (d) items.push({ kind, at: d.toISOString() }); }
     f.plan = { day: today, items: items.sort((a, b) => a.at.localeCompare(b.at)) }; return true;
   }
   const recentAt = iso => Date.now() - new Date(iso).getTime() < 30 * 60e3; // 刚刚发生的才弹提示，补上的不吵她

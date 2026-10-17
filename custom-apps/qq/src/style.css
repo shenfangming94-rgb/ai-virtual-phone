@@ -225,3 +225,4 @@ input, textarea, select { font: inherit; color: inherit; }
 .cp-diary { background: #fff; border-radius: 8px; padding: 10px 12px; margin-bottom: 10px; border: 1px solid #ffd3e4; } .cp-diary b { color: #c2187a; } .cp-diary small { display: block; color: #a0809a; font-size: 11px; margin: 2px 0 6px; } .cp-diary p { font-size: 14px; line-height: 1.8; white-space: pre-wrap; }
 .cp-photos { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; } .cp-photos img { width: 100%; border-radius: 6px; border: 3px solid #fff; box-shadow: 0 1px 4px #0002; }
 .cp-entry { display: flex; gap: 10px; align-items: center; padding: 8px; cursor: pointer; background: #fff0f6 !important; } .cp-entry .px { width: 110px; border-radius: 6px; } .cp-entry b { display: block; color: #c2187a; font-size: 14px; } .cp-entry span { font-size: 12px; color: #a0607a; }
+.cp-note.npc { background: #e8f3ff; margin: 0 15px 10px 15px; transform: rotate(-1.2deg); }

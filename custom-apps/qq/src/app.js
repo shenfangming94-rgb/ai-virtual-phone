@@ -381,7 +381,7 @@
     const typing = S.meta.queue.some(q => q.fid === f.id && q.kind === "reply" && q.typing);
     return `<div class="chat">
       <div class="ct"><button class="bk" data-act="back-main">‹</button>${fAv(f, 40, st === "offline")}<div class="ctn"><b>${esc(nameOf(f))}</b> <span>[${STATUS_NAME[st]}]</span><small>${esc(f.sig || "")}</small></div><button class="more" data-act="open-zone" data-who="${esc(f.id)}">更多</button></div>
-      <div class="tools"><button data-act="nope" data-t="对方没有安装摄像头">📹 视频</button><button data-act="nope" data-t="对方没有麦克风">🎤 语音</button><button data-act="nope" data-t="文件太大了，传了半天还是失败">📁 传文件</button><button data-act="open-zone" data-who="${esc(f.id)}">🌐 空间</button></div>
+      <div class="tools"><button data-act="nope" data-t="对方没有安装摄像头">📹 视频</button><button data-act="nope" data-t="对方没有麦克风">🎤 语音</button><button data-act="nope" data-t="文件太大了，传了半天还是失败">📁 传文件</button><button data-act="open-zone" data-who="${esc(f.id)}">🌐 空间</button><button data-act="open-show" data-who="${esc(f.id)}">👗 QQ秀</button></div>
       ${miniBarHtml()}
       <div class="log" id="log">${lines || `<div class="sys">${st === "offline" ? `${esc(nameOf(f))} 现在不在线，消息会在他上线后收到` : "开始聊天吧"}</div>`}${typing && st === "online" ? `<div class="sys">对方正在输入…</div>` : ""}${c.msgs.length && c.msgs[c.msgs.length - 1].from === "him" && c.msgs.some(m => m.from === "me") && !S.meta.queue.some(q => q.fid === f.id && q.kind === "reply") ? `<div class="rr"><button data-act="reroll">↻ 重新回复</button></div>` : ""}</div>
       <div class="itools"><button data-act="font"><b style="color:${S.meta.font.color}">A</b> 字体</button><button data-act="faces">${faceSvg("微笑", 16)} 表情</button><button data-act="shake">〰 抖动</button><button data-act="send-photo">📷 图片</button><span class="sp"></span><button data-act="history">消息记录</button></div>
@@ -451,7 +451,7 @@
       ${S.draftBlogPhoto ? `<div class="dph"><img data-ref="${esc(S.draftBlogPhoto.ref)}" alt=""><button data-act="blog-photo-del">✕</button></div>` : ""}
       <div class="zbtn"><button class="btn" data-act="zone-tab" data-t="blog">取消</button>&nbsp;<button class="btn" data-act="blog-photo">📷 插图</button>&nbsp;<button class="btn s" data-act="blog-post">发表</button></div></div></div>`;
     const prof = mine ? A() : f;
-    const profTab = `<div class="box"><h3><span>个人档</span></h3><div class="prof">${mine ? myAv(64) : fAv(f, 64)}<div><p><b>${esc(ownerName)}</b></p><p>QQ：${esc(mine ? A().qq : f.qq || "")}</p><p>等级：${mine ? levelOf(acct) : f.lv || 20}</p><p>签名：${richText(prof.sig || "")}</p></div></div><div class="zbtn">${mine ? `<button class="btn" data-act="my-avatar">换头像</button>&nbsp;<button class="btn" data-act="edit-zone">修改空间名字和签名</button>` : `<button class="btn" data-act="his-avatar">换 QQ 头像</button>&nbsp;<button class="btn" data-act="remark">修改备注</button>&nbsp;<button class="btn" data-act="his-font">他的字体</button>`}</div></div>`;
+    const profTab = `<div class="box"><h3><span>QQ秀</span></h3><div class="qs-mini" data-act="open-show" data-who="${mine ? "me" : esc(f.id)}"><img src="${stageUrl(showOf(mine ? "me" : f.id))}" alt=""><span>点这里换装 ›</span></div></div><div class="box"><h3><span>个人档</span></h3><div class="prof">${mine ? myAv(64) : fAv(f, 64)}<div><p><b>${esc(ownerName)}</b></p><p>QQ：${esc(mine ? A().qq : f.qq || "")}</p><p>等级：${mine ? levelOf(acct) : f.lv || 20}</p><p>签名：${richText(prof.sig || "")}</p></div></div><div class="zbtn">${mine ? `<button class="btn" data-act="my-avatar">换头像</button>&nbsp;<button class="btn" data-act="edit-zone">修改空间名字和签名</button>` : `<button class="btn" data-act="his-avatar">换 QQ 头像</button>&nbsp;<button class="btn" data-act="remark">修改备注</button>&nbsp;<button class="btn" data-act="his-font">他的字体</button>`}</div></div>`;
     return `<div class="zone">
       ${titlebar(`${ownerName}的QQ空间`, S.zoneBack || "back-main")}
       <div class="banner${z.cover ? " has-cover" : ""}">${z.cover ? `<img class="cov" data-ref="${esc(z.cover)}" alt="">` : CLOUDS}<button class="covbtn" data-act="cover">换背景</button><span class="yz">黄钻 LV${mine ? 3 : 1 + (hash(f.id) % 5)}</span><h1>${esc(z.name || `${ownerName}的空间`)}</h1><p>${esc(z.sig ? `[ ${z.sig} ]` : "")}</p>${bgmBarHtml()}</div>
@@ -491,6 +491,135 @@
 
   // ───────────────────────── 交互 ─────────────────────────
   const ACT = {};
+  // ───────────────────────── QQ秀：像素小人（src/qqshow.js 画），衣柜、Q币、送礼、他自己换装 ─────────────────────────
+  // show = { g: f|m, hair, hairC, eyeC, outfit, wings, acc: [], bg, eyes, mouth, owned: [物品 id], qb: Q币, gifts: [{ name, from, items, at }] }
+  const CAT = [
+    // [id, 名字, 格子, 价钱, 谁能穿 f/m/*, 值]
+    ["o_angel", "天使礼服", "outfit", 88, "f", "angel"], ["o_lolita", "粉色洛丽塔", "outfit", 60, "f", "lolita"], ["o_overalls", "背带裤", "outfit", 40, "f", "overalls"],
+    ["o_sweater", "毛衣格子裙", "outfit", 50, "f", "sweater"], ["o_tunic", "韩版长T", "outfit", 30, "f", "tunic"], ["o_gothic", "哥特黑裙", "outfit", 70, "f", "gothic"],
+    ["o_yukata", "浴衣", "outfit", 66, "f", "yukata"], ["o_xmas", "圣诞装", "outfit", 58, "f", "xmas"],
+    ["o_uniform", "运动校服", "outfit", 20, "m", "uniform"], ["o_hoodie", "卫衣牛仔裤", "outfit", 30, "m", "hoodie"], ["o_shirt", "白衬衫领带", "outfit", 40, "m", "shirt"],
+    ["o_basketball", "篮球服", "outfit", 45, "m", "basketball"], ["o_leather", "皮衣", "outfit", 60, "m", "leather"], ["o_sailor", "海魂衫", "outfit", 35, "m", "sailor"], ["o_devil", "恶魔套装", "outfit", 70, "m", "devil"],
+    ["h_wavy", "大波浪", "hair", 0, "f", "wavy"], ["h_twin", "双马尾", "hair", 20, "f", "twin"], ["h_straight", "齐刘海直发", "hair", 20, "f", "straight"], ["h_bun", "丸子头", "hair", 20, "f", "bun"],
+    ["h_spiky", "刺猬头", "hair", 0, "m", "spiky"], ["h_messy", "碎发", "hair", 20, "m", "messy"], ["h_sidepart", "偏分", "hair", 20, "m", "sidepart"],
+    ["w_angel", "天使翅膀", "wings", 50, "*", "angel"], ["w_devil", "恶魔翅膀", "wings", 50, "*", "devil"],
+    ["a_halo", "光环", "acc", 15, "*", "halo"], ["a_bow", "蝴蝶结", "acc", 10, "f", "bow"], ["a_headphones", "大耳机", "acc", 25, "*", "headphones"], ["a_beret", "贝雷帽", "acc", 20, "*", "beret"],
+    ["a_scarf", "粉围巾", "acc", 15, "*", "scarf"], ["a_starclip", "星星发卡", "acc", 10, "f", "starclip"], ["a_santa", "圣诞帽", "acc", 15, "*", "santa"], ["a_horns", "恶魔角", "acc", 15, "*", "horns"],
+    ["p_bunny", "小白兔", "acc", 40, "*", "bunny"], ["p_cat", "小橘猫", "acc", 40, "*", "cat"],
+    ["b_hearts", "粉色爱心", "bg", 20, "*", "hearts"], ["b_starry", "星空", "bg", 30, "*", "starry"], ["b_campus", "校园", "bg", 0, "*", "campus"], ["b_city", "城市夜景", "bg", 30, "*", "city"],
+    ["b_magazine", "杂志封面", "bg", 40, "*", "magazine"], ["b_beach", "海边", "bg", 30, "*", "beach"], ["b_snow", "下雪天", "bg", 30, "*", "snow"],
+  ].map(([id, name, slot, price, who, val]) => ({ id, name, slot, price, who, val }));
+  const itemById = id => CAT.find(i => i.id === id);
+  const fits = (it, g) => it.who === "*" || it.who === g;
+  const FACES_QS = [["微笑", "open", "smile"], ["开心", "happy", "grin"], ["眨眼", "wink", "cat"], ["害羞", "shy", "pout"], ["惊讶", "wide", "o"], ["闭眼笑", "closed", "smile"]];
+  const HAIR_COLORS = ["#8a5236", "#2a1e1c", "#5a3a2a", "#c98a4a", "#e8c46a", "#a04a5a"];
+  const defaultShow = g => g === "f"
+    ? { g, hair: "wavy", hairC: "#8a5236", eyeC: "#1e1416", outfit: "tunic", acc: [], bg: "hearts", eyes: "open", mouth: "smile", owned: ["h_wavy", "o_tunic", "b_hearts", "b_campus"], qb: 200, gifts: [] }
+    : { g, hair: "spiky", hairC: "#2a1e1c", eyeC: "#3a2620", outfit: "uniform", acc: [], bg: "campus", eyes: "open", mouth: "smile", owned: ["h_spiky", "o_uniform", "b_campus"], qb: 300, gifts: [] };
+  const myShow = () => A().show || (A().show = defaultShow("f"));
+  const hisShow = f => f.show || (f.show = defaultShow("m"));
+  const showOf = who => who === "me" ? myShow() : hisShow(friendById(who));
+  const saveShowOf = who => who === "me" ? saveMeta() : saveFriend(friendById(who));
+  /** 这一身对应的小人参数 */
+  const dollOf = (sh, extra = {}) => ({ g: sh.g, hair: sh.hair, hairC: sh.hairC, eyeC: sh.eyeC, outfit: sh.outfit, wings: sh.wings, acc: sh.acc || [], eyes: sh.eyes, mouth: sh.mouth, blush: sh.eyes === "shy" || sh.eyes === "closed", extra: sh.eyes === "shy" ? "heart" : sh.eyes === "wink" ? "sparkle" : sh.eyes === "wide" ? "sweat" : "", ...extra });
+  const pixCache = new Map();
+  /** 格子 → 图片（同样的东西只画一次） */
+  function pixUrl(key, grid, k) {
+    if (pixCache.has(key)) return pixCache.get(key);
+    const cv = document.createElement("canvas"); cv.width = grid[0].length * k; cv.height = grid.length * k; window.drawPix(cv.getContext("2d"), grid, 0, 0, k);
+    const u = cv.toDataURL(); pixCache.set(key, u); return u;
+  }
+  const stageUrl = sh => { const d = dollOf(sh); return pixUrl(`st${JSON.stringify(d)}${sh.bg}`, window.qqstage(sh.bg, [[d, 30]]), 4); };
+  const coupleUrl = (a, b, bg) => { const da = dollOf(a), db = dollOf(b); return pixUrl(`cp${JSON.stringify([da, db, bg])}`, window.qqstage(bg, [[da, 12], [db, 50]]), 4); };
+  /** 衣柜格子里的小图：穿着这一件的样子 */
+  function thumbUrl(sh, it) {
+    if (it.slot === "bg") return pixUrl(`bg${it.val}`, window.qqstage(it.val, [], 50, 42), 3);
+    const base = { g: sh.g, hair: sh.g === "f" ? "wavy" : "spiky", hairC: sh.hairC, eyeC: sh.eyeC, outfit: sh.g === "f" ? "tunic" : "uniform", acc: [] };
+    const d = { ...base, ...(it.slot === "outfit" ? { outfit: it.val } : it.slot === "hair" ? { hair: it.val } : it.slot === "wings" ? { wings: it.val } : { acc: [it.val] }) };
+    return pixUrl(`th${JSON.stringify(d)}`, window.qqpix(d), 2);
+  }
+  /** 穿上 / 摘下 */
+  function wear(sh, it) {
+    if (it.slot === "acc") { sh.acc = (sh.acc || []).includes(it.val) ? sh.acc.filter(a => a !== it.val) : [...(sh.acc || []), it.val]; return; }
+    if (it.slot === "wings") { sh.wings = sh.wings === it.val ? null : it.val; return; }
+    sh[it.slot] = it.val;
+  }
+  const isWorn = (sh, it) => it.slot === "acc" ? (sh.acc || []).includes(it.val) : sh[it.slot] === it.val;
+  /** 名字 → 物品（AI 写的名字，按包含关系找最像的） */
+  const findItem = (name, g) => { const n = String(name || "").trim(); if (!n) return null; return CAT.find(i => fits(i, g) && i.name === n) || CAT.find(i => fits(i, g) && (n.includes(i.name) || i.name.includes(n))); };
+  const catText = g => ["outfit", "hair", "wings", "acc", "bg"].map(sl => `${{ outfit: "衣服", hair: "发型", wings: "翅膀", acc: "配饰/宠物", bg: "背景" }[sl]}：${CAT.filter(i => i.slot === sl && fits(i, g)).map(i => `${i.name}(${i.price}Q币)`).join("、")}`).join("\n");
+
+  V.show = () => {
+    const who = S.showOf; const mine = who === "me"; const f = mine ? null : friendById(who); const sh = showOf(who); const me = myShow();
+    const tab = S.showTab || "outfit";
+    const items = tab === "gifts" ? [] : CAT.filter(i => i.slot === tab && fits(i, sh.g));
+    const cell = it => { const own = sh.owned.includes(it.id), worn = isWorn(sh, it);
+      const btn = own ? `<button class="${worn ? "on" : ""}" data-act="qs-wear" data-id="${it.id}">${worn ? (it.slot === "acc" || it.slot === "wings" ? "摘下" : "穿着") : mine ? "穿上" : "帮他穿"}</button>`
+        : mine ? `<button data-act="qs-buy" data-id="${it.id}">${it.price} Q币</button>` : `<button data-act="qs-give" data-id="${it.id}">送他 ${it.price}</button>`;
+      return `<div class="qs-it ${worn ? "on" : ""}"><img src="${thumbUrl(sh, it)}" alt=""><b>${esc(it.name)}</b>${btn}</div>`; };
+    const gifts = (sh.gifts || []).slice().reverse().map(gf => `<div class="qs-gift"><b>🎁 ${esc(gf.name)}</b><small>${esc(gf.from)} 送的 · ${esc(ago(S.meta.cur, gf.at))}</small><div>${gf.items.map(id => esc((itemById(id) || {}).name || "")).join("、")}</div><button data-act="qs-wearset" data-i="${sh.gifts.indexOf(gf)}">整套穿上</button></div>`).join("") || `<div class="empty">还没有收到礼物</div>`;
+    return `<div class="qshow">${titlebar(`${mine ? A().nick : nameOf(f)}的QQ秀`, S.showBack || "back-main")}
+      <div class="qs-stage"><img src="${stageUrl(sh)}" alt=""></div>
+      <div class="qs-bar"><span>💰 ${mine ? "我的" : "他的"} Q币 <b>${sh.qb}</b></span>${mine ? "" : `<span>我的 Q币 <b>${me.qb}</b></span>`}${mine ? "" : `<button data-act="qs-gender">${sh.g === "f" ? "女生" : "男生"} ⇄</button>`}</div>
+      <div class="qs-faces">${FACES_QS.map(([n, e, m]) => `<button class="${sh.eyes === e && sh.mouth === m ? "on" : ""}" data-act="qs-face" data-e="${e}" data-m="${m}">${n}</button>`).join("")}</div>
+      <div class="qs-tabs">${[["outfit", "衣服"], ["hair", "发型"], ["wings", "翅膀"], ["acc", "配饰"], ["bg", "背景"], ["gifts", "礼物"]].map(([k, t]) => `<button class="${tab === k ? "on" : ""}" data-act="qs-tab" data-t="${k}">${t}</button>`).join("")}</div>
+      <div class="qs-body">${tab === "hair" ? `<div class="qs-colors">发色 ${HAIR_COLORS.map(c => `<button style="background:${c}" class="${sh.hairC === c ? "on" : ""}" data-act="qs-hairc" data-c="${c}"></button>`).join("")}</div>` : ""}
+        ${tab === "gifts" ? gifts : `<div class="qs-grid">${items.map(cell).join("")}</div>`}</div>
+    </div>`;
+  };
+  ACT["open-show"] = b => { S.showOf = b.dataset.who; S.showBack = S.view === "chat" ? "back-chat" : S.view === "zone" ? "back-zone" : "back-main"; S.showTab = "outfit"; S.lastZone = S.zoneOf; S.view = "show"; render(); };
+  ACT["back-zone"] = () => { S.zoneOf = S.lastZone; S.view = "zone"; render(); };
+  ACT["qs-tab"] = b => { S.showTab = b.dataset.t; render(); };
+  ACT["qs-face"] = b => { const sh = showOf(S.showOf); sh.eyes = b.dataset.e; sh.mouth = b.dataset.m; saveShowOf(S.showOf); render(); };
+  ACT["qs-hairc"] = b => { const sh = showOf(S.showOf); sh.hairC = b.dataset.c; saveShowOf(S.showOf); render(); };
+  ACT["qs-gender"] = () => { const f = friendById(S.showOf); const g = hisShow(f).g === "m" ? "f" : "m"; f.show = { ...defaultShow(g), qb: f.show.qb, gifts: f.show.gifts }; saveFriend(f); render(); };
+  ACT["qs-wear"] = b => { const sh = showOf(S.showOf); wear(sh, itemById(b.dataset.id)); saveShowOf(S.showOf); render(); };
+  ACT["qs-wearset"] = b => { const sh = showOf(S.showOf); const gf = sh.gifts[+b.dataset.i]; for (const id of gf.items) { const it = itemById(id); if (it && !isWorn(sh, it)) wear(sh, it); } saveShowOf(S.showOf); render(); toast("整套穿上了"); };
+  ACT["qs-buy"] = b => { const sh = myShow(); const it = itemById(b.dataset.id); if (sh.qb < it.price) return toast("Q币不够了"); sh.qb -= it.price; sh.owned.push(it.id); wear(sh, it); saveMeta(); render(); toast(`买下了「${it.name}」`); };
+  ACT["qs-give"] = b => { const f = friendById(S.showOf); const sh = hisShow(f), me = myShow(); const it = itemById(b.dataset.id);
+    if (me.qb < it.price) return toast("你的 Q币不够了");
+    me.qb -= it.price; sh.owned.push(it.id); sh.gifts = [...(sh.gifts || []), { name: it.name, from: A().nick, items: [it.id], at: new Date().toISOString() }]; saveMeta(); saveFriend(f);
+    const c = chatOf(f.id); c.msgs.push({ id: uid("m"), from: "sys", text: `你赠送给 ${nameOf(f)} QQ秀「${it.name}」`, at: new Date().toISOString() }); saveChat(c);
+    remember(f, `${A().nick} 在 QQ 上送了我一件 QQ秀「${it.name}」`); queueZone(f, { kind: "gotShow", name: it.name }, rand(1, 10) * 60e3);
+    render(); toast(`送给他了「${it.name}」`); };
+
+  /** 他送她 QQ秀：东西进她的衣柜，右下角弹系统提示，聊天里留一条 */
+  function giveHer(f, name, ids) {
+    const me = myShow(); const hs = hisShow(f); ids = ids.filter(id => !!itemById(id)); if (!ids.length) return false;
+    for (const id of ids) if (!me.owned.includes(id)) me.owned.push(id);
+    const cost = ids.reduce((n, id) => n + itemById(id).price, 0); hs.qb = Math.max(0, hs.qb - cost);
+    me.gifts = [...(me.gifts || []), { name, from: nameOf(f), items: ids, at: new Date().toISOString() }]; saveMeta(); saveFriend(f);
+    const c = chatOf(f.id); c.msgs.push({ id: uid("m"), from: "sys", text: `${nameOf(f)} 赠送给你 QQ秀「${name}」，快去穿上吧`, at: new Date().toISOString() }); saveChat(c);
+    play("msg"); qqPop("系统消息", `${fAv(f, 28)}<div><b>${esc(nameOf(f))}</b> 赠送给你<br>QQ秀「${esc(name)}」</div>`);
+    remember(f, `我在 QQ 上送了 ${A().nick} 一套 QQ秀「${name}」（${ids.map(id => itemById(id).name).join("、")}）`);
+    return true;
+  }
+  /** AI 写的 ===送QQ秀=== / ===换装=== 块 */
+  function applyShowBlocks(f, raw) {
+    const gb = block(raw, "送QQ秀"); let gave = false;
+    if (gb) { const name = (field(gb, "名字") || "").slice(0, 30); const ids = (field(gb, "包含") || gb).split(/[、,，\s]+/).map(n => findItem(n, "f")).filter(Boolean).map(i => i.id);
+      if (ids.length) gave = giveHer(f, name || itemById(ids[0]).name, [...new Set(ids)]); }
+    const cb = block(raw, "换装");
+    if (cb) { const sh = hisShow(f); const notes = [];
+      const take = (n, slot) => { const it = findItem(n, sh.g); if (!it || it.slot !== slot && !(slot === "acc" && it.slot === "acc")) return; if (!sh.owned.includes(it.id)) { if (sh.qb < it.price) return; sh.qb -= it.price; sh.owned.push(it.id); } if (!isWorn(sh, it)) wear(sh, it); notes.push(it.name); };
+      take(field(cb, "衣服"), "outfit"); take(field(cb, "发型"), "hair"); take(field(cb, "背景"), "bg");
+      const wg = field(cb, "翅膀"); if (/^(无|不要|没有)$/.test(wg)) sh.wings = null; else if (wg) take(wg, "wings");
+      const ac = field(cb, "配饰"); if (ac) { sh.acc = []; ac.split(/[、,，\s]+/).forEach(n => take(n, "acc")); }
+      const fc = FACES_QS.find(x => x[0] === field(cb, "表情")); if (fc) { sh.eyes = fc[1]; sh.mouth = fc[2]; }
+      if (notes.length) { saveFriend(f); remember(f, `我把 QQ秀换成了：${notes.join("、")}`); } }
+    return gave;
+  }
+  const SHOW_FMT = g => `QQ秀的东西（名字只能从这里挑）：\n${catText(g)}`;
+  /** 装上新版后他第一次上线：照记忆看有没有说过要送她 QQ秀；顺便给自己挑一身 */
+  async function genShowCheck(f) {
+    const acct = f.acct; const sh = hisShow(f);
+    const raw = await gen(f, "qqshow", [ERA_RULE(acct), `QQ 有了 QQ秀（像素小人，可以换衣服、发型、配饰、背景，用 Q币买，也能送人）。用户的 QQ 昵称是「${S.meta.accts[acct].nick}」。你有 ${sh.qb} Q币。`,
+      `翻一下你的记忆：你如果说过要送用户、或者已经送了用户 QQ秀衣服，现在就送出去：从下面挑最像你说的那几样，名字用你说过的名字。没说过就不送。\n${SHOW_FMT("f")}\n===送QQ秀===\n名字：这份礼物叫什么\n包含：挑的东西，用顿号隔开\n===结束===`,
+      `再按你的人设给自己挑一身：\n${SHOW_FMT(sh.g)}\n===换装===\n衣服：\n发型：\n翅膀：（不要就写无）\n配饰：（可以几样，用顿号隔开，不要就写无）\n背景：\n表情：微笑/开心/眨眼/害羞/惊讶/闭眼笑 选一个\n===结束===`].join("\n\n"));
+    if (raw == null) return null;
+    applyShowBlocks(f, raw); f.showChecked = true; saveFriend(f); return true;
+  }
+
   ACT["pick-acct"] = b => { S.meta.last = b.dataset.k; saveMeta(); render(); };
   ACT.login = async () => {
     const k = S.meta.last || "a08"; S.meta.cur = k; S.meta.auto = $("#auto").checked; S.meta.accts[k].status = $("#st0").value; saveMeta();
@@ -519,13 +648,14 @@
   };
   ACT.remark = async () => { const fr = friendById(S.zoneOf); const r = await ask("修改备注", [{ label: "备注名（不填就显示他的名字）", value: fr.remark, max: 16 }]); if (r) { fr.remark = r[0]; saveFriend(fr); render(); } };
   ACT.menu = () => sheet(`<h3>菜单</h3><div class="mlist">
-      <button data-v="nick">修改昵称</button><button data-v="qq">修改 QQ 号（现在：${esc(A().qq)}）</button><button data-v="theme">更换皮肤</button><button data-v="sound">声音：${S.meta.sound !== false ? "开" : "关"}</button><button data-v="music">我的音乐（${S.meta.music.length} 首）</button><button data-v="export">导出数据</button><button data-v="import">导入数据</button><button data-v="switch">切换帐号</button><button data-v="about">关于</button></div><div class="btns"><button data-v="no">关闭</button></div>`,
+      <button data-v="nick">修改昵称</button><button data-v="qq">修改 QQ 号（现在：${esc(A().qq)}）</button><button data-v="show">我的QQ秀</button><button data-v="theme">更换皮肤</button><button data-v="sound">声音：${S.meta.sound !== false ? "开" : "关"}</button><button data-v="music">我的音乐（${S.meta.music.length} 首）</button><button data-v="export">导出数据</button><button data-v="import">导入数据</button><button data-v="switch">切换帐号</button><button data-v="about">关于</button></div><div class="btns"><button data-v="no">关闭</button></div>`,
     async v => { closeSheet();
       if (v === "nick") { const r = await ask("修改昵称", [{ label: "昵称", value: A().nick, max: 16 }]); if (r && r[0]) { A().nick = r[0]; saveMeta(); render(); } }
       if (v === "qq") { const r = await ask("修改 QQ 号", [{ label: `QQ 号（5 到 11 位数字）`, value: A().qq, max: 11 }]); if (r) { const n = r[0].replace(/\D/g, ""); if (n.length < 5) return toast("QQ 号要 5 到 11 位数字"); A().qq = n; saveMeta(); render(); toast("QQ 号改好了"); } }
       if (v === "sound") { S.meta.sound = S.meta.sound === false; saveMeta(); }
       if (v === "music") musicSheet();
       if (v === "theme") themeSheet();
+      if (v === "show") ACT["open-show"]({ dataset: { who: "me" } });
       if (v === "export") exportData();
       if (v === "import") importData();
       if (v === "switch") ACT.logout();
@@ -906,6 +1036,7 @@
       pending.length ? `用户刚刚${pending.length > 1 ? "连着" : ""}发来：${pending.map(m => m.shake ? "[窗口抖动]" : `「${photoText(m.photo, true)}${m.text || ""}」`).join("")}${pending.some(m => m.photo) ? "（[照片] 是用户拍了发给你的照片，括号里是照片上的样子）" : ""}` : "",
       futures.length ? `用户提到的「${futures.join("」「")}」，是你那边还没有的东西，你没听说过。` : "",
       FMT_REPLY,
+      `想送用户 QQ秀时加（她的 QQ秀；名字只能从下面挑）：\n===送QQ秀===\n名字：这份礼物叫什么\n包含：挑的东西，用顿号隔开\n===结束===\n想给自己换 QQ秀时加：\n===换装===\n衣服：\n发型：\n配饰：\n背景：\n表情：\n===结束===（不换的项空着）\n她能用的：\n${catText("f")}\n你能用的：\n${catText(hisShow(f).g)}`,
       `${acct === "a08" ? "你的照片是用数码相机或者拍照手机拍的，传到电脑上再发。" : ""}想给用户发你拍的照片时（发不发按你的人设和当时的心情，一次最多一张），加：\n===照片===\n画面：照片里拍到了什么（场景、人物、物品、光线，客观写清楚，只能是你身边真实的东西）\n配的话：一句话，可以不写\n===结束===`,
       !f.font ? `你还没定 ${FONT_ASK}。按你的人设挑，加上：\n===字体===\n颜色 加粗或不加粗\n===结束===` : !f.fontByMe ? `你现在的 QQ 字体是${FONT_NAMES[FONT_COLORS.indexOf(f.font.color)] || "黑色"}${f.font.bold ? "加粗" : ""}。想换字体时加（${FONT_NAMES.join(" ")}）：\n===字体===\n颜色 加粗或不加粗\n===结束===` : "",
     ].filter(Boolean).join("\n\n");
@@ -916,8 +1047,8 @@
     let msgs = blocks(raw, "消息"); if (!msgs.length && raw && !/===/.test(raw)) msgs = [raw.trim()];
     const pb = block(raw, "照片"); const cap = pb ? field(pb, "配的话") : "";
     const photo = pb ? { desc: (field(pb, "画面") || pb).slice(0, 200), caption: /^(无|不写|没有)?$/.test(cap) ? "" : cap.slice(0, 200) } : null;
-    if (!msgs.length && !photo) return { msgs: [] };
-    return { msgs: msgs.slice(0, 6).map(t => t.slice(0, 500)), photo, sig: block(raw, "签名"), font: parseFont(block(raw, "字体")), off: parseInt(block(raw, "下线") || "", 10) };
+    if (!msgs.length && !photo && !/===\s*(送QQ秀|换装)\s*===/.test(raw)) return { msgs: [] };
+    return { raw, msgs: msgs.slice(0, 6).map(t => t.slice(0, 500)), photo, sig: block(raw, "签名"), font: parseFont(block(raw, "字体")), off: parseInt(block(raw, "下线") || "", 10) };
   }
   /** 空间里的事（她留言、踩、评论、发说说）攒一起，他上线后一次处理 */
   async function genZone(f, q) {
@@ -931,6 +1062,7 @@
       if (mine) { others = true; todo.push(`${isBlog(p) ? `你的日志《${p.title}》` : `你的说说「${p.text.slice(0, 80)}${photoText(p.photo)}」`}下面的评论：\n${cmText(p)}\n用户刚评论${mine.to && mine.to !== `f:${f.id}` ? `（回复 ${whoName(mine.to)}）` : ""}：「${mine.text}」。回不回、怎么回按你的人设来。`); } }
     for (const e of evs.filter(e => e.kind === "myPost")) { const p = mz.posts.find(x => x.id === e.pid); if (p && p.photo && !p.photo.seen) { await seePhoto(f, p.photo); saveMeta(); } if (p) todo.push(`你刷到用户在她空间新发的说说：「${p.text}${photoText(p.photo, true)}」。赞不赞、评不评论按你们的关系和你的人设决定，也可以都不做。`); }
     for (const e of evs.filter(e => e.kind === "boardReply")) { const m = (mz.board || []).find(x => x.id === e.bid); if (m && m.reply) todo.push(`你在用户留言板上留过言：「${m.text}」，她回复了：「${m.reply}」。想接着说就在她留言板上再留一条，不想也可以不写。`); }
+    for (const e of evs.filter(e => e.kind === "gotShow")) todo.push(`用户在 QQ 上送了你一件 QQ秀「${e.name}」。想穿上就写 ===换装===，想谢她可以在她留言板上留言。\n你能用的：\n${catText(hisShow(f).g)}\n===换装===\n衣服：\n发型：\n配饰：\n背景：\n表情：\n===结束===（不换的项空着）`);
     for (const e of evs.filter(e => e.kind === "myBlog")) { const b = (mz.blogs || []).find(x => x.id === e.pid); if (b) { if (b.photo && !b.photo.seen) { await seePhoto(f, b.photo); saveMeta(); } todo.push(`你看到用户在她空间写了一篇日志《${b.title}》${b.priv === "friends" ? "（仅好友可见）" : ""}：\n${b.text.slice(0, 2000)}${photoText(b.photo, true)}\n评不评论按你们的关系和你的人设决定。`); } }
     for (const e of evs.filter(e => e.kind === "myPostReply")) { const p = itemOf(mz, e.pid); const mine = p && (p.comments || []).filter(cm => cm.who === "me" && cm.to === `f:${f.id}`).slice(-1)[0]; if (mine) todo.push(`用户在她自己的${isBlog(p) ? `日志《${p.title}》` : `说说「${p.text.slice(0, 80)}」`}下回复了你：「${mine.text}」。回不回按你的人设来。`); }
     if (!todo.length) return {};
@@ -939,7 +1071,7 @@
         others ? "===别人回复===\n你身边的人看到用户的评论后回她的话（没人回就不写这个块），一行一条：昵称：话\n===结束===\n===回别人===\n你在这条说说下回复别人的话（不回就不写），一行一条：昵称：话\n===结束===" : "",
         "===赞===\n（赞用户的说说就写这个块，内容留空）\n===结束===\n===评论===\n评论用户说说的话\n===结束===\n===日志评论===\n评论用户日志的话\n===结束===\n===回她===\n在用户说说下回复她的话\n===结束===\n===回踩===\n（去她空间踩一脚就写这个块，内容留空）\n===结束===\n===留言===\n在用户留言板上写的话\n===结束===\n想发一条新说说：\n===说说===\n内容\n===结束==="].filter(Boolean).join("\n")].filter(Boolean).join("\n\n"));
     if (raw == null) return null;
-    return { reply: block(raw, "主人回复"), creply: block(raw, "评论回复"), others: others ? parseCm(f, block(raw, "别人回复")).filter(c => !c.who.startsWith("f:")) : [], toOthers: others ? parseCm(f, block(raw, "回别人")).map(c => ({ to: c.who.startsWith("f:") ? c.to || "" : c.who.replace(/^回复\s*/, ""), text: c.text })).filter(c => c.to && c.to !== "me" && !c.to.startsWith("f:")) : [], like: /===\s*赞\s*===/.test(raw), comment: block(raw, "评论"), bcomment: block(raw, "日志评论"), back: block(raw, "回她"), step: /===\s*回踩\s*===/.test(raw), board: block(raw, "留言"), post: block(raw, "说说"), evs };
+    return { reply: block(raw, "主人回复"), creply: block(raw, "评论回复"), others: others ? parseCm(f, block(raw, "别人回复")).filter(c => !c.who.startsWith("f:")) : [], toOthers: others ? parseCm(f, block(raw, "回别人")).map(c => ({ to: c.who.startsWith("f:") ? c.to || "" : c.who.replace(/^回复\s*/, ""), text: c.text })).filter(c => c.to && c.to !== "me" && !c.to.startsWith("f:")) : [], like: /===\s*赞\s*===/.test(raw), comment: block(raw, "评论"), bcomment: block(raw, "日志评论"), back: block(raw, "回她"), step: /===\s*回踩\s*===/.test(raw), board: block(raw, "留言"), post: block(raw, "说说"), evs, raw };
   }
   /** 写进他的记忆；返回 appEventId（重新回复时按它把这条删掉） */
   function remember(f, summary, id = uid("qq")) {
@@ -962,16 +1094,20 @@
           // AI 没回上来就一直等着重试（前三次隔 1 分钟，之后隔 10 分钟），别把申请弄丢
           if (!r) { q.tries = (q.tries || 0) + 1; q.due = new Date(Date.now() + (q.tries < 3 ? 60e3 : 600e3)).toISOString(); saveMeta(); continue; }
           S.meta.queue = S.meta.queue.filter(x => x !== q); saveMeta();
-          if (r.ok) { f.pending = false; delete f.verify; saveFriend(f); const c = chatOf(f.id); c.msgs.push({ id: uid("m"), from: "sys", text: `${nameOf(f)} 已经通过了你的好友请求，现在可以开始聊天了。`, at: new Date().toISOString() }); saveChat(c);
+          if (r.ok) { f.pending = false; delete f.verify; saveFriend(f); S.meta.queue.push({ fid: f.id, kind: "showcheck", due: new Date(Date.now() + rand(60, 600) * 1000 * TS()).toISOString() }); const c = chatOf(f.id); c.msgs.push({ id: uid("m"), from: "sys", text: `${nameOf(f)} 已经通过了你的好友请求，现在可以开始聊天了。`, at: new Date().toISOString() }); saveChat(c);
             remember(f, `${S.meta.accts[f.acct].nick}（QQ ${S.meta.accts[f.acct].qq}）在 QQ 上加了我好友，我通过了`); play("online"); qqPop("系统消息", `${fAv(f, 28)}<div><b>${esc(nameOf(f))}</b><br>通过了你的好友请求</div>`); lastStatus[f.id] = statusOf(f); }
           else { S.friends = S.friends.filter(x => x !== f); dbDel(COL.friends, f.id); play("msg"); qqPop("系统消息", `${fAv(f, 28)}<div><b>${esc(nameOf(f))}</b><br>拒绝了你的好友请求${r.why ? `：${esc(r.why)}` : ""}</div>`); }
           render(); continue;
         }
         if (q.kind === "reply") {
           const r = await genReply(f, q);
-          if (!r || (!r.msgs.length && !r.photo)) { q.tries = (q.tries || 0) + 1; if (q.tries < 3) { q.due = new Date(Date.now() + 20e3).toISOString(); saveMeta(); continue; } }
+          if (!r || (!r.msgs.length && !r.photo && !r.raw)) { q.tries = (q.tries || 0) + 1; if (q.tries < 3) { q.due = new Date(Date.now() + 20e3).toISOString(); saveMeta(); continue; } }
           S.meta.queue = S.meta.queue.filter(x => x !== q); saveMeta();
-          if (r && (r.msgs.length || r.photo)) await deliver(f, r);
+          if (r && (r.msgs.length || r.photo || r.raw)) await deliver(f, r);
+        } else if (q.kind === "showcheck") {
+          const r = await genShowCheck(f);
+          if (r == null) { q.tries = (q.tries || 0) + 1; q.due = new Date(Date.now() + (q.tries < 3 ? 60e3 : 600e3)).toISOString(); saveMeta(); continue; }
+          S.meta.queue = S.meta.queue.filter(x => x !== q); saveMeta(); if (S.view === "show" || S.view === "main") render();
         } else if (q.kind === "zone") {
           const r = await genZone(f, q);
           if (r == null) { q.tries = (q.tries || 0) + 1; if (q.tries < 3) { q.due = new Date(Date.now() + 60e3).toISOString(); saveMeta(); continue; } }
@@ -1009,6 +1145,7 @@
       parts.push(`${photoText({ desc: r.photo.desc })}${r.photo.caption}`); play("msg");
       if (S.view === "chat" && S.fid === f.id) render(); else qqPop("QQ 消息", `${fAv(f, 28)}<div><b>${esc(nameOf(f))}</b><br>[图片]</div>`);
     }
+    if (r.raw) applyShowBlocks(f, r.raw);
     if (r.sig) { f.sig = r.sig.slice(0, 60); saveFriend(f); }
     if (r.off > 0) { f.offUntil = new Date(Date.now() + Math.min(600, r.off) * 60e3 * TS()).toISOString(); saveFriend(f); }
     const mine = c.msgs.filter(m => m.from === "me").slice(-3).map(m => m.shake ? "[窗口抖动]" : `「${photoText(m.photo, true)}${(m.text || "").slice(0, 60)}」`).join("");
@@ -1016,6 +1153,7 @@
     if (S.view !== "zone") render();
   }
   function applyZone(f, r) {
+    if (r.raw && /===\s*(送QQ秀|换装)\s*===/.test(r.raw)) applyShowBlocks(f, r.raw);
     const z = f.zone, mz = S.meta.accts[f.acct].zone; const now = new Date().toISOString(); const notes = [];
     if (r.reply) { const un = z.board.filter(b => b.who === "me" && !b.reply); un.forEach(b => { b.reply = r.reply.slice(0, 200); b.replyAt = now; }); if (un.length) notes.push(`回复了她的留言：「${r.reply}」`); }
     const hisPids = [...new Set(r.evs.filter(e => e.kind === "hisPostComment").map(e => e.pid))], myPids = [...new Set(r.evs.filter(e => e.kind === "myPost").map(e => e.pid))], backPids = [...new Set(r.evs.filter(e => e.kind === "myPostReply").map(e => e.pid))], blogPids = [...new Set(r.evs.filter(e => e.kind === "myBlog").map(e => e.pid))];
@@ -1146,6 +1284,8 @@
   async function boot() {
     $("#app").innerHTML = `<div class="login"><div class="logo" style="padding-top:160px">${PENGUIN(120, 118)}<b>QQ2008</b></div></div>`;
     await loadAll(); applyTheme(S.meta.theme);
+    // QQ秀 是新加的：每个好友上线后看一次记忆（答应过送她衣服的话就送），顺便给自己挑一身
+    for (const f of S.friends.filter(f => !f.pending && !f.showChecked && !S.meta.queue.some(q => q.fid === f.id && q.kind === "showcheck"))) S.meta.queue.push({ fid: f.id, kind: "showcheck", due: new Date(Date.now() + rand(10, 90) * 1000 * TS()).toISOString() });
     // 以前的版本 AI 失败三次就把好友申请从队列里扔了，人卡在「等待验证」：补回队列
     for (const f of S.friends.filter(f => f.pending && !S.meta.queue.some(q => q.fid === f.id && q.kind === "verify"))) S.meta.queue.push({ fid: f.id, kind: "verify", due: new Date().toISOString() });
     saveMeta();

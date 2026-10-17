@@ -192,3 +192,20 @@ input, textarea, select { font: inherit; color: inherit; }
 .zone .banner .covbtn { position: absolute; right: 10px; top: 36px; z-index: 2; font-size: 11px; padding: 2px 7px; border-radius: 10px; background: #ffffffb0; color: #345; }
 .zone .banner .music { z-index: 2; }
 .chat .rr { text-align: center; margin: 2px 0 8px; } .chat .rr button { font-size: 12px; color: #6a7a90; padding: 2px 10px; border: 1px solid #c9d4e2; border-radius: 10px; background: #fff; }
+
+/* QQ秀 */
+.qshow { background: #fff3f8; }
+.qs-stage { flex: none; background: #2b2430; display: flex; justify-content: center; }
+.qs-stage img, .qs-mini img, .qs-it img, .cpl img { image-rendering: pixelated; image-rendering: crisp-edges; display: block; }
+.qs-stage img { width: 100%; max-width: 400px; }
+.qs-bar { flex: none; display: flex; gap: 12px; align-items: center; padding: 6px 10px; background: #fff; border-bottom: 1px solid #f2d3e2; font-size: 12px; color: #8a4a6a; } .qs-bar b { color: #e0218a; } .qs-bar button { margin-left: auto; font-size: 12px; color: #2f6ea8; }
+.qs-faces { flex: none; display: flex; gap: 4px; padding: 6px 8px; overflow-x: auto; background: #fff; } .qs-faces button { flex: none; padding: 3px 9px; border-radius: 12px; border: 1px solid #f2c2d8; font-size: 12px; color: #a0156a; } .qs-faces button.on { background: #ff8fbf; color: #fff; border-color: #ff8fbf; }
+.qs-tabs { flex: none; display: flex; background: #ffe2ef; } .qs-tabs button { flex: 1; text-align: center; padding: 8px 0; font-size: 13px; color: #a0156a; } .qs-tabs button.on { background: #fff3f8; font-weight: bold; }
+.qs-body { flex: 1; min-height: 0; overflow-y: auto; padding: 8px 8px calc(12px + env(safe-area-inset-bottom)); }
+.qs-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+.qs-it { background: #fff; border: 1px solid #f2d3e2; border-radius: 6px; padding: 4px; display: flex; flex-direction: column; align-items: center; gap: 2px; } .qs-it.on { border-color: #ff8fbf; box-shadow: 0 0 0 1px #ff8fbf; }
+.qs-it img { height: 96px; width: auto; max-width: 100%; object-fit: contain; } .qs-it b { font-size: 11px; color: #5a2a44; text-align: center; }
+.qs-it button { font-size: 11px; padding: 1px 6px; border-radius: 8px; background: #ff8fbf; color: #fff; } .qs-it button.on { background: #fff; color: #e0218a; border: 1px solid #ff8fbf; }
+.qs-colors { display: flex; gap: 6px; align-items: center; font-size: 12px; color: #a0156a; margin-bottom: 8px; } .qs-colors button { width: 22px; height: 22px; border-radius: 50%; border: 2px solid #fff; box-shadow: 0 0 0 1px #ddd; } .qs-colors button.on { box-shadow: 0 0 0 2px #ff4f9e; }
+.qs-gift { background: #fff; border: 1px dashed #ff8fbf; border-radius: 8px; padding: 8px; margin-bottom: 8px; font-size: 12px; color: #5a2a44; } .qs-gift b { display: block; font-size: 14px; color: #e0218a; } .qs-gift small { color: #a0809a; } .qs-gift button { margin-top: 6px; font-size: 12px; padding: 3px 10px; border-radius: 10px; background: #ff8fbf; color: #fff; }
+.qs-mini { display: flex; align-items: center; gap: 8px; padding: 8px; cursor: pointer; } .qs-mini img { width: 120px; border-radius: 4px; } .qs-mini span { font-size: 12px; color: #e0218a; }

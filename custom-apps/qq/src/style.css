@@ -166,3 +166,16 @@ input, textarea, select { font: inherit; color: inherit; }
 .zone .dph { position: relative; display: inline-block; margin: 6px 8px 0; } .zone .dph img { display: block; max-height: 90px; border: 1px solid #b8d6ef; } .zone .dph button { position: absolute; top: -6px; right: -6px; width: 20px; height: 20px; border-radius: 50%; background: #666; color: #fff; font-size: 11px; }
 .pview { position: fixed; inset: 0; z-index: 99; background: rgba(0,0,0,.86); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; padding: 16px; }
 .pview img { max-width: 100%; max-height: 80vh; } .pview .tip { color: #bbb; font-size: 12px; }
+.zone .nav button { font-size: 13px; }
+.zone .bl { padding: 8px; border-bottom: 1px dashed #b8d6ef; cursor: pointer; } .zone .bl .t { color: #1a4fa0; font-weight: bold; font-size: 14px; }
+.zone .bl .meta { color: #999; font-size: 11px; margin-top: 2px; display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.zone .sum { color: #555; font-size: 12px; margin-top: 4px; line-height: 1.6; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; font-weight: normal; }
+.zone .tag { font-size: 10px; border: 1px solid #b8d6ef; color: #2f6ea8; padding: 0 4px; border-radius: 2px; }
+.zone .art { padding: 10px 12px; } .zone .art h2 { font-size: 17px; color: #1a4fa0; text-align: center; margin: 4px 0 6px; } .zone .art .meta { color: #999; font-size: 11px; text-align: center; margin-bottom: 6px; }
+.zone .art .bgm { font-size: 11px; color: #2f6ea8; background: #f3f8fd; border: 1px solid #d6e8f6; padding: 3px 8px; margin: 0 0 10px; text-align: center; }
+.zone .art .body { font-size: 14px; line-height: 1.9; color: #333; white-space: pre-wrap; word-break: break-all; } .zone .art .foot { color: #999; font-size: 11px; margin-top: 10px; text-align: right; }
+.zone .wbtn { display: flex; justify-content: flex-end; padding: 8px 8px 0; } .zone .lnk { color: #2f6ea8; font-size: 12px; }
+.zone .fb { margin: 6px 0 2px; padding: 6px 8px; background: #f3f8fd; border: 1px solid #d6e8f6; cursor: pointer; font-size: 13px; color: #555; } .zone .fb b { color: #1a4fa0; }
+.zone .bw { padding: 8px; display: flex; flex-direction: column; gap: 8px; font-size: 13px; } .zone .bw input, .zone .bw textarea, .zone .bw select { border: 1px solid #b8d6ef; padding: 5px 6px; font-size: 14px; outline: 0; background: #fff; }
+.zone .bw textarea { height: 260px; line-height: 1.8; resize: vertical; } .zone .bw .row { display: flex; gap: 6px; align-items: center; color: #2f6ea8; } .zone .bw .row .sp { flex: 1; } .zone .bw select { font-size: 12px; padding: 2px; }
+.zone .bw .zbtn { padding: 0; } .zone .bw .dph { margin: 0; }

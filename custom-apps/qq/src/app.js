@@ -293,11 +293,11 @@
   function render() {
     // 空间里点赞、评论完重画：滚动位置和没发出去的评论别丢
     const zb = $(".zone .zbody"); const keep = S.view === "zone" && zb && zb.dataset.k === `${S.zoneOf}|${S.zoneTab}` ? zb.scrollTop : null;
-    const postDraft = ($("#postin") || {}).value || "";
+    const keepIds = ["postin", "bt", "bbody", "bcat", "bpriv", "bbgm"].map(id => [id, ($(`#${id}`) || {}).value]).filter(x => x[1]);
     const drafts = [...document.querySelectorAll(".cmform input")].filter(i => i.value).map(i => [i.dataset.post, i.value, i.dataset.to || "", i.placeholder]);
     const v = V[S.view] || V.login; $("#app").innerHTML = v(); hydrate($("#app"));
     if (keep != null) { const z2 = $(".zone .zbody"); if (z2) z2.scrollTop = keep; }
-    if (postDraft && $("#postin")) $("#postin").value = postDraft;
+    for (const [id, v] of keepIds) { const el = $(`#${id}`); if (el) el.value = v; }
     for (const [pid, val, to, ph] of drafts) { const i = $(`.cmform input[data-post="${pid}"]`); if (i) { i.value = val; i.dataset.to = to; i.placeholder = ph; } }
     if (S.view === "chat") { const log = $("#log"); if (log) log.scrollTop = log.scrollHeight; }
   }
@@ -394,6 +394,10 @@
     const board = [...(z.board || [])].sort((x, y) => y.at.localeCompare(x.at));
     const posts = [...(z.posts || [])].filter(shown).sort((x, y) => y.at.localeCompare(x.at));
     const own = mine ? "me" : f.id;
+    // 日志：列表 / 一篇 / 写（她自己的）。她能看到的：自己的全部，他的「所有人」「仅好友」
+    const blogs = [...(z.blogs || [])].filter(shown).sort((x, y) => y.at.localeCompare(x.at));
+    const PRIV = { all: "所有人可见", friends: "仅好友可见", self: "仅自己可见" };
+    const blogSum = b => esc(b.text.replace(/\s+/g, " ").slice(0, 70));
     const postHtml = (owner, p) => {
       const of = owner === "me" ? null : friendById(owner);
       const likes = (p.likes || []).filter(shown); const iLike = likes.some(l => l.who === "me"); const cms = (p.comments || []).filter(shown).sort((x, y) => (x.at || "").localeCompare(y.at || ""));
@@ -409,9 +413,12 @@
         <div class="vis">${visitors.map(v => `<div>${whoAv(v.who, 44)}<span>${esc(whoName(v.who))}</span><small>${esc(ago(acct, v.at))}</small></div>`).join("") || `<div class="empty" style="grid-column:1/-1">还没有人来过</div>`}</div></div>`;
     const writeBox = `<div class="box"><h3><span>写说说</span></h3><textarea class="zin" id="postin" placeholder="说点什么吧…"></textarea>${S.draftPhoto ? `<div class="dph"><img data-ref="${esc(S.draftPhoto.ref)}" alt=""><button data-act="post-photo-del">✕</button></div>` : ""}<div class="zbtn"><button class="btn" data-act="post-photo">📷 照片</button>&nbsp;<button class="btn s" data-act="post">发表</button></div></div>`;
     // 她的主页是好友动态：自己和好友的说说按时间排在一起
-    const feed = mine ? [...posts.map(p => ["me", p]), ...myFriends().flatMap(fr => (fr.zone.posts || []).filter(shown).map(p => [fr.id, p]))].sort((x, y) => y[1].at.localeCompare(x[1].at)).slice(0, 40) : [];
+    const feed = mine ? [...posts.map(p => ["me", p]), ...myFriends().flatMap(fr => (fr.zone.posts || []).filter(shown).map(p => [fr.id, p])),
+      ...(A().zone.blogs || []).map(b => ["me", b, 1]), ...myFriends().flatMap(fr => (fr.zone.blogs || []).filter(b => shown(b) && b.priv !== "self").map(b => [fr.id, b, 1]))].sort((x, y) => y[1].at.localeCompare(x[1].at)).slice(0, 40) : [];
+    const feedBlog = (o, b) => { const of = o === "me" ? null : friendById(o);
+      return `<div class="post"><div class="ph">${of ? fAv(of, 26) : myAv(26)}<b>${esc(of ? nameOf(of) : A().nick)}</b><em>${esc(ago(acct, b.at))}</em></div><div class="fb" data-act="open-blog" data-owner="${esc(o)}" data-id="${esc(b.id)}">发表了日志 <b>《${esc(b.title)}》</b><div class="sum">${blogSum(b)}</div></div></div>`; };
     const home = mine ? `${writeBox}${visBox}
-      <div class="box"><h3><span>好友动态</span></h3>${feed.map(([o, p]) => postHtml(o, p)).join("") || `<div class="empty">还没有动态</div>`}</div>` : `${visBox}
+      <div class="box"><h3><span>好友动态</span></h3>${feed.map(([o, p, isBlog]) => isBlog ? feedBlog(o, p) : postHtml(o, p)).join("") || `<div class="empty">还没有动态</div>`}</div>` : `${visBox}
       <div class="cai"><button data-act="step">👣 踩一踩</button><button data-act="zone-tab" data-t="board">✎ 留言</button></div>
       ${posts.length ? `<div class="box"><h3><span>说说</span><span>(${posts.length})</span></h3>${postHtml(own, posts[0])}</div>` : ""}
       <div class="box"><h3><span>留言板</span><span>(${board.length})</span></h3>${board.slice(0, 3).map(boardHtml).join("") || `<div class="empty">还没有留言</div>`}</div>`;
@@ -419,13 +426,31 @@
       <div class="box"><h3><span>说说</span><span>(${posts.length})</span></h3>${posts.map(p => postHtml(own, p)).join("") || `<div class="empty">还没有说说</div>`}</div>`;
     const boardTab = `${mine ? "" : `<div class="box"><h3><span>给 ${esc(ownerName)} 留言</span></h3><textarea class="zin" id="boardin" placeholder="踩踩~"></textarea><div class="zbtn"><button class="btn s" data-act="leave-msg">发表</button></div></div>`}
       <div class="box"><h3><span>留言板</span><span>(${board.length})</span></h3>${board.map(boardHtml).join("") || `<div class="empty">还没有留言</div>`}</div>`;
+    const blogRow = b => `<div class="bl" data-act="open-blog" data-id="${esc(b.id)}"><div class="t">${esc(b.title)}${b.priv !== "all" ? " 🔒" : ""}</div><div class="meta"><span class="tag">${esc(b.cat || "个人日记")}</span><span>${esc(ago(acct, b.at))}</span><span>${b.priv !== "all" ? PRIV[b.priv] : `阅读(${b.reads || 0})`}</span><span>评论(${(b.comments || []).filter(shown).length})</span></div><div class="sum">${blogSum(b)}</div></div>`;
+    const blogTab = `${mine ? `<div class="wbtn"><button class="btn s" data-act="zone-tab" data-t="blogWrite">✎ 写日志</button></div>` : ""}<div class="box"><h3><span>日志</span><span>(${blogs.length})</span></h3>${blogs.map(blogRow).join("") || `<div class="empty">还没有日志</div>`}</div>`;
+    const bv = blogs.find(b => b.id === S.blogId);
+    const bgmLine = b => b.bgm ? (S.meta.music.find(m => m.id === b.bgm) || {}).name || "" : b.bgmName || "";
+    const blogView = bv ? `<div class="wbtn" style="justify-content:flex-start"><button class="lnk" data-act="zone-tab" data-t="blog">‹ 返回日志列表</button></div>
+      <div class="box"><div class="art"><h2>${esc(bv.title)}</h2><div class="meta">${esc(ymd(thereDate(acct, new Date(bv.at))))} ${esc(hm(thereDate(acct, new Date(bv.at))))} · ${esc(bv.cat || "个人日记")} · ${PRIV[bv.priv] || PRIV.all}</div>
+        ${bgmLine(bv) ? `<div class="bgm">♫ 背景音乐：${esc(bgmLine(bv))}</div>` : ""}<div class="body">${richText(bv.text)}</div>${photoHtml(bv.photo, `data-kind="post" data-owner="${esc(own)}" data-post="${esc(bv.id)}"`, bv.id)}
+        <div class="foot">阅读(${bv.reads || 0}) · 评论(${(bv.comments || []).filter(shown).length})${mine ? ` · <button class="lnk" data-act="del-blog" data-id="${esc(bv.id)}">删除</button>` : ""}</div></div>
+        <div style="padding:0 8px 8px">${(bv.comments || []).filter(shown).sort((x, y) => (x.at || "").localeCompare(y.at || "")).map(cm => `<div class="cm" data-act="reply-cm" data-post="${esc(bv.id)}" data-who="${esc(cm.who)}"><b>${esc(whoName(cm.who))}</b>${cm.to ? ` 回复 <b>${esc(whoName(cm.to))}</b>` : ""}：${richText(cm.text)}</div>`).join("")}
+        <div class="cmform"><input placeholder="评论…" data-post="${esc(bv.id)}"><button data-act="comment" data-owner="${esc(own)}" data-post="${esc(bv.id)}">评论</button></div></div></div>` : `<div class="empty">这篇日志找不到了</div>`;
+    const sel = (id, opts, v) => `<select id="${id}">${opts.map(([k, t]) => `<option value="${esc(k)}" ${k === v ? "selected" : ""}>${esc(t)}</option>`).join("")}</select>`;
+    const blogWrite = `<div class="box"><h3><span>写日志</span></h3><div class="bw">
+      <input id="bt" maxlength="40" placeholder="标题">
+      <div class="row"><span>分类</span>${sel("bcat", ["个人日记", "心情随笔", "学习笔记", "转载"].map(x => [x, x]))}<span class="sp"></span><span>权限</span>${sel("bpriv", Object.entries(PRIV))}</div>
+      <textarea id="bbody" placeholder="写点什么…"></textarea>
+      <div class="row"><span>♫ 背景音乐</span>${sel("bbgm", [["", "不要"], ...S.meta.music.map(m => [m.id, m.name])])}</div>
+      ${S.draftBlogPhoto ? `<div class="dph"><img data-ref="${esc(S.draftBlogPhoto.ref)}" alt=""><button data-act="blog-photo-del">✕</button></div>` : ""}
+      <div class="zbtn"><button class="btn" data-act="zone-tab" data-t="blog">取消</button>&nbsp;<button class="btn" data-act="blog-photo">📷 插图</button>&nbsp;<button class="btn s" data-act="blog-post">发表</button></div></div></div>`;
     const prof = mine ? A() : f;
     const profTab = `<div class="box"><h3><span>个人档</span></h3><div class="prof">${mine ? myAv(64) : fAv(f, 64)}<div><p><b>${esc(ownerName)}</b></p><p>QQ：${esc(mine ? A().qq : f.qq || "")}</p><p>等级：${mine ? levelOf(acct) : f.lv || 20}</p><p>签名：${richText(prof.sig || "")}</p></div></div><div class="zbtn">${mine ? `<button class="btn" data-act="my-avatar">换头像</button>&nbsp;<button class="btn" data-act="edit-zone">修改空间名字和签名</button>` : `<button class="btn" data-act="his-avatar">换 QQ 头像</button>&nbsp;<button class="btn" data-act="remark">修改备注</button>&nbsp;<button class="btn" data-act="his-font">他的字体</button>`}</div></div>`;
     return `<div class="zone">
       ${titlebar(`${ownerName}的QQ空间`, S.zoneBack || "back-main")}
       <div class="banner">${CLOUDS}<span class="yz">黄钻 LV${mine ? 3 : 1 + (hash(f.id) % 5)}</span><h1>${esc(z.name || `${ownerName}的空间`)}</h1><p>${esc(z.sig ? `[ ${z.sig} ]` : "")}</p>${bgmBarHtml()}</div>
-      <div class="nav">${[["home", mine ? "好友动态" : "主页"], ["posts", "说说"], ["board", "留言板"], ["prof", "个人档"]].map(([k, t]) => `<button class="${tab === k ? "on" : ""}" data-act="zone-tab" data-t="${k}">${t}</button>`).join("")}</div>
-      <div class="zbody" data-k="${esc(`${S.zoneOf}|${tab}`)}">${{ home, posts: postsTab, board: boardTab, prof: profTab }[tab]}</div>
+      <div class="nav">${[["home", mine ? "好友动态" : "主页"], ["posts", "说说"], ["blog", "日志"], ["board", "留言板"], ["prof", "个人档"]].map(([k, t]) => `<button class="${tab === k || (k === "blog" && /^blog/.test(tab)) ? "on" : ""}" data-act="zone-tab" data-t="${k}">${t}</button>`).join("")}</div>
+      <div class="zbody" data-k="${esc(`${S.zoneOf}|${tab}`)}">${{ home, posts: postsTab, blog: blogTab, blogView, blogWrite: mine ? blogWrite : blogTab, board: boardTab, prof: profTab }[tab]}</div>
     </div>`;
   };
   const CLOUD = (pos, w, op) => `<svg viewBox="0 0 120 50" style="position:absolute;${pos};width:${w}px"><g fill="#fff" opacity="${op}"><circle cx="34" cy="30" r="16"/><circle cx="56" cy="21" r="20"/><circle cx="80" cy="28" r="15"/><circle cx="96" cy="35" r="10"/><rect x="20" y="30" width="86" height="16" rx="8"/></g></svg>`;
@@ -576,7 +601,27 @@
     const el = document.createElement("div"); el.className = "pview"; el.innerHTML = `<img src="${url}" alt=""><p class="tip">长按图片可以保存 · 点空白处关闭</p>`;
     el.onclick = e => { if (e.target.tagName !== "IMG") el.remove(); }; document.body.appendChild(el);
   };
-  const postOf = (owner, pid) => { const z = owner === "me" ? A().zone : (friendById(owner) || {}).zone; return z && (z.posts || []).find(p => p.id === pid); };
+  /** 说说和日志都在这里找（评论、回复、生成照片共用） */
+  const itemOf = (z, id) => z && ((z.posts || []).find(p => p.id === id) || (z.blogs || []).find(b => b.id === id));
+  const postOf = (owner, pid) => itemOf(owner === "me" ? A().zone : (friendById(owner) || {}).zone, pid);
+  const isBlog = p => p && "title" in p;
+  ACT["open-blog"] = b => {
+    const o = b.dataset.owner;
+    if (o && o !== S.zoneOf) ACT["open-zone"]({ dataset: { who: o } });
+    S.blogId = b.dataset.id; S.zoneTab = "blogView";
+    const z = curZone(); const bg = ((z.blogs || []).find(x => x.id === S.blogId) || {}).bgm; if (bg && S.meta.music.some(m => m.id === bg)) playBgm([bg]); const bl = (z.blogs || []).find(x => x.id === S.blogId); if (bl && S.zoneOf !== "me") { bl.reads = (bl.reads || 0) + 1; saveFriend(friendById(S.zoneOf)); }
+    render(); const zb = $(".zone .zbody"); if (zb) zb.scrollTop = 0;
+  };
+  ACT["blog-photo"] = async () => { const ph = await pickPhotoFor(S.meta.cur); if (ph) { S.draftBlogPhoto = ph; render(); } };
+  ACT["blog-photo-del"] = () => { S.draftBlogPhoto = null; render(); };
+  ACT["blog-post"] = () => {
+    const title = ($("#bt").value || "").trim(), text = ($("#bbody").value || "").trim(); if (!title) return toast("写个标题吧"); if (!text) return toast("正文还空着");
+    const bl = { id: uid("g"), title, text: text.slice(0, 8000), cat: $("#bcat").value, priv: $("#bpriv").value, bgm: $("#bbgm").value || undefined, at: new Date().toISOString(), comments: [], reads: 0, ...(S.draftBlogPhoto ? { photo: S.draftBlogPhoto } : {}) };
+    const z = A().zone; z.blogs = [...(z.blogs || []), bl]; S.draftBlogPhoto = null; ["bt", "bbody"].forEach(id => { $(`#${id}`).value = ""; }); saveMeta();
+    if (bl.priv !== "self") for (const f of myFriends()) queueZone(f, { kind: "myBlog", pid: bl.id }, rand(10, 180) * 60e3);
+    S.blogId = bl.id; S.zoneTab = "blogView"; render(); toast("日志发表成功");
+  };
+  ACT["del-blog"] = b => { const z = A().zone; z.blogs = (z.blogs || []).filter(x => x.id !== b.dataset.id); S.meta.queue.forEach(q => { if (q.ev) q.ev = q.ev.filter(e => e.pid !== b.dataset.id); }); saveMeta(); S.zoneTab = "blog"; render(); toast("删掉了"); };
   const saveOwner = owner => owner === "me" ? saveMeta() : saveFriend(friendById(owner));
   ACT.like = b => {
     const o = b.dataset.owner; const p = postOf(o, b.dataset.post); if (!p) return;
@@ -794,18 +839,19 @@
     if (evs.some(e => e.kind === "step")) todo.push("用户在你的空间踩了一脚。你可以回踩（去她空间留下脚印），也可以在她的留言板上留言。");
     const cmText = p => (p.comments || []).filter(shown).slice(-8).map(cm => `${cm.who === "me" ? "用户" : cm.who === `f:${f.id}` ? "你" : whoName(cm.who)}${cm.to ? ` 回复 ${cm.to === "me" ? "用户" : cm.to === `f:${f.id}` ? "你" : whoName(cm.to)}` : ""}：${cm.text}`).join("\n");
     let others = false;
-    for (const e of evs.filter(e => e.kind === "hisPostComment")) { const p = z.posts.find(x => x.id === e.pid); const mine = p && (p.comments || []).filter(cm => cm.who === "me").slice(-1)[0];
-      if (mine) { others = true; todo.push(`你的说说「${p.text.slice(0, 80)}${photoText(p.photo)}」下面的评论：\n${cmText(p)}\n用户刚评论${mine.to && mine.to !== `f:${f.id}` ? `（回复 ${whoName(mine.to)}）` : ""}：「${mine.text}」。回不回、怎么回按你的人设来。`); } }
+    for (const e of evs.filter(e => e.kind === "hisPostComment")) { const p = itemOf(z, e.pid); const mine = p && (p.comments || []).filter(cm => cm.who === "me").slice(-1)[0];
+      if (mine) { others = true; todo.push(`${isBlog(p) ? `你的日志《${p.title}》` : `你的说说「${p.text.slice(0, 80)}${photoText(p.photo)}」`}下面的评论：\n${cmText(p)}\n用户刚评论${mine.to && mine.to !== `f:${f.id}` ? `（回复 ${whoName(mine.to)}）` : ""}：「${mine.text}」。回不回、怎么回按你的人设来。`); } }
     for (const e of evs.filter(e => e.kind === "myPost")) { const p = mz.posts.find(x => x.id === e.pid); if (p && p.photo && !p.photo.seen) { await seePhoto(f, p.photo); saveMeta(); } if (p) todo.push(`你刷到用户在她空间新发的说说：「${p.text}${photoText(p.photo, true)}」。赞不赞、评不评论按你们的关系和你的人设决定，也可以都不做。`); }
     for (const e of evs.filter(e => e.kind === "boardReply")) { const m = (mz.board || []).find(x => x.id === e.bid); if (m && m.reply) todo.push(`你在用户留言板上留过言：「${m.text}」，她回复了：「${m.reply}」。想接着说就在她留言板上再留一条，不想也可以不写。`); }
-    for (const e of evs.filter(e => e.kind === "myPostReply")) { const p = mz.posts.find(x => x.id === e.pid); const mine = p && (p.comments || []).filter(cm => cm.who === "me" && cm.to === `f:${f.id}`).slice(-1)[0]; if (mine) todo.push(`用户在她自己的说说「${p.text.slice(0, 80)}」下回复了你：「${mine.text}」。回不回按你的人设来。`); }
+    for (const e of evs.filter(e => e.kind === "myBlog")) { const b = (mz.blogs || []).find(x => x.id === e.pid); if (b) { if (b.photo && !b.photo.seen) { await seePhoto(f, b.photo); saveMeta(); } todo.push(`你看到用户在她空间写了一篇日志《${b.title}》${b.priv === "friends" ? "（仅好友可见）" : ""}：\n${b.text.slice(0, 2000)}${photoText(b.photo, true)}\n评不评论按你们的关系和你的人设决定。`); } }
+    for (const e of evs.filter(e => e.kind === "myPostReply")) { const p = itemOf(mz, e.pid); const mine = p && (p.comments || []).filter(cm => cm.who === "me" && cm.to === `f:${f.id}`).slice(-1)[0]; if (mine) todo.push(`用户在她自己的${isBlog(p) ? `日志《${p.title}》` : `说说「${p.text.slice(0, 80)}」`}下回复了你：「${mine.text}」。回不回按你的人设来。`); }
     if (!todo.length) return {};
     const raw = await gen(f, "zone", [ERA_RULE(acct), COMMON_RULE, `这是 QQ 空间里的事。用户的 QQ 昵称是「${S.meta.accts[acct].nick}」。`, zoneCtx(f), others ? circleLine(f) : "", ...todo,
       ["按需要输出这些块（没有就不写）：\n===主人回复===\n回复用户留言的话\n===结束===\n===评论回复===\n在你说说下回复用户评论的话\n===结束===",
         others ? "===别人回复===\n你身边的人看到用户的评论后回她的话（没人回就不写这个块），一行一条：昵称：话\n===结束===\n===回别人===\n你在这条说说下回复别人的话（不回就不写），一行一条：昵称：话\n===结束===" : "",
-        "===赞===\n（赞用户的说说就写这个块，内容留空）\n===结束===\n===评论===\n评论用户说说的话\n===结束===\n===回她===\n在用户说说下回复她的话\n===结束===\n===回踩===\n（去她空间踩一脚就写这个块，内容留空）\n===结束===\n===留言===\n在用户留言板上写的话\n===结束===\n想发一条新说说：\n===说说===\n内容\n===结束==="].filter(Boolean).join("\n")].filter(Boolean).join("\n\n"));
+        "===赞===\n（赞用户的说说就写这个块，内容留空）\n===结束===\n===评论===\n评论用户说说的话\n===结束===\n===日志评论===\n评论用户日志的话\n===结束===\n===回她===\n在用户说说下回复她的话\n===结束===\n===回踩===\n（去她空间踩一脚就写这个块，内容留空）\n===结束===\n===留言===\n在用户留言板上写的话\n===结束===\n想发一条新说说：\n===说说===\n内容\n===结束==="].filter(Boolean).join("\n")].filter(Boolean).join("\n\n"));
     if (raw == null) return null;
-    return { reply: block(raw, "主人回复"), creply: block(raw, "评论回复"), others: others ? parseCm(f, block(raw, "别人回复")).filter(c => !c.who.startsWith("f:")) : [], toOthers: others ? parseCm(f, block(raw, "回别人")).map(c => ({ to: c.who.startsWith("f:") ? c.to || "" : c.who.replace(/^回复\s*/, ""), text: c.text })).filter(c => c.to && c.to !== "me" && !c.to.startsWith("f:")) : [], like: /===\s*赞\s*===/.test(raw), comment: block(raw, "评论"), back: block(raw, "回她"), step: /===\s*回踩\s*===/.test(raw), board: block(raw, "留言"), post: block(raw, "说说"), evs };
+    return { reply: block(raw, "主人回复"), creply: block(raw, "评论回复"), others: others ? parseCm(f, block(raw, "别人回复")).filter(c => !c.who.startsWith("f:")) : [], toOthers: others ? parseCm(f, block(raw, "回别人")).map(c => ({ to: c.who.startsWith("f:") ? c.to || "" : c.who.replace(/^回复\s*/, ""), text: c.text })).filter(c => c.to && c.to !== "me" && !c.to.startsWith("f:")) : [], like: /===\s*赞\s*===/.test(raw), comment: block(raw, "评论"), bcomment: block(raw, "日志评论"), back: block(raw, "回她"), step: /===\s*回踩\s*===/.test(raw), board: block(raw, "留言"), post: block(raw, "说说"), evs };
   }
   function remember(f, summary) {
     if (!api.memory || !api.memory.addTimeline) return;
@@ -846,7 +892,7 @@
         if (planDay(f)) saveFriend(f);
         const it = f.plan.items.find(x => !x.done && new Date(x.at) <= new Date()); if (!it) continue;
         it.tries = (it.tries || 0) + 1;
-        const ok = it.kind === "post" ? await selfPost(f, it) : await browse(f, it);
+        const ok = it.kind === "post" ? await selfPost(f, it) : it.kind === "blog" ? await selfBlog(f, it) : await browse(f, it);
         if (ok || it.tries >= 3) it.done = true; saveFriend(f);
         if (ok && (S.view === "zone" || S.view === "main") && !zoneTyping()) render();
       }
@@ -881,21 +927,24 @@
   function applyZone(f, r) {
     const z = f.zone, mz = S.meta.accts[f.acct].zone; const now = new Date().toISOString(); const notes = [];
     if (r.reply) { const un = z.board.filter(b => b.who === "me" && !b.reply); un.forEach(b => { b.reply = r.reply.slice(0, 200); b.replyAt = now; }); if (un.length) notes.push(`回复了她的留言：「${r.reply}」`); }
-    const hisPids = [...new Set(r.evs.filter(e => e.kind === "hisPostComment").map(e => e.pid))], myPids = [...new Set(r.evs.filter(e => e.kind === "myPost").map(e => e.pid))], backPids = [...new Set(r.evs.filter(e => e.kind === "myPostReply").map(e => e.pid))];
-    if (r.creply) { for (const pid of hisPids) { const p = z.posts.find(x => x.id === pid); if (p) p.comments.push({ who: `f:${f.id}`, to: "me", text: r.creply.slice(0, 200), at: now, seen: true }); } notes.push(`回复了她在我说说下的评论：「${r.creply}」`); }
-    const lastP = z.posts.find(x => x.id === hisPids[hisPids.length - 1]); const otherAt = {};
+    const hisPids = [...new Set(r.evs.filter(e => e.kind === "hisPostComment").map(e => e.pid))], myPids = [...new Set(r.evs.filter(e => e.kind === "myPost").map(e => e.pid))], backPids = [...new Set(r.evs.filter(e => e.kind === "myPostReply").map(e => e.pid))], blogPids = [...new Set(r.evs.filter(e => e.kind === "myBlog").map(e => e.pid))];
+    if (r.creply) { for (const pid of hisPids) { const p = itemOf(z, pid); if (p) p.comments.push({ who: `f:${f.id}`, to: "me", text: r.creply.slice(0, 200), at: now, seen: true }); } notes.push(`回复了她在我说说下的评论：「${r.creply}」`); }
+    const lastP = itemOf(z, hisPids[hisPids.length - 1]); const otherAt = {};
     if (r.others && r.others.length && lastP) { let t = Date.now();
       for (const c of r.others) { t += rand(2, 40) * 60e3; otherAt[c.who] = t; lastP.comments.push({ who: c.who, to: c.to && c.to !== "me" ? c.to : "me", text: c.text, at: new Date(t).toISOString() }); } }
     // 他回别人：回的是刚冒出来的那几个人，就排在他们后面
     if (r.toOthers && r.toOthers.length && lastP) { for (const c of r.toOthers) lastP.comments.push({ who: `f:${f.id}`, to: c.to, text: c.text, at: otherAt[c.to] ? new Date(otherAt[c.to] + rand(1, 20) * 60e3).toISOString() : now }); notes.push(`在说说下回了${r.toOthers.map(c => c.to).join("、")}`); }
     if (r.like) { for (const pid of myPids) { const p = mz.posts.find(x => x.id === pid); if (p && !(p.likes || []).some(l => l.who === `f:${f.id}`)) p.likes = [...(p.likes || []), { who: `f:${f.id}`, at: now }]; } if (myPids.length) notes.push("赞了她的说说"); }
     if (r.comment) { for (const pid of myPids) { const p = mz.posts.find(x => x.id === pid); if (p) p.comments.push({ who: `f:${f.id}`, text: r.comment.slice(0, 200), at: now }); } notes.push(`评论了她的说说：「${r.comment}」`); }
-    if (r.back) { for (const pid of backPids) { const p = mz.posts.find(x => x.id === pid); if (p) p.comments.push({ who: `f:${f.id}`, to: "me", text: r.back.slice(0, 200), at: now, seen: true }); } notes.push(`在她说说下回复她：「${r.back}」`); }
+    for (const pid of blogPids) { const b = (mz.blogs || []).find(x => x.id === pid); if (!b) continue; b.reads = (b.reads || 0) + 1; notes.push(`看了她的日志《${b.title}》`);
+      if (r.bcomment) { b.comments = [...(b.comments || []), { who: `f:${f.id}`, text: r.bcomment.slice(0, 300), at: now }]; notes.push(`评论：「${r.bcomment}」`); } }
+    if (r.back) { for (const pid of backPids) { const p = itemOf(mz, pid); if (p) p.comments.push({ who: `f:${f.id}`, to: "me", text: r.back.slice(0, 200), at: now, seen: true }); } notes.push(`在她说说下回复她：「${r.back}」`); }
     if (r.step) { mz.visitors = [{ who: `f:${f.id}`, at: now, step: true }, ...(mz.visitors || []).filter(v => v.who !== `f:${f.id}`)].slice(0, 30); notes.push("去她空间回踩了一脚"); }
     if (r.board) { mz.board.push({ id: uid("b"), who: `f:${f.id}`, text: r.board.slice(0, 200), at: now }); notes.push(`在她留言板上留言：「${r.board}」`); }
     if (r.post) { z.posts.push({ id: uid("p"), text: r.post.slice(0, 300), at: now, comments: [], likes: [] }); notes.push(`发了一条说说：「${r.post}」`); }
     saveFriend(f); saveMeta();
-    if (notes.length) { remember(f, `在 QQ 空间里，我${notes.join("，")}`); qqPop("QQ空间", `${fAv(f, 28)}<div><b>${esc(nameOf(f))}</b><br>${r.board ? "给你留言了" : r.comment ? "评论了你的说说" : r.creply || r.back ? "回复了你的评论" : r.like && myPids.length ? "赞了你的说说" : r.step ? "踩了你的空间" : "有新动态"}</div>`); play("msg"); }
+    if (notes.length) remember(f, `在 QQ 空间里，我${notes.join("，")}`);
+    if (notes.some(n => !n.startsWith("看了她的日志"))) { qqPop("QQ空间", `${fAv(f, 28)}<div><b>${esc(nameOf(f))}</b><br>${r.board ? "给你留言了" : r.bcomment && blogPids.length ? "评论了你的日志" : r.comment ? "评论了你的说说" : r.creply || r.back ? "回复了你的评论" : r.like && myPids.length ? "赞了你的说说" : r.step ? "踩了你的空间" : "有新动态"}</div>`); play("msg"); }
     if (S.view === "zone" || S.view === "main") render();
   }
   // ───────────────────────── 他自己上空间：每天发 1～3 条说说、逛 1～3 次她的空间 ─────────────────────────
@@ -904,7 +953,7 @@
     const today = ymd(new Date()); if (f.plan && f.plan.day === today) return false;
     const start = new Date(); start.setHours(0, 0, 0, 0); const items = [];
     const pick = () => { for (let i = 0; i < 60; i++) { const d = new Date(start.getTime() + rand(0, 1439) * 60e3); if (statusOf(f, d) !== "offline") return d; } return null; };
-    for (const [kind, n] of [["post", rand(1, 3)], ["browse", rand(1, 3)]]) for (let i = 0; i < n; i++) { const d = pick(); if (d) items.push({ kind, at: d.toISOString() }); }
+    for (const [kind, n] of [["post", rand(1, 3)], ["browse", rand(1, 3)], ["blog", Math.random() < 0.3 ? 1 : 0]]) for (let i = 0; i < n; i++) { const d = pick(); if (d) items.push({ kind, at: d.toISOString() }); }
     f.plan = { day: today, items: items.sort((a, b) => a.at.localeCompare(b.at)) }; return true;
   }
   const recentAt = iso => Date.now() - new Date(iso).getTime() < 30 * 60e3; // 刚刚发生的才弹提示，补上的不吵她
@@ -927,6 +976,30 @@
     f.zone.posts.push(p); saveFriend(f);
     remember(f, `我在 QQ 空间发了一条说说：「${p.text}${photoText(p.photo)}」`);
     if (recentAt(p.at)) { qqPop("QQ空间", `${fAv(f, 28)}<div><b>${esc(nameOf(f))}</b><br>发表了新说说</div>`); play("msg"); }
+    return true;
+  }
+  /** 他写日志：几天一篇，比说说长；他身边的人来看、来评论 */
+  async function selfBlog(f, it) {
+    const acct = f.acct; const d = new Date(it.at); f.zone.blogs = f.zone.blogs || [];
+    const prev = f.zone.blogs.slice(-5).map(b => `《${b.title}》`).join("");
+    const lines = [ERA_RULE(acct, d), COMMON_RULE, "你在 QQ 空间写一篇日志：写你那边最近一件完整的事或者一段心情，比说说长，想到哪写到哪，像那时候的人写空间日志。写什么、写多长按你的人设来。", prev ? `你之前写过的日志：${prev}` : "", circleLine(f),
+      `===日志===\n标题：\n分类：\n权限：所有人可见 或 仅好友可见\n背景音乐：歌手 - 歌名（${acct === "a08" ? "2008 年以前就有的歌，" : ""}不挂就写无）\n正文：\n（正文写在这一行下面）\n===结束===`,
+      `${acct === "a08" ? "你的照片是用数码相机或者拍照手机拍的。" : ""}想配一张你拍的照片就加（不配就不写）：\n===照片===\n画面：照片里拍到了什么（场景、人物、物品、光线，客观写清楚，只能是你身边真实的东西）\n===结束===`,
+      "再写你身边的人看了这篇日志的反应（谁来、来不来按你们的关系定，可以没人）。有人评论你，你回不回、回谁按你的人设来，你的回复也写进评论里，排在那条评论后面：\n===评论===\n按时间先后一行一条：昵称：评论的话\n回复别人写成：昵称：回复 某某：话\n你自己回复写成：你：回复 某某：话\n===结束===",
+      f.circle && f.circle.length ? "" : CIRCLE_ASK].filter(Boolean).join("\n\n");
+    let raw = await gen(f, "blog", lines); if (raw == null) return false;
+    const leak = futureIn(acct, raw); if (leak.length) { const again = await gen(f, "blog", `${lines}\n\n你刚才写了「${leak.join("」「")}」，这是你那边还没有的东西，你不可能知道。重写。`); if (again && block(again, "日志")) raw = again; }
+    const bk = block(raw, "日志"); if (!bk) return false;
+    const m = bk.match(/正文\s*[：:]\s*([\s\S]*)$/); const text = (m ? m[1] : "").replace(/^（正文写在这一行下面）/, "").trim(); const title = field(bk, "标题").slice(0, 40);
+    if (!title || !text) return false;
+    if (!(f.circle && f.circle.length)) { const c = parseCircle(raw); if (c.length) f.circle = c; }
+    const bgm = field(bk, "背景音乐"); const pb = block(raw, "照片");
+    const bl = { id: uid("g"), title, text: text.slice(0, 6000), cat: field(bk, "分类").slice(0, 10) || "个人日记", priv: /好友/.test(field(bk, "权限")) ? "friends" : "all", at: d.toISOString(), reads: rand(3, 40), comments: [],
+      ...(bgm && !/^(无|不挂|没有)$/.test(bgm) ? { bgmName: bgm.slice(0, 40) } : {}), ...(pb ? { photo: { desc: (field(pb, "画面") || pb).slice(0, 200) } } : {}) };
+    let t = d.getTime(); for (const c of parseCm(f, block(raw, "评论"))) { if (c.to === "me") continue; t += rand(10, 300) * 60e3; bl.comments.push({ ...c, at: new Date(t).toISOString() }); }
+    f.zone.blogs.push(bl); saveFriend(f);
+    remember(f, `我在 QQ 空间写了一篇日志《${title}》：${text.slice(0, 300)}`);
+    if (recentAt(bl.at)) { qqPop("QQ空间", `${fAv(f, 28)}<div><b>${esc(nameOf(f))}</b><br>发表了日志《${esc(title)}》</div>`); play("msg"); }
     return true;
   }
   /** 他逛到她的空间：留下访客记录，赞不赞、评不评论、踩不踩、留不留言他自己定 */
@@ -954,7 +1027,7 @@
   function notifyReplies() {
     for (const [owner, z] of [["me", A().zone], ...myFriends().map(fr => [fr.id, fr.zone])]) {
       let changed = false;
-      for (const p of z.posts || []) for (const c of p.comments || []) if (c.to === "me" && !c.seen && shown(c)) { c.seen = true; changed = true; qqPop("QQ空间", `${whoAv(c.who, 28)}<div><b>${esc(whoName(c.who))}</b><br>回复了你的评论：${richText(c.text).slice(0, 120)}</div>`); play("msg"); }
+      for (const p of [...(z.posts || []), ...(z.blogs || [])]) for (const c of p.comments || []) if (c.to === "me" && !c.seen && shown(c)) { c.seen = true; changed = true; qqPop("QQ空间", `${whoAv(c.who, 28)}<div><b>${esc(whoName(c.who))}</b><br>回复了你的评论：${richText(c.text).slice(0, 120)}</div>`); play("msg"); }
       if (changed) saveOwner(owner);
     }
   }

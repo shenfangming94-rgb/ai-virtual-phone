@@ -563,7 +563,7 @@
     return `<div class="qshow">${titlebar(`${mine ? A().nick : nameOf(f)}的QQ秀`, S.showBack || "back-main")}
       ${pair ? `<div class="qs-who"><button class="${mine ? "on" : ""}" data-act="qs-who" data-w="me">我的</button><button class="${!mine ? "on" : ""}" data-act="qs-who" data-w="${esc(pair.id)}">${esc(nameOf(pair))}的</button></div>` : ""}
       <div class="qs-stage"><img src="${stageUrl(sh)}" alt=""></div>
-      <div class="qs-bar"><span>💰 ${mine ? "我的" : "他的"} Q币 <b>${sh.qb}</b></span>${mine ? "" : `<span>我的 Q币 <b>${me.qb}</b></span>`}${mine ? "" : `<button data-act="qs-gender">${sh.g === "f" ? "女生" : "男生"} ⇄</button>`}</div>
+      <div class="qs-bar"><span>💰 ${mine ? "我的" : "他的"} Q币 <b>${sh.qb}</b></span>${mine ? `<button data-act="qs-sign" ${sh.signed === ymd(new Date()) ? "disabled" : ""}>${sh.signed === ymd(new Date()) ? "今天签过了" : "签到 +20"}</button><button data-act="qs-pay">充值</button>` : ""}${mine ? "" : `<span>我的 Q币 <b>${me.qb}</b></span>`}${mine ? "" : `<button data-act="qs-gender">${sh.g === "f" ? "女生" : "男生"} ⇄</button>`}</div>
       <div class="qs-faces">${FACES_QS.map(([n, e, m]) => `<button class="${sh.eyes === e && sh.mouth === m ? "on" : ""}" data-act="qs-face" data-e="${e}" data-m="${m}">${n}</button>`).join("")}</div>
       <div class="qs-tabs">${[["outfit", "衣服"], ["hair", "发型"], ["wings", "翅膀"], ["acc", "配饰"], ["bg", "背景"], ["gifts", "礼物"]].map(([k, t]) => `<button class="${tab === k ? "on" : ""}" data-act="qs-tab" data-t="${k}">${t}${k === "gifts" && mine && newGift() ? `<i class="dot"></i>` : ""}</button>`).join("")}</div>
       <div class="qs-body">${tab === "hair" ? `<div class="qs-colors">发色 ${HAIR_COLORS.map(c => `<button style="background:${c}" class="${sh.hairC === c ? "on" : ""}" data-act="qs-hairc" data-c="${c}"></button>`).join("")}</div>` : ""}
@@ -575,6 +575,10 @@
   ACT["open-show"] = b => { S.showPair = b.dataset.who !== "me" ? b.dataset.who : (S.view === "chat" ? S.fid : S.showPair); S.showOf = S.view === "chat" ? "me" : b.dataset.who; S.showBack = S.view === "chat" ? "back-chat" : S.view === "zone" ? "back-zone" : "back-main"; S.showTab = "outfit"; S.lastZone = S.zoneOf; S.view = "show"; render(); };
   ACT["back-zone"] = () => { S.zoneOf = S.lastZone; S.view = "zone"; render(); };
   ACT["qs-who"] = b => { S.showOf = b.dataset.w; S.showTab = "outfit"; render(); };
+  ACT["qs-sign"] = () => { const sh = myShow(); const d = ymd(new Date()); if (sh.signed === d) return; sh.signed = d; sh.qb += 20; saveMeta(); render(); toast("签到成功 +20 Q币"); };
+  /** 仿 2008 年的短信充值：点了就到账 */
+  ACT["qs-pay"] = () => sheet(`<h3>Q币充值</h3><p class="note">手机短信充值：编辑「QB」发送到 1066 8888，1 元 = 1 Q币</p><div class="mlist">${[10, 50, 100, 500].map(n => `<button data-v="${n}">充 ${n} Q币</button>`).join("")}</div><div class="btns"><button data-v="no">取消</button></div>`,
+    v => { closeSheet(); if (v === "no") return; const sh = myShow(); sh.qb += +v; saveMeta(); render(); toast(`充值成功，到账 ${v} Q币`); });
   ACT["qs-tab"] = b => { S.showTab = b.dataset.t; render(); };
   ACT["qs-face"] = b => { const sh = showOf(S.showOf); sh.eyes = b.dataset.e; sh.mouth = b.dataset.m; saveShowOf(S.showOf); render(); };
   ACT["qs-hairc"] = b => { const sh = showOf(S.showOf); sh.hairC = b.dataset.c; saveShowOf(S.showOf); render(); };

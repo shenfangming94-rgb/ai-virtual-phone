@@ -198,7 +198,7 @@ input, textarea, select { font: inherit; color: inherit; }
 .qs-stage { flex: none; background: #2b2430; display: flex; justify-content: center; }
 .qs-stage img, .qs-mini img, .qs-it img, .cpl img { image-rendering: pixelated; image-rendering: crisp-edges; display: block; }
 .qs-stage img { width: 100%; max-width: 400px; }
-.qs-bar { flex: none; display: flex; gap: 12px; align-items: center; padding: 6px 10px; background: #fff; border-bottom: 1px solid #f2d3e2; font-size: 12px; color: #8a4a6a; } .qs-bar b { color: #e0218a; } .qs-bar button { margin-left: auto; font-size: 12px; color: #2f6ea8; }
+.qs-bar { flex: none; display: flex; gap: 12px; align-items: center; padding: 6px 10px; background: #fff; border-bottom: 1px solid #f2d3e2; font-size: 12px; color: #8a4a6a; } .qs-bar b { color: #e0218a; } .qs-bar button { font-size: 12px; color: #fff; background: #ff8fbf; padding: 2px 9px; border-radius: 10px; } .qs-bar button:first-of-type { margin-left: auto; } .qs-bar button:disabled { background: #e9d5df; color: #fff; } .qs-bar button[data-act="qs-gender"] { background: none; color: #2f6ea8; }
 .qs-faces { flex: none; display: flex; gap: 4px; padding: 6px 8px; overflow-x: auto; background: #fff; } .qs-faces button { flex: none; padding: 3px 9px; border-radius: 12px; border: 1px solid #f2c2d8; font-size: 12px; color: #a0156a; } .qs-faces button.on { background: #ff8fbf; color: #fff; border-color: #ff8fbf; }
 .qs-tabs { flex: none; display: flex; background: #ffe2ef; } .qs-tabs button { flex: 1; text-align: center; padding: 8px 0; font-size: 13px; color: #a0156a; } .qs-tabs button.on { background: #fff3f8; font-weight: bold; }
 .qs-body { flex: 1; min-height: 0; overflow-y: auto; padding: 8px 8px calc(12px + env(safe-area-inset-bottom)); }

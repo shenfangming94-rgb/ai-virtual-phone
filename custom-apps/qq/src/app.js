@@ -341,7 +341,7 @@
         <button class="avbtn" data-act="my-avatar">${myAv(50)}</button>
         <div class="mi"><div><b>${esc(a.nick)}</b> <select class="stsel" data-act="status">${["online", "away", "hidden"].map(s => `<option value="${s}" ${a.status === s ? "selected" : ""}>${STATUS_NAME[s]}</option>`).join("")}</select></div>
           <button class="sig" data-act="edit-sig">${a.sig ? richText(a.sig) : `<span class="ph">编辑个性签名</span>`}</button>
-          <div class="lv">${lvIcons(lv)}<span>LV ${lv}</span><button class="qsbtn" data-act="open-show" data-who="me">👗 QQ秀${newGift() ? `<i class="dot"></i>` : ""}</button></div></div>
+          <div class="lv">${lvIcons(lv)}<span>LV ${lv}</span></div></div>
       </div>
       <div class="search"><input id="srch" placeholder="🔍 搜索联系人" value="${esc(S.search)}"></div>
       <div class="tabs"><button class="${S.tab === "friends" ? "on" : ""}" data-act="tab" data-t="friends">联系人</button><button class="${S.tab === "recent" ? "on" : ""}" data-act="tab" data-t="recent">最近联系人</button></div>
@@ -350,7 +350,7 @@
           ${S.collapsed.f ? "" : sorted.map(row).join("") || `<div class="empty">还没有好友<br>点下面的「查找」加一个吧</div>`}` : recent.map(row).join("") || `<div class="empty">还没有聊过天</div>`}
       </div>
       ${miniBarHtml()}
-      <div class="bot"><button class="btn" data-act="menu">菜单</button><button class="btn" data-act="find">查找</button><button class="btn" data-act="open-zone" data-who="me">QQ空间</button></div>
+      <div class="bot"><button class="btn" data-act="menu">菜单</button><button class="btn" data-act="find">查找</button><button class="btn" data-act="open-zone" data-who="me">QQ空间${newGift() ? `<i class="dot"></i>` : ""}</button></div>
     </div>`;
   };
 
@@ -384,7 +384,7 @@
       <div class="tools"><button data-act="nope" data-t="对方没有安装摄像头">📹 视频</button><button data-act="nope" data-t="对方没有麦克风">🎤 语音</button><button data-act="nope" data-t="文件太大了，传了半天还是失败">📁 传文件</button><button data-act="open-zone" data-who="${esc(f.id)}">🌐 空间</button><button data-act="open-show" data-who="${esc(f.id)}">👗 QQ秀</button></div>
       ${miniBarHtml()}
       <div class="log" id="log">${lines || `<div class="sys">${st === "offline" ? `${esc(nameOf(f))} 现在不在线，消息会在他上线后收到` : "开始聊天吧"}</div>`}${typing && st === "online" ? `<div class="sys">对方正在输入…</div>` : ""}</div>
-      <div class="itools"><button data-act="font"><b style="color:${S.meta.font.color}">A</b> 字体</button><button data-act="faces">${faceSvg("微笑", 16)} 表情</button><button data-act="shake">〰 抖动</button><button data-act="send-photo">📷 图片</button>${canReroll(f) ? `<button data-act="reroll">↻ 重新回复</button>` : ""}<span class="sp"></span><button data-act="history">消息记录</button></div>
+      <div class="itools"><button data-act="font"><b style="color:${S.meta.font.color}">A</b> 字体</button><button data-act="faces">${faceSvg("微笑", 16)} 表情</button><button data-act="shake">〰 抖动</button><button data-act="send-photo">📷 图片</button>${canReroll(f) ? `<button data-act="reroll">↻ 重新回复</button>` : ""}<button data-act="ping">💭 让他来找我</button><span class="sp"></span><button data-act="history">消息记录</button></div>
       <div class="pop-wrap" id="popwrap"></div>
       <div class="ibar"><textarea class="inp" id="inp" style="color:${S.meta.font.color};${S.meta.font.bold ? "font-weight:bold" : ""}" placeholder=""></textarea>
       <div class="send"><button class="btn" data-act="back-main">关闭(C)</button><button class="btn s" data-act="send">发送(S)</button></div></div>
@@ -707,9 +707,17 @@
     c.msgs.push({ id: uid("m"), from: "me", text, at: new Date().toISOString(), color: S.meta.font.color, bold: S.meta.font.bold }); saveChat(c);
     i.value = ""; queueReply(f); render(); $("#inp").focus();
   };
+  /** 自动来找她之前看一眼：他上一条主动的她还没回，或者正在等他回，就不找 */
+  const mayPing = f => { const ms = chatOf(f.id).msgs.filter(m => m.from !== "sys"); const last = ms[ms.length - 1]; return !(last && last.from === "him" && last.pro) && !S.meta.queue.some(q => q.fid === f.id && (q.kind === "reply" || q.kind === "ping")); };
+  const queuePing = (f, delayMs, extra = {}) => { S.meta.queue.push({ fid: f.id, kind: "ping", due: new Date(Date.now() + delayMs * TS()).toISOString(), typing: true, ...extra }); saveMeta(); };
   /** 最后一条真人消息是他的（系统提示不算），前面有她发的，而且没在等他回 */
   const canReroll = f => { const ms = chatOf(f.id).msgs.filter(m => m.from !== "sys"); return ms.length && ms[ms.length - 1].from === "him" && ms.some(m => m.from === "me") && !S.meta.queue.some(q => q.fid === f.id && q.kind === "reply"); };
   /** 不满意他最后这几条：删掉（连他记忆里那条），马上重新回 */
+  /** 她不想先开口：让他马上主动来找她（他不知道是她按的）。她最后发的还没回的话，就是催他回 */
+  ACT.ping = () => { const f = friendById(S.fid); const c = chatOf(f.id); const ms = c.msgs.filter(m => m.from !== "sys");
+    if (S.meta.queue.some(q => q.fid === f.id && (q.kind === "reply" || q.kind === "ping"))) return toast("他已经在打字了");
+    if (ms.length && ms[ms.length - 1].from === "me") { queueReply(f); const q = S.meta.queue.find(x => x.fid === f.id && x.kind === "reply"); if (q) { q.due = new Date(Date.now() + 3000).toISOString(); q.typing = true; saveMeta(); } render(); return; }
+    queuePing(f, 3000, { force: true }); render(); if (statusOf(f) === "offline") toast("他现在不在线，上线了会来找你"); };
   ACT.reroll = () => {
     const f = friendById(S.fid); const c = chatOf(f.id);
     sheet(`<h3>重新回复</h3><p class="note">把 ${esc(nameOf(f))} 最后回的这几条删掉，让他重新回一次。他也不会记得删掉的这几条。</p><div class="btns"><button data-v="no">算了</button><button data-v="ok" class="pri">重新回复</button></div>`, v => {
@@ -1057,12 +1065,12 @@
 跟用户聊着的时候不找理由走；要下线先跟用户说一声再写下线块，说了要下线就一定写下线块，没写就是还在。`;
   async function genReply(f, q) {
     const c = chatOf(f.id); const acct = f.acct; const me = S.meta.accts[acct];
-    let s = c.msgs.length; while (s > 0 && c.msgs[s - 1].from === "me") s--;
-    const pending = c.msgs.slice(s).filter(m => m.from === "me");
+    let s = c.msgs.length; if (!q.ping) while (s > 0 && c.msgs[s - 1].from === "me") s--;
+    const pending = q.ping ? [] : c.msgs.slice(s).filter(m => m.from === "me");
     const hist = c.msgs.slice(0, s).filter(m => m.from !== "sys").slice(-40).map(m => msgLine(m, f)).join("\n");
     for (const m of pending) if (m.photo) await seePhoto(f, m.photo); if (pending.some(m => m.photo)) saveChat(c);
     const futures = futureIn(acct, pending.map(m => m.text).join(" "));
-    const late = q.wasOffline ? `用户是在你不在线的时候发来的（${pending[0] ? hm(thereDate(acct, new Date(pending[0].at))) : ""}），你刚上线才看到。` : "";
+    const late = q.wasOffline && !q.ping ? `用户是在你不在线的时候发来的（${pending[0] ? hm(thereDate(acct, new Date(pending[0].at))) : ""}），你刚上线才看到。` : "";
     const lines = [
       ERA_RULE(acct),
       `- 你在用 QQ 和用户聊天：打字随意，可以连着发几条，一次一到五条消息。可以用 QQ 表情，写成「/表情名」，只能用这些：${FACE_NAMES.join(" ")}。用多用少按你的人设。`,
@@ -1071,9 +1079,11 @@
       zoneCtx(f),
       hist ? `你们之前在 QQ 上的聊天：\n${hist}` : "这是你们在 QQ 上第一次聊天。你们之前可能用别的方式联系过，按你的记忆来。",
       late,
+      q.ping ? `你想主动在 QQ 上找用户聊几句。说什么按你的人设、你们最近聊到哪、你记得的事来（你在别处说过要在 QQ 上找她的话，现在就是来找她了）。${q.note ? `你之前说过：${q.note}。` : ""}不用交代为什么来找她，也不要追问她为什么没找你。${q.force ? "" : "这会儿不想找她的话，只写 ===不发===。"}` : "",
       pending.length ? `用户刚刚${pending.length > 1 ? "连着" : ""}发来：${pending.map(m => m.shake ? "[窗口抖动]" : `「${photoText(m.photo, true)}${m.text || ""}」`).join("")}${pending.some(m => m.photo) ? "（[照片] 是用户拍了发给你的照片，括号里是照片上的样子）" : ""}` : "",
       futures.length ? `用户提到的「${futures.join("」「")}」，是你那边还没有的东西，你没听说过。` : "",
       FMT_REPLY,
+      "说了过一会儿再来找用户的话，在最后加：\n===待会找你===\n多少分钟后（只写数字）\n===结束===",
       sleepSoon(f) ? `你快到睡觉的点了（大概 ${sleepSoon(f)} 分钟后）。要去睡就跟用户说晚安，再写下线块。` : "",
       `你现在的 QQ秀：${showDesc(hisShow(f))}。说自己换了 QQ秀、或者说送了她 QQ秀，就一定要写对应的块，不写就等于没换、没送。`,
       `想送用户 QQ秀时加（她的 QQ秀；名字只能从下面挑）：\n===送QQ秀===\n名字：这份礼物叫什么\n包含：挑的东西，用顿号隔开\n===结束===\n想给自己换 QQ秀时加：\n===换装===\n衣服：\n发型：\n配饰：\n背景：\n表情：\n===结束===（不换的项空着）\n她能用的：\n${catText("f")}\n你能用的：\n${catText(hisShow(f).g)}`,
@@ -1087,8 +1097,9 @@
     let msgs = blocks(raw, "消息"); if (!msgs.length && raw && !/===/.test(raw)) msgs = [raw.trim()];
     const pb = block(raw, "照片"); const cap = pb ? field(pb, "配的话") : "";
     const photo = pb ? { desc: (field(pb, "画面") || pb).slice(0, 200), caption: /^(无|不写|没有)?$/.test(cap) ? "" : cap.slice(0, 200) } : null;
+    if (q.ping && /===\s*不发\s*===/.test(raw) && !msgs.length) return { msgs: [], skip: true };
     if (!msgs.length && !photo && !/===\s*(送QQ秀|换装)\s*===/.test(raw)) return { msgs: [] };
-    return { raw, msgs: msgs.slice(0, 6).map(t => t.slice(0, 500)), photo, sig: block(raw, "签名"), font: parseFont(block(raw, "字体")), off: parseInt(block(raw, "下线") || "", 10) };
+    return { raw, ping: !!q.ping, followUp: !!q.note, later: parseInt(block(raw, "待会找你") || "", 10), msgs: msgs.slice(0, 6).map(t => t.slice(0, 500)), photo, sig: block(raw, "签名"), font: parseFont(block(raw, "字体")), off: parseInt(block(raw, "下线") || "", 10) };
   }
   /** 空间里的事（她留言、踩、评论、发说说）攒一起，他上线后一次处理 */
   async function genZone(f, q) {
@@ -1139,8 +1150,10 @@
           else { S.friends = S.friends.filter(x => x !== f); dbDel(COL.friends, f.id); play("msg"); qqPop("系统消息", `${fAv(f, 28)}<div><b>${esc(nameOf(f))}</b><br>拒绝了你的好友请求${r.why ? `：${esc(r.why)}` : ""}</div>`); }
           render(); continue;
         }
-        if (q.kind === "reply") {
+        if (q.kind === "reply" || q.kind === "ping") {
+          if (q.kind === "ping") q.ping = true;
           const r = await genReply(f, q);
+          if (r && r.skip) { S.meta.queue = S.meta.queue.filter(x => x !== q); saveMeta(); continue; }
           if (!r || (!r.msgs.length && !r.photo && !r.raw)) { q.tries = (q.tries || 0) + 1; if (q.tries < 3) { q.due = new Date(Date.now() + 20e3).toISOString(); saveMeta(); continue; } }
           S.meta.queue = S.meta.queue.filter(x => x !== q); saveMeta();
           if (r && (r.msgs.length || r.photo || r.raw)) await deliver(f, r);
@@ -1158,6 +1171,7 @@
       for (const f of myFriends()) {
         if (planDay(f)) saveFriend(f);
         const it = f.plan.items.find(x => !x.done && new Date(x.at) <= new Date()); if (!it) continue;
+        if (it.kind === "ping") { it.done = true; saveFriend(f); if (Date.now() - new Date(it.at).getTime() < 3600e3 && statusOf(f) !== "offline" && mayPing(f)) queuePing(f, rand(5, 60) * 1000); continue; }
         it.tries = (it.tries || 0) + 1;
         const ok = it.kind === "post" ? await selfPost(f, it) : it.kind === "blog" ? await selfBlog(f, it) : await browse(f, it);
         if (ok || it.tries >= 3) it.done = true; saveFriend(f);
@@ -1174,7 +1188,7 @@
     for (const [i, t] of r.msgs.entries()) {
       if (i) await wait(Math.min(4000, 600 + t.length * 120) * TS());
       const shake = /^\[?抖动\]?$/.test(t.trim());
-      const m = { id: uid("m"), from: "him", text: shake ? "" : t, shake, at: new Date().toISOString(), read: S.view === "chat" && S.fid === f.id, mem, ...(f.font ? { color: f.font.color, bold: f.font.bold } : {}) };
+      const m = { id: uid("m"), from: "him", text: shake ? "" : t, shake, at: new Date().toISOString(), read: S.view === "chat" && S.fid === f.id, mem, ...(r.ping ? { pro: true } : {}), ...(f.font ? { color: f.font.color, bold: f.font.bold } : {}) };
       c.msgs.push(m); saveChat(c); parts.push(shake ? "[窗口抖动]" : t);
       if (shake && S.view === "chat" && S.fid === f.id) shakeScreen(); else play("msg");
       if (S.view === "chat" && S.fid === f.id) render(); else if (S.view === "main") render(); else qqPop("QQ 消息", `${fAv(f, 28)}<div><b>${esc(nameOf(f))}</b><br>${richText(shake ? "给你发了一个窗口抖动" : t).slice(0, 200)}</div>`);
@@ -1189,7 +1203,9 @@
     if (r.sig) { f.sig = r.sig.slice(0, 60); saveFriend(f); }
     if (r.off > 0) { f.offUntil = new Date(Date.now() + Math.min(600, r.off) * 60e3 * TS()).toISOString(); saveFriend(f); }
     const mine = c.msgs.filter(m => m.from === "me").slice(-3).map(m => m.shake ? "[窗口抖动]" : `「${photoText(m.photo, true)}${(m.text || "").slice(0, 60)}」`).join("");
-    remember(f, `在 QQ 上，${S.meta.accts[f.acct].nick}（QQ ${S.meta.accts[f.acct].qq}）说${mine}，我回：${parts.map(t => `「${t.slice(0, 60)}」`).join("")}${r.sig ? `；我把 QQ 签名改成了「${r.sig}」` : ""}${r.off > 0 ? "；然后我下线了" : ""}`, mem);
+    if (r.later > 0 && !r.followUp && !S.meta.queue.some(q => q.fid === f.id && q.kind === "ping")) S.meta.queue.push({ fid: f.id, kind: "ping", force: true, note: `过 ${r.later} 分钟再来找她`, due: new Date(Date.now() + Math.min(240, r.later) * 60e3 * TS()).toISOString(), typing: true });
+    if (r.ping) remember(f, `我在 QQ 上主动找 ${S.meta.accts[f.acct].nick}：${parts.map(t => `「${t.slice(0, 60)}」`).join("")}`, mem);
+    else remember(f, `在 QQ 上，${S.meta.accts[f.acct].nick}（QQ ${S.meta.accts[f.acct].qq}）说${mine}，我回：${parts.map(t => `「${t.slice(0, 60)}」`).join("")}${r.sig ? `；我把 QQ 签名改成了「${r.sig}」` : ""}${r.off > 0 ? "；然后我下线了" : ""}`, mem);
     if (S.view !== "zone") render();
   }
   function applyZone(f, r) {
@@ -1223,7 +1239,7 @@
     hisShow(f).qb += 20; // 他每天签到
     const start = new Date(); start.setHours(0, 0, 0, 0); const items = [];
     const pick = () => { for (let i = 0; i < 60; i++) { const d = new Date(start.getTime() + rand(0, 1439) * 60e3); if (statusOf(f, d) !== "offline") return d; } return null; };
-    for (const [kind, n] of [["post", rand(1, 3)], ["browse", rand(1, 3)], ["blog", Math.random() < 0.3 ? 1 : 0]]) for (let i = 0; i < n; i++) { const d = pick(); if (d) items.push({ kind, at: d.toISOString() }); }
+    for (const [kind, n] of [["post", rand(1, 3)], ["browse", rand(1, 3)], ["blog", Math.random() < 0.3 ? 1 : 0], ["ping", rand(1, 2)]]) for (let i = 0; i < n; i++) { const d = pick(); if (d) items.push({ kind, at: d.toISOString() }); }
     f.plan = { day: today, items: items.sort((a, b) => a.at.localeCompare(b.at)) }; return true;
   }
   const recentAt = iso => Date.now() - new Date(iso).getTime() < 30 * 60e3; // 刚刚发生的才弹提示，补上的不吵她
@@ -1306,7 +1322,7 @@
   function watchStatus(silent) {
     if (!S.meta.cur) return;
     for (const f of myFriends()) { const st = statusOf(f); const was = lastStatus[f.id];
-      if (!silent && was === "offline" && st !== "offline") { play("online"); qqPop("QQ 提示", `${fAv(f, 28)}<div><b>${esc(nameOf(f))}</b><br>上线了</div>`); }
+      if (!silent && was === "offline" && st !== "offline") { play("online"); qqPop("QQ 提示", `${fAv(f, 28)}<div><b>${esc(nameOf(f))}</b><br>上线了</div>`); if (Math.random() < 0.3 && mayPing(f)) queuePing(f, rand(20, 180) * 1000); }
       lastStatus[f.id] = st; }
     if (!silent && S.view === "main") render();
   }

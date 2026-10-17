@@ -213,3 +213,15 @@ input, textarea, select { font: inherit; color: inherit; }
 .dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: #f74c31; margin-left: 3px; vertical-align: 4px; }
 .main .qsbtn { margin-left: auto; font-size: 11px; color: #e0218a; padding: 1px 6px; border: 1px solid #ffb3d1; border-radius: 10px; background: #fff; }
 .zone .memo { padding: 8px 10px; font-size: 12px; line-height: 1.8; color: #555; white-space: normal; }
+
+/* 情侣空间 */
+.couple { background: #fff1f6; } .couple .px, .cp-entry .px { image-rendering: pixelated; display: block; }
+.cp-top { flex: none; position: relative; } .cp-top .px { width: 100%; }
+.cp-days { position: absolute; left: 0; right: 0; top: 10px; text-align: center; color: #fff; font-size: 14px; text-shadow: 0 1px 3px #c0397a; } .cp-days b { font-size: 26px; margin: 0 2px; }
+.cp-sig { text-align: center; padding: 8px; background: #fff; color: #c2187a; font-size: 13px; border-bottom: 1px solid #ffd3e4; }
+.cp-write { display: flex; gap: 6px; margin-bottom: 10px; } .cp-write input { flex: 1; border: 1px solid #ffb3d1; border-radius: 16px; padding: 6px 12px; outline: 0; }
+.cp-note { background: #fffbe0; border-radius: 4px; padding: 8px 10px; margin: 0 30px 10px 0; box-shadow: 1px 2px 4px #0001; transform: rotate(-.6deg); } .cp-note.me { background: #ffe2ef; margin: 0 0 10px 30px; transform: rotate(.6deg); }
+.cp-note p { font-size: 14px; line-height: 1.6; } .cp-note small { color: #a0809a; font-size: 11px; }
+.cp-diary { background: #fff; border-radius: 8px; padding: 10px 12px; margin-bottom: 10px; border: 1px solid #ffd3e4; } .cp-diary b { color: #c2187a; } .cp-diary small { display: block; color: #a0809a; font-size: 11px; margin: 2px 0 6px; } .cp-diary p { font-size: 14px; line-height: 1.8; white-space: pre-wrap; }
+.cp-photos { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; } .cp-photos img { width: 100%; border-radius: 6px; border: 3px solid #fff; box-shadow: 0 1px 4px #0002; }
+.cp-entry { display: flex; gap: 10px; align-items: center; padding: 8px; cursor: pointer; background: #fff0f6 !important; } .cp-entry .px { width: 110px; border-radius: 6px; } .cp-entry b { display: block; color: #c2187a; font-size: 14px; } .cp-entry span { font-size: 12px; color: #a0607a; }

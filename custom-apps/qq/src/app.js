@@ -381,7 +381,7 @@
     const typing = S.meta.queue.some(q => q.fid === f.id && q.kind === "reply" && q.typing);
     return `<div class="chat">
       <div class="ct"><button class="bk" data-act="back-main">‹</button>${fAv(f, 40, st === "offline")}<div class="ctn"><b>${esc(nameOf(f))}</b> <span>[${STATUS_NAME[st]}]</span><small>${esc(f.sig || "")}</small></div><button class="more" data-act="open-zone" data-who="${esc(f.id)}">更多</button></div>
-      <div class="tools"><button data-act="nope" data-t="对方没有安装摄像头">📹 视频</button><button data-act="nope" data-t="对方没有麦克风">🎤 语音</button><button data-act="nope" data-t="文件太大了，传了半天还是失败">📁 传文件</button><button data-act="open-zone" data-who="${esc(f.id)}">🌐 空间</button><button data-act="open-show" data-who="${esc(f.id)}">👗 QQ秀</button></div>
+      <div class="tools"><button data-act="nope" data-t="对方没有安装摄像头">📹 视频</button><button data-act="nope" data-t="对方没有麦克风">🎤 语音</button><button data-act="nope" data-t="文件太大了，传了半天还是失败">📁 传文件</button><button data-act="open-zone" data-who="${esc(f.id)}">🌐 空间</button><button data-act="open-show" data-who="${esc(f.id)}">👗 QQ秀</button>${cpOn() && cp().fid === f.id ? `<button data-act="open-couple">💕 情侣</button>` : ""}</div>
       ${miniBarHtml()}
       <div class="log" id="log">${lines || `<div class="sys">${st === "offline" ? `${esc(nameOf(f))} 现在不在线，消息会在他上线后收到` : "开始聊天吧"}</div>`}${typing && st === "online" ? `<div class="sys">对方正在输入…</div>` : ""}</div>
       <div class="itools"><button data-act="font"><b style="color:${S.meta.font.color}">A</b> 字体</button><button data-act="faces">${faceSvg("微笑", 16)} 表情</button><button data-act="shake">〰 抖动</button><button data-act="send-photo">📷 图片</button>${canReroll(f) ? `<button data-act="reroll">↻ 重新回复</button>` : ""}<button data-act="ping">💭 让他来找我</button><span class="sp"></span><button data-act="history">消息记录</button></div>
@@ -423,7 +423,9 @@
       ...(A().zone.blogs || []).map(b => ["me", b, 1]), ...myFriends().flatMap(fr => (fr.zone.blogs || []).filter(b => shown(b) && b.priv !== "self").map(b => [fr.id, b, 1]))].sort((x, y) => y[1].at.localeCompare(x[1].at)).slice(0, 40) : [];
     const feedBlog = (o, b) => { const of = o === "me" ? null : friendById(o);
       return `<div class="post"><div class="ph">${of ? fAv(of, 26) : myAv(26)}<b>${esc(of ? nameOf(of) : A().nick)}</b><em>${esc(ago(acct, b.at))}</em></div><div class="fb" data-act="open-blog" data-owner="${esc(o)}" data-id="${esc(b.id)}">发表了日志 <b>《${esc(b.title)}》</b><div class="sum">${blogSum(b)}</div></div></div>`; };
-    const home = mine ? `${writeBox}${visBox}
+    const cpBox = !mine ? "" : cpOn() ? `<div class="box cp-entry" data-act="open-couple"><img class="px" src="${coupleUrl(myShow(), hisShow(cpFriend()), "hearts")}" alt=""><div><b>💕 情侣空间</b><span>和 ${esc(nameOf(cpFriend()))} 在一起的第 ${cpDays()} 天</span></div></div>`
+      : cp() && cp().pending && cp().pending.from !== "me" && friendById(cp().pending.fid) ? `<div class="box cp-entry"><div><b>💌 ${esc(nameOf(friendById(cp().pending.fid)))} 邀请你开通情侣空间</b><span><button class="btn s" data-act="cp-accept" data-v="yes">同意</button> <button class="btn" data-act="cp-accept" data-v="no">先不要</button></span></div></div>` : "";
+    const home = mine ? `${cpBox}${writeBox}${visBox}
       <div class="box"><h3><span>好友动态</span></h3>${feed.map(([o, p, isBlog]) => isBlog ? feedBlog(o, p) : postHtml(o, p)).join("") || `<div class="empty">还没有动态</div>`}</div>` : `${visBox}
       <div class="cai"><button data-act="step">👣 踩一踩</button><button data-act="zone-tab" data-t="board">✎ 留言</button></div>
       ${posts.length ? `<div class="box"><h3><span>说说</span><span>(${posts.length})</span></h3>${postHtml(own, posts[0])}</div>` : ""}
@@ -451,7 +453,7 @@
       ${S.draftBlogPhoto ? `<div class="dph"><img data-ref="${esc(S.draftBlogPhoto.ref)}" alt=""><button data-act="blog-photo-del">✕</button></div>` : ""}
       <div class="zbtn"><button class="btn" data-act="zone-tab" data-t="blog">取消</button>&nbsp;<button class="btn" data-act="blog-photo">📷 插图</button>&nbsp;<button class="btn s" data-act="blog-post">发表</button></div></div></div>`;
     const prof = mine ? A() : f;
-    const profTab = `<div class="box"><h3><span>QQ秀</span></h3><div class="qs-mini" data-act="open-show" data-who="${mine ? "me" : esc(f.id)}"><img src="${stageUrl(showOf(mine ? "me" : f.id))}" alt=""><span>点这里换装 ›</span></div></div><div class="box"><h3><span>个人档</span></h3><div class="prof">${mine ? myAv(64) : fAv(f, 64)}<div><p><b>${esc(ownerName)}</b></p><p>QQ：${esc(mine ? A().qq : f.qq || "")}</p><p>等级：${mine ? levelOf(acct) : f.lv || 20}</p><p>签名：${richText(prof.sig || "")}</p></div></div><div class="zbtn">${mine ? `<button class="btn" data-act="my-avatar">换头像</button>&nbsp;<button class="btn" data-act="edit-zone">修改空间名字和签名</button>` : `<button class="btn" data-act="his-avatar">换 QQ 头像</button>&nbsp;<button class="btn" data-act="remark">修改备注</button>&nbsp;<button class="btn" data-act="his-font">他的字体</button>`}</div></div>` + (mine ? "" : `<div class="box"><h3><span>他记得的事</span><span>QQ 里 ${KEEP} 条以前的聊天</span></h3><div class="memo">${f.memo ? esc(f.memo).replace(/\n/g, "<br>") : `<span class="empty">聊天多过 ${KEEP + 10} 条以后会自动整理</span>`}</div><div class="zbtn"><button class="btn" data-act="edit-memo">改一改</button>&nbsp;<button class="btn s" data-act="import-mem">${f.importedAt ? "已写进他的记忆 · 再写一次" : f.importDone ? "接着写进他的记忆" : "把 QQ 聊天写进他的记忆"}</button></div></div>`);
+    const profTab = `<div class="box"><h3><span>QQ秀</span></h3><div class="qs-mini" data-act="open-show" data-who="${mine ? "me" : esc(f.id)}"><img src="${stageUrl(showOf(mine ? "me" : f.id))}" alt=""><span>点这里换装 ›</span></div></div><div class="box"><h3><span>个人档</span></h3><div class="prof">${mine ? myAv(64) : fAv(f, 64)}<div><p><b>${esc(ownerName)}</b></p><p>QQ：${esc(mine ? A().qq : f.qq || "")}</p><p>等级：${mine ? levelOf(acct) : f.lv || 20}</p><p>签名：${richText(prof.sig || "")}</p></div></div><div class="zbtn">${mine ? `<button class="btn" data-act="my-avatar">换头像</button>&nbsp;<button class="btn" data-act="edit-zone">修改空间名字和签名</button>` : `<button class="btn" data-act="his-avatar">换 QQ 头像</button>&nbsp;<button class="btn" data-act="remark">修改备注</button>&nbsp;<button class="btn" data-act="his-font">他的字体</button>${!cpOn() && !(cp() && cp().pending) ? `&nbsp;<button class="btn" data-act="cp-invite">💕 邀请开通情侣空间</button>` : ""}`}</div></div>` + (mine ? "" : `<div class="box"><h3><span>他记得的事</span><span>QQ 里 ${KEEP} 条以前的聊天</span></h3><div class="memo">${f.memo ? esc(f.memo).replace(/\n/g, "<br>") : `<span class="empty">聊天多过 ${KEEP + 10} 条以后会自动整理</span>`}</div><div class="zbtn"><button class="btn" data-act="edit-memo">改一改</button>&nbsp;<button class="btn s" data-act="import-mem">${f.importedAt ? "已写进他的记忆 · 再写一次" : f.importDone ? "接着写进他的记忆" : "把 QQ 聊天写进他的记忆"}</button></div></div>`);
     return `<div class="zone">
       ${titlebar(`${ownerName}的QQ空间`, S.zoneBack || "back-main")}
       <div class="banner${z.cover ? " has-cover" : ""}">${z.cover ? `<img class="cov" data-ref="${esc(z.cover)}" alt="">` : CLOUDS}<button class="covbtn" data-act="cover">换背景</button><span class="yz">黄钻 LV${mine ? 3 : 1 + (hash(f.id) % 5)}</span><h1>${esc(z.name || `${ownerName}的空间`)}</h1><p>${esc(z.sig ? `[ ${z.sig} ]` : "")}</p>${bgmBarHtml()}</div>
@@ -491,6 +493,52 @@
 
   // ───────────────────────── 交互 ─────────────────────────
   const ACT = {};
+  // ───────────────────────── 情侣空间：一方邀请、对方同意；在一起天数、情侣签名、小纸条、恋爱日记、合影墙 ─────────────────────────
+  // A().couple = { fid, since, sig, notes: [{ who, text, at }], diary: [{ who, title, text, at }], photos: [ref], pending: { from: "me"|fid, fid } }
+  const cp = () => A().couple || null;
+  const cpOn = () => !!(cp() && cp().since && friendById(cp().fid));
+  const cpDays = () => Math.floor((Date.now() - new Date(cp().since).getTime()) / 864e5) + 1;
+  const cpFriend = () => cpOn() ? friendById(cp().fid) : null;
+  function cpCtx(f) { const c = cp(); if (!c) return "";
+    if (c.pending && c.pending.fid === f.id) return c.pending.from === "me" ? "用户邀请你在 QQ 上开通情侣空间，你还没答复。" : "你邀请用户开通情侣空间，她还没答复。";
+    if (!c.since || c.fid !== f.id) return "";
+    const notes = (c.notes || []).slice(-4).map(n => `${n.who === "me" ? "她" : "你"}：${n.text}`).join("；");
+    return `你和用户开通了 QQ 情侣空间，今天是在一起第 ${cpDays()} 天。情侣签名：${c.sig || "（还没写）"}。${notes ? `最近的小纸条：${notes}` : ""}`; }
+  function cpOpen(f) { const c = A().couple = { ...(A().couple || {}), fid: f.id, since: new Date().toISOString(), pending: null, notes: (A().couple || {}).notes || [], diary: (A().couple || {}).diary || [], photos: (A().couple || {}).photos || [] }; saveMeta();
+    const ch = chatOf(f.id); ch.msgs.push({ id: uid("m"), from: "sys", text: `你和 ${nameOf(f)} 开通了情侣空间，今天是第 1 天 💕`, at: new Date().toISOString() }); saveChat(ch);
+    play("online"); qqPop("系统消息", `${fAv(f, 28)}<div>你和 <b>${esc(nameOf(f))}</b><br>开通了情侣空间 💕</div>`); remember(f, `我和 ${A().nick} 在 QQ 上开通了情侣空间`); return c; }
+  /** 他写的 ===情侣空间邀请=== / ===同意情侣空间=== / ===不同意=== / ===情侣签名=== / ===小纸条=== / ===恋爱日记=== */
+  function applyCouple(f, raw) { if (!raw) return; const c = A().couple || (A().couple = {});
+    if (/===\s*情侣空间邀请\s*===/.test(raw) && !cpOn() && !c.pending) { c.pending = { from: f.id, fid: f.id }; saveMeta(); const ch = chatOf(f.id); ch.msgs.push({ id: uid("m"), from: "sys", text: `${nameOf(f)} 邀请你开通情侣空间`, at: new Date().toISOString() }); saveChat(ch); play("msg"); qqPop("系统消息", `${fAv(f, 28)}<div><b>${esc(nameOf(f))}</b><br>邀请你开通情侣空间 💕</div>`); }
+    if (c.pending && c.pending.from === "me" && c.pending.fid === f.id) {
+      if (/===\s*同意情侣空间\s*===/.test(raw)) cpOpen(f);
+      else if (/===\s*不同意\s*===/.test(raw)) { c.pending = null; saveMeta(); const ch = chatOf(f.id); ch.msgs.push({ id: uid("m"), from: "sys", text: `${nameOf(f)} 暂时没有同意开通情侣空间`, at: new Date().toISOString() }); saveChat(ch); } }
+    if (!cpOn() || c.fid !== f.id) return; const now = new Date().toISOString();
+    const sg = block(raw, "情侣签名"); if (sg) c.sig = sg.slice(0, 40);
+    const nt = block(raw, "小纸条"); if (nt) { c.notes.push({ who: f.id, text: nt.slice(0, 200), at: now }); qqPop("情侣空间", `${fAv(f, 28)}<div><b>${esc(nameOf(f))}</b><br>给你留了一张小纸条</div>`); }
+    const dy = block(raw, "恋爱日记"); if (dy) { c.diary.push({ who: f.id, title: (field(dy, "标题") || "无题").slice(0, 30), text: (dy.replace(/标题\s*[：:][^\n]*\n?/, "")).trim().slice(0, 3000), at: now }); remember(f, `我在情侣空间写了一篇恋爱日记`); }
+    saveMeta(); }
+  const CP_FMT = f => { const c = cp(); if (cpOn() && c.fid === f.id) return "你们的情侣空间：想改情侣签名加 ===情侣签名===，想给她留小纸条加 ===小纸条===，想写恋爱日记加 ===恋爱日记===（第一行写 标题：），都是内容写在块里，不想写就不写。";
+    if (c && c.pending && c.pending.fid === f.id && c.pending.from === "me") return "答复她的情侣空间邀请：同意写 ===同意情侣空间===，不同意写 ===不同意===（块里不用写内容）。";
+    if (!cpOn() && !(c && c.pending)) return "想邀请用户开通 QQ 情侣空间的话，加 ===情侣空间邀请===（块里不用写内容）。"; return ""; };
+
+  V.couple = () => { const c = cp(), f = cpFriend(); const tab = S.cpTab || "home";
+    const notes = [...(c.notes || [])].reverse().map(n => `<div class="cp-note ${n.who === "me" ? "me" : ""}"><p>${richText(n.text)}</p><small>${n.who === "me" ? esc(A().nick) : esc(nameOf(f))} · ${esc(ago(S.meta.cur, n.at))}</small></div>`).join("") || `<div class="empty">还没有小纸条</div>`;
+    const diary = [...(c.diary || [])].reverse().map(d => `<div class="cp-diary"><b>${esc(d.title)}</b><small>${d.who === "me" ? esc(A().nick) : esc(nameOf(f))} · ${esc(ymd(thereDate(S.meta.cur, new Date(d.at))))}</small><p>${richText(d.text)}</p></div>`).join("") || `<div class="empty">还没有恋爱日记</div>`;
+    const photos = `<div class="cp-photos"><img class="px" src="${coupleUrl(myShow(), hisShow(f), myShow().bg)}" alt="">${(c.photos || []).map(r => `<img data-ref="${esc(r)}" data-act="view-photo" alt="">`).join("")}</div><div class="zbtn"><button class="btn s" data-act="cp-photo">＋ 传一张合影</button></div>`;
+    return `<div class="couple">${titlebar(`${esc(A().nick)} ❤ ${esc(nameOf(f))}`, "back-main")}
+      <div class="cp-top"><img class="px" src="${coupleUrl(myShow(), hisShow(f), "hearts")}" alt=""><div class="cp-days">在一起的第 <b>${cpDays()}</b> 天</div><div class="cp-sig" data-act="cp-sig">${c.sig ? `「${esc(c.sig)}」` : "点这里写情侣签名"}</div></div>
+      <div class="qs-tabs">${[["home", "小纸条"], ["diary", "恋爱日记"], ["photos", "合影墙"]].map(([k, t]) => `<button class="${tab === k ? "on" : ""}" data-act="cp-tab" data-t="${k}">${t}</button>`).join("")}</div>
+      <div class="qs-body">${tab === "home" ? `<div class="cp-write"><input id="cpnote" maxlength="120" placeholder="给他留一张小纸条…"><button class="btn s" data-act="cp-note">贴上</button></div>${notes}` : tab === "diary" ? `<div class="zbtn"><button class="btn s" data-act="cp-diary">✎ 写恋爱日记</button></div>${diary}` : photos}</div></div>`; };
+  ACT["open-couple"] = () => { if (!cpOn()) return; S.view = "couple"; S.cpTab = "home"; render(); };
+  ACT["cp-tab"] = b => { S.cpTab = b.dataset.t; render(); };
+  ACT["cp-invite"] = () => { const f = friendById(S.zoneOf); if (cpOn()) return toast("已经开通情侣空间了"); A().couple = { ...(A().couple || {}), pending: { from: "me", fid: f.id } }; saveMeta();
+    const ch = chatOf(f.id); ch.msgs.push({ id: uid("m"), from: "sys", text: `你邀请 ${nameOf(f)} 开通情侣空间，等他同意`, at: new Date().toISOString() }); saveChat(ch); queueZone(f, { kind: "cpInvite" }, rand(1, 8) * 60e3); render(); toast("邀请发出去了"); };
+  ACT["cp-accept"] = b => { const f = friendById(cp().pending.fid); if (b.dataset.v === "yes") { cpOpen(f); queueZone(f, { kind: "cpOpened" }, rand(1, 5) * 60e3); } else { A().couple.pending = null; saveMeta(); remember(f, `${A().nick} 没有同意开通情侣空间`); } render(); };
+  ACT["cp-sig"] = async () => { const r = await ask("情侣签名", [{ label: "你们俩的签名", value: cp().sig || "", max: 40 }]); if (r) { cp().sig = r[0]; saveMeta(); remember(cpFriend(), `${A().nick} 把我们的情侣签名改成了「${r[0]}」`); render(); } };
+  ACT["cp-note"] = () => { const t = ($("#cpnote").value || "").trim(); if (!t) return; cp().notes.push({ who: "me", text: t, at: new Date().toISOString() }); saveMeta(); queueZone(cpFriend(), { kind: "cpNote" }, rand(2, 20) * 60e3); render(); };
+  ACT["cp-diary"] = async () => { const r = await ask("写恋爱日记", [{ label: "标题", max: 30 }, { label: "正文", long: true, max: 3000 }], "写好了"); if (!r || !r[1]) return; cp().diary.push({ who: "me", title: r[0] || "无题", text: r[1], at: new Date().toISOString() }); saveMeta(); queueZone(cpFriend(), { kind: "cpDiary" }, rand(10, 90) * 60e3); render(); };
+  ACT["cp-photo"] = async () => { const ph = await pickPhotoFor(S.meta.cur); if (!ph) return; cp().photos = [...(cp().photos || []), ph.ref]; saveMeta(); render(); };
   // ───────────────────────── QQ秀：像素小人（src/qqshow.js 画），衣柜、Q币、送礼、他自己换装 ─────────────────────────
   // show = { g: f|m, hair, hairC, eyeC, outfit, wings, acc: [], bg, eyes, mouth, owned: [物品 id], qb: Q币, gifts: [{ name, from, items, at }] }
   const CAT = [
@@ -1045,7 +1093,7 @@
   }
   function zoneCtx(f, noPosts) {
     const z = f.zone, mz = S.meta.accts[f.acct].zone; const lines = [];
-    const hs = herShowText(f); if (hs) lines.push(hs);
+    const hs = herShowText(f); if (hs) lines.push(hs); const cc = cpCtx(f); if (cc) lines.push(cc);
     const v = (z.visitors || []).find(x => x.who === "me"); if (v) lines.push(`用户${ago(f.acct, v.at)}${v.step ? "在你空间踩了一脚" : "来过你的空间"}。`);
     const myBoard = (z.board || []).filter(b => b.who === "me").slice(-3); if (myBoard.length) lines.push(`用户在你留言板上写过：${myBoard.map(b => `「${b.text}」${b.reply ? `（你回了「${b.reply}」）` : ""}`).join("")}`);
     const mp = noPosts ? [] : (mz.posts || []).slice(-2); if (mp.length) lines.push(`用户空间最近的说说：${mp.map(p => `「${p.text}${photoText(p.photo, true)}」`).join("")}`);
@@ -1118,6 +1166,7 @@
       pending.length ? `用户刚刚${pending.length > 1 ? "连着" : ""}发来：${pending.map(m => m.shake ? "[窗口抖动]" : `「${photoText(m.photo, true)}${m.text || ""}」`).join("")}${pending.some(m => m.photo) ? "（[照片] 是用户拍了发给你的照片，括号里是照片上的样子）" : ""}` : "",
       futures.length ? `用户提到的「${futures.join("」「")}」，是你那边还没有的东西，你没听说过。` : "",
       FMT_REPLY,
+      CP_FMT(f),
       "说了过一会儿再来找用户的话，在最后加：\n===待会找你===\n多少分钟后（只写数字）\n===结束===",
       sleepSoon(f) ? `你快到睡觉的点了（大概 ${sleepSoon(f)} 分钟后）。要去睡就跟用户说晚安，再写下线块。` : "",
       `你现在的 QQ秀：${showDesc(hisShow(f))}。说自己换了 QQ秀、或者说送了她 QQ秀，就一定要写对应的块，不写就等于没换、没送。`,
@@ -1148,6 +1197,10 @@
       if (mine) { others = true; todo.push(`${isBlog(p) ? `你的日志《${p.title}》` : `你的说说「${p.text.slice(0, 80)}${photoText(p.photo)}」`}下面的评论：\n${cmText(p)}\n用户刚评论${mine.to && mine.to !== `f:${f.id}` ? `（回复 ${whoName(mine.to)}）` : ""}：「${mine.text}」。回不回、怎么回按你的人设来。`); } }
     for (const e of evs.filter(e => e.kind === "myPost")) { const p = mz.posts.find(x => x.id === e.pid); if (p && p.photo && !p.photo.seen) { await seePhoto(f, p.photo); saveMeta(); } if (p) todo.push(`你刷到用户在她空间新发的说说：「${p.text}${photoText(p.photo, true)}」。赞不赞、评不评论按你们的关系和你的人设决定，也可以都不做。`); }
     for (const e of evs.filter(e => e.kind === "boardReply")) { const m = (mz.board || []).find(x => x.id === e.bid); if (m && m.reply) todo.push(`你在用户留言板上留过言：「${m.text}」，她回复了：「${m.reply}」。想接着说就在她留言板上再留一条，不想也可以不写。`); }
+    if (evs.some(e => e.kind === "cpInvite")) todo.push(`用户邀请你开通 QQ 情侣空间。${CP_FMT(f)}`);
+    if (evs.some(e => e.kind === "cpOpened")) todo.push(`你和用户刚开通了情侣空间。${CP_FMT(f)}`);
+    if (evs.some(e => e.kind === "cpNote")) { const n = (cp().notes || []).filter(x => x.who === "me").slice(-1)[0]; if (n) todo.push(`用户在情侣空间给你留了小纸条：「${n.text}」。${CP_FMT(f)}`); }
+    if (evs.some(e => e.kind === "cpDiary")) { const d = (cp().diary || []).filter(x => x.who === "me").slice(-1)[0]; if (d) todo.push(`用户在情侣空间写了恋爱日记《${d.title}》：\n${d.text.slice(0, 1500)}\n${CP_FMT(f)}`); }
     for (const e of evs.filter(e => e.kind === "gotShow")) todo.push(`用户在 QQ 上送了你一件 QQ秀「${e.name}」。想穿上就写 ===换装===，想谢她可以在她留言板上留言。\n你能用的：\n${catText(hisShow(f).g)}\n===换装===\n衣服：\n发型：\n配饰：\n背景：\n表情：\n===结束===（不换的项空着）`);
     for (const e of evs.filter(e => e.kind === "myBlog")) { const b = (mz.blogs || []).find(x => x.id === e.pid); if (b) { if (b.photo && !b.photo.seen) { await seePhoto(f, b.photo); saveMeta(); } todo.push(`你看到用户在她空间写了一篇日志《${b.title}》${b.priv === "friends" ? "（仅好友可见）" : ""}：\n${b.text.slice(0, 2000)}${photoText(b.photo, true)}\n评不评论按你们的关系和你的人设决定。`); } }
     for (const e of evs.filter(e => e.kind === "myPostReply")) { const p = itemOf(mz, e.pid); const mine = p && (p.comments || []).filter(cm => cm.who === "me" && cm.to === `f:${f.id}`).slice(-1)[0]; if (mine) todo.push(`用户在她自己的${isBlog(p) ? `日志《${p.title}》` : `说说「${p.text.slice(0, 80)}」`}下回复了你：「${mine.text}」。回不回按你的人设来。`); }
@@ -1234,7 +1287,7 @@
       parts.push(`${photoText({ desc: r.photo.desc })}${r.photo.caption}`); play("msg");
       if (S.view === "chat" && S.fid === f.id) render(); else qqPop("QQ 消息", `${fAv(f, 28)}<div><b>${esc(nameOf(f))}</b><br>[图片]</div>`);
     }
-    if (r.raw) applyShowBlocks(f, r.raw);
+    if (r.raw) { applyShowBlocks(f, r.raw); applyCouple(f, r.raw); }
     if (r.sig) { f.sig = r.sig.slice(0, 60); saveFriend(f); }
     if (r.off > 0) { f.offUntil = new Date(Date.now() + Math.min(600, r.off) * 60e3 * TS()).toISOString(); saveFriend(f); }
     const mine = c.msgs.filter(m => m.from === "me").slice(-3).map(m => m.shake ? "[窗口抖动]" : `「${photoText(m.photo, true)}${(m.text || "").slice(0, 60)}」`).join("");
@@ -1244,7 +1297,7 @@
     if (S.view !== "zone") render();
   }
   function applyZone(f, r) {
-    if (r.raw && /===\s*(送QQ秀|换装)\s*===/.test(r.raw)) applyShowBlocks(f, r.raw);
+    if (r.raw && /===\s*(送QQ秀|换装)\s*===/.test(r.raw)) applyShowBlocks(f, r.raw); if (r.raw) applyCouple(f, r.raw);
     const z = f.zone, mz = S.meta.accts[f.acct].zone; const now = new Date().toISOString(); const notes = [];
     if (r.reply) { const un = z.board.filter(b => b.who === "me" && !b.reply); un.forEach(b => { b.reply = r.reply.slice(0, 200); b.replyAt = now; }); if (un.length) notes.push(`回复了她的留言：「${r.reply}」`); }
     const hisPids = [...new Set(r.evs.filter(e => e.kind === "hisPostComment").map(e => e.pid))], myPids = [...new Set(r.evs.filter(e => e.kind === "myPost").map(e => e.pid))], backPids = [...new Set(r.evs.filter(e => e.kind === "myPostReply").map(e => e.pid))], blogPids = [...new Set(r.evs.filter(e => e.kind === "myBlog").map(e => e.pid))];

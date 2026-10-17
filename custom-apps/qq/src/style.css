@@ -183,3 +183,11 @@ input, textarea, select { font: inherit; color: inherit; }
 /* 只给「现代」皮肤用的：消息头像、时间已读、聊天右上「更多」、列表时间；平时不显示 */
 .chat .mav, .chat .mt, .chat .ct .more, .fr .ft { display: none; }
 .chat .mb2, .chat .ibar { display: contents; }
+
+/* 空间自己上传的背景图：盖住云和皮肤的装饰，底下压一层暗，字看得清 */
+.zone .banner .cov { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.zone .banner.has-cover::before { display: none !important; }
+.zone .banner.has-cover::after { content: "" !important; display: block !important; position: absolute; inset: auto 0 0 0 !important; top: auto !important; height: 70px !important; width: auto !important; background: linear-gradient(transparent, #0005) !important; box-shadow: none !important; transform: none !important; opacity: 1 !important; animation: none !important; }
+.zone .banner.has-cover h1, .zone .banner.has-cover p { color: #fff !important; text-shadow: 0 1px 4px #000a !important; z-index: 1; }
+.zone .banner .covbtn { position: absolute; right: 10px; top: 36px; z-index: 2; font-size: 11px; padding: 2px 7px; border-radius: 10px; background: #ffffffb0; color: #345; }
+.zone .banner .music { z-index: 2; }

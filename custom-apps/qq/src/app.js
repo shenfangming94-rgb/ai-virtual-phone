@@ -454,7 +454,7 @@
     const profTab = `<div class="box"><h3><span>个人档</span></h3><div class="prof">${mine ? myAv(64) : fAv(f, 64)}<div><p><b>${esc(ownerName)}</b></p><p>QQ：${esc(mine ? A().qq : f.qq || "")}</p><p>等级：${mine ? levelOf(acct) : f.lv || 20}</p><p>签名：${richText(prof.sig || "")}</p></div></div><div class="zbtn">${mine ? `<button class="btn" data-act="my-avatar">换头像</button>&nbsp;<button class="btn" data-act="edit-zone">修改空间名字和签名</button>` : `<button class="btn" data-act="his-avatar">换 QQ 头像</button>&nbsp;<button class="btn" data-act="remark">修改备注</button>&nbsp;<button class="btn" data-act="his-font">他的字体</button>`}</div></div>`;
     return `<div class="zone">
       ${titlebar(`${ownerName}的QQ空间`, S.zoneBack || "back-main")}
-      <div class="banner">${CLOUDS}<span class="yz">黄钻 LV${mine ? 3 : 1 + (hash(f.id) % 5)}</span><h1>${esc(z.name || `${ownerName}的空间`)}</h1><p>${esc(z.sig ? `[ ${z.sig} ]` : "")}</p>${bgmBarHtml()}</div>
+      <div class="banner${z.cover ? " has-cover" : ""}">${z.cover ? `<img class="cov" data-ref="${esc(z.cover)}" alt="">` : CLOUDS}<button class="covbtn" data-act="cover">🖼 换背景</button><span class="yz">黄钻 LV${mine ? 3 : 1 + (hash(f.id) % 5)}</span><h1>${esc(z.name || `${ownerName}的空间`)}</h1><p>${esc(z.sig ? `[ ${z.sig} ]` : "")}</p>${bgmBarHtml()}</div>
       <div class="nav">${[["home", mine ? "好友动态" : "主页"], ["posts", "说说"], ["blog", "日志"], ["board", "留言板"], ["prof", "个人档"]].map(([k, t]) => `<button class="${tab === k || (k === "blog" && /^blog/.test(tab)) ? "on" : ""}" data-act="zone-tab" data-t="${k}">${t}</button>`).join("")}</div>
       <div class="zbody" data-k="${esc(`${S.zoneOf}|${tab}`)}">${{ home, posts: postsTab, blog: blogTab, blogView, blogWrite: mine ? blogWrite : blogTab, board: boardTab, prof: profTab }[tab]}</div>
     </div>`;
@@ -579,6 +579,15 @@
   ACT["bgm-stop"] = () => { stopBgm(); renderBgmBar(); };
   ACT["bgm-next"] = () => { if (bgmList.length) playBgm(bgmList.map(s => s.id), bgmIdx + 1); };
   ACT["bgm-set"] = () => pickBgm();
+  /** 空间顶上的背景图：她的、他的都能换（2008 号也不做旧，是她挑的图） */
+  ACT.cover = () => {
+    const z = curZone();
+    sheet(`<h3>${S.zoneOf === "me" ? "空间背景" : `给${esc(nameOf(friendById(S.zoneOf)))}的空间换背景`}</h3><div class="mlist"><button data-v="pick">从相册选一张</button>${z.cover ? `<button data-v="reset">换回原来的</button>` : ""}</div><div class="btns"><button data-v="no">取消</button></div>`,
+      async v => { closeSheet(); if (v === "no") return;
+        if (v === "reset") { delete z.cover; saveZone(); return render(); }
+        const f = await pickFile("image/*").catch(() => null); if (!f || !f.dataUrl) return;
+        const d = await compressImage(f.dataUrl, 1080); const st = await api.media.put({ dataUrl: d }); mediaCache.set(st.ref, d); z.cover = st.ref; saveZone(); render(); toast("背景换好了"); });
+  };
   ACT["edit-zone"] = async () => { const z = A().zone; const r = await ask("修改空间", [{ label: "空间名字", value: z.name, max: 20 }, { label: "空间签名", value: z.sig, max: 40 }]); if (r) { z.name = r[0] || z.name; z.sig = r[1]; saveMeta(); render(); } };
   ACT.post = () => {
     const t = ($("#postin").value || "").trim(); if (!t && !S.draftPhoto) return;

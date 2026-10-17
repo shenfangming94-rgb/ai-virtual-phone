@@ -1045,10 +1045,11 @@
 ===签名===
 新的签名
 ===结束===
-要下线时（家里人叫、要睡了、有事），在最后加：
+真要下线时，在最后加：
 ===下线===
 多少分钟后再上线（只写数字）
-===结束===`;
+===结束===
+跟用户聊着的时候不找理由走；说了要下线就一定写下线块，没写就是还在。`;
   async function genReply(f, q) {
     const c = chatOf(f.id); const acct = f.acct; const me = S.meta.accts[acct];
     let s = c.msgs.length; while (s > 0 && c.msgs[s - 1].from === "me") s--;

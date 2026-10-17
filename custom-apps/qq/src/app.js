@@ -339,7 +339,7 @@
     const own = mine ? "me" : f.id;
     const postHtml = (owner, p) => {
       const of = owner === "me" ? null : friendById(owner);
-      const likes = (p.likes || []).filter(shown); const iLike = likes.some(l => l.who === "me"); const cms = (p.comments || []).filter(shown);
+      const likes = (p.likes || []).filter(shown); const iLike = likes.some(l => l.who === "me"); const cms = (p.comments || []).filter(shown).sort((x, y) => (x.at || "").localeCompare(y.at || ""));
       return `<div class="post"><div class="ph">${of ? fAv(of, 26) : myAv(26)}<b>${esc(of ? nameOf(of) : A().nick)}</b><em>${esc(ago(acct, p.at))}</em></div><div class="pt">${richText(p.text)}</div>
       <div class="pa"><button class="${iLike ? "on" : ""}" data-act="like" data-owner="${esc(owner)}" data-post="${esc(p.id)}">${iLike ? "已赞" : "赞"}(${likes.length})</button><span>|</span><button data-act="focus-cm" data-post="${esc(p.id)}">评论(${cms.length})</button></div>
       ${likes.length ? `<div class="lk">${[...likes].sort((x, y) => (y.who === "me") - (x.who === "me")).map(l => `<b>${esc(l.who === "me" ? "我" : whoName(l.who))}</b>`).join("、")} 觉得很赞</div>` : ""}
@@ -719,10 +719,10 @@
     if (!todo.length) return {};
     const raw = await gen(f, "zone", [ERA_RULE(acct), COMMON_RULE, `这是 QQ 空间里的事。用户的 QQ 昵称是「${S.meta.accts[acct].nick}」。`, zoneCtx(f), others ? circleLine(f) : "", ...todo,
       ["按需要输出这些块（没有就不写）：\n===主人回复===\n回复用户留言的话\n===结束===\n===评论回复===\n在你说说下回复用户评论的话\n===结束===",
-        others ? "===别人回复===\n你身边的人看到用户的评论后回她的话（没人回就不写这个块），一行一条：昵称：话\n===结束===" : "",
+        others ? "===别人回复===\n你身边的人看到用户的评论后回她的话（没人回就不写这个块），一行一条：昵称：话\n===结束===\n===回别人===\n你在这条说说下回复别人的话（不回就不写），一行一条：昵称：话\n===结束===" : "",
         "===赞===\n（赞用户的说说就写这个块，内容留空）\n===结束===\n===评论===\n评论用户说说的话\n===结束===\n===回她===\n在用户说说下回复她的话\n===结束===\n===回踩===\n（去她空间踩一脚就写这个块，内容留空）\n===结束===\n===留言===\n在用户留言板上写的话\n===结束===\n想发一条新说说：\n===说说===\n内容\n===结束==="].filter(Boolean).join("\n")].filter(Boolean).join("\n\n"));
     if (raw == null) return null;
-    return { reply: block(raw, "主人回复"), creply: block(raw, "评论回复"), others: others ? parseCm(f, block(raw, "别人回复")).filter(c => !c.who.startsWith("f:")) : [], like: /===\s*赞\s*===/.test(raw), comment: block(raw, "评论"), back: block(raw, "回她"), step: /===\s*回踩\s*===/.test(raw), board: block(raw, "留言"), post: block(raw, "说说"), evs };
+    return { reply: block(raw, "主人回复"), creply: block(raw, "评论回复"), others: others ? parseCm(f, block(raw, "别人回复")).filter(c => !c.who.startsWith("f:")) : [], toOthers: others ? parseCm(f, block(raw, "回别人")).map(c => ({ to: c.who.startsWith("f:") ? c.to || "" : c.who.replace(/^回复\s*/, ""), text: c.text })).filter(c => c.to && c.to !== "me" && !c.to.startsWith("f:")) : [], like: /===\s*赞\s*===/.test(raw), comment: block(raw, "评论"), back: block(raw, "回她"), step: /===\s*回踩\s*===/.test(raw), board: block(raw, "留言"), post: block(raw, "说说"), evs };
   }
   function remember(f, summary) {
     if (!api.memory || !api.memory.addTimeline) return;
@@ -794,8 +794,11 @@
     if (r.reply) { const un = z.board.filter(b => b.who === "me" && !b.reply); un.forEach(b => { b.reply = r.reply.slice(0, 200); b.replyAt = now; }); if (un.length) notes.push(`回复了她的留言：「${r.reply}」`); }
     const hisPids = [...new Set(r.evs.filter(e => e.kind === "hisPostComment").map(e => e.pid))], myPids = [...new Set(r.evs.filter(e => e.kind === "myPost").map(e => e.pid))], backPids = [...new Set(r.evs.filter(e => e.kind === "myPostReply").map(e => e.pid))];
     if (r.creply) { for (const pid of hisPids) { const p = z.posts.find(x => x.id === pid); if (p) p.comments.push({ who: `f:${f.id}`, to: "me", text: r.creply.slice(0, 200), at: now, seen: true }); } notes.push(`回复了她在我说说下的评论：「${r.creply}」`); }
-    if (r.others && r.others.length) { const p = z.posts.find(x => x.id === hisPids[hisPids.length - 1]); let t = Date.now();
-      if (p) for (const c of r.others) { t += rand(2, 40) * 60e3; p.comments.push({ who: c.who, to: c.to && c.to !== "me" ? c.to : "me", text: c.text, at: new Date(t).toISOString() }); } }
+    const lastP = z.posts.find(x => x.id === hisPids[hisPids.length - 1]); const otherAt = {};
+    if (r.others && r.others.length && lastP) { let t = Date.now();
+      for (const c of r.others) { t += rand(2, 40) * 60e3; otherAt[c.who] = t; lastP.comments.push({ who: c.who, to: c.to && c.to !== "me" ? c.to : "me", text: c.text, at: new Date(t).toISOString() }); } }
+    // 他回别人：回的是刚冒出来的那几个人，就排在他们后面
+    if (r.toOthers && r.toOthers.length && lastP) { for (const c of r.toOthers) lastP.comments.push({ who: `f:${f.id}`, to: c.to, text: c.text, at: otherAt[c.to] ? new Date(otherAt[c.to] + rand(1, 20) * 60e3).toISOString() : now }); notes.push(`在说说下回了${r.toOthers.map(c => c.to).join("、")}`); }
     if (r.like) { for (const pid of myPids) { const p = mz.posts.find(x => x.id === pid); if (p && !(p.likes || []).some(l => l.who === `f:${f.id}`)) p.likes = [...(p.likes || []), { who: `f:${f.id}`, at: now }]; } if (myPids.length) notes.push("赞了她的说说"); }
     if (r.comment) { for (const pid of myPids) { const p = mz.posts.find(x => x.id === pid); if (p) p.comments.push({ who: `f:${f.id}`, text: r.comment.slice(0, 200), at: now }); } notes.push(`评论了她的说说：「${r.comment}」`); }
     if (r.back) { for (const pid of backPids) { const p = mz.posts.find(x => x.id === pid); if (p) p.comments.push({ who: `f:${f.id}`, to: "me", text: r.back.slice(0, 200), at: now, seen: true }); } notes.push(`在她说说下回复她：「${r.back}」`); }
@@ -822,7 +825,7 @@
     const recent = (f.zone.posts || []).slice(-5).map(p => `「${p.text.slice(0, 80)}」`).join("");
     const lines = [ERA_RULE(acct, d), COMMON_RULE, "你在 QQ 空间发一条说说，写你那边这个时候的生活。", recent ? `你之前发过的说说：${recent}` : "", circleLine(f),
       "===说说===\n内容\n===结束===",
-      "再写你身边的人在这条说说下的反应（谁来、来不来按你们的关系定，可以没人）：\n===赞===\n点赞的人的昵称，一行一个\n===结束===\n===评论===\n按时间先后一行一条：昵称：评论的话\n回复别人写成：昵称：回复 某某：话\n你自己回复写成：你：回复 某某：话\n===结束===",
+      "再写你身边的人在这条说说下的反应（谁来、来不来按你们的关系定，可以没人）。有人评论你，你回不回、回谁按你的人设来，你的回复也写进评论里，排在那条评论后面：\n===赞===\n点赞的人的昵称，一行一个\n===结束===\n===评论===\n按时间先后一行一条：昵称：评论的话\n回复别人写成：昵称：回复 某某：话\n你自己回复写成：你：回复 某某：话\n===结束===",
       f.circle && f.circle.length ? "" : CIRCLE_ASK].filter(Boolean).join("\n\n");
     let raw = await gen(f, "post", lines); if (raw == null) return false;
     const leak = futureIn(acct, raw); if (leak.length) { const again = await gen(f, "post", `${lines}\n\n你刚才写了「${leak.join("」「")}」，这是你那边还没有的东西，你不可能知道。重写。`); if (again && block(again, "说说")) raw = again; }

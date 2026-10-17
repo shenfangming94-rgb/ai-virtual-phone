@@ -363,7 +363,7 @@
     const boardTab = `${mine ? "" : `<div class="box"><h3><span>给 ${esc(ownerName)} 留言</span></h3><textarea class="zin" id="boardin" placeholder="踩踩~"></textarea><div class="zbtn"><button class="btn s" data-act="leave-msg">发表</button></div></div>`}
       <div class="box"><h3><span>留言板</span><span>(${board.length})</span></h3>${board.map(boardHtml).join("") || `<div class="empty">还没有留言</div>`}</div>`;
     const prof = mine ? A() : f;
-    const profTab = `<div class="box"><h3><span>个人档</span></h3><div class="prof">${mine ? myAv(64) : fAv(f, 64)}<div><p><b>${esc(ownerName)}</b></p><p>QQ：${esc(mine ? A().qq : f.qq || "")}</p><p>等级：${mine ? levelOf(acct) : f.lv || 20}</p><p>签名：${richText(prof.sig || "")}</p></div></div><div class="zbtn">${mine ? `<button class="btn" data-act="my-avatar">换头像</button>&nbsp;<button class="btn" data-act="edit-zone">修改空间名字和签名</button>` : `<button class="btn" data-act="his-avatar">换 QQ 头像</button>&nbsp;<button class="btn" data-act="remark">修改备注</button>`}</div></div>`;
+    const profTab = `<div class="box"><h3><span>个人档</span></h3><div class="prof">${mine ? myAv(64) : fAv(f, 64)}<div><p><b>${esc(ownerName)}</b></p><p>QQ：${esc(mine ? A().qq : f.qq || "")}</p><p>等级：${mine ? levelOf(acct) : f.lv || 20}</p><p>签名：${richText(prof.sig || "")}</p></div></div><div class="zbtn">${mine ? `<button class="btn" data-act="my-avatar">换头像</button>&nbsp;<button class="btn" data-act="edit-zone">修改空间名字和签名</button>` : `<button class="btn" data-act="his-avatar">换 QQ 头像</button>&nbsp;<button class="btn" data-act="remark">修改备注</button>&nbsp;<button class="btn" data-act="his-font">他的字体</button>`}</div></div>`;
     return `<div class="zone">
       ${titlebar(`${ownerName}的QQ空间`, S.zoneBack || "back-main")}
       <div class="banner">${CLOUDS}<span class="yz">黄钻 LV${mine ? 3 : 1 + (hash(f.id) % 5)}</span><h1>${esc(z.name || `${ownerName}的空间`)}</h1><p>${esc(z.sig ? `[ ${z.sig} ]` : "")}</p>${bgmBarHtml()}</div>
@@ -391,6 +391,10 @@
   /** 右下角黄色小窗：QQ 提示 */
   function qqPop(title, html) { const el = document.createElement("div"); el.className = "qpop"; el.innerHTML = `<div class="qh">${esc(title)}</div><div class="qb">${html}</div>`; $("#pops").appendChild(el); hydrate(el); setTimeout(() => el.classList.add("out"), 3600); setTimeout(() => el.remove(), 4200); }
   const FONT_COLORS = ["#000000", "#e0218a", "#ff69b4", "#8e44ad", "#1f6fd1", "#0a8f3c", "#e67e22", "#c0392b"];
+  const FONT_NAMES = ["黑色", "玫红", "粉色", "紫色", "蓝色", "绿色", "橙色", "红色"];
+  /** 他的 QQ 字体：AI 写「颜色名 加粗/不加粗」 */
+  function parseFont(t) { t = String(t || ""); const i = FONT_NAMES.findIndex(n => t.includes(n)); if (i < 0) return null; return { color: FONT_COLORS[i], bold: /加粗/.test(t) && !/不加粗/.test(t) }; }
+  const FONT_ASK = `QQ 字体：从这些颜色里挑一个：${FONT_NAMES.join(" ")}；再写加粗或不加粗`;
   function showPop(kind) {
     const w = $("#popwrap"); if (!w) return; if (w.dataset.kind === kind) { w.innerHTML = ""; w.dataset.kind = ""; return; } w.dataset.kind = kind;
     if (kind === "faces") w.innerHTML = `<div class="facegrid">${FACE_NAMES.map(n => `<button data-act="face" data-n="${n}" title="${n}">${faceSvg(n, 24)}</button>`).join("")}</div>`;
@@ -416,6 +420,14 @@
   ACT["his-avatar"] = async () => {
     const fr = friendById(S.zoneOf); const f = await pickFile("image/*").catch(() => null); if (!f || !f.dataUrl) return;
     const st = await api.media.put({ dataUrl: await compressImage(f.dataUrl, 256) }); fr.avatarRef = st.ref; saveFriend(fr); render(); toast("头像换好了");
+  };
+  /** 给他设字体：她设过就固定，他不再自己换；选「让他自己挑」就还给他 */
+  ACT["his-font"] = () => {
+    const fr = friendById(S.zoneOf); const cur = fr.font || { color: "#000000", bold: false };
+    sheet(`<h3>${esc(nameOf(fr))}的字体</h3><p class="note">${fr.fontByMe ? "现在是你给他设的。" : fr.font ? "现在是他自己挑的。" : "他还没挑，下次回你消息时会挑。"}</p><div class="fontbar">${FONT_COLORS.map((c, i) => `<button data-v="c:${c}" title="${FONT_NAMES[i]}" style="background:${c}" class="${fr.font && cur.color === c ? "on" : ""}"></button>`).join("")}<button data-v="b" class="fb ${cur.bold ? "on" : ""}">B</button></div><div class="btns"><button data-v="auto">让他自己挑</button><button data-v="no" class="pri">好了</button></div>`,
+      v => { if (v === "no") return closeSheet();
+        if (v === "auto") { delete fr.fontByMe; delete fr.font; saveFriend(fr); closeSheet(); return toast("他下次回消息时自己挑"); }
+        fr.font = { ...cur, ...(v === "b" ? { bold: !cur.bold } : { color: v.slice(2) }) }; fr.fontByMe = true; saveFriend(fr); ACT["his-font"](); });
   };
   ACT.remark = async () => { const fr = friendById(S.zoneOf); const r = await ask("修改备注", [{ label: "备注名（不填就显示他的名字）", value: fr.remark, max: 16 }]); if (r) { fr.remark = r[0]; saveFriend(fr); render(); } };
   ACT.menu = () => sheet(`<h3>菜单</h3><div class="mlist">
@@ -606,7 +618,7 @@
       `你的 QQ 号是 ${f.qq}。QQ 昵称「${S.meta.accts[acct].nick}」的用户（QQ ${S.meta.accts[acct].qq}）申请加你好友，验证信息：「${f.verify || ""}」。按你的人设、你的记忆和你们的关系决定同不同意。`,
       "===验证===\n同意 或 拒绝\n===结束===\n如果拒绝，再写一句拒绝理由：\n===理由===\n理由\n===结束===",
       "同意的话，再按你的人设和你那边的生活，写出你 QQ 资料和 QQ 空间里本来就有的东西（都是你自己写的、你身边的人留的，写真实的，不提用户）：",
-      `===资料===\n个性签名：\n空间名字：\n空间签名：\n背景音乐：歌手 - 歌名（${acct === "a08" ? "2008 年以前就有的歌" : "你会挂的歌"}）\n===结束===`,
+      `===资料===\n个性签名：\n${FONT_ASK}，写在这行——字体：\n空间名字：\n空间签名：\n背景音乐：歌手 - 歌名（${acct === "a08" ? "2008 年以前就有的歌" : "你会挂的歌"}）\n===结束===`,
       "===说说===\n你以前发的一条说说\n===结束===\n（写 3 条）",
       CIRCLE_ASK,
       "===访客===\n来过你空间的人的 QQ 昵称，一行一个，3 到 5 个（从上面那些人里出）\n===结束===",
@@ -616,6 +628,7 @@
     if (/拒绝/.test(block(raw, "验证") || "")) return { ok: false, why: (block(raw, "理由") || "").slice(0, 60) };
     const info = block(raw, "资料") || "";
     const circle = parseCircle(raw); if (circle.length) f.circle = circle;
+    const font = parseFont(field(info, "字体")); if (font) f.font = font;
     f.sig = field(info, "个性签名").slice(0, 60); f.zone.name = field(info, "空间名字").slice(0, 20) || f.zone.name; f.zone.sig = field(info, "空间签名").slice(0, 40); f.zone.bgmName = field(info, "背景音乐").slice(0, 40);
     f.zone.posts = blocks(raw, "说说").slice(0, 4).map((t, i) => ({ id: uid("p"), text: t.slice(0, 300), at: pastAt(24 * (i + 1) - 20, 24 * (i + 2)), comments: [] }));
     f.zone.visitors = (block(raw, "访客") || "").split("\n").map(s => s.replace(/^[-·\d.、\s]+/, "").trim()).filter(Boolean).slice(0, 6).map((n, i) => ({ who: n.slice(0, 16), at: pastAt(i * 8 + 1, i * 12 + 10) }));
@@ -681,13 +694,14 @@
       pending.length ? `用户刚刚${pending.length > 1 ? "连着" : ""}发来：${pending.map(m => m.shake ? "[窗口抖动]" : `「${m.text}」`).join("")}` : "",
       futures.length ? `用户提到的「${futures.join("」「")}」，是你那边还没有的东西，你没听说过。` : "",
       FMT_REPLY,
+      !f.font ? `你还没定 ${FONT_ASK}。按你的人设挑，加上：\n===字体===\n颜色 加粗或不加粗\n===结束===` : !f.fontByMe ? `你现在的 QQ 字体是${FONT_NAMES[FONT_COLORS.indexOf(f.font.color)] || "黑色"}${f.font.bold ? "加粗" : ""}。想换字体时加（${FONT_NAMES.join(" ")}）：\n===字体===\n颜色 加粗或不加粗\n===结束===` : "",
     ].filter(Boolean).join("\n\n");
     let raw = await gen(f, "chat", lines); if (raw == null) return null;
     const textOf = r => blocks(r, "消息").join(" ");
     const leak = futureIn(acct, textOf(raw)).filter(w => !futures.includes(w));
     if (leak.length) { const again = await gen(f, "chat", `${lines}\n\n你刚才写了「${leak.join("」「")}」，这是你那边还没有的东西，你不可能知道。重写。`); if (again && blocks(again, "消息").length) raw = again; }
     let msgs = blocks(raw, "消息"); if (!msgs.length && raw && !/===/.test(raw)) msgs = [raw.trim()];
-    return { msgs: msgs.slice(0, 6).map(t => t.slice(0, 500)), sig: block(raw, "签名"), off: parseInt(block(raw, "下线") || "", 10) };
+    return { msgs: msgs.slice(0, 6).map(t => t.slice(0, 500)), sig: block(raw, "签名"), font: parseFont(block(raw, "字体")), off: parseInt(block(raw, "下线") || "", 10) };
   }
   /** 空间里的事（她留言、踩、评论、发说说）攒一起，他上线后一次处理 */
   async function genZone(f, q) {
@@ -760,10 +774,11 @@
   /** 他的消息一条条冒出来（按打字速度隔几秒） */
   async function deliver(f, r) {
     const c = chatOf(f.id); const parts = [];
+    if (r.font && !f.fontByMe) { const changed = f.font && (f.font.color !== r.font.color || f.font.bold !== r.font.bold); f.font = r.font; saveFriend(f); if (changed) remember(f, `我把 QQ 字体换成了${FONT_NAMES[FONT_COLORS.indexOf(r.font.color)]}${r.font.bold ? "加粗" : ""}`); }
     for (const [i, t] of r.msgs.entries()) {
       if (i) await wait(Math.min(4000, 600 + t.length * 120) * TS());
       const shake = /^\[?抖动\]?$/.test(t.trim());
-      const m = { id: uid("m"), from: "him", text: shake ? "" : t, shake, at: new Date().toISOString(), read: S.view === "chat" && S.fid === f.id };
+      const m = { id: uid("m"), from: "him", text: shake ? "" : t, shake, at: new Date().toISOString(), read: S.view === "chat" && S.fid === f.id, ...(f.font ? { color: f.font.color, bold: f.font.bold } : {}) };
       c.msgs.push(m); saveChat(c); parts.push(shake ? "[窗口抖动]" : t);
       if (shake && S.view === "chat" && S.fid === f.id) shakeScreen(); else play("msg");
       if (S.view === "chat" && S.fid === f.id) render(); else if (S.view === "main") render(); else qqPop("QQ 消息", `${fAv(f, 28)}<div><b>${esc(nameOf(f))}</b><br>${richText(shake ? "给你发了一个窗口抖动" : t).slice(0, 200)}</div>`);

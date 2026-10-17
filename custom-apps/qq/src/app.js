@@ -383,7 +383,7 @@
       <div class="ct"><button class="bk" data-act="back-main">‹</button>${fAv(f, 40, st === "offline")}<div class="ctn"><b>${esc(nameOf(f))}</b> <span>[${STATUS_NAME[st]}]</span><small>${esc(f.sig || "")}</small></div><button class="more" data-act="open-zone" data-who="${esc(f.id)}">更多</button></div>
       <div class="tools"><button data-act="nope" data-t="对方没有安装摄像头">📹 视频</button><button data-act="nope" data-t="对方没有麦克风">🎤 语音</button><button data-act="nope" data-t="文件太大了，传了半天还是失败">📁 传文件</button><button data-act="open-zone" data-who="${esc(f.id)}">🌐 空间</button></div>
       ${miniBarHtml()}
-      <div class="log" id="log">${lines || `<div class="sys">${st === "offline" ? `${esc(nameOf(f))} 现在不在线，消息会在他上线后收到` : "开始聊天吧"}</div>`}${typing && st === "online" ? `<div class="sys">对方正在输入…</div>` : ""}</div>
+      <div class="log" id="log">${lines || `<div class="sys">${st === "offline" ? `${esc(nameOf(f))} 现在不在线，消息会在他上线后收到` : "开始聊天吧"}</div>`}${typing && st === "online" ? `<div class="sys">对方正在输入…</div>` : ""}${c.msgs.length && c.msgs[c.msgs.length - 1].from === "him" && c.msgs.some(m => m.from === "me") && !S.meta.queue.some(q => q.fid === f.id && q.kind === "reply") ? `<div class="rr"><button data-act="reroll">↻ 重新回复</button></div>` : ""}</div>
       <div class="itools"><button data-act="font"><b style="color:${S.meta.font.color}">A</b> 字体</button><button data-act="faces">${faceSvg("微笑", 16)} 表情</button><button data-act="shake">〰 抖动</button><button data-act="send-photo">📷 图片</button><span class="sp"></span><button data-act="history">消息记录</button></div>
       <div class="pop-wrap" id="popwrap"></div>
       <div class="ibar"><textarea class="inp" id="inp" style="color:${S.meta.font.color};${S.meta.font.bold ? "font-weight:bold" : ""}" placeholder=""></textarea>
@@ -519,13 +519,15 @@
   };
   ACT.remark = async () => { const fr = friendById(S.zoneOf); const r = await ask("修改备注", [{ label: "备注名（不填就显示他的名字）", value: fr.remark, max: 16 }]); if (r) { fr.remark = r[0]; saveFriend(fr); render(); } };
   ACT.menu = () => sheet(`<h3>菜单</h3><div class="mlist">
-      <button data-v="nick">修改昵称</button><button data-v="qq">修改 QQ 号（现在：${esc(A().qq)}）</button><button data-v="theme">更换皮肤</button><button data-v="sound">声音：${S.meta.sound !== false ? "开" : "关"}</button><button data-v="music">我的音乐（${S.meta.music.length} 首）</button><button data-v="switch">切换帐号</button><button data-v="about">关于</button></div><div class="btns"><button data-v="no">关闭</button></div>`,
+      <button data-v="nick">修改昵称</button><button data-v="qq">修改 QQ 号（现在：${esc(A().qq)}）</button><button data-v="theme">更换皮肤</button><button data-v="sound">声音：${S.meta.sound !== false ? "开" : "关"}</button><button data-v="music">我的音乐（${S.meta.music.length} 首）</button><button data-v="export">导出数据</button><button data-v="import">导入数据</button><button data-v="switch">切换帐号</button><button data-v="about">关于</button></div><div class="btns"><button data-v="no">关闭</button></div>`,
     async v => { closeSheet();
       if (v === "nick") { const r = await ask("修改昵称", [{ label: "昵称", value: A().nick, max: 16 }]); if (r && r[0]) { A().nick = r[0]; saveMeta(); render(); } }
       if (v === "qq") { const r = await ask("修改 QQ 号", [{ label: `QQ 号（5 到 11 位数字）`, value: A().qq, max: 11 }]); if (r) { const n = r[0].replace(/\D/g, ""); if (n.length < 5) return toast("QQ 号要 5 到 11 位数字"); A().qq = n; saveMeta(); render(); toast("QQ 号改好了"); } }
       if (v === "sound") { S.meta.sound = S.meta.sound === false; saveMeta(); }
       if (v === "music") musicSheet();
       if (v === "theme") themeSheet();
+      if (v === "export") exportData();
+      if (v === "import") importData();
       if (v === "switch") ACT.logout();
       if (v === "about") sheet(`<h3>QQ2008</h3><p class="note">版本 ${esc(VERSION)}<br>等回复：${S.meta.queue.map(q => `${esc(nameOf(friendById(q.fid) || {}))}（${{ reply: "消息", zone: "空间", verify: "好友验证" }[q.kind] || q.kind}）${hm(new Date(q.due))}`).join("；") || "没有"}</p>${(S.meta.errors || []).map(e => `<p class="note">❗${esc(e)}</p>`).join("")}<div class="btns"><button data-v="no">关闭</button></div>`, () => closeSheet());
     });
@@ -557,6 +559,18 @@
     const f = friendById(S.fid); const c = chatOf(f.id);
     c.msgs.push({ id: uid("m"), from: "me", text, at: new Date().toISOString(), color: S.meta.font.color, bold: S.meta.font.bold }); saveChat(c);
     i.value = ""; queueReply(f); render(); $("#inp").focus();
+  };
+  /** 不满意他最后这几条：删掉（连他记忆里那条），马上重新回 */
+  ACT.reroll = () => {
+    const f = friendById(S.fid); const c = chatOf(f.id);
+    sheet(`<h3>重新回复</h3><p class="note">把 ${esc(nameOf(f))} 最后回的这几条删掉，让他重新回一次。他也不会记得删掉的这几条。</p><div class="btns"><button data-v="no">算了</button><button data-v="ok" class="pri">重新回复</button></div>`, v => {
+      closeSheet(); if (v !== "ok") return;
+      let i = c.msgs.length; while (i > 0 && c.msgs[i - 1].from === "him") i--;
+      const gone = c.msgs.slice(i); c.msgs = c.msgs.slice(0, i); saveChat(c);
+      for (const id of new Set(gone.map(m => m.mem).filter(Boolean))) forget(f, id);
+      S.meta.queue = S.meta.queue.filter(q => !(q.fid === f.id && q.kind === "reply"));
+      S.meta.queue.push({ fid: f.id, kind: "reply", due: new Date(Date.now() + 3000).toISOString(), typing: true }); saveMeta(); render();
+    });
   };
   ACT.shake = () => {
     const f = friendById(S.fid); const c = chatOf(f.id);
@@ -680,6 +694,59 @@
     toast("踩了一脚~ 他上线会看到的"); render();
   };
 
+  // ───────────────────────── 导出 / 导入：整个 app 的数据存成一个文件，换个 float 链接也能搬过去 ─────────────────────────
+  const MEDIA_RE = /media-store:\/\/[^"\\\s]+/g;
+  function downloadFile(name, text) {
+    const u = URL.createObjectURL(new Blob([text], { type: "application/json" })); const a = document.createElement("a");
+    a.href = u; a.download = name; document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(u); a.remove(); }, 2000);
+  }
+  async function exportData() {
+    const songs = S.meta.music.length ? await new Promise(res => sheet(`<h3>导出数据</h3><p class="note">把两个号的好友、聊天记录、空间、照片、头像都存成一个文件。<br>「我的音乐」里的歌有 ${S.meta.music.length} 首，带上的话文件会很大。</p><div class="btns"><button data-v="no">不带歌</button><button data-v="yes" class="pri">带上歌</button></div>`, v => { closeSheet(); res(v === "yes"); })) : false;
+    toast("正在打包…");
+    const data = { meta: { ...S.meta, queue: S.meta.queue, errors: [] }, friends: S.friends, chats: S.chats };
+    if (!songs) data.meta = { ...data.meta, music: [] };
+    const json = JSON.stringify(data); const refs = [...new Set(json.match(MEDIA_RE) || [])]; const media = {};
+    for (const r of refs) { const u = await mediaUrl(r); if (u) media[r] = u; }
+    const names = Object.fromEntries(S.friends.map(f => [f.charId, charOf(f.charId).name || ""]));
+    const out = JSON.stringify({ app: "nox.qq2008", version: VERSION, exportedAt: new Date().toISOString(), names, data, media });
+    const d = new Date(); downloadFile(`QQ2008-数据-${ymd(d)}-${pad(d.getHours())}${pad(d.getMinutes())}.json`, out);
+    toast(`导出好了（${(out.length / 1048576).toFixed(1)} MB）`);
+  }
+  /** 档案库角色换了链接 id 会变：按名字对上，对不上的让她选 */
+  async function mapChars(names) {
+    const map = {};
+    for (const [old, name] of Object.entries(names)) {
+      if (S.chars.some(c => c.id === old)) { map[old] = old; continue; }
+      const same = S.chars.filter(c => c.name === name);
+      if (same.length === 1) { map[old] = same[0].id; continue; }
+      map[old] = await new Promise(res => sheet(`<h3>「${esc(name || "未知")}」是档案库里的谁？</h3><p class="note">新链接里角色的编号变了，帮我对一下。</p><div class="mlist">${S.chars.map(c => `<button class="pick" data-v="${esc(c.id)}">${avatar({ url: c.avatar, seed: c.id, name: c.name }, 30)}<span>${esc(c.name)}</span></button>`).join("")}</div><div class="btns"><button data-v="skip">跳过（不导入这个人）</button></div>`, v => { closeSheet(); res(v === "skip" ? null : v); }));
+    }
+    return map;
+  }
+  async function importData() {
+    const ok = await new Promise(res => sheet(`<h3>导入数据</h3><p class="note">选之前导出的那个 .json 文件。<b>现在 app 里的数据会被全部换掉。</b></p><div class="btns"><button data-v="no">取消</button><button data-v="ok" class="pri">选文件</button></div>`, v => { closeSheet(); res(v === "ok"); }));
+    if (!ok) return;
+    let pack;
+    try {
+      const r = await api.media.pick({ accept: ".json,application/json,text/plain" }); const f = r && (r.file || (r.files || [])[0]); if (!f || !f.dataUrl) return;
+      const b64 = f.dataUrl.slice(f.dataUrl.indexOf(",") + 1); const bytes = Uint8Array.from(atob(b64), ch => ch.charCodeAt(0));
+      pack = JSON.parse(new TextDecoder().decode(bytes));
+    } catch (e) { return toast("这个文件读不了"); }
+    if (!pack || pack.app !== "nox.qq2008" || !pack.data) return toast("这不是 QQ2008 导出的文件");
+    toast("正在导入…");
+    let json = JSON.stringify(pack.data);
+    for (const [old, u] of Object.entries(pack.media || {})) { try { const st = await api.media.put({ dataUrl: u }); json = json.split(old).join(st.ref); } catch (e) { /* 这张图就算了 */ } }
+    const map = await mapChars(pack.names || {});
+    for (const [old, nu] of Object.entries(map)) if (nu && nu !== old) json = json.split(old).join(nu);
+    const data = JSON.parse(json); const skip = Object.entries(map).filter(([, v]) => !v).map(([k]) => k);
+    data.friends = (data.friends || []).filter(f => !skip.includes(f.charId)); data.chats = (data.chats || []).filter(c => data.friends.some(f => f.id === c.id));
+    if (data.meta) data.meta.queue = (data.meta.queue || []).filter(q => data.friends.some(f => f.id === q.fid));
+    for (const [col, rows] of [[COL.friends, S.friends], [COL.chats, S.chats]]) for (const r of rows) await dbDel(col, r.id);
+    for (const f of data.friends) await dbPut(COL.friends, f);
+    for (const c of data.chats) await dbPut(COL.chats, c);
+    await dbPut(COL.meta, { ...data.meta, id: "meta" });
+    toast("导入好了"); setTimeout(() => location.reload(), 800);
+  }
   function themeSheet() {
     const cur = S.meta.theme || "classic";
     sheet(`<h3>更换皮肤</h3><div class="themes">${THEMES.map(([k, n, d]) => `<button data-v="${k}" class="${cur === k ? "on" : ""}"><i class="sw sw-${k}"></i><b>${n}</b><small>${d}</small></button>`).join("")}</div><div class="btns"><button data-v="no" class="pri">好了</button></div>`,
@@ -874,10 +941,13 @@
     if (raw == null) return null;
     return { reply: block(raw, "主人回复"), creply: block(raw, "评论回复"), others: others ? parseCm(f, block(raw, "别人回复")).filter(c => !c.who.startsWith("f:")) : [], toOthers: others ? parseCm(f, block(raw, "回别人")).map(c => ({ to: c.who.startsWith("f:") ? c.to || "" : c.who.replace(/^回复\s*/, ""), text: c.text })).filter(c => c.to && c.to !== "me" && !c.to.startsWith("f:")) : [], like: /===\s*赞\s*===/.test(raw), comment: block(raw, "评论"), bcomment: block(raw, "日志评论"), back: block(raw, "回她"), step: /===\s*回踩\s*===/.test(raw), board: block(raw, "留言"), post: block(raw, "说说"), evs };
   }
-  function remember(f, summary) {
-    if (!api.memory || !api.memory.addTimeline) return;
-    api.memory.addTimeline({ characterId: f.charId, appLabel: "QQ", detail: "qq", summary: summary.slice(0, 1500), appEventId: uid("qq") }).catch(() => {});
+  /** 写进他的记忆；返回 appEventId（重新回复时按它把这条删掉） */
+  function remember(f, summary, id = uid("qq")) {
+    if (!api.memory || !api.memory.addTimeline) return null;
+    api.memory.addTimeline({ characterId: f.charId, appLabel: "QQ", detail: "qq", summary: summary.slice(0, 1500), appEventId: id }).catch(() => {});
+    return id;
   }
+  const forget = (f, id) => { if (id && api.memory && api.memory.deleteTimeline) api.memory.deleteTimeline({ characterId: f.charId, appEventId: id }).catch(() => {}); };
 
   // 定时：处理到点的回复 / 空间事件；看看谁上线了
   let busy = false;
@@ -923,26 +993,26 @@
   const zoneTyping = () => { const a = document.activeElement; return !!(a && /INPUT|TEXTAREA/.test(a.tagName) && a.value); };
   /** 他的消息一条条冒出来（按打字速度隔几秒） */
   async function deliver(f, r) {
-    const c = chatOf(f.id); const parts = [];
+    const c = chatOf(f.id); const parts = []; const mem = uid("qq");
     if (r.font && !f.fontByMe) { const changed = f.font && (f.font.color !== r.font.color || f.font.bold !== r.font.bold); f.font = r.font; saveFriend(f); if (changed) remember(f, `我把 QQ 字体换成了${FONT_NAMES[FONT_COLORS.indexOf(r.font.color)]}${r.font.bold ? "加粗" : ""}`); }
     for (const [i, t] of r.msgs.entries()) {
       if (i) await wait(Math.min(4000, 600 + t.length * 120) * TS());
       const shake = /^\[?抖动\]?$/.test(t.trim());
-      const m = { id: uid("m"), from: "him", text: shake ? "" : t, shake, at: new Date().toISOString(), read: S.view === "chat" && S.fid === f.id, ...(f.font ? { color: f.font.color, bold: f.font.bold } : {}) };
+      const m = { id: uid("m"), from: "him", text: shake ? "" : t, shake, at: new Date().toISOString(), read: S.view === "chat" && S.fid === f.id, mem, ...(f.font ? { color: f.font.color, bold: f.font.bold } : {}) };
       c.msgs.push(m); saveChat(c); parts.push(shake ? "[窗口抖动]" : t);
       if (shake && S.view === "chat" && S.fid === f.id) shakeScreen(); else play("msg");
       if (S.view === "chat" && S.fid === f.id) render(); else if (S.view === "main") render(); else qqPop("QQ 消息", `${fAv(f, 28)}<div><b>${esc(nameOf(f))}</b><br>${richText(shake ? "给你发了一个窗口抖动" : t).slice(0, 200)}</div>`);
     }
     if (r.photo) {
       if (parts.length) await wait(3000 * TS());
-      c.msgs.push({ id: uid("m"), from: "him", text: r.photo.caption, photo: { desc: r.photo.desc }, at: new Date().toISOString(), read: S.view === "chat" && S.fid === f.id, ...(f.font ? { color: f.font.color, bold: f.font.bold } : {}) }); saveChat(c);
+      c.msgs.push({ id: uid("m"), from: "him", text: r.photo.caption, photo: { desc: r.photo.desc }, at: new Date().toISOString(), read: S.view === "chat" && S.fid === f.id, mem, ...(f.font ? { color: f.font.color, bold: f.font.bold } : {}) }); saveChat(c);
       parts.push(`${photoText({ desc: r.photo.desc })}${r.photo.caption}`); play("msg");
       if (S.view === "chat" && S.fid === f.id) render(); else qqPop("QQ 消息", `${fAv(f, 28)}<div><b>${esc(nameOf(f))}</b><br>[图片]</div>`);
     }
     if (r.sig) { f.sig = r.sig.slice(0, 60); saveFriend(f); }
     if (r.off > 0) { f.offUntil = new Date(Date.now() + Math.min(600, r.off) * 60e3 * TS()).toISOString(); saveFriend(f); }
     const mine = c.msgs.filter(m => m.from === "me").slice(-3).map(m => m.shake ? "[窗口抖动]" : `「${photoText(m.photo, true)}${(m.text || "").slice(0, 60)}」`).join("");
-    remember(f, `在 QQ 上，${S.meta.accts[f.acct].nick}（QQ ${S.meta.accts[f.acct].qq}）说${mine}，我回：${parts.map(t => `「${t.slice(0, 60)}」`).join("")}${r.sig ? `；我把 QQ 签名改成了「${r.sig}」` : ""}${r.off > 0 ? "；然后我下线了" : ""}`);
+    remember(f, `在 QQ 上，${S.meta.accts[f.acct].nick}（QQ ${S.meta.accts[f.acct].qq}）说${mine}，我回：${parts.map(t => `「${t.slice(0, 60)}」`).join("")}${r.sig ? `；我把 QQ 签名改成了「${r.sig}」` : ""}${r.off > 0 ? "；然后我下线了" : ""}`, mem);
     if (S.view !== "zone") render();
   }
   function applyZone(f, r) {

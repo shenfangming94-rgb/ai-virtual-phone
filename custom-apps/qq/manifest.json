@@ -15,6 +15,7 @@
     "ai.generate",
     "memory.write",
     "media.pick",
-    "ui.toast"
+    "ui.toast",
+    "ai.generateImage"
   ]
 }

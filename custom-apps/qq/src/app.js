@@ -717,11 +717,12 @@
         if (statusOf(f) === "offline") { q.due = new Date(Date.now() + (nextOnline(f).getTime() - Date.now() + rand(1, 20) * 60e3) * TS()).toISOString(); q.wasOffline = true; saveMeta(); continue; }
         if (q.kind === "verify") {
           const r = await seedFriend(f);
-          if (!r) { q.tries = (q.tries || 0) + 1; if (q.tries < 3) { q.due = new Date(Date.now() + 60e3).toISOString(); saveMeta(); continue; } }
+          // AI 没回上来就一直等着重试（前三次隔 1 分钟，之后隔 10 分钟），别把申请弄丢
+          if (!r) { q.tries = (q.tries || 0) + 1; q.due = new Date(Date.now() + (q.tries < 3 ? 60e3 : 600e3)).toISOString(); saveMeta(); continue; }
           S.meta.queue = S.meta.queue.filter(x => x !== q); saveMeta();
-          if (r && r.ok) { f.pending = false; delete f.verify; saveFriend(f); const c = chatOf(f.id); c.msgs.push({ id: uid("m"), from: "sys", text: `${nameOf(f)} 已经通过了你的好友请求，现在可以开始聊天了。`, at: new Date().toISOString() }); saveChat(c);
+          if (r.ok) { f.pending = false; delete f.verify; saveFriend(f); const c = chatOf(f.id); c.msgs.push({ id: uid("m"), from: "sys", text: `${nameOf(f)} 已经通过了你的好友请求，现在可以开始聊天了。`, at: new Date().toISOString() }); saveChat(c);
             remember(f, `${S.meta.accts[f.acct].nick}（QQ ${S.meta.accts[f.acct].qq}）在 QQ 上加了我好友，我通过了`); play("online"); qqPop("系统消息", `${fAv(f, 28)}<div><b>${esc(nameOf(f))}</b><br>通过了你的好友请求</div>`); lastStatus[f.id] = statusOf(f); }
-          else if (r) { S.friends = S.friends.filter(x => x !== f); dbDel(COL.friends, f.id); play("msg"); qqPop("系统消息", `${fAv(f, 28)}<div><b>${esc(nameOf(f))}</b><br>拒绝了你的好友请求${r.why ? `：${esc(r.why)}` : ""}</div>`); }
+          else { S.friends = S.friends.filter(x => x !== f); dbDel(COL.friends, f.id); play("msg"); qqPop("系统消息", `${fAv(f, 28)}<div><b>${esc(nameOf(f))}</b><br>拒绝了你的好友请求${r.why ? `：${esc(r.why)}` : ""}</div>`); }
           render(); continue;
         }
         if (q.kind === "reply") {
@@ -864,6 +865,9 @@
   async function boot() {
     $("#app").innerHTML = `<div class="login"><div class="logo" style="padding-top:160px">${PENGUIN(120, 118)}<b>QQ2008</b></div></div>`;
     await loadAll();
+    // 以前的版本 AI 失败三次就把好友申请从队列里扔了，人卡在「等待验证」：补回队列
+    for (const f of S.friends.filter(f => f.pending && !S.meta.queue.some(q => q.fid === f.id && q.kind === "verify"))) S.meta.queue.push({ fid: f.id, kind: "verify", due: new Date().toISOString() });
+    saveMeta();
     if (S.meta.auto && S.meta.cur) { S.view = "main"; render(); watchStatus(true); tick(); } else { S.meta.cur = null; S.view = "login"; render(); }
     setInterval(tick, 3000);
     setInterval(() => watchStatus(false), 20000);

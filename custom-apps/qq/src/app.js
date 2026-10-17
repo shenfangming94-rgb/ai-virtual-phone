@@ -289,6 +289,10 @@
     return `<div class="music" id="bgmbar"><span>♫</span><div class="marq"><span>${bgmName ? "正在播放：" : ""}${esc(name || "点 ▶ 播放")}</span></div>${bgmList.length ? `<button data-act="bgm-toggle">${audio.paused ? "▶" : "▮▮"}</button><button data-act="bgm-next">⏭</button>` : (mine && z.bgm && z.bgm.length) || (!mine && z.bgm && z.bgm.length) ? `<button data-act="bgm-toggle">▶</button>` : ""}<button data-act="bgm-set">${mine ? "换歌" : "配歌"}</button></div>`;
   }
 
+  // ───────────────────────── 皮肤：每套是一整套设计（themes.css 里按 html[data-theme] 写） ─────────────────────────
+  const THEMES = [["classic", "经典蓝天", "2008 原版"], ["fzl", "非主流", "黑底蕾丝闪星星"], ["memo", "手账日记", "横格纸和胶带"], ["xp", "Windows XP", "网吧的蓝天绿地"], ["pixel", "像素绿屏", "手机 QQ"], ["dark", "炫酷黑", "磨砂玻璃"], ["fresh", "小清新", "白底和木头"]];
+  const applyTheme = k => { document.documentElement.dataset.theme = THEMES.some(t => t[0] === k) ? k : "classic"; };
+
   // ───────────────────────── 画界面 ─────────────────────────
   function render() {
     // 空间里点赞、评论完重画：滚动位置和没发出去的评论别丢
@@ -513,12 +517,13 @@
   };
   ACT.remark = async () => { const fr = friendById(S.zoneOf); const r = await ask("修改备注", [{ label: "备注名（不填就显示他的名字）", value: fr.remark, max: 16 }]); if (r) { fr.remark = r[0]; saveFriend(fr); render(); } };
   ACT.menu = () => sheet(`<h3>菜单</h3><div class="mlist">
-      <button data-v="nick">修改昵称</button><button data-v="qq">修改 QQ 号（现在：${esc(A().qq)}）</button><button data-v="sound">声音：${S.meta.sound !== false ? "开" : "关"}</button><button data-v="music">我的音乐（${S.meta.music.length} 首）</button><button data-v="switch">切换帐号</button><button data-v="about">关于</button></div><div class="btns"><button data-v="no">关闭</button></div>`,
+      <button data-v="nick">修改昵称</button><button data-v="qq">修改 QQ 号（现在：${esc(A().qq)}）</button><button data-v="theme">更换皮肤</button><button data-v="sound">声音：${S.meta.sound !== false ? "开" : "关"}</button><button data-v="music">我的音乐（${S.meta.music.length} 首）</button><button data-v="switch">切换帐号</button><button data-v="about">关于</button></div><div class="btns"><button data-v="no">关闭</button></div>`,
     async v => { closeSheet();
       if (v === "nick") { const r = await ask("修改昵称", [{ label: "昵称", value: A().nick, max: 16 }]); if (r && r[0]) { A().nick = r[0]; saveMeta(); render(); } }
       if (v === "qq") { const r = await ask("修改 QQ 号", [{ label: `QQ 号（5 到 11 位数字）`, value: A().qq, max: 11 }]); if (r) { const n = r[0].replace(/\D/g, ""); if (n.length < 5) return toast("QQ 号要 5 到 11 位数字"); A().qq = n; saveMeta(); render(); toast("QQ 号改好了"); } }
       if (v === "sound") { S.meta.sound = S.meta.sound === false; saveMeta(); }
       if (v === "music") musicSheet();
+      if (v === "theme") themeSheet();
       if (v === "switch") ACT.logout();
       if (v === "about") sheet(`<h3>QQ2008</h3><p class="note">版本 ${esc(VERSION)}<br>等回复：${S.meta.queue.map(q => `${esc(nameOf(friendById(q.fid) || {}))}（${{ reply: "消息", zone: "空间", verify: "好友验证" }[q.kind] || q.kind}）${hm(new Date(q.due))}`).join("；") || "没有"}</p>${(S.meta.errors || []).map(e => `<p class="note">❗${esc(e)}</p>`).join("")}<div class="btns"><button data-v="no">关闭</button></div>`, () => closeSheet());
     });
@@ -664,6 +669,11 @@
     toast("踩了一脚~ 他上线会看到的"); render();
   };
 
+  function themeSheet() {
+    const cur = S.meta.theme || "classic";
+    sheet(`<h3>更换皮肤</h3><div class="themes">${THEMES.map(([k, n, d]) => `<button data-v="${k}" class="${cur === k ? "on" : ""}"><i class="sw sw-${k}"></i><b>${n}</b><small>${d}</small></button>`).join("")}</div><div class="btns"><button data-v="no" class="pri">好了</button></div>`,
+      v => { if (v === "no") return closeSheet(); S.meta.theme = v; saveMeta(); applyTheme(v); themeSheet(); });
+  }
   // 我的音乐：传 mp3，空间里挑歌
   function musicSheet() {
     sheet(`<h3>我的音乐</h3><p class="note">把手机里的歌传上来（mp3、flac 都行），空间的背景音乐从这里挑。</p><div class="mlist">${S.meta.music.map(m => `<div class="song"><span>♫ ${esc(m.name)}</span><button data-v="del:${esc(m.id)}">删除</button></div>`).join("") || `<div class="note">还没有歌</div>`}</div><div class="btns"><button data-v="no">关闭</button><button data-v="add" class="pri">＋ 传一首歌</button></div>`,
@@ -1054,7 +1064,7 @@
   document.addEventListener("keydown", e => { if (e.target.id === "inp" && e.key === "Enter" && (e.ctrlKey || e.metaKey)) { e.preventDefault(); ACT.send(); } });
   async function boot() {
     $("#app").innerHTML = `<div class="login"><div class="logo" style="padding-top:160px">${PENGUIN(120, 118)}<b>QQ2008</b></div></div>`;
-    await loadAll();
+    await loadAll(); applyTheme(S.meta.theme);
     // 以前的版本 AI 失败三次就把好友申请从队列里扔了，人卡在「等待验证」：补回队列
     for (const f of S.friends.filter(f => f.pending && !S.meta.queue.some(q => q.fid === f.id && q.kind === "verify"))) S.meta.queue.push({ fid: f.id, kind: "verify", due: new Date().toISOString() });
     saveMeta();

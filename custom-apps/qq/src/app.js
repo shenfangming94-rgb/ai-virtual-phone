@@ -41,7 +41,7 @@
   const FUTURE = [["微博", "2009-08"], ["饿了么", "2009-04"], ["B站", "2009-06"], ["哔哩哔哩", "2010-01"], ["英雄联盟", "2009-10"], ["美团", "2010-03"], ["小米手机", "2011-08"], ["iPad", "2010-04"],
     ["微信", "2011-01"], ["知乎", "2011-01"], ["朋友圈", "2012-04"], ["滴滴", "2012-09"], ["打车软件", "2012-06"], ["快手", "2012-11"], ["表情包", "2012-01"], ["小红书", "2013-06"], ["余额宝", "2013-06"],
     ["微信支付", "2013-08"], ["扫码", "2013-06"], ["二维码支付", "2014-01"], ["4G", "2013-12"], ["Apple Watch", "2014-09"], ["拼多多", "2015-09"], ["王者荣耀", "2015-11"], ["共享单车", "2016-01"], ["摩拜", "2016-04"],
-    ["抖音", "2016-09"], ["直播带货", "2016-05"], ["短视频", "2013-09"], ["刷脸", "2017-09"], ["5G", "2019-06"], ["健康码", "2020-02"], ["新冠", "2020-01"], ["原神", "2020-09"], ["元宇宙", "2021-10"], ["ChatGPT", "2022-11"], ["AI 聊天", "2022-11"], ["QQ农场", "2009-01"], ["开心网", "2008-03"]];
+    ["抖音", "2016-09"], ["直播带货", "2016-05"], ["短视频", "2013-09"], ["刷脸", "2017-09"], ["5G", "2019-06"], ["健康码", "2020-02"], ["新冠", "2020-01"], ["原神", "2020-09"], ["元宇宙", "2021-10"], ["ChatGPT", "2022-11"], ["AI 聊天", "2022-11"], ["开心网", "2008-03"]];
   const futureIn = (acct, text) => { if (acct !== "a08") return []; const t = thereDate(acct); const now = `${t.getFullYear()}-${pad(t.getMonth() + 1)}`; return FUTURE.filter(([w, at]) => at > now && String(text || "").toLowerCase().includes(w.toLowerCase())).map(x => x[0]); };
 
   // ───────────────────────── 经典黄脸表情（自己画的，/名字） ─────────────────────────
@@ -768,6 +768,103 @@
     saveMeta(); render(); };
   ACT["pet-wear"] = b => { const p = pet(), w = PET_WEAR.find(x => x.id === b.dataset.k); p.wear[w.slot] = p.wear[w.slot] === w.id ? null : w.id; saveMeta(); render(); };
   ACT["pet-diary"] = () => petDiary(true);
+  // ───────────────────────── QQ农场（像素，她定稿 scratchpad farm/farm_px.html + 新小狗）：种菜、收菜、卖钱买种子；去好友家偷菜、帮忙、使坏，他们也会来；金币跟 Q币分开 ─────────────────────────
+  // A().farm / f.farm = { lv, exp, gold, plots: [{ crop, at, water, weed, bug, dryHit, dead, stolen: { 谁: 个数 } }], seeds: { 种子: 个数 }, inv: { 菜: 个数 }, log: [{ who, note, at }], board: [{ who, text, at }], steals: { day, n }, last }
+  const CROP = { radish: { name: "白萝卜", h: 4, lv: 1, price: 10, yld: 10, sell: 3, exp: 8 }, carrot: { name: "胡萝卜", h: 6, lv: 1, price: 20, yld: 12, sell: 4, exp: 12 }, corn: { name: "玉米", h: 8, lv: 2, price: 35, yld: 14, sell: 5, exp: 16 },
+    tomato: { name: "番茄", h: 9, lv: 3, price: 50, yld: 14, sell: 7, exp: 22 }, potato: { name: "土豆", h: 10, lv: 3, price: 45, yld: 15, sell: 6, exp: 20 }, straw: { name: "草莓", h: 12, lv: 4, price: 80, yld: 16, sell: 10, exp: 30 },
+    rose: { name: "玫瑰", h: 16, lv: 5, price: 120, yld: 12, sell: 18, exp: 40 }, melon: { name: "西瓜", h: 24, lv: 6, price: 160, yld: 10, sell: 32, exp: 55 } };
+  const FARM_TITLE = ["", "新手农民", "小农民", "小农民", "勤劳农民", "勤劳农民", "种菜能手", "种菜能手", "农场主", "农场主", "大农场主"];
+  const farmNeed = lv => lv * 80;
+  const farmPlotsN = lv => lv >= 6 ? 12 : lv >= 3 ? 9 : 6;
+  const STEAL_MAX = 8;
+  const farmFix = fm => { fm.plots = fm.plots || []; while (fm.plots.length < farmPlotsN(fm.lv)) fm.plots.push({}); fm.seeds = fm.seeds || {}; fm.inv = fm.inv || {}; fm.log = fm.log || []; fm.board = fm.board || []; return fm; };
+  const myFarm = () => { const a = A(); if (!a.farm) a.farm = { lv: 1, exp: 0, gold: 500, plots: [], seeds: { radish: 4, carrot: 2 }, inv: {}, log: [], board: [], last: new Date().toISOString() }; return farmFix(a.farm); };
+  const cropMs = k => CROP[k].h * 3600e3 * TS();
+  const cropStage = p => { if (p.dead) return "dead"; if (!p.crop) return null; const k = (Date.now() - new Date(p.at)) / cropMs(p.crop); return k >= 1 ? "ripe" : k > .6 ? "young" : k > .15 ? "sprout" : "seed"; };
+  const isDry = p => p.crop && !p.dead && cropStage(p) !== "ripe" && Date.now() - new Date(p.water || p.at) > 6 * 3600e3 * TS();
+  const stolenN = p => Object.values(p.stolen || {}).reduce((a, b) => a + b, 0);
+  const harvestN = p => Math.max(1, CROP[p.crop].yld - (p.weed ? 2 : 0) - (p.bug ? 2 : 0) - (p.dryHit ? 2 : 0) - stolenN(p));
+  const farmLog = (fm, who, note) => { fm.log = [...fm.log, { who, note, at: new Date().toISOString() }].slice(-60); };
+  const plant = (p, k, at = new Date()) => Object.assign(p, { crop: k, at: at.toISOString(), water: at.toISOString(), dead: false, weed: false, bug: false, dryHit: false, stolen: {} });
+  /** 时间过去了：没熟的地会长草、生虫（每块每小时大约 6%），干了也记一笔（收的时候少两个） */
+  function farmTick(fm) { const now = Date.now(); const h = (now - new Date(fm.last || now)) / 3600e3 / TS(); if (h < .02) return; fm.last = new Date(now).toISOString(); const pr = 1 - Math.pow(.94, h);
+    for (const p of fm.plots) if (p.crop && !p.dead && cropStage(p) !== "ripe") { if (Math.random() < pr) p.weed = true; if (Math.random() < pr * .7) p.bug = true; if (isDry(p)) p.dryHit = true; } }
+  /** 好友的地：第一次打开时按他的等级种满；之后他自己会收、会接着种、偶尔浇水除草 */
+  function hisFarm(f) { if (!f.farm) { const fm = farmFix({ lv: rand(3, 7), exp: 0, gold: 0, plots: [], last: new Date().toISOString() }); const ks = Object.keys(CROP).filter(k => CROP[k].lv <= fm.lv);
+      fm.plots.forEach(p => { if (Math.random() < .9) { const k = ks[rand(0, ks.length - 1)]; plant(p, k, new Date(Date.now() - Math.random() * cropMs(k) * 1.3)); } }); f.farm = fm; }
+    const fm = farmFix(f.farm), ks = Object.keys(CROP).filter(k => CROP[k].lv <= fm.lv); farmTick(fm);
+    for (const p of fm.plots) { if (!p.crop || p.dead) { plant(p, ks[rand(0, ks.length - 1)], new Date(Date.now() - rand(0, 3) * 3600e3 * TS())); continue; }
+      const ripeAt = new Date(p.at).getTime() + cropMs(p.crop); p.wait = p.wait || rand(2, 12) * 3600e3 * TS();
+      if (Date.now() > ripeAt + p.wait) { const at = new Date(ripeAt + p.wait); delete p.wait; plant(p, ks[rand(0, ks.length - 1)], at); }
+      else if ((p.weed || p.bug || isDry(p)) && Math.random() < .3) { p.weed = p.bug = false; p.water = new Date().toISOString(); } }
+    return fm; }
+  const farmOf = () => S.farmOf && S.farmOf !== "me" ? friendById(S.farmOf) : null;
+  /** 我的地涨经验，够了就升级（升级开新地） */
+  const farmExp = (fm, n) => { fm.exp += n; let up = false; while (fm.exp >= farmNeed(fm.lv)) { fm.exp -= farmNeed(fm.lv); fm.lv++; up = true; } if (up) { farmFix(fm); toast(`升到 ${fm.lv} 级了！${farmPlotsN(fm.lv) > farmPlotsN(fm.lv - 1) ? "开了新地" : ""}`); } };
+  const today = () => ymd(new Date());
+  const stealsLeft = fm => STEAL_MAX - (fm.steals && fm.steals.day === today() ? fm.steals.n : 0);
+  /** 他来我农场：熟了的偷一点、看到草虫干地帮一把、偶尔使坏；他身边的人也可能顺手偷 */
+  function farmVisit(f, it) { const fm = myFarm(); farmTick(fm); const notes = [];
+    const ripe = fm.plots.filter(p => cropStage(p) === "ripe" && !(p.stolen || {})[f.id] && stolenN(p) < CROP[p.crop].yld * .4);
+    const need = fm.plots.filter(p => p.crop && !p.dead && cropStage(p) !== "ripe" && (p.weed || p.bug || isDry(p)));
+    const grow = fm.plots.filter(p => p.crop && !p.dead && cropStage(p) !== "ripe" && !p.weed && !p.bug);
+    const r = Math.random();
+    if (ripe.length && r < .6 && fm.dog && Math.random() < .25) notes.push("想来偷菜，被你家狗咬了一口");
+    else if (ripe.length && r < .6) { const p = ripe[rand(0, ripe.length - 1)], n = rand(1, 3); p.stolen = { ...(p.stolen || {}), [f.id]: n }; notes.push(`偷走了你 ${n} 个${CROP[p.crop].name}`); }
+    else if (need.length && r < .88) { const p = need[0]; const what = p.weed ? "除了草" : p.bug ? "杀了虫" : "浇了水"; p.weed && !p.bug ? p.weed = false : p.bug ? p.bug = false : p.water = new Date().toISOString(); notes.push(`帮你${what}`); }
+    else if (grow.length) { const p = grow[rand(0, grow.length - 1)]; if (Math.random() < .5) p.bug = true; else p.weed = true; notes.push(`在你地里放了${p.bug ? "一只虫子" : "一把草"}`); }
+    for (const n of notes) farmLog(fm, f.id, n);
+    const c = circleOf(f); if (c.length && Math.random() < .25) { const p = fm.plots.find(p => cropStage(p) === "ripe" && stolenN(p) < CROP[p.crop].yld * .4); const who = c[rand(0, c.length - 1)].name; if (p && fm.dog && Math.random() < .3) farmLog(fm, who, "想来偷菜，被你家狗咬跑了"); else if (p && !(p.stolen || {})[who]) { p.stolen = { ...(p.stolen || {}), [who]: 1 }; farmLog(fm, who, `偷走了你 1 个${CROP[p.crop].name}`); } }
+    saveMeta(); if (!notes.length) return;
+    if (recentAt(it.at)) qqPop("QQ农场", `${fAv(f, 28)}<div><b>${esc(nameOf(f))}</b><br>${esc(notes[0])}</div>`);
+    queueZone(f, { kind: "farmHe", note: notes.join("，") }, rand(1, 20) * 60e3); if (S.view === "farm") render(); }
+  V.farm = () => { const his = farmOf(), mine = !his; const fm = mine ? myFarm() : hisFarm(his); if (mine) farmTick(fm); const tool = S.farmTool || "hand", tab = S.farmTab || (mine ? "log" : "board");
+    const rows = Math.ceil(fm.plots.length / 3), sceneH = 120 + rows * 58 + 18;
+    const plots = fm.plots.map((p, i) => { const r = Math.floor(i / 3), k = i % 3, st = cropStage(p); const ms = p.crop && st !== "ripe" && st !== "dead" ? new Date(p.at).getTime() + cropMs(p.crop) - Date.now() : 0;
+      const tag = st === "ripe" ? (stolenN(p) && mine ? `<i class="tag st">被偷了</i>` : `<i class="tag">可收</i>`) : st && st !== "dead" ? `<i class="tag tm">${Math.ceil(ms / 3600e3 / TS())} 小时</i>` : "";
+      return `<div class="fm-plot" data-act="farm-plot" data-i="${i}" style="left:${48 + k * 88 - r * 14}px;top:${118 + r * 58}px"><img class="pi" src="${pixUrl(`fp${isDry(p) ? "dry" : p.water && Date.now() - new Date(p.water) < 3600e3 * TS() ? "wet" : ""}`, window.qqplot(isDry(p) ? "dry" : p.water && Date.now() - new Date(p.water) < 3600e3 * TS() ? "wet" : ""), 4)}">${st ? `<img class="pi crop" src="${pixUrl(`cr${st === "ripe" ? p.crop : st}`, window.qqcrop(st === "ripe" ? p.crop : st), 4)}">` : ""}${p.weed ? `<img class="pi wd" src="${pixUrl("crweed", window.qqcrop("weed"), 3)}">` : ""}${p.bug ? `<img class="pi bg" src="${pixUrl("crbug", window.qqcrop("bug"), 3)}">` : ""}${tag}</div>`; }).join("");
+    const tools = (mine ? [["hoe", "hoe", "锄地"], ["seed", "seed", "播种"], ["water", "water", "浇水"], ["weed", "weed", "除草"], ["bug", "bug", "杀虫"], ["hand", "hand", "收获"]] : [["hand", "hand", "偷菜"], ["water", "water", "帮浇水"], ["weed", "weed", "帮除草"], ["bug", "bug", "帮杀虫"], ["putbug", "bug", "放虫子"], ["putweed", "weed", "放草"]])
+      .map(([k, ic, n]) => `<button class="pxb ${tool === k ? "on" : ""}" data-act="farm-tool" data-k="${k}"><img class="pi" src="${pixUrl(`tl${ic}`, window.qqtool(ic), 4)}">${n}</button>`).join("");
+    const who = w => w === "me" ? "你" : friendById(w) ? nameOf(friendById(w)) : w;
+    let body = "";
+    if (tab === "log") body = [...fm.log].reverse().slice(0, 30).map(l => `<p>${esc(who(l.who))} ${esc(l.note)} <small>${esc(ago(S.meta.cur, l.at))}</small></p>`).join("") || `<p class="empty">还没什么动静。种点菜吧</p>`;
+    if (tab === "board") body = `${mine ? "" : `<div class="fm-write"><input id="fmb" maxlength="60" placeholder="在他农场留句话…"><button class="pxbtn" data-act="farm-board">留言</button></div>`}${[...fm.board].reverse().slice(0, 30).map(b => `<p><b>${esc(who(b.who))}：</b>${richText(b.text)} <small>${esc(ago(S.meta.cur, b.at))}</small></p>`).join("") || `<p class="empty">还没有人留言</p>`}`;
+    if (tab === "friends") body = myFriends().map(f => { const hf = hisFarm(f); const n = hf.plots.filter(p => cropStage(p) === "ripe" && !(p.stolen || {}).me && stolenN(p) < CROP[p.crop].yld * .4).length; return `<button class="fm-fr" data-act="farm-go" data-id="${esc(f.id)}">${fAv(f, 28)}<b>${esc(nameOf(f))}</b><small>Lv.${hf.lv}</small>${n ? `<em>${n} 块能偷</em>` : ""}</button>`; }).join("") || `<p class="empty">先加个好友吧</p>`;
+    if (tab === "inv") { const has = Object.entries(fm.inv).filter(([, n]) => n > 0); body = has.length ? `<div class="fm-grid">${has.map(([k, n]) => `<div class="fm-item"><img class="pi" src="${pixUrl(`cr${k}`, window.qqcrop(k), 3)}"><b>${CROP[k].name} × ${n}</b><button class="pxbtn" data-act="farm-sell" data-k="${k}">卖 ${CROP[k].sell * n}</button></div>`).join("")}</div><div class="zbtn"><button class="pxbtn" data-act="farm-sell" data-k="all">全部卖掉</button></div>` : `<p class="empty">仓库是空的。菜熟了点「收获」</p>`;
+      const sd = Object.entries(fm.seeds).filter(([, n]) => n > 0); body += `<h4>种子</h4>${sd.length ? sd.map(([k, n]) => `${CROP[k].name} × ${n}`).join("　") : `<span class="empty">没有种子了，去商店买</span>`}`; }
+    if (tab === "shop") body = `${fm.dog ? "" : `<div class="fm-dogbuy"><img class="pi" src="${pixUrl("dog", window.qqdog(), 2)}"><div><b>看家小狗</b><small>守在家门口，来偷菜的人有机会被咬</small></div><button class="pxbtn" data-act="farm-dog">300 金币</button></div>`}<div class="fm-grid">${Object.entries(CROP).map(([k, c]) => `<button class="fm-item ${c.lv > fm.lv ? "off" : ""}" data-act="farm-buy" data-k="${k}"><img class="pi" src="${pixUrl(`cr${k}`, window.qqcrop(k), 3)}"><b>${c.name}</b><small>${c.lv > fm.lv ? `${c.lv} 级解锁` : `${c.price} 金币 · ${c.h} 小时`}</small></button>`).join("")}</div>`;
+    const tabs = (mine ? [["log", "动态"], ["board", "留言"], ["friends", "好友农场"], ["inv", "仓库"], ["shop", "商店"]] : [["board", "留言"], ["friends", "好友农场"]]).map(([k, n]) => `<button class="${tab === k ? "on" : ""}" data-act="farm-tab" data-t="${k}">${n}</button>`).join("");
+    const hud = mine ? `<div class="pxb">Lv.${fm.lv} ${FARM_TITLE[Math.min(fm.lv, 10)]}</div><div class="pxb">金币 ${fm.gold}</div><div class="pxb">经验 ${fm.exp}/${farmNeed(fm.lv)}</div>` : `<div class="pxb">${esc(nameOf(his))} · Lv.${fm.lv}</div><div class="pxb">今天还能偷 ${stealsLeft(myFarm())} 次</div>`;
+    return `<div class="farmv">${titlebar(`QQ农场 · ${mine ? "我的农场" : `${nameOf(his)}的农场`}`, mine ? S.farmBack || "back-main" : "farm-home")}
+      <div class="fm-scene" style="height:${sceneH}px"><img class="pi fm-bg" src="${pixUrl("fmbg", window.qqfarmbg(), 4)}">${plots}<div class="fm-hud">${hud}</div>${!mine || fm.dog ? `<img class="pi fm-dog" src="${pixUrl("dog", window.qqdog(), 3)}">` : ""}<div class="fm-tip">${mine ? `先选下面的工具，再点地${fm.dog ? "" : " · 商店里有小狗"}` : "他家有狗，偷多了会被咬"}</div></div>
+      <div class="fm-tools">${tools}</div><div class="pr-tabs">${tabs}</div><div class="pr-body pxb">${body}</div></div>`; };
+  ACT["open-farm"] = () => { S.farmBack = S.view === "chat" ? "back-chat" : "back-main"; S.farmOf = "me"; S.farmTool = "hand"; S.farmTab = "log"; S.view = "farm"; render(); };
+  ACT["farm-home"] = () => { S.farmOf = "me"; S.farmTool = "hand"; S.farmTab = "friends"; render(); };
+  ACT["farm-go"] = b => { S.farmOf = b.dataset.id; S.farmTool = "hand"; S.farmTab = "board"; render(); };
+  ACT["farm-tool"] = b => { S.farmTool = b.dataset.k; render(); };
+  ACT["farm-tab"] = b => { S.farmTab = b.dataset.t; render(); };
+  ACT["farm-plot"] = b => { const his = farmOf(), fm = his ? hisFarm(his) : myFarm(), me = myFarm(), p = fm.plots[+b.dataset.i], st = cropStage(p), t = S.farmTool || "hand", c = p.crop && CROP[p.crop];
+    const done = msg => { if (msg) toast(msg); saveMeta(); if (his) saveFriend(his); render(); };
+    const tell = note => { farmLog(me, "me", `${note.replace(/^你/, "")}（${nameOf(his)}家）`); queueZone(his, { kind: "farmMe", note }, rand(5, 60) * 60e3); };
+    if (his) {
+      if (t === "hand") { if (st !== "ripe") return toast(st ? "还没熟呢" : "这块地是空的"); if ((p.stolen || {}).me) return toast("这块已经偷过了"); if (stolenN(p) >= c.yld * .4) return toast("被偷得差不多了，给他留点吧"); if (stealsLeft(me) <= 0) return toast("今天偷够了，明天再来");
+        me.steals = { day: today(), n: (me.steals && me.steals.day === today() ? me.steals.n : 0) + 1 };
+        if (Math.random() < .15) { const lose = Math.min(me.gold, 20); me.gold -= lose; tell(`来偷菜被你家狗咬了，掉了 ${lose} 金币`); return done(`被狗咬了！掉了 ${lose} 金币`); }
+        const n = rand(1, 3); p.stolen = { ...(p.stolen || {}), me: n }; me.inv[p.crop] = (me.inv[p.crop] || 0) + n; tell(`偷走了你 ${n} 个${c.name}`); return done(`偷到 ${n} 个${c.name}`); }
+      if (t === "putbug" || t === "putweed") { if (!p.crop || st === "ripe" || st === "dead") return toast("这块地放不了"); if (t === "putbug" ? p.bug : p.weed) return toast("已经有了"); p[t === "putbug" ? "bug" : "weed"] = true; tell(`在你地里放了${t === "putbug" ? "一只虫子" : "一把草"}`); return done("放好了，嘿嘿"); }
+      const k = { water: "water", weed: "weed", bug: "bug" }[t]; if (k === "water" ? !isDry(p) : !p[k]) return toast(k === "water" ? "这块不缺水" : k === "weed" ? "这块没有草" : "这块没有虫");
+      if (k === "water") p.water = new Date().toISOString(); else p[k] = false; me.gold += 2; farmExp(me, 2); tell(`帮你${k === "water" ? "浇了水" : k === "weed" ? "除了草" : "杀了虫"}`); return done("帮了他一把，金币 +2"); }
+    if (t === "hand") { if (st !== "ripe") return toast(st === "dead" ? "枯了，先用锄头锄掉" : st ? `还要 ${Math.ceil((new Date(p.at).getTime() + cropMs(p.crop) - Date.now()) / 3600e3 / TS())} 小时才熟` : "这块地是空的，先播种"); const n = harvestN(p);
+      me.inv[p.crop] = (me.inv[p.crop] || 0) + n; farmExp(me, c.exp); p.dead = true; farmLog(me, "me", `收了 ${n} 个${c.name}`); return done(`收了 ${n} 个${c.name}`); }
+    if (t === "hoe") { if (!p.crop) return toast("这块已经是空地了"); if (!p.dead) return toast("还长着呢，别锄"); Object.keys(p).forEach(k => delete p[k]); farmExp(me, 1); return done(); }
+    if (t === "seed") { if (p.crop) return toast(p.dead ? "先把枯的锄掉" : "这块已经种了"); const sd = Object.entries(me.seeds).filter(([, n]) => n > 0); if (!sd.length) return toast("没有种子了，去商店买");
+      return sheet(`<h3>种什么</h3><div class="mlist">${sd.map(([k, n]) => `<button data-v="${k}">${CROP[k].name} × ${n}（${CROP[k].h} 小时熟）</button>`).join("")}</div><div class="btns"><button class="btn" data-v="no">取消</button></div>`, v => { closeSheet(); if (v === "no") return; me.seeds[v]--; plant(p, v); farmExp(me, 2); done(); }); }
+    const k = { water: "water", weed: "weed", bug: "bug" }[t]; if (k === "water" ? !p.crop || p.dead || cropStage(p) === "ripe" : !p[k]) return toast(k === "water" ? "这块不用浇" : k === "weed" ? "这块没有草" : "这块没有虫");
+    if (k === "water") p.water = new Date().toISOString(); else p[k] = false; farmExp(me, 2); done(); };
+  ACT["farm-buy"] = b => { const fm = myFarm(), c = CROP[b.dataset.k]; if (c.lv > fm.lv) return toast(`${c.lv} 级才能种`); if (fm.gold < c.price) return toast("金币不够了，卖点菜吧"); fm.gold -= c.price; fm.seeds[b.dataset.k] = (fm.seeds[b.dataset.k] || 0) + 1; saveMeta(); render(); toast(`买了 1 包${c.name}种子`); };
+  ACT["farm-dog"] = () => { const fm = myFarm(); if (fm.dog) return; if (fm.gold < 300) return toast("金币不够，攒到 300 再来"); fm.gold -= 300; fm.dog = { at: new Date().toISOString() }; farmLog(fm, "me", "买了一只看家小狗"); saveMeta(); render(); toast("小狗到家了！"); };
+  ACT["farm-sell"] = b => { const fm = myFarm(); let g = 0; for (const [k, n] of Object.entries(fm.inv)) if (n > 0 && (b.dataset.k === "all" || b.dataset.k === k)) { g += CROP[k].sell * n; fm.inv[k] = 0; } if (!g) return; fm.gold += g; saveMeta(); render(); toast(`卖了 ${g} 金币`); };
+  ACT["farm-board"] = () => { const his = farmOf(); const t = ($("#fmb").value || "").trim(); if (!his || !t) return; const fm = hisFarm(his); fm.board.push({ who: "me", text: t, at: new Date().toISOString() }); saveFriend(his); queueZone(his, { kind: "farmMe", note: `在你农场留言板上说：「${t}」` }, rand(5, 60) * 60e3); render(); };
   // ───────────────────────── QQ秀：像素小人（src/qqshow.js 画），衣柜、Q币、送礼、他自己换装 ─────────────────────────
   // show = { g: f|m, hair, hairC, eyeC, outfit, wings, acc: [], bg, eyes, mouth, owned: [物品 id], qb: Q币, gifts: [{ name, from, items, at }] }
   const CAT = [
@@ -950,7 +1047,7 @@
   };
   ACT.remark = async () => { const fr = friendById(S.zoneOf); const r = await ask("修改备注", [{ label: "备注名（不填就显示他的名字）", value: fr.remark, max: 16 }]); if (r) { fr.remark = r[0]; saveFriend(fr); render(); } };
   ACT.menu = () => sheet(`<h3>菜单</h3><div class="mlist">
-      <button data-v="nick">修改昵称</button><button data-v="qq">修改 QQ 号（现在：${esc(A().qq)}）</button><button data-v="show">我的QQ秀</button><button data-v="pet">QQ宠物</button><button data-v="theme">更换皮肤</button><button data-v="sound">声音：${S.meta.sound !== false ? "开" : "关"}</button><button data-v="music">我的音乐（${S.meta.music.length} 首）</button><button data-v="export">导出数据</button><button data-v="import">导入数据</button><button data-v="switch">切换帐号</button><button data-v="about">关于</button></div><div class="btns"><button data-v="no">关闭</button></div>`,
+      <button data-v="nick">修改昵称</button><button data-v="qq">修改 QQ 号（现在：${esc(A().qq)}）</button><button data-v="show">我的QQ秀</button><button data-v="pet">QQ宠物</button><button data-v="farm">QQ农场</button><button data-v="theme">更换皮肤</button><button data-v="sound">声音：${S.meta.sound !== false ? "开" : "关"}</button><button data-v="music">我的音乐（${S.meta.music.length} 首）</button><button data-v="export">导出数据</button><button data-v="import">导入数据</button><button data-v="switch">切换帐号</button><button data-v="about">关于</button></div><div class="btns"><button data-v="no">关闭</button></div>`,
     async v => { closeSheet();
       if (v === "nick") { const r = await ask("修改昵称", [{ label: "昵称", value: A().nick, max: 16 }]); if (r && r[0]) { A().nick = r[0]; saveMeta(); render(); } }
       if (v === "qq") { const r = await ask("修改 QQ 号", [{ label: `QQ 号（5 到 11 位数字）`, value: A().qq, max: 11 }]); if (r) { const n = r[0].replace(/\D/g, ""); if (n.length < 5) return toast("QQ 号要 5 到 11 位数字"); A().qq = n; saveMeta(); render(); toast("QQ 号改好了"); } }
@@ -959,6 +1056,7 @@
       if (v === "theme") themeSheet();
       if (v === "show") ACT["open-show"]({ dataset: { who: "me" } });
       if (v === "pet") ACT["open-pet"]();
+      if (v === "farm") ACT["open-farm"]();
       if (v === "export") exportData();
       if (v === "import") importData();
       if (v === "switch") ACT.logout();
@@ -1494,6 +1592,9 @@
     if (evs.some(e => e.kind === "cpNote")) { const n = (cp().notes || []).filter(x => x.who === "me").slice(-1)[0]; if (n) todo.push(`用户在情侣空间给你留了小纸条：「${n.text}」。${CP_FMT(f)}`); }
     if (evs.some(e => e.kind === "cpDiary")) { const d = (cp().diary || []).filter(x => x.who === "me").slice(-1)[0]; if (d) todo.push(`用户在情侣空间写了恋爱日记《${d.title}》：\n${d.text.slice(0, 1500)}\n${CP_FMT(f)}`); }
     if (evs.some(e => e.kind === "cpMood" || e.kind === "cpQa") && cpOn() && cp().fid === f.id) { const t = cpTodo(f); if (t) todo.push(`用户在你们的情侣空间${evs.some(e => e.kind === "cpQa") ? "答了今天的问题" : "写了今天的心情"}。${t}`); }
+    const fh = evs.filter(e => e.kind === "farmHe").map(e => e.note), fme = evs.filter(e => e.kind === "farmMe").map(e => e.note);
+    if (fh.length) todo.push(`你刚才逛了用户的 QQ农场：${fh.join("；")}。想在她农场的留言板上说句话就写 ===农场留言===，块里写那句话；不想就不写。`);
+    if (fme.length) todo.push(`用户刚去了你的 QQ农场：${fme.join("；")}。想在你自己农场的留言板上回应她就写 ===我的农场留言===，块里写那句话；不想就不写。`);
     for (const e of evs.filter(e => e.kind === "gotShow")) todo.push(`用户在 QQ 上送了你一件 QQ秀「${e.name}」。想穿上就写 ===换装===，想谢她可以在她留言板上留言。\n你能用的：\n${catText(hisShow(f).g)}\n===换装===\n衣服：\n发型：\n配饰：\n背景：\n表情：\n===结束===（不换的项空着）`);
     for (const e of evs.filter(e => e.kind === "myBlog")) { const b = (mz.blogs || []).find(x => x.id === e.pid); if (b) { if (b.photo && !b.photo.seen) { await seePhoto(f, b.photo); saveMeta(); } todo.push(`你看到用户在她空间写了一篇日志《${b.title}》${b.priv === "friends" ? "（仅好友可见）" : ""}：\n${b.text.slice(0, 2000)}${photoText(b.photo, true)}\n评不评论按你们的关系和你的人设决定。`); } }
     for (const e of evs.filter(e => e.kind === "myPostReply")) { const p = itemOf(mz, e.pid); const mine = p && (p.comments || []).filter(cm => cm.who === "me" && cm.to === `f:${f.id}`).slice(-1)[0]; if (mine) todo.push(`用户在她自己的${isBlog(p) ? `日志《${p.title}》` : `说说「${p.text.slice(0, 80)}」`}下回复了你：「${mine.text}」。回不回按你的人设来。`); }
@@ -1559,6 +1660,7 @@
           else if (Math.random() < .25) { const k = ["fish", "cake", "ice", "milk"][rand(0, 3)]; p.inv[k] = (p.inv[k] || 0) + 1; petLog(f.id, "buy", `给${p.name}买了${PET_FOOD[k].name}`); saveMeta(); note = `给${p.name}买了${PET_FOOD[k].name}`; }
           else { const act = p.hunger <= p.clean && p.hunger <= p.mood ? "feed" : p.clean <= p.mood ? "bath" : "play"; const fd = act === "feed" ? ["fish", "cake", "ice", "milk"].find(x => p.inv[x]) || "onigiri" : null; if (fd && fd !== "onigiri") p.inv[fd]--; petDo(f.id, act, fd); note = p.log[p.log.length - 1].note; }
           if (recentAt(it.at)) qqPop("QQ宠物", `<img class="pi" src="${pengUrl("happy", p.wear, 2)}" style="width:30px;height:30px"><div><b>${esc(nameOf(f))}</b><br>${esc(note)}</div>`); if (S.view === "pet") render(); } continue; }
+        if (it.kind === "farm") { it.done = true; saveFriend(f); if (Date.now() - new Date(it.at).getTime() < 6 * 3600e3) farmVisit(f, it); continue; }
         if (it.kind === "cpdaily") { it.done = true; saveFriend(f); if (cpOn() && cp().fid === f.id && cpDay(new Date(it.at)) === cpDay()) { const t = cpTodo(f); if (t) { const raw = await gen(f, "cpdaily", [ERA_RULE(f.acct), COMMON_RULE, cpCtx(f), `你打开了你和用户（QQ 昵称「${A().nick}」）的情侣空间。${t}\n想做哪件就写哪个块，不想做的就不写。`].join("\n\n")); if (raw) { applyCouple(f, raw); saveMeta(); if (S.view === "couple") render(); } } } continue; }
         if (it.kind === "cpvisit") { it.done = true; saveFriend(f); if (cpOn() && cp().fid === f.id) await cpVisit(f, it); continue; }
         it.tries = (it.tries || 0) + 1;
@@ -1604,6 +1706,9 @@
   }
   function applyZone(f, r) {
     if (r.raw && /===\s*(送QQ秀|换装)\s*===/.test(r.raw)) applyShowBlocks(f, r.raw); if (r.raw) applyCouple(f, r.raw);
+    if (r.raw) { const fb = block(r.raw, "农场留言"), hb = block(r.raw, "我的农场留言"), at = new Date().toISOString();
+      if (fb) { myFarm().board.push({ who: f.id, text: fb.slice(0, 120), at }); saveMeta(); qqPop("QQ农场", `${fAv(f, 28)}<div><b>${esc(nameOf(f))}</b><br>在你农场留言了</div>`); }
+      if (hb) { hisFarm(f).board.push({ who: f.id, text: hb.slice(0, 120), at }); saveFriend(f); } if ((fb || hb) && S.view === "farm") render(); }
     const z = f.zone, mz = S.meta.accts[f.acct].zone; const now = new Date().toISOString(); const notes = [];
     if (r.reply) { const un = z.board.filter(b => b.who === "me" && !b.reply); un.forEach(b => { b.reply = r.reply.slice(0, 200); b.replyAt = now; }); if (un.length) notes.push(`回复了她的留言：「${r.reply}」`); }
     const hisPids = [...new Set(r.evs.filter(e => e.kind === "hisPostComment").map(e => e.pid))], myPids = [...new Set(r.evs.filter(e => e.kind === "myPost").map(e => e.pid))], backPids = [...new Set(r.evs.filter(e => e.kind === "myPostReply").map(e => e.pid))], blogPids = [...new Set(r.evs.filter(e => e.kind === "myBlog").map(e => e.pid))];
@@ -1633,7 +1738,7 @@
     hisShow(f).qb += 20; // 他每天签到
     const start = new Date(); start.setHours(0, 0, 0, 0); const items = [];
     const pick = () => { for (let i = 0; i < 60; i++) { const d = new Date(start.getTime() + rand(0, 1439) * 60e3); if (statusOf(f, d) !== "offline") return d; } return null; };
-    for (const [kind, n] of [["post", rand(1, 3)], ["browse", rand(1, 3)], ["blog", Math.random() < 0.3 ? 1 : 0], ["ping", rand(1, 2)], ["cpvisit", cpOn() && cp().fid === f.id && Math.random() < .5 ? 1 : 0], ["cpdaily", cpOn() && cp().fid === f.id ? 1 : 0], ["petcare", pet() && pet().fid === f.id ? rand(1, 2) : 0]]) for (let i = 0; i < n; i++) { const d = pick(); if (d) items.push({ kind, at: d.toISOString() }); }
+    for (const [kind, n] of [["post", rand(1, 3)], ["browse", rand(1, 3)], ["blog", Math.random() < 0.3 ? 1 : 0], ["ping", rand(1, 2)], ["cpvisit", cpOn() && cp().fid === f.id && Math.random() < .5 ? 1 : 0], ["cpdaily", cpOn() && cp().fid === f.id ? 1 : 0], ["farm", A().farm ? rand(1, 2) : 0], ["petcare", pet() && pet().fid === f.id ? rand(1, 2) : 0]]) for (let i = 0; i < n; i++) { const d = pick(); if (d) items.push({ kind, at: d.toISOString() }); }
     f.plan = { day: today, items: items.sort((a, b) => a.at.localeCompare(b.at)) }; return true;
   }
   const recentAt = iso => Date.now() - new Date(iso).getTime() < 30 * 60e3; // 刚刚发生的才弹提示，补上的不吵她

@@ -234,6 +234,8 @@
   }
   /** 2008 号的照片做旧，2026 号的只压缩 */
   const photoize = (acct, dataUrl, at) => acct === "a08" ? oldify(dataUrl, acct, at) : compressImage(dataUrl, 1080);
+  /** ===照片=== 里「有没有你」：有就用他的参考图；没写返回 undefined（按画面猜） */
+  const hasMe = pb => { const v = field(pb, "有没有你"); return v ? !/没有|无|否/.test(v) : undefined; };
   const SELFIE = /自拍|合照|合影|镜子|对镜|本人|我自己|我的脸/;
   /** 写给 AI 看：她的照片用 AI 看过的样子，他的用画面描述 */
   const photoText = (ph, hers) => ph ? (hers ? `[照片${ph.seen ? `：${ph.seen}` : ""}]` : `[照片：${ph.desc || "一张照片"}]`) : "";
@@ -254,7 +256,8 @@
   /** 他拍的照片：按画面生成（点了才生成，费生图 API），2008 号再做旧 */
   async function genPhoto(f, ph, at) {
     const prompt = f.acct === "a08" ? `${ph.desc}。2008 年的数码相机或拍照手机随手拍的照片：画面有点糊、有噪点、颜色发灰偏色、构图随意，没有美颜和滤镜，像真实生活里的抓拍，画面里的东西都是 2008 年的样子。` : `${ph.desc}。手机随手拍的照片，像真实生活里的抓拍。`;
-    const r = await api.ai.generateImage({ prompt, characterId: f.charId, useReferenceImage: SELFIE.test(ph.desc || ""), timeoutMs: 120000 });
+    const me = ph.me != null ? ph.me : SELFIE.test(ph.desc || "") || /我/.test(ph.desc || ""); // 老照片没有「有没有你」，按画面猜
+    const r = await api.ai.generateImage({ prompt: me ? `${prompt}照片里的他就是参考图里的这个人，脸和发型照参考图画。` : prompt, ...(me ? { characterId: f.charId, useReferenceImage: true } : {}), timeoutMs: 120000 });
     if (!r || !r.dataUrl) throw new Error("没有拿到图片");
     const d = await photoize(f.acct, r.dataUrl, at); const st = await api.media.put({ dataUrl: d }); mediaCache.set(st.ref, d); ph.ref = st.ref;
   }
@@ -262,7 +265,7 @@
   /** 照片：有图显示图；他发的还没生成就显示画面文字 + 「生成照片」 */
   function photoHtml(ph, loc, key) {
     if (!ph) return "";
-    if (ph.ref) return `<div class="pic"><img data-ref="${esc(ph.ref)}" data-act="view-photo" alt=""></div>`;
+    if (ph.ref) return `<div class="pic"><img data-ref="${esc(ph.ref)}" data-act="view-photo" ${ph.desc ? loc : ""} alt=""></div>`; // 有画面文字的是他的照片（生成的），大图里能重新生成
     return `<div class="pic none"><span>[图片] ${esc(ph.desc || "")}</span><button data-act="gen-photo" ${loc} ${photoBusy.has(key) ? "disabled" : ""}>${photoBusy.has(key) ? "正在接收…" : "生成照片"}</button></div>`;
   }
 
@@ -894,14 +897,15 @@
     if (b.dataset.kind === "chat") { f = friendById(b.dataset.fid); const c = chatOf(b.dataset.fid); const m = c.msgs.find(x => x.id === b.dataset.mid); if (!m) return; ph = m.photo; at = m.at; save = () => saveChat(c); }
     else { const o = b.dataset.owner; f = friendById(o); const p = postOf(o, b.dataset.post); if (!p) return; ph = p.photo; at = p.at; save = () => saveOwner(o); }
     const key = b.dataset.mid || b.dataset.post; if (!f || !ph || photoBusy.has(key)) return;
+    const old = b.dataset.redo ? ph.ref : null; if (old) { ph.ref = null; }
     photoBusy.add(key); render();
-    try { await genPhoto(f, ph, at); save(); } catch (e) { logErr(`生成照片：${(e && e.message) || e}`); toast("照片接收失败，再点一次试试"); }
+    try { await genPhoto(f, ph, at); save(); } catch (e) { if (old) ph.ref = old; logErr(`生成照片：${(e && e.message) || e}`); toast(old ? "没生成出来，还是原来那张" : "照片接收失败，再点一次试试"); }
     photoBusy.delete(key); render();
   };
   ACT["view-photo"] = async b => {
     const url = await mediaUrl(b.dataset.ref); if (!url) return toast("照片找不到了");
-    const el = document.createElement("div"); el.className = "pview"; el.innerHTML = `<img src="${url}" alt=""><p class="tip">长按图片可以保存 · 点空白处关闭</p>`;
-    el.onclick = e => { if (e.target.tagName !== "IMG") el.remove(); }; document.body.appendChild(el);
+    const el = document.createElement("div"); el.className = "pview"; el.innerHTML = `<img src="${url}" alt="">${b.dataset.kind ? `<button class="btn s redo">↻ 重新生成这张（会用 1 次生图）</button>` : ""}<p class="tip">长按图片可以保存 · 点空白处关闭</p>`;
+    el.onclick = e => { if (e.target.closest(".redo")) { el.remove(); ACT["gen-photo"]({ dataset: { ...b.dataset, redo: "1" } }); return; } if (e.target.tagName !== "IMG") el.remove(); }; document.body.appendChild(el);
   };
   /** 说说和日志都在这里找（评论、回复、生成照片共用） */
   const itemOf = (z, id) => z && ((z.posts || []).find(p => p.id === id) || (z.blogs || []).find(b => b.id === id));
@@ -1235,7 +1239,7 @@
       sleepSoon(f) ? `你快到睡觉的点了（大概 ${sleepSoon(f)} 分钟后）。要去睡就跟用户说晚安，再写下线块。` : "",
       `你现在的 QQ秀：${showDesc(hisShow(f))}。说自己换了 QQ秀、或者说送了她 QQ秀，就一定要写对应的块，不写就等于没换、没送。`,
       `想送用户 QQ秀时加（她的 QQ秀；名字只能从下面挑）：\n===送QQ秀===\n名字：这份礼物叫什么\n包含：挑的东西，用顿号隔开\n===结束===\n想给自己换 QQ秀时加：\n===换装===\n衣服：\n发型：\n配饰：\n背景：\n表情：\n===结束===（不换的项空着）\n她能用的：\n${catText("f")}\n你能用的：\n${catText(hisShow(f).g)}`,
-      `${acct === "a08" ? "你的照片是用数码相机或者拍照手机拍的，传到电脑上再发。" : ""}想给用户发你拍的照片时（发不发按你的人设和当时的心情，一次最多一张），加：\n===照片===\n画面：照片里拍到了什么（场景、人物、物品、光线，客观写清楚，只能是你身边真实的东西）\n配的话：一句话，可以不写\n===结束===`,
+      `${acct === "a08" ? "你的照片是用数码相机或者拍照手机拍的，传到电脑上再发。" : ""}想给用户发你拍的照片时（发不发按你的人设和当时的心情，一次最多一张），加：\n===照片===\n画面：照片里拍到了什么（场景、人物、物品、光线，客观写清楚，只能是你身边真实的东西）\n有没有你：照片里能看到你自己（脸、身体、手都算）写「有」，看不到写「没有」\n配的话：一句话，可以不写\n===结束===`,
       !f.font ? `你还没定 ${FONT_ASK}。按你的人设挑，加上：\n===字体===\n颜色 加粗或不加粗\n===结束===` : !f.fontByMe ? `你现在的 QQ 字体是${FONT_NAMES[FONT_COLORS.indexOf(f.font.color)] || "黑色"}${f.font.bold ? "加粗" : ""}。想换字体时加（${FONT_NAMES.join(" ")}）：\n===字体===\n颜色 加粗或不加粗\n===结束===` : "",
     ].filter(Boolean).join("\n\n");
     let raw = await gen(f, "chat", lines); if (raw == null) return null;
@@ -1244,7 +1248,7 @@
     if (leak.length) { const again = await gen(f, "chat", `${lines}\n\n你刚才写了「${leak.join("」「")}」，这是你那边还没有的东西，你不可能知道。重写。`); if (again && blocks(again, "消息").length) raw = again; }
     let msgs = blocks(raw, "消息"); if (!msgs.length && raw && !/===/.test(raw)) msgs = [raw.trim()];
     const pb = block(raw, "照片"); const cap = pb ? field(pb, "配的话") : "";
-    const photo = pb ? { desc: (field(pb, "画面") || pb).slice(0, 200), caption: /^(无|不写|没有)?$/.test(cap) ? "" : cap.slice(0, 200) } : null;
+    const photo = pb ? { desc: (field(pb, "画面") || pb).slice(0, 200), me: hasMe(pb), caption: /^(无|不写|没有)?$/.test(cap) ? "" : cap.slice(0, 200) } : null;
     if (q.ping && /===\s*不发\s*===/.test(raw) && !msgs.length) return { msgs: [], skip: true };
     if (!msgs.length && !photo && !/===\s*(送QQ秀|换装)\s*===/.test(raw)) return { msgs: [] };
     return { raw, ping: !!q.ping, followUp: !!q.note, later: parseInt(block(raw, "待会找你") || "", 10), msgs: msgs.slice(0, 6).map(t => t.slice(0, 500)), photo, sig: block(raw, "签名"), font: parseFont(block(raw, "字体")), off: parseInt(block(raw, "下线") || "", 10) };
@@ -1349,7 +1353,7 @@
     }
     if (r.photo) {
       if (parts.length) await wait(3000 * TS());
-      c.msgs.push({ id: uid("m"), from: "him", text: r.photo.caption, photo: { desc: r.photo.desc }, at: new Date().toISOString(), read: S.view === "chat" && S.fid === f.id, mem, ...(f.font ? { color: f.font.color, bold: f.font.bold } : {}) }); saveChat(c);
+      c.msgs.push({ id: uid("m"), from: "him", text: r.photo.caption, photo: { desc: r.photo.desc, me: r.photo.me }, at: new Date().toISOString(), read: S.view === "chat" && S.fid === f.id, mem, ...(f.font ? { color: f.font.color, bold: f.font.bold } : {}) }); saveChat(c);
       parts.push(`${photoText({ desc: r.photo.desc })}${r.photo.caption}`); play("msg");
       if (S.view === "chat" && S.fid === f.id) render(); else qqPop("QQ 消息", `${fAv(f, 28)}<div><b>${esc(nameOf(f))}</b><br>[图片]</div>`);
     }
@@ -1404,14 +1408,14 @@
     const recent = (f.zone.posts || []).slice(-5).map(p => `「${p.text.slice(0, 80)}」`).join("");
     const lines = [ERA_RULE(acct, d), COMMON_RULE, "你在 QQ 空间发一条说说，写你那边这个时候的生活。", recent ? `你之前发过的说说：${recent}` : "", circleLine(f),
       "===说说===\n内容\n===结束===",
-      `${acct === "a08" ? "你的照片是用数码相机或者拍照手机拍的。" : ""}想配一张你拍的照片就加（不配就不写）：\n===照片===\n画面：照片里拍到了什么（场景、人物、物品、光线，客观写清楚，只能是你身边真实的东西）\n===结束===`,
+      `${acct === "a08" ? "你的照片是用数码相机或者拍照手机拍的。" : ""}想配一张你拍的照片就加（不配就不写）：\n===照片===\n画面：照片里拍到了什么（场景、人物、物品、光线，客观写清楚，只能是你身边真实的东西）\n有没有你：照片里能看到你自己（脸、身体、手都算）写「有」，看不到写「没有」\n===结束===`,
       "再写你身边的人在这条说说下的反应（谁来、来不来按你们的关系定，可以没人）。有人评论你，你回不回、回谁按你的人设来，你的回复也写进评论里，排在那条评论后面：\n===赞===\n点赞的人的昵称，一行一个\n===结束===\n===评论===\n按时间先后一行一条：昵称：评论的话\n回复别人写成：昵称：回复 某某：话\n你自己回复写成：你：回复 某某：话\n===结束===",
       f.circle && f.circle.length ? "" : CIRCLE_ASK].filter(Boolean).join("\n\n");
     let raw = await gen(f, "post", lines); if (raw == null) return false;
     const leak = futureIn(acct, raw); if (leak.length) { const again = await gen(f, "post", `${lines}\n\n你刚才写了「${leak.join("」「")}」，这是你那边还没有的东西，你不可能知道。重写。`); if (again && block(again, "说说")) raw = again; }
     const text = block(raw, "说说") || ""; const pb = block(raw, "照片"); if (!text && !pb) return false;
     if (!(f.circle && f.circle.length)) { const c = parseCircle(raw); if (c.length) f.circle = c; }
-    const p = { id: uid("p"), text: text.slice(0, 300), at: d.toISOString(), comments: [], likes: [], ...(pb ? { photo: { desc: (field(pb, "画面") || pb).slice(0, 200) } } : {}) };
+    const p = { id: uid("p"), text: text.slice(0, 300), at: d.toISOString(), comments: [], likes: [], ...(pb ? { photo: { desc: (field(pb, "画面") || pb).slice(0, 200), me: hasMe(pb) } } : {}) };
     for (const n of (block(raw, "赞") || "").split("\n").map(x => x.replace(/^[-·\d.、\s]+/, "").trim()).filter(n => notUser(f, n))) p.likes.push({ who: n, at: new Date(d.getTime() + rand(3, 300) * 60e3).toISOString() });
     let t = d.getTime(); for (const c of parseCm(f, block(raw, "评论"))) { if (c.to === "me") continue; t += rand(5, 150) * 60e3; p.comments.push({ ...c, at: new Date(t).toISOString() }); }
     f.zone.posts.push(p); saveFriend(f);
@@ -1425,7 +1429,7 @@
     const prev = f.zone.blogs.slice(-5).map(b => `《${b.title}》`).join("");
     const lines = [ERA_RULE(acct, d), COMMON_RULE, "你在 QQ 空间写一篇日志：写你那边最近一件完整的事或者一段心情，比说说长，想到哪写到哪，像那时候的人写空间日志。写什么、写多长按你的人设来。", prev ? `你之前写过的日志：${prev}` : "", circleLine(f),
       `===日志===\n标题：\n分类：\n权限：所有人可见 或 仅好友可见\n背景音乐：歌手 - 歌名（${acct === "a08" ? "2008 年以前就有的歌，" : ""}不挂就写无）\n正文：\n（正文写在这一行下面）\n===结束===`,
-      `${acct === "a08" ? "你的照片是用数码相机或者拍照手机拍的。" : ""}想配一张你拍的照片就加（不配就不写）：\n===照片===\n画面：照片里拍到了什么（场景、人物、物品、光线，客观写清楚，只能是你身边真实的东西）\n===结束===`,
+      `${acct === "a08" ? "你的照片是用数码相机或者拍照手机拍的。" : ""}想配一张你拍的照片就加（不配就不写）：\n===照片===\n画面：照片里拍到了什么（场景、人物、物品、光线，客观写清楚，只能是你身边真实的东西）\n有没有你：照片里能看到你自己（脸、身体、手都算）写「有」，看不到写「没有」\n===结束===`,
       "再写你身边的人看了这篇日志的反应（谁来、来不来按你们的关系定，可以没人）。有人评论你，你回不回、回谁按你的人设来，你的回复也写进评论里，排在那条评论后面：\n===评论===\n按时间先后一行一条：昵称：评论的话\n回复别人写成：昵称：回复 某某：话\n你自己回复写成：你：回复 某某：话\n===结束===",
       f.circle && f.circle.length ? "" : CIRCLE_ASK].filter(Boolean).join("\n\n");
     let raw = await gen(f, "blog", lines); if (raw == null) return false;
@@ -1436,7 +1440,7 @@
     if (!(f.circle && f.circle.length)) { const c = parseCircle(raw); if (c.length) f.circle = c; }
     const bgm = field(bk, "背景音乐"); const pb = block(raw, "照片");
     const bl = { id: uid("g"), title, text: text.slice(0, 6000), cat: field(bk, "分类").slice(0, 10) || "个人日记", priv: /好友/.test(field(bk, "权限")) ? "friends" : "all", at: d.toISOString(), reads: rand(3, 40), comments: [],
-      ...(bgm && !/^(无|不挂|没有)$/.test(bgm) ? { bgmName: bgm.slice(0, 40) } : {}), ...(pb ? { photo: { desc: (field(pb, "画面") || pb).slice(0, 200) } } : {}) };
+      ...(bgm && !/^(无|不挂|没有)$/.test(bgm) ? { bgmName: bgm.slice(0, 40) } : {}), ...(pb ? { photo: { desc: (field(pb, "画面") || pb).slice(0, 200), me: hasMe(pb) } } : {}) };
     let t = d.getTime(); for (const c of parseCm(f, block(raw, "评论"))) { if (c.to === "me") continue; t += rand(10, 300) * 60e3; bl.comments.push({ ...c, at: new Date(t).toISOString() }); }
     f.zone.blogs.push(bl); saveFriend(f);
     remember(f, `我在 QQ 空间写了一篇日志《${title}》：${text.slice(0, 300)}`);

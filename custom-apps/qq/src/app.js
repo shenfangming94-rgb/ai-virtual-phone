@@ -122,14 +122,23 @@
   // zone：{ name, sig, bgm: [歌的 id]（她的）或 bgmName（他挂的歌名）+ bgm, posts: [{id,text,at,comments:[{who,text,at}]}], board: [{id,who,text,at,reply,replyAt}], visitors: [{who,at}] }
   const S = { view: "login", fid: null, zoneOf: null, zoneTab: "home", tab: "friends", search: "", collapsed: {}, chars: [], friends: [], chats: [], profile: {},
     meta: { id: "meta", accts: {}, cur: null, last: "a08", auto: false, font: { color: "#000000", bold: false }, music: [], queue: [], sound: true } };
-  const COL = { meta: "meta", friends: "friends", chats: "chats" };
+  const COL = { meta: "meta", friends: "friends", chats: "chats", logs: "logs" };
+  // logs：收起来的旧聊天记录 { id, fid, msgs, from, to }，平时不读，打开「消息记录」才读
   async function dbList(c) { try { return (await api.db.list(c, { limit: 500 })) || []; } catch (e) { console.warn(e); return []; } }
   async function dbPut(c, row) { try { const u = await api.db.update(c, row.id, row); if (u) return; } catch (e) { /* 没有就建 */ } try { await api.db.create(c, row); } catch (e) { console.warn(e); } }
   async function dbDel(c, id) { try { await api.db.delete(c, id); } catch (e) { console.warn(e); } }
   let metaT = null;
   function saveMeta() { clearTimeout(metaT); metaT = setTimeout(() => dbPut(COL.meta, S.meta), 200); }
   const saveFriend = f => dbPut(COL.friends, f);
-  const saveChat = c => dbPut(COL.chats, c);
+  /** 聊天超过 300 条：把最早的收进「消息记录」，聊天里留最近 200 条（每次存都要整份重写，越长越占内存） */
+  const CHAT_MAX = 300, CHAT_KEEP = 200;
+  function saveChat(c) {
+    if (c.msgs.length > CHAT_MAX) {
+      const old = c.msgs.slice(0, c.msgs.length - CHAT_KEEP); c.msgs = c.msgs.slice(-CHAT_KEEP);
+      dbPut(COL.logs, { id: `${c.id}__${Date.now().toString(36)}`, fid: c.id, msgs: old, from: old[0].at, to: old[old.length - 1].at });
+    }
+    return dbPut(COL.chats, c);
+  }
   const emptyZone = name => ({ name, sig: "", posts: [], board: [], visitors: [] });
   async function loadAll() {
     const [metas, friends, chats] = await Promise.all([dbList(COL.meta), dbList(COL.friends), dbList(COL.chats)]);
@@ -187,7 +196,13 @@
   function shakeScreen() { const el = $("#app"); el.classList.remove("shake"); void el.offsetWidth; el.classList.add("shake"); play("shake"); }
 
   // ───────────────────────── 媒体（头像、歌） ─────────────────────────
-  const mediaCache = new Map();
+  /** 图片缓存：只在内存里留最近用到的 80 张，旧的用到时再从媒体库读（省内存，float 容易被系统关掉） */
+  class LruMap extends Map {
+    constructor(max) { super(); this.max = max; }
+    get(k) { if (!super.has(k)) return undefined; const v = super.get(k); super.delete(k); super.set(k, v); return v; }
+    set(k, v) { super.delete(k); super.set(k, v); while (this.size > this.max) super.delete(this.keys().next().value); return this; }
+  }
+  const mediaCache = new LruMap(80);
   async function mediaUrl(ref) { if (!ref) return ""; if (mediaCache.has(ref)) return mediaCache.get(ref); try { const r = await api.media.get({ ref }); const u = (r && r.dataUrl) || ""; if (u) mediaCache.set(ref, u); return u; } catch (e) { return ""; } }
   /** 页面里 <img data-ref> 画完以后补上图 */
   function hydrate(root) { (root || document).querySelectorAll("img[data-ref]").forEach(async img => { const u = await mediaUrl(img.dataset.ref); if (u) img.src = u; }); }
@@ -372,7 +387,8 @@
     const f = friendById(S.fid); const st = statusOf(f); const c = chatOf(f.id);
     let lastDay = ""; const me = A();
     const lastHim = c.msgs.map(m => m.from).lastIndexOf("him");
-    const lines = c.msgs.map((m, idx) => {
+    const shown = Math.min(c.msgs.length, S.showN || 60); const hidden = c.msgs.length - shown;
+    const lines = (hidden ? `<div class="sys more-log" data-act="more-log">↑ 查看更早的消息</div>` : "") + c.msgs.slice(hidden).map((m, i) => { const idx = i + hidden;
       const d = thereDate(S.meta.cur, new Date(m.at)); const day = ymd(d); const sep = day !== lastDay ? `<div class="sys">—— ${day} ——</div>` : ""; lastDay = day;
       if (m.from === "sys") return `${sep}<div class="sys">${esc(m.text)}</div>`;
       const who = m.from === "me" ? me.nick : nameOf(f);
@@ -793,14 +809,49 @@
         S.meta.queue.push({ fid: f.id, kind: "verify", due: new Date(now + due * TS()).toISOString() }); saveMeta();
         render(); toast(st === "offline" ? "请求已发送，对方上线后会看到" : "请求已发送，等待对方验证"); });
   };
-  ACT["open-chat"] = b => { S.fid = b.dataset.id; S.view = "chat"; render(); };
+  ACT["open-chat"] = b => { S.fid = b.dataset.id; S.view = "chat"; S.showN = 60; render(); };
+  ACT["more-log"] = () => { const log = $("#log"); const h0 = log ? log.scrollHeight : 0; S.showN = (S.showN || 60) + 60; render(); const l2 = $("#log"); if (l2) l2.scrollTop = l2.scrollHeight - h0; };
   ACT.nope = b => toast(b.dataset.t);
   ACT.faces = () => showPop("faces");
   ACT.font = () => showPop("font");
   ACT.face = b => { const i = $("#inp"); i.value += `/${b.dataset.n}`; i.focus(); };
   ACT["font-color"] = b => { S.meta.font.color = b.dataset.c; saveMeta(); $("#inp").style.color = b.dataset.c; $("#popwrap").innerHTML = ""; $("#popwrap").dataset.kind = ""; render(); };
   ACT["font-bold"] = () => { S.meta.font.bold = !S.meta.font.bold; saveMeta(); render(); };
-  ACT.history = () => toast("消息记录都在上面啦");
+  /** 消息记录：收起来的旧记录 + 聊天里现在的，只显示文字（照片写成 [照片]），能导出成文本、能删掉收起来的那部分 */
+  ACT.history = async () => {
+    const f = friendById(S.fid); if (!f) return;
+    S.histLogs = (await dbList(COL.logs)).filter(r => r.fid === f.id).sort((a, b) => String(a.from).localeCompare(String(b.from)));
+    S.view = "history"; render(); const l = $("#hlog"); if (l) l.scrollTop = l.scrollHeight;
+  };
+  const histMsgs = f => [...(S.histLogs || []).flatMap(r => r.msgs || []), ...chatOf(f.id).msgs];
+  const histText = (m, f) => m.shake ? "[窗口抖动]" : m.recalled ? "[撤回了一条消息]" : `${m.photo ? photoText(m.photo, m.from === "me") : ""}${m.text || ""}`;
+  V.history = () => {
+    const f = friendById(S.fid); const me = A(); let lastDay = "";
+    const all = histMsgs(f);
+    const lines = all.map(m => { const d = thereDate(f.acct, new Date(m.at)); const day = ymd(d); const sep = day !== lastDay ? `<div class="sys">—— ${day} ——</div>` : ""; lastDay = day;
+      if (m.from === "sys") return `${sep}<div class="sys">${esc(m.text)}</div>`;
+      return `${sep}<div class="hl"><div class="h ${m.from === "me" ? "o" : "i"}">${esc(m.from === "me" ? me.nick : nameOf(f))}　${hms(d)}</div><div>${esc(histText(m, f))}</div></div>`; }).join("");
+    const archived = (S.histLogs || []).reduce((a, r) => a + (r.msgs || []).length, 0);
+    return `<div class="chat hist"><div class="ct"><button class="bk" data-act="back-chat">‹</button><div class="ctn"><b>消息记录</b><small>与 ${esc(nameOf(f))}，共 ${all.length} 条${archived ? `（其中 ${archived} 条已收起）` : ""}</small></div></div>
+      <div class="log" id="hlog">${lines || `<div class="sys">还没有聊天记录</div>`}</div>
+      <div class="hbtns"><button class="btn s" data-act="hist-export">导出为文本</button>${archived ? `<button class="btn s" data-act="hist-clear">删掉收起来的 ${archived} 条</button>` : ""}</div></div>`;
+  };
+  ACT["hist-export"] = () => {
+    const f = friendById(S.fid); const me = A(); let lastDay = "";
+    const txt = histMsgs(f).map(m => { const d = thereDate(f.acct, new Date(m.at)); const day = ymd(d); const sep = day !== lastDay ? `\n—— ${day} ——\n` : ""; lastDay = day;
+      return m.from === "sys" ? `${sep}（${m.text}）` : `${sep}${m.from === "me" ? me.nick : nameOf(f)}  ${hms(d)}\n${histText(m, f)}\n`; }).join("\n");
+    const d = new Date(); const u = URL.createObjectURL(new Blob([`与 ${nameOf(f)} 的 QQ 消息记录（导出于 ${ymd(d)}）\n${txt}`], { type: "text/plain;charset=utf-8" }));
+    const a = document.createElement("a"); a.href = u; a.download = `QQ消息记录-${nameOf(f)}-${ymd(d)}.txt`; document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(u); a.remove(); }, 2000);
+    toast("导出好了");
+  };
+  ACT["hist-clear"] = () => {
+    const f = friendById(S.fid); const n = (S.histLogs || []).reduce((a, r) => a + (r.msgs || []).length, 0);
+    sheet(`<h3>删掉收起来的 ${n} 条？</h3><p class="note">只删收进「消息记录」的旧消息，聊天窗口里最近的不动。删了找不回来，建议先「导出为文本」。他的记忆不受影响。</p><div class="btns"><button data-v="no">算了</button><button data-v="ok" class="pri">删掉</button></div>`, async v => {
+      closeSheet(); if (v !== "ok") return;
+      for (const r of S.histLogs || []) await dbDel(COL.logs, r.id);
+      S.histLogs = []; render(); toast("删掉了");
+    });
+  };
   ACT.send = () => {
     const i = $("#inp"); const text = i.value.trim(); if (!text) return;
     const f = friendById(S.fid); const c = chatOf(f.id);
@@ -979,7 +1030,7 @@
   async function exportData() {
     const songs = S.meta.music.length ? await new Promise(res => sheet(`<h3>导出数据</h3><p class="note">把两个号的好友、聊天记录、空间、照片、头像都存成一个文件。<br>「我的音乐」里的歌有 ${S.meta.music.length} 首，带上的话文件会很大。</p><div class="btns"><button data-v="no">不带歌</button><button data-v="yes" class="pri">带上歌</button></div>`, v => { closeSheet(); res(v === "yes"); })) : false;
     toast("正在打包…");
-    const data = { meta: { ...S.meta, queue: S.meta.queue, errors: [] }, friends: S.friends, chats: S.chats };
+    const data = { meta: { ...S.meta, queue: S.meta.queue, errors: [] }, friends: S.friends, chats: S.chats, logs: await dbList(COL.logs) };
     if (!songs) data.meta = { ...data.meta, music: [] };
     const json = JSON.stringify(data); const refs = [...new Set(json.match(MEDIA_RE) || [])]; const media = {};
     for (const r of refs) { const u = await mediaUrl(r); if (u) media[r] = u; }
@@ -1015,9 +1066,10 @@
     const map = await mapChars(pack.names || {});
     for (const [old, nu] of Object.entries(map)) if (nu && nu !== old) json = json.split(old).join(nu);
     const data = JSON.parse(json); const skip = Object.entries(map).filter(([, v]) => !v).map(([k]) => k);
-    data.friends = (data.friends || []).filter(f => !skip.includes(f.charId)); data.chats = (data.chats || []).filter(c => data.friends.some(f => f.id === c.id));
+    data.friends = (data.friends || []).filter(f => !skip.includes(f.charId)); data.chats = (data.chats || []).filter(c => data.friends.some(f => f.id === c.id)); data.logs = (data.logs || []).filter(r => data.friends.some(f => f.id === r.fid));
     if (data.meta) data.meta.queue = (data.meta.queue || []).filter(q => data.friends.some(f => f.id === q.fid));
-    for (const [col, rows] of [[COL.friends, S.friends], [COL.chats, S.chats]]) for (const r of rows) await dbDel(col, r.id);
+    for (const [col, rows] of [[COL.friends, S.friends], [COL.chats, S.chats], [COL.logs, await dbList(COL.logs)]]) for (const r of rows) await dbDel(col, r.id);
+    for (const r of data.logs) await dbPut(COL.logs, r);
     for (const f of data.friends) await dbPut(COL.friends, f);
     for (const c of data.chats) await dbPut(COL.chats, c);
     await dbPut(COL.meta, { ...data.meta, id: "meta" });

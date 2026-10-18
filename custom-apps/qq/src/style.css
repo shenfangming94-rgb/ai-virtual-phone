@@ -246,3 +246,8 @@ input, textarea, select { font: inherit; color: inherit; }
 .fx-feed { animation: fxf 1s ease-in forwards; } @keyframes fxf { from { left: 15%; bottom: 150px; } to { left: 46%; bottom: 90px; opacity: 0; transform: scale(.5); } }
 .fx-bath, .fx-play { animation: fxu 1.6s ease-out forwards; opacity: 0; } @keyframes fxu { 0% { opacity: 0; transform: translateY(0); } 20% { opacity: 1; } 100% { opacity: 0; transform: translateY(-110px); } }
 .chat .sys.rc { cursor: pointer; } .chat .sys.rc small { display: block; color: #aaa; font-size: 11px; margin-top: 2px; }
+/* 消息记录 */
+.chat .more-log { color: #2a6fb0; cursor: pointer; }
+.hist .log .hl { margin-bottom: 8px; font-size: 13px; }
+.hist .log .hl .h { font-size: 12px; } .hist .log .hl .h.o { color: #008040; } .hist .log .hl .h.i { color: #0000ff; }
+.hist .hbtns { display: flex; gap: 8px; justify-content: flex-end; padding: 8px 6px calc(8px + env(safe-area-inset-bottom)); }

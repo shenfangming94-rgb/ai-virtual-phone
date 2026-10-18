@@ -586,7 +586,7 @@
   const pxImg = (key, g, k, cls = "") => `<img class="pi ${cls}" src="${pixUrl(key, g, k)}" alt="">`;
   V.couple = () => { const c = cp(), f = cpFriend(); const tab = S.cpTab || "home"; const me = A().nick, him = nameOf(f), today = cpDay();
     const notes = [...(c.notes || [])].filter(shown).reverse().map(n => `<div class="cp-note ${n.who === "me" ? "me" : n.who === f.id ? "" : "npc"}" data-act="cp-note-menu" data-i="${c.notes.indexOf(n)}"><p>${richText(n.text)}</p><small>${n.who === "me" ? "你" : n.who === f.id ? esc(him) : `${esc(n.who)} 来过`} · ${esc(ago(S.meta.cur, n.at))}</small></div>`).join("") || `<div class="empty">还没有小纸条</div>`;
-    const diary = [...(c.diary || [])].reverse().map(d => `<div class="cp-diary pxc"><b>${esc(d.title)}</b><small>${d.who === "me" ? "你" : esc(him)} · ${esc(ymd(thereDate(S.meta.cur, new Date(d.at))))}</small><p>${richText(d.text)}</p></div>`).join("") || `<div class="empty">还没有恋爱日记</div>`;
+    const diary = [...(c.diary || [])].reverse().map(d => `<div class="cp-diary pxc" data-act="cp-diary-menu" data-i="${c.diary.indexOf(d)}"><b>${esc(d.title)}</b><small>${d.who === "me" ? "你" : esc(him)} · ${esc(ymd(thereDate(S.meta.cur, new Date(d.at))))}</small><p>${richText(d.text)}</p></div>`).join("") || `<div class="empty">还没有恋爱日记</div>`;
     let body = "";
     if (tab === "home") { const tr = cpTree(), lv = cpTreeLv(tr.exp), L = window.TREE_LV, next = L[lv + 1], mood = cpMood();
       const prog = next ? Math.round((tr.exp - L[lv][0]) / (next[0] - L[lv][0]) * 10) : 10;
@@ -610,6 +610,10 @@
     sheet(`<h3>小纸条</h3><div class="mlist"><button data-v="edit">编辑</button><button data-v="del">删掉</button></div><div class="btns"><button class="btn" data-v="no">取消</button></div>`, async v => { closeSheet();
       if (v === "edit") { const r = await ask("编辑小纸条", [{ label: "改完他看到的就是改过的", value: n.text, long: true, max: 200 }], "改好了"); if (!r || !r[0].trim()) return; n.text = r[0].trim(); n.edited = true; saveMeta(); render(); }
       if (v === "del") { c.notes = c.notes.filter(x => x !== n); saveMeta(); render(); toast("删掉了"); } }); };
+  ACT["cp-diary-menu"] = b => { const c = cp(), d = c.diary[+b.dataset.i]; if (!d) return;
+    sheet(`<h3>${esc(d.title)}</h3><div class="mlist"><button data-v="edit">编辑</button><button data-v="del">删掉</button></div><div class="btns"><button class="btn" data-v="no">取消</button></div>`, async v => { closeSheet();
+      if (v === "edit") { const r = await ask("编辑恋爱日记", [{ label: "标题", value: d.title, max: 30 }, { label: "正文", value: d.text, long: true, max: 3000 }], "改好了"); if (!r || !r[1].trim()) return; d.title = r[0].trim() || "无题"; d.text = r[1].trim(); d.edited = true; saveMeta(); render(); }
+      if (v === "del") { const ok = await new Promise(res => sheet(`<h3>删掉《${esc(d.title)}》？</h3><div class="btns"><button class="btn" data-v="no">算了</button><button class="btn s" data-v="ok">删掉</button></div>`, x => { closeSheet(); res(x === "ok"); })); if (ok) { c.diary = c.diary.filter(x => x !== d); saveMeta(); render(); toast("删掉了"); } } }); };
   ACT["cp-water"] = () => { const tr = cpTree(), d = cpDay(); if (tr.me === d) return; tr.me = d; const lv0 = cpTreeLv(tr.exp); tr.exp += tr.him === d ? 15 : 10; saveMeta();
     const lv = cpTreeLv(tr.exp); if (lv > lv0) { toast(`爱情树${window.TREE_LV[lv][1]}！`); remember(cpFriend(), `我们情侣空间的爱情树${window.TREE_LV[lv][1]}`); } else toast("浇好了"); render(); };
   ACT["cp-mood"] = async () => { const m = cpMood(); const r = await ask("今天的心情", [{ label: "一句话", value: m.me || "", max: 40 }]); if (!r || !r[0]) return; m.me = r[0]; saveMeta(); if (!m.him) queueZone(cpFriend(), { kind: "cpMood" }, rand(5, 60) * 60e3); render(); };

@@ -21,6 +21,7 @@
     user: { async getProfile() { return { id: "u1", name: "林小满", avatarUrl: "" }; } },
     characters: { async list() { return chars; }, async get(id) { return chars.find(c => c.id === id); } },
     ai: { async generateImage(p) { calls.push({ image: p }); await sleep(300); const c = document.createElement("canvas"); c.width = 640; c.height = 480; const g = c.getContext("2d"); const gr = g.createLinearGradient(0, 0, 640, 480); gr.addColorStop(0, "#7ec8ff"); gr.addColorStop(1, "#ffd86b"); g.fillStyle = gr; g.fillRect(0, 0, 640, 480); g.fillStyle = "#3a7a3a"; g.fillRect(0, 330, 640, 150); g.fillStyle = "#fff"; g.font = "bold 40px sans-serif"; g.fillText("操场", 260, 250); return { dataUrl: c.toDataURL("image/png") }; },
+      async chat(p) { calls.push({ chat: p }); await sleep(300); return { text: window.__MOCK_CHAT != null ? window.__MOCK_CHAT : /扔进海里/.test(p.prompt) ? "===瓶子===\n昵称：吉他少年\n来自：天津 · 一个会弹吉他的高二男生\n内容：明天要月考了，物理一道都不会。谁捡到这个瓶子，祝我考过 60 分吧\n===结束===" : /有几个陌生人/.test(p.prompt) ? "===回复===\n昵称：夜猫子\n来自：广州 · 大三学生\n回复：我也失眠 在宿舍偷偷玩电脑\n===结束===\n===回复===\n昵称：小雨点\n来自：成都 · 初二女生\n回复：数羊没用 我试过了\n===结束===" : "===回复===\n哈哈 那你加油\n===结束===" }; },
       async generate(p) { calls.push(p); await sleep(300); const t = p.appTags[1]; return { text: (window.__MOCK_TEXT && window.__MOCK_TEXT[t] != null) ? window.__MOCK_TEXT[t] : DEF[t] || "" }; } },
     memory: { async addTimeline(p) { calls.push({ memory: p }); return {}; } },
     media: {

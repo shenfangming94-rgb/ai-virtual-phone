@@ -865,6 +865,51 @@
   ACT["farm-dog"] = () => { const fm = myFarm(); if (fm.dog) return; if (fm.gold < 300) return toast("金币不够，攒到 300 再来"); fm.gold -= 300; fm.dog = { at: new Date().toISOString() }; farmLog(fm, "me", "买了一只看家小狗"); saveMeta(); render(); toast("小狗到家了！"); };
   ACT["farm-sell"] = b => { const fm = myFarm(); let g = 0; for (const [k, n] of Object.entries(fm.inv)) if (n > 0 && (b.dataset.k === "all" || b.dataset.k === k)) { g += CROP[k].sell * n; fm.inv[k] = 0; } if (!g) return; fm.gold += g; saveMeta(); render(); toast(`卖了 ${g} 金币`); };
   ACT["farm-board"] = () => { const his = farmOf(); const t = ($("#fmb").value || "").trim(); if (!his || !t) return; const fm = hisFarm(his); fm.board.push({ who: "me", text: t, at: new Date().toISOString() }); saveFriend(his); queueZone(his, { kind: "farmMe", note: `在你农场留言板上说：「${t}」` }, rand(5, 60) * 60e3); render(); };
+  // ───────────────────────── 漂流瓶（像素海边）：扔一个等路人回、捞一个看路人写的；全是路人，不放 char；路人跟着登录的号走（2008 号是 2008 年的人）；用 ai.chat，不带角色 ─────────────────────────
+  // A().bottle = { list: [{ id, kind: "mine"|"found"|"star", text, from, at, due, done, threads: [{ id, who, from, msgs: [{ me, text, at }], due }] }], day: { d, t, p } }
+  const BOT_MAX = { t: 5, p: 5 };
+  const bot = () => { const a = A(); a.bottle = a.bottle || { list: [] }; const d = ymd(new Date()); if (!a.bottle.day || a.bottle.day.d !== d) a.bottle.day = { d, t: 0, p: 0 }; return a.bottle; };
+  const botEra = () => { const acct = S.meta.cur, t = thereDate(acct); return acct === "a08" ? `现在是 ${t.getFullYear()} 年 ${t.getMonth() + 1} 月 ${t.getDate()} 日，QQ邮箱的漂流瓶。写瓶子的是这个年代的普通网民（学生、上班族、打工的、大学生都有），用当时的说法和东西，绝对不能出现之后才有的东西（智能手机 App、微信、微博、外卖软件、短视频之类）。` : `现在是 ${t.getFullYear()} 年 ${t.getMonth() + 1} 月，QQ 漂流瓶。写瓶子的是现在的普通网民。`; };
+  const BOT_RULE = "像真人随手写的：口语、短，可以有错别字和网络用语，不写旁白和动作。不煽情、不鸡汤、不说教，不要文艺腔，不要用破折号和省略号堆情绪。";
+  async function botGen(prompt) { try { const r = await api.ai.chat({ system: `你在模拟 QQ 漂流瓶里的陌生网友。${botEra()}${BOT_RULE}只输出要求的格式。`, prompt, timeoutMs: 90000 }); return String((r && r.text) || ""); } catch (e) { logErr(`漂流瓶：${(e && e.message) || e}`); return null; } }
+  ACT["open-bottle"] = () => { S.botBack = S.view === "chat" ? "back-chat" : "back-main"; S.view = "bottle"; S.botOpen = null; render(); };
+  ACT["bot-throw"] = async () => { const b = bot(); if (b.day.t >= BOT_MAX.t) return toast("今天扔够了，明天再来");
+    const r = await ask("扔一个漂流瓶", [{ label: "想对陌生人说什么", long: true, max: 300 }], "扔出去"); if (!r || !r[0].trim()) return;
+    b.day.t++; b.list.push({ id: uid("bt"), kind: "mine", text: r[0].trim(), at: new Date().toISOString(), due: new Date(Date.now() + rand(10, 240) * 60e3 * TS()).toISOString(), threads: [] }); saveMeta(); render(); toast("扑通，瓶子漂走了"); };
+  ACT["bot-pick"] = async () => { const b = bot(); if (b.day.p >= BOT_MAX.p) return toast("今天捞够了，明天再来"); if (S.botBusy) return;
+    b.day.p++; saveMeta(); if (Math.random() < .18) { const id = uid("bt"); b.list.push({ id, kind: "star", at: new Date().toISOString() }); saveMeta(); S.botOpen = id; return render(); }
+    S.botBusy = true; render();
+    const raw = await botGen(`编一个被人扔进海里的漂流瓶。按这个格式输出：\n===瓶子===\n昵称：写瓶子的人的 QQ 昵称\n来自：哪里的什么人（比如「天津 · 一个会弹吉他的高二男生」，一句话）\n内容：瓶子里写的话（一到三句，可以是心事、吐槽、提问、无聊、想交朋友，什么都行）\n===结束===`);
+    S.botBusy = false; const bk = block(raw, "瓶子"); const text = bk && field(bk, "内容");
+    if (!text) { b.day.p--; saveMeta(); render(); return toast("什么也没捞到，再试一次"); }
+    const id = uid("bt"); b.list.push({ id, kind: "found", text: text.slice(0, 300), from: (field(bk, "来自") || "").slice(0, 40), at: new Date().toISOString(), threads: [{ id: uid("th"), who: (field(bk, "昵称") || "路人").slice(0, 16), from: (field(bk, "来自") || "").slice(0, 40), msgs: [] }] }); saveMeta(); S.botOpen = id; render(); };
+  ACT["bot-open"] = b => { S.botOpen = b.dataset.id; render(); };
+  ACT["bot-close"] = () => { S.botOpen = null; render(); };
+  ACT["bot-toss"] = () => { const b = bot(); b.list = b.list.filter(x => x.id !== S.botOpen); S.botOpen = null; saveMeta(); render(); toast("扔回海里了"); };
+  ACT["bot-reply"] = b => { const t = ($(`#botin-${b.dataset.th}`).value || "").trim(); if (!t) return; const bt = bot().list.find(x => x.id === S.botOpen); const th = bt && bt.threads.find(x => x.id === b.dataset.th); if (!th) return;
+    th.msgs.push({ me: true, text: t.slice(0, 300), at: new Date().toISOString() }); th.due = new Date(Date.now() + rand(5, 180) * 60e3 * TS()).toISOString(); saveMeta(); render(); };
+  /** 到点了：路人回我扔的瓶子（0~3 个人），或者回我在某个瓶子下说的话。每次 tick 最多跑一个 */
+  async function botTick() { const a = A(); if (!a || !a.bottle || S.botBusy) return; const now = Date.now();
+    const mine = a.bottle.list.find(x => x.kind === "mine" && !x.done && new Date(x.due) <= now);
+    if (mine) { S.botBusy = true; const raw = await botGen(`有人扔了一个漂流瓶，写着：「${mine.text}」\n有几个陌生人捡到了，想回就回一句（0 到 3 个人，可以一个都没有）。每个人一块：\n===回复===\n昵称：QQ 昵称\n来自：哪里的什么人（一句话）\n回复：回她的话\n===结束===`); S.botBusy = false;
+      if (raw == null) { mine.due = new Date(now + 30 * 60e3 * TS()).toISOString(); return saveMeta(); }
+      mine.done = true; for (const r of blocks(raw, "回复").slice(0, 3)) { const t = field(r, "回复"); if (t) mine.threads.push({ id: uid("th"), who: (field(r, "昵称") || "路人").slice(0, 16), from: (field(r, "来自") || "").slice(0, 40), msgs: [{ me: false, text: t.slice(0, 300), at: new Date().toISOString() }] }); }
+      saveMeta(); if (mine.threads.length) { play("msg"); qqPop("漂流瓶", `<div><b>有 ${mine.threads.length} 个人</b><br>回了你的瓶子</div>`); } if (S.view === "bottle") render(); return; }
+    for (const bt of a.bottle.list) for (const th of bt.threads || []) if (th.due && new Date(th.due) <= now) { S.botBusy = true;
+      const hist = [bt.kind === "found" ? `你扔的瓶子：「${bt.text}」` : `对方扔的瓶子：「${bt.text}」`, ...th.msgs.map(m => `${m.me ? "对方" : "你"}：${m.text}`)].join("\n");
+      const raw = await botGen(`你是「${th.who}」${th.from ? `（${th.from}）` : ""}，在漂流瓶里跟一个陌生人聊。\n${hist}\n接着回一句（不想回了就写 不回）：\n===回复===\n回复的话\n===结束===`); S.botBusy = false;
+      if (raw == null) { th.due = new Date(now + 30 * 60e3 * TS()).toISOString(); return saveMeta(); }
+      delete th.due; const t = block(raw, "回复"); if (t && !/^不回/.test(t)) { th.msgs.push({ me: false, text: t.slice(0, 300), at: new Date().toISOString() }); play("msg"); qqPop("漂流瓶", `<div><b>${esc(th.who)}</b><br>回了你</div>`); }
+      saveMeta(); if (S.view === "bottle") render(); return; } }
+  V.bottle = () => { const b = bot(); const open = S.botOpen && b.list.find(x => x.id === S.botOpen);
+    const rows = [...b.list].reverse().map(x => { const n = (x.threads || []).filter(t => t.msgs.some(m => !m.me)).length;
+      return `<button class="bt-row" data-act="bot-open" data-id="${x.id}">${x.kind === "star" ? `<span>捞到一只海星</span><em>什么都没写</em>` : `<span>${x.kind === "found" ? "捞到 · " : ""}「${esc(x.text.slice(0, 22))}${x.text.length > 22 ? "…" : ""}」</span><em>${x.kind === "mine" ? (x.done ? n ? `${n} 个人回了你` : "没人回" : "还在漂") : (x.threads[0].msgs.length ? `聊了 ${x.threads[0].msgs.length} 句` : "")}</em>`}</button>`; }).join("") || `<p class="empty">还没有瓶子。扔一个，或者捞一个看看</p>`;
+    let letter = "";
+    if (open) { if (open.kind === "star") letter = `<div class="bt-letter"><img class="pi bt-star" src="${pixUrl("star", window.qqstar(), 5)}"><p class="c">捞到一只海星，什么都没写</p><div class="r"><button data-act="bot-toss">扔回海里</button></div></div>`;
+      else { const th = (open.threads || []).map(t => `<div class="bt-th"><b>${esc(t.who)}</b>${t.from ? `<small>${esc(t.from)}</small>` : ""}${t.msgs.map(m => `<p class="${m.me ? "me" : ""}">${m.me ? "你：" : ""}${esc(m.text)}</p>`).join("")}${t.due ? `<p class="wait">等他回…</p>` : ""}<div class="bt-in"><input id="botin-${t.id}" maxlength="300" placeholder="${open.kind === "found" && !t.msgs.length ? "回他一句…" : "接着聊…"}"><button data-act="bot-reply" data-th="${t.id}">回</button></div></div>`).join("");
+        letter = `<div class="bt-letter"><small>${open.kind === "found" ? `捞到一个瓶子 · 来自「${esc(open.from || "不知道哪里")}」` : `你扔的瓶子 · ${esc(ago(S.meta.cur, open.at))}`}</small><p class="c">${esc(open.text)}</p>${open.kind === "mine" && !open.done ? `<p class="wait">还在海里漂，有人捡到会回你</p>` : open.kind === "mine" && !open.threads.length ? `<p class="wait">没有人回</p>` : ""}${th}<div class="r">${open.kind === "found" ? `<button data-act="bot-toss">扔回海里</button>` : ""}<button data-act="bot-close">收起来</button></div></div>`; } }
+    return `<div class="botv">${titlebar(`QQ邮箱 · 漂流瓶`, S.botBack || "back-main")}<div class="bt-scene"><img class="pi bt-bg" src="${pixUrl("beach", window.qqbeach(), 4)}"><div class="bt-hud pxb">今天还能捞 ${BOT_MAX.p - b.day.p} 次 · 扔 ${BOT_MAX.t - b.day.t} 次</div>${S.botBusy ? `<div class="bt-busy pxb">正在捞…</div>` : ""}</div>
+      <div class="bt-btns"><button class="pxb" data-act="bot-throw">扔一个</button><button class="pxb" data-act="bot-pick">捞一个</button></div><div class="pr-body pxb bt-list"><h4>我的瓶子</h4>${rows}</div>${letter ? `<div class="bt-mask">${letter}</div>` : ""}</div>`; };
   // ───────────────────────── QQ秀：像素小人（src/qqshow.js 画），衣柜、Q币、送礼、他自己换装 ─────────────────────────
   // show = { g: f|m, hair, hairC, eyeC, outfit, wings, acc: [], bg, eyes, mouth, owned: [物品 id], qb: Q币, gifts: [{ name, from, items, at }] }
   const CAT = [
@@ -1047,7 +1092,7 @@
   };
   ACT.remark = async () => { const fr = friendById(S.zoneOf); const r = await ask("修改备注", [{ label: "备注名（不填就显示他的名字）", value: fr.remark, max: 16 }]); if (r) { fr.remark = r[0]; saveFriend(fr); render(); } };
   ACT.menu = () => sheet(`<h3>菜单</h3><div class="mlist">
-      <button data-v="nick">修改昵称</button><button data-v="qq">修改 QQ 号（现在：${esc(A().qq)}）</button><button data-v="show">我的QQ秀</button><button data-v="pet">QQ宠物</button><button data-v="farm">QQ农场</button><button data-v="theme">更换皮肤</button><button data-v="sound">声音：${S.meta.sound !== false ? "开" : "关"}</button><button data-v="music">我的音乐（${S.meta.music.length} 首）</button><button data-v="export">导出数据</button><button data-v="import">导入数据</button><button data-v="switch">切换帐号</button><button data-v="about">关于</button></div><div class="btns"><button data-v="no">关闭</button></div>`,
+      <button data-v="nick">修改昵称</button><button data-v="qq">修改 QQ 号（现在：${esc(A().qq)}）</button><button data-v="show">我的QQ秀</button><button data-v="pet">QQ宠物</button><button data-v="farm">QQ农场</button><button data-v="bottle">漂流瓶</button><button data-v="theme">更换皮肤</button><button data-v="sound">声音：${S.meta.sound !== false ? "开" : "关"}</button><button data-v="music">我的音乐（${S.meta.music.length} 首）</button><button data-v="export">导出数据</button><button data-v="import">导入数据</button><button data-v="switch">切换帐号</button><button data-v="about">关于</button></div><div class="btns"><button data-v="no">关闭</button></div>`,
     async v => { closeSheet();
       if (v === "nick") { const r = await ask("修改昵称", [{ label: "昵称", value: A().nick, max: 16 }]); if (r && r[0]) { A().nick = r[0]; saveMeta(); render(); } }
       if (v === "qq") { const r = await ask("修改 QQ 号", [{ label: `QQ 号（5 到 11 位数字）`, value: A().qq, max: 11 }]); if (r) { const n = r[0].replace(/\D/g, ""); if (n.length < 5) return toast("QQ 号要 5 到 11 位数字"); A().qq = n; saveMeta(); render(); toast("QQ 号改好了"); } }
@@ -1057,6 +1102,7 @@
       if (v === "show") ACT["open-show"]({ dataset: { who: "me" } });
       if (v === "pet") ACT["open-pet"]();
       if (v === "farm") ACT["open-farm"]();
+      if (v === "bottle") ACT["open-bottle"]();
       if (v === "export") exportData();
       if (v === "import") importData();
       if (v === "switch") ACT.logout();
@@ -1617,6 +1663,7 @@
   // 定时：处理到点的回复 / 空间事件；看看谁上线了
   let busy = false, tickId = 0;
   async function tick() {
+    if (S.meta.cur) botTick();
     if (busy || !S.meta.cur) return; busy = true; const my = ++tickId;
     try {
       for (const q of S.meta.queue.filter(q => new Date(q.due) <= new Date())) {

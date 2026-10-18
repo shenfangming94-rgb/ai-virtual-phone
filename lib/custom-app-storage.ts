@@ -772,14 +772,21 @@ function emitUpdated(): void {
   }
 }
 
+// 装好的 APP 整包（含几 MB 的页面和图片）存成一串 JSON：每次都重新解析会在手机上反复占用十几 MB 内存，
+// 存储里那串没变就直接用上次解析的结果（kvGet 返回的是同一个字符串，比较很快）
+let installedCache: { raw: string; apps: InstalledCustomApp[] } | null = null;
+
 export function loadInstalledCustomApps(): InstalledCustomApp[] {
   const raw = kvGet(CUSTOM_APPS_KEY);
   if (!raw) return [];
+  if (installedCache && installedCache.raw === raw) return installedCache.apps.slice();
   try {
     const parsed = JSON.parse(raw) as unknown;
-    return Array.isArray(parsed)
+    const apps = Array.isArray(parsed)
       ? parsed.map(normalizeInstalledApp).filter(Boolean) as InstalledCustomApp[]
       : [];
+    installedCache = { raw, apps };
+    return apps.slice();
   } catch {
     return [];
   }

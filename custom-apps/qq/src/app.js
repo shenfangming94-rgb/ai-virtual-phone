@@ -585,7 +585,7 @@
   const cpTopZ = () => Math.max(0, ...cpPhotos().map(p => p.z || 0));
   const pxImg = (key, g, k, cls = "") => `<img class="pi ${cls}" src="${pixUrl(key, g, k)}" alt="">`;
   V.couple = () => { const c = cp(), f = cpFriend(); const tab = S.cpTab || "home"; const me = A().nick, him = nameOf(f), today = cpDay();
-    const notes = [...(c.notes || [])].filter(shown).reverse().map(n => `<div class="cp-note ${n.who === "me" ? "me" : n.who === f.id ? "" : "npc"}"><p>${richText(n.text)}</p><small>${n.who === "me" ? "你" : n.who === f.id ? esc(him) : `${esc(n.who)} 来过`} · ${esc(ago(S.meta.cur, n.at))}</small></div>`).join("") || `<div class="empty">还没有小纸条</div>`;
+    const notes = [...(c.notes || [])].filter(shown).reverse().map(n => `<div class="cp-note ${n.who === "me" ? "me" : n.who === f.id ? "" : "npc"}" data-act="cp-note-menu" data-i="${c.notes.indexOf(n)}"><p>${richText(n.text)}</p><small>${n.who === "me" ? "你" : n.who === f.id ? esc(him) : `${esc(n.who)} 来过`} · ${esc(ago(S.meta.cur, n.at))}</small></div>`).join("") || `<div class="empty">还没有小纸条</div>`;
     const diary = [...(c.diary || [])].reverse().map(d => `<div class="cp-diary pxc"><b>${esc(d.title)}</b><small>${d.who === "me" ? "你" : esc(him)} · ${esc(ymd(thereDate(S.meta.cur, new Date(d.at))))}</small><p>${richText(d.text)}</p></div>`).join("") || `<div class="empty">还没有恋爱日记</div>`;
     let body = "";
     if (tab === "home") { const tr = cpTree(), lv = cpTreeLv(tr.exp), L = window.TREE_LV, next = L[lv + 1], mood = cpMood();
@@ -606,6 +606,10 @@
       <div class="cp-top"><div class="cp-doll pxb"><img class="pi" src="${coupleUrl(myShow(), hisShow(f), "hearts")}" alt=""></div><div class="cp-info"><div class="cp-days">在一起的第${pxImg(`dg${cpDays()}`, window.qqdigits(cpDays(), "#c2187a"), 4)}天</div><small>${esc(ymd(thereDate(S.meta.cur, new Date(c.since))))} 开通</small><div class="cp-sig pxb" data-act="cp-sig">${c.sig ? esc(c.sig) : "点这里写情侣签名"}</div></div></div>
       <div class="cp-tabs">${[["home", "首页"], ["notes", "小纸条"], ["diary", "日记"], ["photos", "合影墙"], ["qa", "问答"]].map(([k, t]) => `<button class="${tab === k ? "on" : ""}" data-act="cp-tab" data-t="${k}">${t}</button>`).join("")}</div>
       <div class="cp-body pxb">${body}</div></div>`; };
+  ACT["cp-note-menu"] = b => { const c = cp(), n = c.notes[+b.dataset.i]; if (!n) return;
+    sheet(`<h3>小纸条</h3><div class="mlist"><button data-v="edit">编辑</button><button data-v="del">删掉</button></div><div class="btns"><button class="btn" data-v="no">取消</button></div>`, async v => { closeSheet();
+      if (v === "edit") { const r = await ask("编辑小纸条", [{ label: "改完他看到的就是改过的", value: n.text, long: true, max: 200 }], "改好了"); if (!r || !r[0].trim()) return; n.text = r[0].trim(); n.edited = true; saveMeta(); render(); }
+      if (v === "del") { c.notes = c.notes.filter(x => x !== n); saveMeta(); render(); toast("删掉了"); } }); };
   ACT["cp-water"] = () => { const tr = cpTree(), d = cpDay(); if (tr.me === d) return; tr.me = d; const lv0 = cpTreeLv(tr.exp); tr.exp += tr.him === d ? 15 : 10; saveMeta();
     const lv = cpTreeLv(tr.exp); if (lv > lv0) { toast(`爱情树${window.TREE_LV[lv][1]}！`); remember(cpFriend(), `我们情侣空间的爱情树${window.TREE_LV[lv][1]}`); } else toast("浇好了"); render(); };
   ACT["cp-mood"] = async () => { const m = cpMood(); const r = await ask("今天的心情", [{ label: "一句话", value: m.me || "", max: 40 }]); if (!r || !r[0]) return; m.me = r[0]; saveMeta(); if (!m.him) queueZone(cpFriend(), { kind: "cpMood" }, rand(5, 60) * 60e3); render(); };
@@ -1032,9 +1036,11 @@
   /** 她的话删了/撤回了：后面那批他的回复的记忆跟着重写 */
   const nextMem = (c, m) => { const i = c.msgs.indexOf(m); const n = c.msgs.slice(i + 1).find(x => x.from === "him" && x.mem); return n && n.mem; };
   ACT["msg-menu"] = b => { const f = friendById(S.fid); const c = chatOf(f.id); const m = c.msgs.find(x => x.id === b.dataset.id); if (!m) return;
-    const opts = [["del", "删除这条（他也不记得了）"], ...(m.from === "me" && !m.recalled ? [["recall", "撤回"]] : []), ...(m.recalled && m.from === "me" ? [["note", "改撤回提示"]] : [])];
+    const opts = [...(!m.recalled && !m.shake && (m.text || m.photo) ? [["edit", m.photo ? "编辑配的话" : "编辑"]] : []), ["del", "删除这条（他也不记得了）"], ...(m.from === "me" && !m.recalled ? [["recall", "撤回"]] : []), ...(m.recalled && m.from === "me" ? [["note", "改撤回提示"]] : [])];
     sheet(`<h3>${m.recalled ? "撤回的消息" : esc((m.text || "[图片]").slice(0, 30))}</h3><div class="mlist">${opts.map(([v, t]) => `<button data-v="${v}">${t}</button>`).join("")}</div><div class="btns"><button data-v="no">取消</button></div>`, async v => {
       closeSheet(); if (v === "no") return;
+      if (v === "edit") { const r = await ask(m.from === "me" ? "编辑我的消息" : `编辑${nameOf(f)}的消息`, [{ label: "改完他回你的时候看到的就是改过的", value: m.text || "", long: true, max: 2000 }], "改好了"); if (!r || (!r[0].trim() && !m.photo)) return;
+        m.text = r[0].trim(); m.edited = true; saveChat(c); rememo(f, m.from === "him" ? m.mem : nextMem(c, m)); render(); return toast("改好了"); }
       if (v === "del") { const mem = m.from === "him" ? m.mem : nextMem(c, m); c.msgs = c.msgs.filter(x => x !== m); saveChat(c); rememo(f, mem); render(); return toast("删掉了"); }
       if (v === "recall" || v === "note") { const r = await ask(v === "recall" ? "撤回" : "改撤回提示", [{ label: "撤回提示（不填就是「你撤回了一条消息」）", value: m.recalled ? m.recalled.note : "", ph: `${A().nick}因为太可爱了撤回了一条消息`, max: 40 }], v === "recall" ? "撤回" : "好了"); if (!r) return;
         if (v === "note") { m.recalled.note = r[0]; saveChat(c); return render(); }

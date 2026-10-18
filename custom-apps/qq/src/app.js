@@ -370,7 +370,7 @@
           ${S.collapsed.f ? "" : sorted.map(row).join("") || `<div class="empty">还没有好友<br>点下面的「查找」加一个吧</div>`}` : recent.map(row).join("") || `<div class="empty">还没有聊过天</div>`}
       </div>
       ${miniBarHtml()}
-      <div class="bot"><button class="btn" data-act="menu">菜单</button><button class="btn" data-act="find">查找</button><button class="btn" data-act="open-zone" data-who="me">QQ空间${newGift() ? `<i class="dot"></i>` : ""}</button></div>
+      <div class="bot"><button class="btn" data-act="menu">菜单</button><button class="btn" data-act="find">查找</button><button class="btn" data-act="open-farm">QQ农场</button><button class="btn" data-act="open-bottle">漂流瓶</button><button class="btn" data-act="open-zone" data-who="me">QQ空间${newGift() ? `<i class="dot"></i>` : ""}</button></div>
     </div>`;
   };
 

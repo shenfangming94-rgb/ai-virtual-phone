@@ -54,7 +54,6 @@
     smile: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="8.6"/><circle cx="9" cy="10" r=".9" fill="currentColor"/><circle cx="15" cy="10" r=".9" fill="currentColor"/><path d="M8.3 14.2c1 1.4 2.2 2 3.7 2s2.7-.6 3.7-2"/></svg>',
     image: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><rect x="3.5" y="5" width="17" height="14" rx="2.5"/><circle cx="9" cy="10" r="1.6"/><path d="M4 17.5l5-4.5 4 3.5 3-2.5 4.5 3.8"/></svg>',
     expand: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M14 4h6v6M20 4l-6.5 6.5M10 20H4v-6M4 20l6.5-6.5"/></svg>',
-    plus: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5.5v13M5.5 12h13"/></svg>',
     check: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg>',
     down: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9.5 6 6 6-6"/></svg>',
     dmIcon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M7.5 4.5h9a4 4 0 0 1 4 4v5a4 4 0 0 1-4 4h-6.2L6 20.3v-3A4 4 0 0 1 3.5 13.5v-5a4 4 0 0 1 4-4Z"/></svg>',
@@ -99,8 +98,8 @@
 
   // ───────────────────────── 数据 ─────────────────────────
   // groups：小组（搜出来的、建的）；topics：帖子（楼层在帖子里）；meta：我的资料、搜索缓存、调试记录
-  const COL = { groups: "groups", topics: "topics", meta: "meta", works: "works", marks: "marks", doulists: "doulists", dms: "dms" };
-  const S = { identity: null, chars: [], meta: null, groups: [], topics: [], works: [], marks: [], doulists: [], dms: [], tab: "group", debug: [], jobs: new Set(), mediaCache: new Map() };
+  const COL = { groups: "groups", topics: "topics", meta: "meta", works: "works", marks: "marks", doulists: "doulists", dms: "dms", statuses: "statuses", diaries: "diaries" };
+  const S = { identity: null, chars: [], meta: null, groups: [], topics: [], works: [], marks: [], doulists: [], dms: [], statuses: [], diaries: [], tab: "group", debug: [], jobs: new Set(), mediaCache: new Map() };
   async function dbList(c) { try { return (await api.db.list(c, { limit: 500 })) || []; } catch (e) { console.warn(e); return []; } }
   async function dbUpsert(c, row) {
     try { const u = await api.db.update(c, row.id, row); if (u) return u; } catch (e) { /* 没有就 create */ }
@@ -120,11 +119,12 @@
     const chars = await api.characters.list().catch(() => []);
     const owners = await Promise.all(chars.map(c => api.user.getProfile({ characterId: c.id }).catch(() => null)));
     S.chars = chars.filter((c, i) => !owners[i] || !identity || owners[i].id === identity.id);
-    const [groups, topics, metas, works, marks, doulists, dms] = await Promise.all([dbList(COL.groups), dbList(COL.topics), dbList(COL.meta), dbList(COL.works), dbList(COL.marks), dbList(COL.doulists), dbList(COL.dms)]);
+    const [groups, topics, metas, works, marks, doulists, dms, statuses, diaries] = await Promise.all([dbList(COL.groups), dbList(COL.topics), dbList(COL.meta), dbList(COL.works), dbList(COL.marks), dbList(COL.doulists), dbList(COL.dms), dbList(COL.statuses), dbList(COL.diaries)]);
     const scope = S.identity.id;
     S.groups = groups.filter(g => g.scope === scope);
     S.topics = topics.filter(t => t.scope === scope).map(t => ({ ...t, floors: t.floors || [] }));
     S.works = works.filter(w => w.scope === scope); S.marks = marks.filter(m => m.scope === scope); S.doulists = doulists.filter(d => d.scope === scope).map(d => ({ ...d, workIds: d.workIds || [] })); S.dms = dms.filter(d => d.scope === scope).map(d => ({ ...d, msgs: d.msgs || [] }));
+    S.statuses = statuses.filter(x => x.scope === scope).map(x => ({ ...x, images: x.images || [], comments: x.comments || [] })); S.diaries = diaries.filter(x => x.scope === scope).map(x => ({ ...x, comments: x.comments || [] }));
     S.debug = (metas.find(m => m.id === "debug_log") || {}).entries || [];
     S.meta = metas.find(m => m.id === `meta_${scope}`) || { id: `meta_${scope}`, nickname: S.identity.name || "豆友", sign: "", avatarRef: null,
       joined: [], searches: {}, charNicks: {}, excludedChars: [], avatarPool: [] };
@@ -786,14 +786,15 @@ ${CALM_LINE}
           <div class="me-follow"><span>关注 ${info ? fmtNum(info.following) : "-"}</span><span>被关注 ${info ? fmtNum(info.followers + (followed ? 1 : 0)) : "-"}</span></div>
         </div>
         <div class="me-sheet">
-          <div class="me-tabs"><button class="on">主页</button><button data-act="coming" data-what="feed">动态</button><button data-act="coming" data-what="album">相册</button></div>
+          ${meTabs(pg.ptab || "home")}
           ${!info ? (busy ? `<div class="gen-tip"><span class="spinner"></span>正在打开${he}的主页…</div>` : `<div class="mcard"><div class="mcard-empty" style="padding:10px 14px">${isChar ? "" : "还没生成 TA 的主页"}</div><button class="load-more" data-act="person-gen" data-k="${esc(k)}">✨ 生成主页（会用 1 次 API）</button></div>`) : ""}
           ${busy && info ? `<div class="gen-tip"><span class="spinner"></span>重新生成中…</div>` : ""}
-          ${profileCards(k, author, groups)}
+          ${pg.ptab === "feed" ? personFeedHtml(k) : pg.ptab === "album" ? personAlbumHtml(k) : profileCards(k, author, groups)}
         </div>`);
       const hero = $(".me-hero", pg.el); if (hero && hero.dataset.bgRef) mediaUrl(hero.dataset.bgRef).then(u => { if (u) hero.style.backgroundImage = `linear-gradient(rgba(0,0,0,.25),rgba(0,0,0,.35)),url("${u}")`; });
     }, { title: "", cls: "gpage ppage", corner: `<button class="top-icon" data-act="person-menu" data-k="${esc(k)}" aria-label="更多">${I.more}</button>` });
     if (isChar && !personInfo(k)) genPerson(k);
+    if (isChar) peekDiary(id);
     if (isChar && !(S.meta.charWorksAt || {})[id] && !charMarks(id).length) genCharWorks(id); // 书影音另一次调用，和主页同时发
     { const inf0 = personInfo(k); if (inf0 && !inf0.uid) { inf0.uid = `${rand(1000, 9999)}${rand(1000, 9999)}`; saveMeta(); page.render(page); } } // 老主页补一个 ID
     // 回关：她关注了他、他还没关注她 → 之后每天第一次打开他主页掷一次骰子（不花 API，主页不变）
@@ -819,7 +820,7 @@ ${CALM_LINE}
         ${groups.length ? `<div class="hscroll">${groups.map(g => `<button class="gtile" data-act="open-group" data-id="${esc(g.id)}">${groupAvaHtml(g)}<span>${esc(g.name)}</span></button>`).join("")}</div>` : `<div class="mcard-empty">${a.type === "user" ? "还没有加入小组" : `还看不出${who}在哪些组`}</div>`}</div>
       <div class="mcard"><div class="mcard-h" data-act="person-list" data-k="${esc(k)}" data-kind="posts">${who}发的帖子 ${posts.length}<i>›</i></div></div>
       <div class="mcard"><div class="mcard-h" data-act="person-list" data-k="${esc(k)}" data-kind="replied">${who}的回应 ${replied.length}<i>›</i></div></div>
-      <div class="mcard"><div class="mcard-h" data-act="coming" data-what="diary">日记<span class="soon">第三期</span><i>›</i></div>${slots("diary", 4, "日记")}</div>
+      ${diaryCardHtml(k)}
       ${a.type === "npc" ? "" : `<div class="mcard"><div class="mcard-h" data-act="w-doulists" data-v="${a.type === "user" ? "me" : esc(a.charId)}">${who === "我" ? "我的" : who + "的"}豆列<i>›</i></div>${doulistRow(a.type === "user" ? "me" : a.charId)}</div>`}`;
   }
   /** 帖子 / 回应列表：匿名发的显示匿名头像（char 的带「他的马甲」、她的带「我」，只她看得到） */
@@ -923,10 +924,18 @@ ${CALM_LINE}
 
   function renderHome() {
     $("#topbar").innerHTML = topSearch("搜索书影音、小组", "open-search", "trash");
-    const list = feedTopics().slice(0, 30);
-    $("#view").innerHTML = `<div class="db-sec">动态</div>${comingHtml(["feed"])}
-      <div class="db-sec">我的小组新帖<button data-act="tab" data-tab="group">全部 ›</button></div>
-      ${list.length ? `<div class="db-white">${list.slice(0, 8).map(t => topicCard(t, "feed")).join("")}</div>` : `<div class="empty" style="padding:30px">还没有加入小组，去「小组」搜一个感兴趣的吧</div>`}`;
+    const tab = S.homeTab || "feed";
+    const segs = `<div class="sec-tabs db-white home-tabs"><button class="${tab === "feed" ? "on" : ""}" data-act="s-home" data-v="feed">关注</button><button class="${tab === "group" ? "on" : ""}" data-act="s-home" data-v="group">小组新帖</button></div>`;
+    if (tab === "group") {
+      const list = feedTopics().slice(0, 40);
+      $("#view").innerHTML = `${segs}${list.length ? `<div class="db-white">${list.map(t => topicCard(t, "feed")).join("")}</div>` : `<div class="empty" style="padding:30px">还没有加入小组，去「小组」搜一个感兴趣的吧</div>`}`;
+      return;
+    }
+    const items = feedItems(new Set([...followedKeys(), "me"])).slice(0, 80);
+    const busy = S._feedBusy;
+    $("#view").innerHTML = `${segs}<div class="feed-bar"><button class="feed-refresh" data-act="s-refresh" ${busy ? "disabled" : ""}>${busy ? `<span class="spinner"></span>大家在发广播…` : "↻ 刷新（1 次 API）"}</button><button class="feed-auto" data-act="s-auto">自动发<span class="switch sm ${S.meta.autoFeed ? "on" : ""}"><span></span></span></button></div>
+      ${items.length ? `<div class="st-list">${items.map(feedCard).join("")}</div>` : `<div class="empty" style="padding:40px 30px">${followedKeys().length ? "大家还没发广播，点上面刷新看看" : "你还没有关注谁<br><span style=\"font-size:13px\">在小组里点进豆友主页、或者搜角色的名字，点关注，他们的广播就会出现在这里</span>"}</div>`}
+      <button class="fab" data-act="s-compose" aria-label="写广播">${I.pen}</button>`;
   }
   function renderMarket() {
     $("#topbar").innerHTML = `<div class="topbar-inner"><span class="top-title">市集</span></div>`;
@@ -960,9 +969,9 @@ ${CALM_LINE}
         <div class="me-follow"><span data-act="follow-list" data-tab="following">关注 ${(S.meta.follows || []).length}</span><span data-act="follow-list" data-tab="fans">被关注 ${Object.entries(S.meta.people || {}).filter(([k, v]) => k.startsWith("c:") && v.followsMe).length + (S.meta.fansExtra || 0)}</span></div>
       </div>
       <div class="me-sheet">
-        <div class="me-tabs"><button class="on">主页</button><button data-act="coming" data-what="feed">动态</button><button data-act="coming" data-what="album">相册</button><button data-act="my-favs">收藏</button></div>
-        ${profileCards("me", { type: "user" }, mine)}
-        <div class="form-note" style="text-align:center">豆瓣 v${VERSION} · 第一期：小组</div>
+        ${meTabs(S.meTab || "home", `<button data-act="my-favs">收藏</button>`)}
+        ${(S.meTab || "home") === "feed" ? personFeedHtml("me") : S.meTab === "album" ? personAlbumHtml("me") : profileCards("me", { type: "user" }, mine)}
+        <div class="form-note" style="text-align:center">豆瓣 v${VERSION}</div>
       </div>
       <button class="fab" data-act="fab-me" aria-label="发帖">${I.pen}</button>`;
     const hero = $(".me-hero"); if (hero && hero.dataset.bgRef) mediaUrl(hero.dataset.bgRef).then(u => { if (u) hero.style.backgroundImage = `linear-gradient(rgba(0,0,0,.25),rgba(0,0,0,.35)),url("${u}")`; });
@@ -1221,6 +1230,8 @@ ${CALM_LINE}
           return `<div class="list-cell">${avatarHtml({ name: c.name, seed: c.id, avatar: c.avatar })}<div class="cell-main"><div>${esc(c.name)}</div><div class="cell-sub">豆瓣昵称：${esc(S.meta.charNicks[c.id] || "还没有（第一次实名出场时起）")} · IP：${esc(charIp(c.id) || "未定")}</div></div>
             <button class="btn-ghost" data-act="set-char-nick" data-id="${esc(c.id)}" style="height:28px;padding:0 10px;font-size:12px">改昵称</button><button class="btn-ghost" data-act="set-char-ip" data-id="${esc(c.id)}" style="height:28px;padding:0 10px;font-size:12px">IP</button><button class="btn-ghost ${isClose(c.id) ? "on-close" : ""}" data-act="w-close" data-id="${esc(c.id)}" style="height:28px;padding:0 10px;font-size:12px">${isClose(c.id) ? "亲密 ✓" : "亲密"}</button><button class="switch ${on ? "on" : ""}" data-act="toggle-char" data-id="${esc(c.id)}"><span></span></button></div>`; }).join("") || `<div class="empty" style="padding:24px">这个身份还没有角色好友</div>`}
         <div class="form-note" style="margin-top:4px">「亲密」：书影音里他会和你扯上关系，也更常跟着你标记。第一次生成他的书影音时 AI 按你们的关系判断，可以自己改</div>
+        <div class="form-note" style="margin-top:8px">广播 · 打开后，你关注的人会自己发广播、偶尔写日记（隔几个小时打开豆瓣时补上，会自己花 API）；关掉就只有你在首页点「刷新」时才发</div>
+        <div class="list-cell"><div class="cell-main"><div>自动发广播</div></div><button class="switch ${S.meta.autoFeed ? "on" : ""}" data-act="s-auto"><span></span></button></div>
         <div class="form-note" style="margin-top:8px">公众人物 · 打开的人会被豆友当成明星、名人讨论（只聊真发生过的事）；都不打开就没人被八卦</div>
         <div class="list-cell"><div class="cell-main"><div>我（${esc(S.meta.nickname)}）</div></div><button class="switch ${S.meta.publicMe ? "on" : ""}" data-act="toggle-public-me"><span></span></button></div>
         ${S.chars.map(c => `<div class="list-cell"><div class="cell-main"><div>${esc(c.name)}</div></div><button class="switch ${(S.meta.publicChars || []).includes(c.id) ? "on" : ""}" data-act="toggle-public" data-id="${esc(c.id)}"><span></span></button></div>`).join("")}
@@ -1374,7 +1385,7 @@ ${CALM_LINE}
         const t = topicById(pg.key.split(":")[1]); if (!t) return;
         if (act === "topic-like") { t.liked = !t.liked; t.likes = Math.max(0, (t.likes || 0) + (t.liked ? 1 : -1)); }
         if (act === "topic-fav") { t.faved = !t.faved; t.favAt = t.faved ? nowIso() : undefined; t.favs = Math.max(0, (t.favs || 0) + (t.faved ? 1 : -1)); toast(t.faved ? "已收藏" : "已取消收藏"); }
-        if (act === "topic-repost") { t.reposts = (t.reposts || 0) + 1; toast("转发到广播的功能第三期上线，先帮你记一笔转发数"); }
+        if (act === "topic-repost") { openCompose({ repost: { kind: "topic", id: t.id } }); return; }
         saveTopic(t); pg.render(pg); return;
       }
       case "follow-author": {
@@ -1899,6 +1910,350 @@ ${CALM_LINE}
     }
   });
 
+  // ───────────────────────── 广播 & 日记（第三期） ─────────────────────────
+  // statuses：广播 { author, text, images[{desc,ref}], at, repost{kind,id}, likes, liked, reposts, comments[{id,author,text,at,to{name,author}}] }
+  // diaries：日记 { author, title, body, at, private, seen, likes, liked, comments }；char 仅自己可见的只有 seen 了她才看得到
+  const saveStatus = s => dbUpsert(COL.statuses, s).catch(e => console.warn(e));
+  const saveDiary = d => dbUpsert(COL.diaries, d).catch(e => console.warn(e));
+  const statusById = id => S.statuses.find(s => s.id === id);
+  const diaryById = id => S.diaries.find(d => d.id === id);
+  const keyOf = a => a.type === "user" ? "me" : followKey(a);
+  const authorOfKey = k => k === "me" ? { type: "user" } : k.startsWith("c:") ? { type: "char", charId: k.slice(2) } : { type: "npc", name: k.slice(2) };
+  /** 她关注的、还在参与豆瓣的人（广播只看这些人 + 她自己） */
+  const followedKeys = () => (S.meta.follows || []).filter(k => k.startsWith("c:") ? activeChars().some(c => c.id === k.slice(2)) : k.startsWith("n:"));
+  const diaryVisible = d => !d.private || d.author.type === "user" || d.seen;
+  const byTime = (x, y) => new Date(y.at) - new Date(x.at);
+
+  /** 一串人的动态：广播、日记、书影音标记（标记不用另外生成，直接从标记里来） */
+  function feedItems(keys) {
+    const items = [];
+    for (const s of S.statuses) if (keys.has(keyOf(s.author))) items.push({ kind: "status", at: s.at, s });
+    for (const d of S.diaries) if (keys.has(keyOf(d.author)) && diaryVisible(d)) items.push({ kind: "diary", at: d.at, d });
+    for (const m of S.marks) if (keys.has(`c:${m.charId}`) && workById(m.workId)) items.push({ kind: "mark", at: m.at, m, w: workById(m.workId), a: { type: "char", charId: m.charId } });
+    if (keys.has("me")) for (const w of S.works) if (w.my && w.my.status && w.my.at) items.push({ kind: "mark", at: w.my.at, m: w.my, w, a: { type: "user" } });
+    return items.sort(byTime);
+  }
+  function picsHtml(images, owner) {
+    if (!images || !images.length) return "";
+    return `<div class="st-pics n${Math.min(images.length, 3)}">${images.map((im, i) => `<div class="st-pic" data-act="s-pic" data-owner="${esc(owner)}" data-idx="${i}">${im.ref ? `<img ${refSrc(im.ref)} alt="">` : `${placeholderImg()}<span>${esc(im.desc)}</span>`}</div>`).join("")}</div>`;
+  }
+  function repostLabel(r) {
+    const t = r.kind === "topic" && topicById(r.id), w = r.kind === "work" && workById(r.id), s = r.kind === "status" && statusById(r.id), d = r.kind === "diary" && diaryById(r.id);
+    return t ? `小组帖子《${t.title}》` : w ? `${KIND_NAME[w.kind]}《${w.title}》` : s ? `${whoOf(s.author).name}的广播「${(s.text || "").slice(0, 40)}」` : d ? `日记《${d.title}》` : "";
+  }
+  /** 转发的东西：灰底小框，点了打开原帖 / 条目 / 广播 / 日记 */
+  function repostHtml(r) {
+    if (!r) return "";
+    if (r.kind === "topic") { const t = topicById(r.id); if (!t) return `<div class="st-rp gone">原帖已经删除</div>`; const g = groupById(t.groupId) || {};
+      return `<div class="st-rp" data-act="open-topic" data-id="${esc(t.id)}">${(t.images || [])[0] && t.images[0].ref ? `<img class="st-rp-pic" ${refSrc(t.images[0].ref)} alt="">` : `<div class="st-rp-ic">${I.group}</div>`}<div class="cell-main"><b>${esc(t.title)}</b><span>来自 ${esc(g.name || "小组")}</span></div></div>`; }
+    if (r.kind === "work") { const w = workById(r.id); if (!w) return "";
+      return `<div class="st-rp" data-act="w-open" data-id="${esc(w.id)}">${coverHtml(w, "st")}<div class="cell-main"><b>${esc(w.title)}</b><span>${esc(workSub(w))}</span>${w.rating ? `<span>${starsHtml(w.rating / 2, "xs")} ${w.rating.toFixed(1)}</span>` : ""}</div></div>`; }
+    if (r.kind === "status") { const s = statusById(r.id); if (!s) return `<div class="st-rp gone">原广播已经删除</div>`;
+      return `<div class="st-rp col" data-act="s-open" data-id="${esc(s.id)}"><div><b>${esc(whoOf(s.author).name)}</b>：${richText((s.text || "").slice(0, 120))}</div>${picsHtml(s.images, "s:" + s.id)}</div>`; }
+    if (r.kind === "diary") { const d = diaryById(r.id); if (!d || !diaryVisible(d)) return `<div class="st-rp gone">原日记看不到了</div>`;
+      return `<div class="st-rp" data-act="s-diary" data-id="${esc(d.id)}"><div class="st-rp-ic">${I.diary}</div><div class="cell-main"><b>${esc(d.title)}</b><span>${esc(d.body.slice(0, 40))}</span></div></div>`; }
+    return "";
+  }
+  const stActs = (x, kind) => `<div class="st-acts"><button data-act="s-repost" data-kind="${kind}" data-id="${esc(x.id)}">${I.repost}<span>${x.reposts ? fmtNum(x.reposts) : "转发"}</span></button><button data-act="${kind === "s" ? "s-open" : "s-diary"}" data-id="${esc(x.id)}">${I.reply}<span>${(x.comments || []).length || "评论"}</span></button><button class="${x.liked ? "on" : ""}" data-act="s-like" data-kind="${kind}" data-id="${esc(x.id)}">${x.liked ? I.liked : I.like}<span>${x.likes ? fmtNum(x.likes) : "赞"}</span></button></div>`;
+  const privateChar = d => d.private && d.author.type !== "user";
+  /** 一条动态卡片（首页、主页「动态」都用） */
+  function feedCard(it) {
+    const a = it.kind === "status" ? it.s.author : it.kind === "diary" ? it.d.author : it.a;
+    const w = whoOf(a);
+    const head = verb => `<div class="st-head"><div ${personAttrs(a)}>${avatarHtml(w)}</div><div class="cell-main"><div class="st-who"><b ${personAttrs(a)}>${esc(w.name)}</b><span>${verb}</span></div><div class="st-time">${fmtTime(it.at)}</div></div></div>`;
+    if (it.kind === "mark") {
+      const m = it.m, wk = it.w;
+      return `<div class="st-card" data-act="w-open" data-id="${esc(wk.id)}">${head(statusName(wk.kind, m.status))}${m.stars || m.comment ? `<div class="st-text">${m.stars ? starsHtml(m.stars, "xs") + " " : ""}${esc(m.comment || "")}</div>` : ""}${repostHtml({ kind: "work", id: wk.id })}</div>`;
+    }
+    if (it.kind === "diary") {
+      const d = it.d;
+      return `<div class="st-card" data-act="s-diary" data-id="${esc(d.id)}">${head("写了日记")}<div class="st-diary"><b>${esc(d.title)}</b>${d.private ? `<span class="role-tag mask">仅自己可见</span>` : ""}<p>${esc(d.body.replace(/\s+/g, " ").slice(0, 90))}</p></div>${privateChar(d) ? "" : stActs(d, "d")}</div>`;
+    }
+    const s = it.s;
+    return `<div class="st-card" data-act="s-open" data-id="${esc(s.id)}">${head(s.repost ? "转发" : "说：")}${s.text ? `<div class="st-text">${richText(s.text)}</div>` : ""}${picsHtml(s.images, "s:" + s.id)}${repostHtml(s.repost)}${stActs(s, "s")}</div>`;
+  }
+
+  // ── 生成：让一批人发广播（掷中的再写日记），一次调用 ──
+  /** char 可以转发的：他在的小组里的帖子、他标记过的书影音、她最近的广播（只有亲密的会转她的） */
+  function repostCands(a) {
+    if (a.type !== "char") return [];
+    const ts = S.topics.filter(t => !t.author.anon && (sameAuthor(t.author, a) || ((groupById(t.groupId) || {}).charsHere || []).includes(a.charId))).sort((x, y) => new Date(y.lastReplyAt || y.createdAt) - new Date(x.lastReplyAt || x.createdAt)).slice(0, 3).map(t => ({ kind: "topic", id: t.id }));
+    const ws = charMarks(a.charId).slice(0, 2).map(m => ({ kind: "work", id: m.workId }));
+    const hers = isClose(a.charId) ? S.statuses.filter(s => s.author.type === "user" && Date.now() - new Date(s.at) < 2 * 86400e3).sort(byTime).slice(0, 1).map(s => ({ kind: "status", id: s.id })) : [];
+    return [...ts, ...ws, ...hers].map(r => ({ ...r, label: repostLabel(r) })).filter(r => r.label);
+  }
+  /** AI 写的作者名 → 这批人里的哪一个 */
+  function whoInList(name, keys) {
+    name = String(name || "").replace(/^@/, "").trim();
+    return keys.find(k => k.startsWith("c:") ? [charById(k.slice(2)).name, charNick(k.slice(2))].includes(name) : k.slice(2) === name) || null;
+  }
+  const personLine = k => { const a = authorOfKey(k); const inf = personInfo(k) || {};
+    return a.type === "char" ? `角色 ${charById(a.charId).name}（豆瓣昵称「${charNick(a.charId)}」）` : `路人豆友「${a.name}」${inf.sign ? `（签名：${inf.sign}）` : ""}`; };
+  const FEED_RULE = "【豆瓣广播】广播是豆瓣的动态，比微博安静：随手的碎碎念、今天遇到的小事、一句心情、一张照片、看到什么好东西转一下。短的几个字到一两句，长的也就几行，不写小作文；不带 #话题#、不 @ 人、不像发给谁看的公告，也不要每条都在抒情。";
+  async function genFeed(who, label) {
+    if (!who.length || S._feedBusy) return null; S._feedBusy = true; refreshAll();
+    try {
+      const keys = who.map(x => x.k); const charIds = keys.filter(k => k.startsWith("c:")).map(k => k.slice(2));
+      const carrier = charIds.length ? charIds : activeChars().slice(0, 1).map(c => c.id);
+      const cands = {};
+      const lines = who.map(x => { const a = authorOfKey(x.k); cands[x.k] = repostCands(a);
+        return `- ${personLine(x.k)}：写 ${x.n} 条广播${x.diary ? `，再写 1 篇日记（${x.diary.private ? "设成仅自己可见：只写给自己看，心里话可以更直白" : "公开的"}）` : ""}。${cands[x.k].length ? `想转发的话可以转（不想转就不转，转的话照抄）：${cands[x.k].map(r => r.label).join("、")}` : ""}`; });
+      const text = await generate(carrier, "feed", [
+        FEED_RULE, `这次要写的人：\n${lines.join("\n")}`,
+        charIds.length ? `角色按自己的人设、最近的生活、和用户聊过的事来写，大部分写他自己的日常。${CHAR_SELF_LINE}` : "",
+        keys.some(k => k.startsWith("n:")) ? "路人豆友是普通网友，写他们自己的生活，不认识角色和用户，不提他们。" : "",
+        userLine(), CHAR_TALK_LINE,
+        "时间都在最近一天以内（「x分钟前」「x小时前」「今天 hh:mm」「昨天 hh:mm」），同一个人的几条错开。",
+        "每条广播：\n===广播===\n作者：角色本名 或 路人豆友昵称（照上面写）\n时间：\n转发：无（或者照抄上面能转的一项）\n配图：画面描述（大多数不配图，写 无）\n正文：\n……\n===结束===",
+        who.some(x => x.diary) ? "日记：\n===日记===\n作者：角色本名\n标题：\n时间：\n正文：\n（三到六段，像真人写的日记：具体发生了什么、当时怎么想的，不煽情、不总结人生道理、不写成给别人看的文章）\n===结束===" : "",
+      ].filter(Boolean).join("\n\n"), label);
+      if (text == null) return null;
+      const cnt = {}; let made = 0; const now = Date.now();
+      for (const b of parseBlocks(text, "广播")) {
+        const k = whoInList(b["作者"], keys); if (!k) continue;
+        const max = (who.find(x => x.k === k) || {}).n || 1; if ((cnt[k] = (cnt[k] || 0) + 1) > max + 1) continue;
+        const body = String(b["正文"] || b["内容"] || "").trim(); const rpRaw = String(b["转发"] || "");
+        const rp = none(rpRaw) ? null : (cands[k] || []).find(r => { const m = r.label.match(/[《「]([^》」]{1,40})/); return rpRaw.includes(r.label) || (m && rpRaw.includes(m[1].slice(0, 12))); });
+        if (!body && !rp) continue;
+        const pics = none(b["配图"]) ? [] : String(b["配图"]).split(/[|｜]/).map(x => x.trim()).filter(Boolean).slice(0, 3).map(desc => ({ desc: desc.slice(0, 200) }));
+        const a = authorOfKey(k); const at = new Date(Math.min(now - rand(1, 20) * 60e3, new Date(parseRelTime(b["时间"], 600)).getTime())).toISOString();
+        const s = { id: uid("s"), scope: S.identity.id, author: a, text: body.slice(0, 600), images: pics, at, ...(rp ? { repost: { kind: rp.kind, id: rp.id } } : {}), likes: rand(0, a.type === "char" ? 15 : 6), reposts: 0, comments: [] };
+        S.statuses.push(s); saveStatus(s); made++;
+        if (rp && rp.kind === "status") { const o = statusById(rp.id); if (o) { o.reposts = (o.reposts || 0) + 1; saveStatus(o); toast(`${whoOf(a).name} 转发了你的广播`); } }
+        if (a.type === "char") remember(a.charId, `我在豆瓣发了一条广播：「${(body || repostLabel(s.repost)).slice(0, 60)}」${rp ? `（转发了${rp.label}）` : ""}`, `douban_status_${s.id}`);
+      }
+      for (const b of parseBlocks(text, "日记")) {
+        const k = whoInList(b["作者"], keys); const x = who.find(y => y.k === k); if (!k || !x || !x.diary || x.diaryDone) continue; x.diaryDone = true;
+        const bodyTxt = String(b["正文"] || b["内容"] || "").trim(); if (!bodyTxt) continue;
+        const a = authorOfKey(k);
+        const d = { id: uid("d"), scope: S.identity.id, author: a, title: String(b["标题"] || "无题").trim().slice(0, 40), body: bodyTxt.slice(0, 3000), at: parseRelTime(b["时间"], 600), private: !!x.diary.private, seen: false, likes: x.diary.private ? 0 : rand(0, 20), reposts: 0, comments: [] };
+        S.diaries.push(d); saveDiary(d); made++;
+        remember(a.charId, `我在豆瓣写了一篇${d.private ? "仅自己可见的" : ""}日记《${d.title}》：${d.body.slice(0, 80)}`, `douban_diary_${d.id}`);
+        if (d.private && Math.random() < 0.25) { d.seen = true; saveDiary(d); toast(`你好像看到了${charNick(a.charId)}设成仅自己可见的日记……`); }
+      }
+      const fa = S.meta.feedAt || (S.meta.feedAt = {}); for (const k of keys) fa[k] = nowIso(); saveMeta();
+      return made;
+    } finally { S._feedBusy = false; refreshAll(); }
+  }
+  /** 自动发广播（设置里开）：她关注的人，离上次超过 6 小时的，七成机会发几条，三成在忙不发；一次最多 4 个人一起写 */
+  async function runFeed() {
+    if (!S.meta || !S.meta.autoFeed || S._feedBusy || document.hidden) return;
+    const now = Date.now(); const fa = S.meta.feedAt || (S.meta.feedAt = {});
+    const due = shuffle(followedKeys()).map(k => ({ k, h: fa[k] ? (now - new Date(fa[k])) / 3600e3 : 24 })).filter(x => x.h >= 6).slice(0, 4);
+    if (!due.length) return;
+    const go = due.filter(() => Math.random() < 0.7);
+    for (const x of due) if (!go.includes(x)) fa[x.k] = nowIso(); saveMeta();
+    if (!go.length) return;
+    await genFeed(go.map(x => ({ k: x.k, n: Math.min(3, 1 + Math.floor(Math.min(x.h, 48) / 16)), diary: x.k.startsWith("c:") && x.h >= 12 && Math.random() < 0.3 ? { private: Math.random() < 0.4 } : null })), "大家发广播");
+  }
+  /** 首页「刷新」：她关注的人里挑最多 4 个 */
+  async function refreshFeed() {
+    const ks = shuffle(followedKeys()).slice(0, 4);
+    if (!ks.length) { toast("先关注几个人，他们的广播才会出现在这里"); return; }
+    const n = await genFeed(ks.map(k => ({ k, n: rand(1, 2), diary: k.startsWith("c:") && Math.random() < 0.2 ? { private: Math.random() < 0.4 } : null })), "刷新广播");
+    if (n === 0) toast("大家都没发什么");
+  }
+  /** 打开他的主页时：他仅自己可见的日记，每天一次机会被她看到 */
+  function peekDiary(charId) {
+    const day = new Date().toDateString(); const pk = S.meta.peek || (S.meta.peek = {});
+    if (pk[charId] === day) return; pk[charId] = day; saveMeta();
+    const hidden = S.diaries.filter(d => d.author.type === "char" && d.author.charId === charId && d.private && !d.seen).sort(byTime);
+    if (!hidden.length || Math.random() >= 0.35) return;
+    hidden[0].seen = true; saveDiary(hidden[0]); toast(`你好像看到了${charNick(charId)}设成仅自己可见的日记……`); refreshAll();
+  }
+
+  // ── 评论：她评论了 → 作者（或她回复的人）回；她发的 → 关注她的 char、亲密的 char 来评论 ──
+  const xText = (x, kind) => kind === "d" ? `日记《${x.title}》：\n${x.body.slice(0, 1200)}` : `${x.text || ""}${(x.images || []).length ? `（配图：${x.images.map(i => i.desc || "一张照片").join("；")}）` : ""}${x.repost ? `（转发了${repostLabel(x.repost)}）` : ""}`;
+  async function replyComments(x, kind, people, why) {
+    if (!people.length) return;
+    const save = kind === "d" ? saveDiary : saveStatus; S._cmtBusy = x.id; refreshAll();
+    try {
+      const keys = people.map(followKey); const charIds = people.filter(a => a.type === "char").map(a => a.charId);
+      const ow = x.author.type === "user" ? `用户本人（豆瓣昵称「${S.meta.nickname}」）` : personLine(keyOf(x.author));
+      const thread = (x.comments || []).slice(-12).map(c => `${c.author.type === "user" ? `用户（${S.meta.nickname}）` : whoOf(c.author).name}${c.to ? ` 回复 ${c.to.name}` : ""}：${c.text}`).join("\n");
+      const text = await generate(charIds.length ? charIds : activeChars().slice(0, 1).map(c => c.id), "statuscomment", [
+        `【豆瓣${kind === "d" ? "日记" : "广播"}的评论区】${ow} 的${kind === "d" ? "日记" : "广播"}（${fmtTime(x.at)}）：\n${xText(x, kind)}`,
+        thread ? `已有评论：\n${thread}` : "还没有评论。",
+        why === "new" ? `${keys.map(personLine).join("、")} 刷到了这条，各自评论一句。` : `用户刚刚评论了（最后一条），${keys.map(personLine).join("、")} 回她，每人一两条。`,
+        "评论像真人随手回的：短，口语，不写小作文。", CHAR_TALK_LINE, userLine(),
+        "每条评论：\n===评论===\n作者：角色本名 或 路人豆友昵称\n内容：\n===结束===",
+      ].join("\n\n"), `${kind === "d" ? "日记" : "广播"}评论`);
+      if (text == null) return;
+      let i = 0;
+      for (const b of parseBlocks(text, "评论").slice(0, people.length * 2)) {
+        const k = whoInList(b["作者"], keys); const body = String(b["内容"] || b["正文"] || "").trim(); if (!k || !body) continue;
+        const a = authorOfKey(k); const c = { id: uid("sc"), author: a, text: body.slice(0, 300), at: new Date(Date.now() + (i++) * 1000).toISOString(), ...(why !== "new" ? { to: { name: S.meta.nickname, author: { type: "user" } } } : {}) };
+        x.comments = [...(x.comments || []), c];
+        if (why === "new") x.likes = (x.likes || 0) + 1;
+        if (a.type === "char") remember(a.charId, `我在豆瓣${x.author.type === "user" ? `${herName()}的` : "自己的"}${kind === "d" ? "日记" : "广播"}下面${why === "new" ? "评论" : "回她"}：「${body.slice(0, 60)}」`, `douban_scmt_${c.id}`);
+      }
+      save(x);
+    } finally { S._cmtBusy = null; refreshAll(); }
+  }
+  /** 她发了广播 / 公开日记：关注她的、亲密的 char 掷骰子来评论（没人来就不花 API），赞慢慢有 */
+  function reactToMine(x, kind) {
+    const fans = activeChars().filter(c => (personInfo(`c:${c.id}`) || {}).followsMe || isClose(c.id));
+    const come = fans.filter(c => Math.random() < (isClose(c.id) ? 0.6 : 0.35));
+    x.likes = (x.likes || 0) + rand(0, 3); (kind === "d" ? saveDiary : saveStatus)(x);
+    if (come.length) setTimeout(() => replyComments(x, kind, come.map(c => ({ type: "char", charId: c.id })), "new").catch(e => console.warn(e)), rand(8, 30) * 1000);
+  }
+  async function sendComment(x, kind, text, to) {
+    const c = { id: uid("sc"), author: { type: "user" }, text: text.slice(0, 300), at: nowIso(), ...(to ? { to } : {}) };
+    x.comments = [...(x.comments || []), c]; (kind === "d" ? saveDiary : saveStatus)(x); refreshAll();
+    const target = x.author.type !== "user" ? x.author : to && to.author && to.author.type !== "user" ? to.author : null;
+    if (target && (target.type !== "char" || activeChars().some(ch => ch.id === target.charId))) await replyComments(x, kind, [target], "reply");
+  }
+  function commentsHtml(x) {
+    const cs = x.comments || [];
+    return `<div class="db-sec">评论 ${cs.length}</div><div class="db-white st-cmts">${cs.length ? cs.map(c => { const w = whoOf(c.author);
+      return `<div class="st-cmt" data-act="s-cmt-to" data-id="${esc(c.id)}"><div ${personAttrs(c.author)}>${avatarHtml(w)}</div><div class="cell-main"><div class="st-cmt-top"><b ${personAttrs(c.author)}>${esc(w.name)}</b>${c.author.type === "user" ? `<span class="role-tag mask">我</span>` : ""}<em>${fmtTime(c.at)}</em></div><div>${c.to ? `回复 <span class="st-at">${esc(c.to.name)}</span>：` : ""}${richText(c.text)}</div></div></div>`; }).join("") : `<div class="mcard-empty" style="padding:16px">还没有评论</div>`}
+      ${S._cmtBusy === x.id ? `<div class="gen-tip"><span class="spinner"></span>有人在输入…</div>` : ""}</div>`;
+  }
+  const cmtBar = `<div class="reply-target hidden"></div><div class="reply-bar"><textarea class="reply-input" rows="1" placeholder="写评论" maxlength="300"></textarea><button class="reply-send" data-act="s-send">发送</button></div>`;
+  function wireCmt(page, x, kind) {
+    page.to = null;
+    page.setTo = c => { page.to = c && c.author.type !== "user" ? { name: whoOf(c.author).name, author: c.author } : null; const t = $(".reply-target", page.el); t.classList.toggle("hidden", !page.to); t.textContent = page.to ? `回复 ${page.to.name}（点这里取消）` : ""; $(".reply-input", page.el).placeholder = page.to ? `回复 ${page.to.name}` : "写评论"; $(".reply-input", page.el).focus(); };
+    $(".reply-target", page.el).onclick = () => page.setTo(null);
+    page.send = () => { const inp = $(".reply-input", page.el); const v = inp.value.trim(); if (!v) return; inp.value = ""; const to = page.to; page.setTo(null); inp.blur(); sendComment(x(), kind, v, to).catch(e => console.warn(e)); };
+  }
+  function openStatus(id) {
+    const page = openPage(`status:${id}`, pg => {
+      const s = statusById(id); if (!s) { body(pg, `<div class="empty">这条广播已经删除了</div>`); return; }
+      body(pg, `<div class="st-list">${feedCard({ kind: "status", at: s.at, s }).replace('data-act="s-open"', 'data-act="noop"')}</div>${commentsHtml(s)}`);
+    }, { title: "广播", action: `<button class="top-icon" data-act="s-menu" data-kind="s" data-id="${esc(id)}" aria-label="更多">${I.more}</button>`, footer: cmtBar });
+    wireCmt(page, () => statusById(id), "s");
+  }
+  function openDiary(id) {
+    const d0 = diaryById(id); if (!d0) return;
+    const page = openPage(`diary:${id}`, pg => {
+      const d = diaryById(id); if (!d) { body(pg, `<div class="empty">这篇日记已经删除了</div>`); return; }
+      const w = whoOf(d.author);
+      body(pg, `<div class="dy"><h1>${esc(d.title)}</h1><div class="dy-by"><div ${personAttrs(d.author)}>${avatarHtml(w)}</div><b ${personAttrs(d.author)}>${esc(w.name)}</b><em>${fmtTime(d.at)}</em>${d.private ? `<span class="role-tag mask">仅自己可见</span>` : ""}</div>
+        <div class="dy-body">${d.body.split(/\n+/).filter(p => p.trim()).map(p => `<p>${richText(p.trim())}</p>`).join("")}</div>
+        ${privateChar(d) ? `<div class="dy-peek">这是${esc(w.name)}设成仅自己可见的日记。你看到了，但他不知道。</div>` : stActs(d, "d")}</div>${privateChar(d) ? "" : commentsHtml(d)}`);
+    }, { title: "日记", cls: "dypage", action: `<button class="top-icon" data-act="s-menu" data-kind="d" data-id="${esc(id)}" aria-label="更多">${I.more}</button>`, footer: privateChar(d0) ? "" : cmtBar });
+    if (!privateChar(d0)) wireCmt(page, () => diaryById(id), "d");
+  }
+
+  // ── 她写广播 / 日记 ──
+  function openCompose(opts = {}) {
+    const isD = !!opts.diary; const d = { text: "", images: [], repost: opts.repost || null, title: "", body: "", private: false };
+    const page = openPage(`compose:${isD ? "d" : "s"}`, pg => {
+      body(pg, isD ? `<div class="form"><div class="form-row"><label>标题</label><input id="sc-title" maxlength="40" placeholder="日记标题" value="${esc(d.title)}"></div>
+          <div class="form-row" style="align-items:flex-start"><label style="padding-top:14px">正文</label><textarea id="sc-body" style="min-height:260px" maxlength="5000" placeholder="写点什么……">${esc(d.body)}</textarea></div>
+          <div class="list-cell"><div class="cell-main"><div>仅自己可见</div><div class="cell-sub">别人看不到，也不会有人来评论</div></div><button class="switch ${d.private ? "on" : ""}" data-act="s-c-private"><span></span></button></div></div>`
+        : `<div class="form"><textarea id="sc-text" class="sc-text" maxlength="600" placeholder="${d.repost ? "说说转发理由……" : "分享生活点滴……"}">${esc(d.text)}</textarea>
+          ${d.repost ? `<div class="sc-rp">${repostHtml(d.repost).replace(/data-act="[^"]+"/, 'data-act="noop"')}</div>` : `<div class="nt-pics" style="padding:0 16px 12px">${d.images.map((im, k) => `<div class="post-pic sm" data-act="s-c-pic-rm" data-idx="${k}">${im.ref ? `<img ${refSrc(im.ref)} alt="">` : placeholderImg()}${!im.ref ? `<span>${esc(im.desc)}</span>` : ""}</div>`).join("")}${d.images.length < 9 ? `<button class="nt-add" data-act="s-c-pic">＋<span>配图</span></button>` : ""}</div>`}</div>`);
+      const on = (sel, f) => { const el = $(sel, pg.el); if (el) el.oninput = e => { d[f] = e.target.value; }; };
+      on("#sc-title", "title"); on("#sc-body", "body"); on("#sc-text", "text");
+    }, { title: isD ? "写日记" : opts.repost ? "转发到广播" : "写广播", action: `<button class="top-icon" style="width:auto;color:var(--wb-orange);font-size:15px" data-act="s-post">发布</button>` });
+    page.draft = d; page.isDiary = isD;
+  }
+  function postCompose(pg) {
+    const d = pg.draft; const base = { scope: S.identity.id, author: { type: "user" }, at: nowIso(), likes: 0, reposts: 0, comments: [] };
+    if (pg.isDiary) {
+      if (!d.title.trim() || !d.body.trim()) { toast("标题和正文都要写"); return; }
+      const x = { id: uid("d"), ...base, title: d.title.trim(), body: d.body.trim(), private: d.private };
+      S.diaries.push(x); saveDiary(x); closePage(); toast(d.private ? "写好了，只有你自己看得到" : "发布成功");
+      if (!x.private) reactToMine(x, "d"); return;
+    }
+    if (!d.text.trim() && !d.images.length && !d.repost) { toast("写点什么吧"); return; }
+    const x = { id: uid("s"), ...base, text: d.text.trim(), images: d.images, ...(d.repost ? { repost: d.repost } : {}) };
+    S.statuses.push(x); saveStatus(x);
+    if (d.repost) { const r = d.repost; const o = r.kind === "topic" ? topicById(r.id) : r.kind === "status" ? statusById(r.id) : r.kind === "diary" ? diaryById(r.id) : null;
+      if (o) { o.reposts = (o.reposts || 0) + 1; (r.kind === "topic" ? saveTopic : r.kind === "status" ? saveStatus : saveDiary)(o); }
+      if (r.kind === "status" && o && o.author.type === "char") remember(o.author.charId, `${herName()}在豆瓣转发了我的广播：「${(o.text || "").slice(0, 40)}」${x.text ? `，她说「${x.text.slice(0, 40)}」` : ""}`, `douban_status_${x.id}`); }
+    closePage(); toast("发布成功"); reactToMine(x, "s");
+  }
+
+  // ── 主页「动态」「相册」 ──
+  function personFeedHtml(k) {
+    const a = authorOfKey(k); const items = feedItems(new Set([k])).slice(0, 80);
+    const he = a.type === "char" ? "他" : "TA";
+    const btn = a.type === "user" ? `<div class="pf-btns"><button data-act="s-compose">写广播</button><button data-act="s-compose-diary">写日记</button></div>`
+      : `<button class="load-more" data-act="s-gen-one" data-k="${esc(k)}" ${S._feedBusy ? "disabled" : ""}>${S._feedBusy ? "正在刷新…" : `✨ 看看${he}最近发了什么（1 次 API）`}</button>`;
+    return `${a.type === "user" ? btn : ""}${items.length ? `<div class="st-list">${items.map(feedCard).join("")}</div>` : `<div class="mcard"><div class="mcard-empty" style="padding:14px">还没有动态</div></div>`}${a.type === "user" ? "" : `<div class="mcard">${btn}</div>`}`;
+  }
+  function personAlbumHtml(k) {
+    const pics = [];
+    for (const s of S.statuses) if (keyOf(s.author) === k) (s.images || []).forEach((im, i) => pics.push({ im, owner: "s:" + s.id, i, at: s.at }));
+    for (const t of S.topics) if ((!t.author.anon || k === "me") && keyOf(t.author) === k) (t.images || []).forEach((im, i) => pics.push({ im, owner: "t:" + t.id, i, at: t.createdAt }));
+    pics.sort(byTime);
+    return pics.length ? `<div class="mcard"><div class="mcard-h">照片 ${pics.length}</div><div class="album-grid">${pics.map(p => `<div class="st-pic" data-act="s-pic" data-owner="${esc(p.owner)}" data-idx="${p.i}">${p.im.ref ? `<img ${refSrc(p.im.ref)} alt="">` : `${placeholderImg()}<span>${esc(p.im.desc)}</span>`}</div>`).join("")}</div></div>`
+      : `<div class="mcard"><div class="mcard-empty" style="padding:14px">还没有照片。广播和帖子里配的图会收在这里</div></div>`;
+  }
+  const meTabs = (tab, extra) => `<div class="me-tabs">${[["home", "主页"], ["feed", "动态"], ["album", "相册"]].map(([v, t]) => `<button class="${tab === v ? "on" : ""}" data-act="s-ptab" data-v="${v}">${t}</button>`).join("")}${extra || ""}</div>`;
+  /** 主页卡片里的日记（真日记，代替原来的占位） */
+  function diaryCardHtml(k) {
+    const who = k === "me" ? "我" : k.startsWith("c:") ? "他" : "TA";
+    const ds = S.diaries.filter(d => keyOf(d.author) === k && diaryVisible(d)).sort(byTime);
+    return `<div class="mcard"><div class="mcard-h">${who === "我" ? "我的" : who + "的"}日记 ${ds.length}${k === "me" ? `<button class="mcard-btn" data-act="s-compose-diary">写日记</button>` : ""}</div>
+      ${ds.length ? ds.slice(0, 3).map(d => `<div class="dy-row" data-act="s-diary" data-id="${esc(d.id)}"><div><b>${esc(d.title)}</b>${d.private ? `<span class="role-tag mask">仅自己可见</span>` : ""}</div><p>${esc(d.body.replace(/\s+/g, " ").slice(0, 60))}</p><em>${fmtTime(d.at)}</em></div>`).join("") + (ds.length > 3 ? `<button class="load-more" data-act="s-ptab" data-v="feed">更多日记在「动态」里</button>` : "")
+        : `<div class="mcard-empty">${k === "me" ? "还没写过日记" : `${who}还没有日记`}</div>`}</div>`;
+  }
+  function deleteX(x, kind) {
+    const ev = [];
+    if (x.author.type === "char") ev.push({ charId: x.author.charId, eventId: `douban_${kind === "d" ? "diary" : "status"}_${x.id}` });
+    for (const c of x.comments || []) if (c.author.type === "char") ev.push({ charId: c.author.charId, eventId: `douban_scmt_${c.id}` });
+    forget(ev);
+    if (kind === "d") { S.diaries = S.diaries.filter(y => y !== x); dbDelete(COL.diaries, x.id); } else { S.statuses = S.statuses.filter(y => y !== x); dbDelete(COL.statuses, x.id); }
+  }
+  /** 广播 > 300 条、日记 > 150 篇：删最久的（她发的、她评论过的不删） */
+  async function pruneFeed() {
+    for (const [kind, list, max] of [["s", S.statuses, 300], ["d", S.diaries, 150]]) {
+      if (list.length <= max) continue;
+      const del = list.filter(x => x.author.type !== "user" && !(x.comments || []).some(c => c.author.type === "user") && !x.liked).sort((a, b) => new Date(a.at) - new Date(b.at)).slice(0, list.length - max);
+      for (const x of del) deleteX(x, kind);
+    }
+  }
+
+  document.addEventListener("click", async e => {
+    const el = e.target.closest("[data-act]"); if (!el || !/^s-/.test(el.dataset.act)) return;
+    e.stopPropagation();
+    const act = el.dataset.act; const pg = topPage(); const id = el.dataset.id; const kind = el.dataset.kind;
+    const xOf = () => kind === "d" ? diaryById(id) : statusById(id);
+    switch (act) {
+      case "s-home": S.homeTab = el.dataset.v; renderTab(); return;
+      case "s-refresh": refreshFeed().catch(err => console.warn(err)); return;
+      case "s-auto": S.meta.autoFeed = !S.meta.autoFeed; saveMeta(); toast(S.meta.autoFeed ? "打开了：你关注的人会自己发广播（会自己花 API）" : "关掉了：想看新的就点刷新"); refreshAll(); if (S.meta.autoFeed) runFeed().catch(err => console.warn(err)); return;
+      case "s-open": openStatus(id); return;
+      case "s-diary": openDiary(id); return;
+      case "s-compose": openCompose(); return;
+      case "s-compose-diary": openCompose({ diary: true }); return;
+      case "s-post": if (pg && pg.draft) postCompose(pg); return;
+      case "s-c-private": if (pg && pg.draft) { pg.draft.private = !pg.draft.private; pg.render(pg); } return;
+      case "s-c-pic": {
+        if (!pg || !pg.draft) return;
+        const how = await sheet("配图", [{ label: "从相册选", value: "pick" }, { label: "写一段描述当图片", value: "desc" }]);
+        if (how === "pick") { try { const refs = await pickImages(9 - pg.draft.images.length, 1280); pg.draft.images.push(...refs.map(ref => ({ ref, desc: "" }))); } catch (err) { toast("上传失败"); } }
+        if (how === "desc") { const desc = await inputSheet("图片描述", { placeholder: "画面里有什么", maxlength: 200, area: true }); if (desc) pg.draft.images.push({ desc }); }
+        pg.render(pg); return;
+      }
+      case "s-c-pic-rm": if (pg && pg.draft) { pg.draft.images.splice(+el.dataset.idx, 1); pg.render(pg); } return;
+      case "s-like": { const x = xOf(); if (!x) return; x.liked = !x.liked; x.likes = Math.max(0, (x.likes || 0) + (x.liked ? 1 : -1)); (kind === "d" ? saveDiary : saveStatus)(x); refreshAll(); return; }
+      case "s-repost": { const x = xOf(); if (!x) return; openCompose({ repost: { kind: kind === "d" ? "diary" : x.repost && !x.text ? x.repost.kind : "status", id: kind === "d" ? x.id : x.repost && !x.text ? x.repost.id : x.id } }); return; }
+      case "s-send": if (pg && pg.send) pg.send(); return;
+      case "s-cmt-to": { if (!pg || !pg.setTo) return; const x = statusById(pg.key.split(":")[1]) || diaryById(pg.key.split(":")[1]); const c = x && (x.comments || []).find(y => y.id === id); if (c) pg.setTo(c); return; }
+      case "s-gen-one": { const k = el.dataset.k; genFeed([{ k, n: rand(2, 3), diary: k.startsWith("c:") && Math.random() < 0.35 ? { private: Math.random() < 0.4 } : null }], `${whoOf(authorOfKey(k)).name}的广播`).then(n => { if (n === 0) toast("没写出来，再点一次试试"); }); return; }
+      case "s-ptab": {
+        if (pg && /^person:/.test(pg.key)) { pg.ptab = el.dataset.v; pg.render(pg); $(".page-body", pg.el).scrollTop = Math.min($(".page-body", pg.el).scrollTop, 260); }
+        else { S.meTab = el.dataset.v; renderTab(); }
+        return;
+      }
+      case "s-pic": {
+        const [t, oid] = el.dataset.owner.split(/:(.+)/); const x = t === "s" ? statusById(oid) : topicById(oid); if (!x) return;
+        openViewer(x.images, +el.dataset.idx, () => (t === "s" ? saveStatus : saveTopic)(x), x.author.type === "char" ? x.author.charId : undefined); return;
+      }
+      case "s-menu": {
+        const x = xOf(); if (!x) return;
+        const v = await sheet("", [...(kind === "d" && x.author.type === "user" ? [{ label: x.private ? "改成公开" : "改成仅自己可见", value: "priv" }] : []), { label: `删除这${kind === "d" ? "篇日记" : "条广播"}`, value: "del" }]);
+        if (v === "priv") { x.private = !x.private; saveDiary(x); refreshAll(); }
+        if (v === "del") { deleteX(x, kind); closePage(); toast("删掉了"); }
+        return;
+      }
+    }
+  });
+
   // ───────────────────────── 启动 ─────────────────────────
   // ───────────────────────── 私信 ─────────────────────────
   // dms：一个人一条会话 { id, scope, k: "c:角色id" | "n:昵称", fromTopic（第一次从哪个帖子点进来）, msgs: [{ id, me, text, images: [{ ref | desc, seen }], quote: { id, text }, at }], unread, lastAt, mem: [记忆 id] }
@@ -2195,10 +2550,11 @@ ${CALM_LINE}
   async function boot() {
     document.body.insertAdjacentHTML("afterbegin", `<header class="topbar" id="topbar"></header><main class="view" id="view"><div class="gen-tip"><span class="spinner"></span>加载中…</div></main><nav class="tabbar" id="tabbar"></nav>`);
     if (!api) { $("#view").innerHTML = `<div class="empty">请在小手机里打开这个 APP</div>`; return; }
-    try { await loadAll(); pruneTopics().catch(e => console.warn(e)); pruneWorks().catch(e => console.warn(e)); } catch (e) { console.error(e); $("#view").innerHTML = `<div class="empty">加载失败：${esc(e.message || e)}</div>`; return; }
+    try { await loadAll(); pruneTopics().catch(e => console.warn(e)); pruneWorks().catch(e => console.warn(e)); pruneFeed().catch(e => console.warn(e)); } catch (e) { console.error(e); $("#view").innerHTML = `<div class="empty">加载失败：${esc(e.message || e)}</div>`; return; }
     renderTab();
-    runFollowMarks().catch(e => console.warn(e)); runDmQueue().catch(e => console.warn(e));
-    document.addEventListener("visibilitychange", () => { if (!document.hidden) { runFollowMarks().catch(e => console.warn(e)); runDmQueue().catch(e => console.warn(e)); } });
+    runFollowMarks().catch(e => console.warn(e)); runDmQueue().catch(e => console.warn(e)); runFeed().catch(e => console.warn(e));
+    document.addEventListener("visibilitychange", () => { if (!document.hidden) { runFollowMarks().catch(e => console.warn(e)); runDmQueue().catch(e => console.warn(e)); runFeed().catch(e => console.warn(e)); } });
+    setInterval(() => runFeed().catch(e => console.warn(e)), 30 * 60e3);
     setInterval(() => { if (!document.hidden) runDmQueue().catch(e => console.warn(e)); }, 60e3);
   }
   boot();

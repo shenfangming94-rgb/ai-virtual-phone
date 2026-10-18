@@ -317,7 +317,9 @@
     const zb = $(".zone .zbody"); const keep = S.view === "zone" && zb && zb.dataset.k === `${S.zoneOf}|${S.zoneTab}` ? zb.scrollTop : null;
     const keepIds = ["postin", "bt", "bbody", "bcat", "bpriv", "bbgm"].map(id => [id, ($(`#${id}`) || {}).value]).filter(x => x[1]);
     const drafts = [...document.querySelectorAll(".cmform input")].filter(i => i.value).map(i => [i.dataset.post, i.value, i.dataset.to || "", i.placeholder]);
+    const ks = [".cp-body", ".pr-body"].map(q => [q, ($(q) || {}).scrollTop]).filter(x => x[1]);
     const v = V[S.view] || V.login; $("#app").innerHTML = v(); hydrate($("#app"));
+    for (const [q, t] of ks) { const el = $(q); if (el) el.scrollTop = t; }
     if (keep != null) { const z2 = $(".zone .zbody"); if (z2) z2.scrollTop = keep; }
     for (const [id, v] of keepIds) { const el = $(`#${id}`); if (el) el.value = v; }
     for (const [pid, val, to, ph] of drafts) { const i = $(`.cmform input[data-post="${pid}"]`); if (i) { i.value = val; i.dataset.to = to; i.placeholder = ph; } }
@@ -519,11 +521,18 @@
   const cpOn = () => !!(cp() && cp().since && friendById(cp().fid));
   const cpDays = () => { const d0 = new Date(cp().since), t = new Date(); d0.setHours(0, 0, 0, 0); t.setHours(0, 0, 0, 0); return Math.round((t - d0) / 864e5) + 1; }; // 按日历算：开通那天是第 1 天，过了零点就是第 2 天
   const cpFriend = () => cpOn() ? friendById(cp().fid) : null;
+  /** 他今天在情侣空间还能做的：浇水、写心情、答今天的问题 */
+  const cpTodo = f => { const c = cp(); if (!c || !c.since) return ""; const d = cpDay(), tr = cpTree(), m = cpMood(), q = cpQa(); const out = [];
+    if (tr.him !== d) out.push("想给你们的爱情树浇水就加 ===浇水===（块里不用写）");
+    if (!m.him) out.push(`写今天的心情就加 ===今天的心情===，块里写一句话${m.me ? `（她今天的心情：「${m.me}」）` : ""}`);
+    if (!q.him || (q.me && !q.score)) out.push(`今天的情侣问答：「${q.q}」${q.me ? `她答的是「${q.me}」。` : ""}${q.him ? `你答过了：「${q.him}」。` : ""}要答就加 ===问答===，块里写 回答：你的答案${q.me ? "；再写 默契：1 到 5 的数字（你们俩答案有多合拍）和 吐槽：一句对她答案的话" : ""}`);
+    return out.length ? `\n情侣空间今天：${out.join("；")}。` : ""; };
   function cpCtx(f) { const c = cp(); if (!c) return "";
     if (c.pending && c.pending.fid === f.id) return c.pending.from === "me" ? "用户邀请你在 QQ 上开通情侣空间，你还没答复。" : "你邀请用户开通情侣空间，她还没答复。";
     if (!c.since || c.fid !== f.id) return "";
     const notes = (c.notes || []).filter(shown).slice(-4).map(n => `${n.who === "me" ? "她" : n.who === f.id ? "你" : n.who}：${n.text}`).join("；");
-    return `你和用户开通了 QQ 情侣空间，今天是在一起第 ${cpDays()} 天。情侣签名：${c.sig || "（还没写）"}。${notes ? `最近的小纸条：${notes}` : ""}`; }
+    const ann = cpAnnivs().filter(a => a.left <= 1).map(a => `${a.left ? "明天" : "今天"}是你们的「${a.name}」`).join("，");
+    return `你和用户开通了 QQ 情侣空间，今天是在一起第 ${cpDays()} 天。情侣签名：${c.sig || "（还没写）"}。${ann ? `${ann}。` : ""}${notes ? `最近的小纸条：${notes}` : ""}`; }
   function cpOpen(f) { const c = A().couple = { ...(A().couple || {}), fid: f.id, since: new Date().toISOString(), pending: null, notes: (A().couple || {}).notes || [], diary: (A().couple || {}).diary || [], photos: (A().couple || {}).photos || [] }; saveMeta();
     const ch = chatOf(f.id); ch.msgs.push({ id: uid("m"), from: "sys", text: `你和 ${nameOf(f)} 开通了情侣空间，今天是第 1 天 💕`, at: new Date().toISOString() }); saveChat(ch);
     play("online"); qqPop("系统消息", `${fAv(f, 28)}<div>你和 <b>${esc(nameOf(f))}</b><br>开通了情侣空间 💕</div>`); remember(f, `我和 ${A().nick} 在 QQ 上开通了情侣空间`); return c; }
@@ -536,6 +545,9 @@
     if (!cpOn() || A().couple.fid !== f.id) return; const now = new Date().toISOString(); const cc = A().couple;
     const sg = block(raw, "情侣签名"); if (sg) cc.sig = sg.slice(0, 40);
     const nt = block(raw, "小纸条"); if (nt) { cc.notes.push({ who: f.id, text: nt.slice(0, 200), at: now }); qqPop("情侣空间", `${fAv(f, 28)}<div><b>${esc(nameOf(f))}</b><br>给你留了一张小纸条</div>`); }
+    const today = cpDay(); if (/===\s*浇水\s*===/.test(raw)) { const tr = cpTree(); if (tr.him !== today) { tr.him = today; tr.hisAt = now; tr.exp += tr.me === today ? 15 : 10; } }
+    const md = block(raw, "今天的心情"); if (md) cpMood().him = md.slice(0, 40);
+    const qa = block(raw, "问答"); if (qa) { const e = cpQa(); const an = field(qa, "回答"); if (an && !e.him) e.him = an.slice(0, 200); const sc = parseInt(field(qa, "默契"), 10); if (e.me && e.him && sc >= 1 && sc <= 5) { e.score = sc; e.cm = (field(qa, "吐槽") || "").replace(/^(无|没有)$/, "").slice(0, 60); } }
     const dy = block(raw, "恋爱日记"); if (dy) { cc.diary.push({ who: f.id, title: (field(dy, "标题") || "无题").slice(0, 30), text: (dy.replace(/标题\s*[：:][^\n]*\n?/, "")).trim().slice(0, 3000), at: now }); remember(f, `我在情侣空间写了一篇恋爱日记`); }
     saveMeta(); }
   /** 他身边的人逛到情侣空间，在小纸条墙上起哄（谁来、说什么按关系，可以没人） */
@@ -547,18 +559,84 @@
     for (const n of parseCm(f, block(raw, "留言")).filter(x => !x.who.startsWith("f:")).slice(0, 4)) { t += rand(10, 120) * 60e3; c.notes.push({ who: n.who, text: n.text, at: new Date(t).toISOString() }); }
     saveMeta();
   }
-  const CP_FMT = f => { const c = cp(); if (cpOn() && c.fid === f.id) return "你们的情侣空间：想改情侣签名加 ===情侣签名===，想给她留小纸条加 ===小纸条===，想写恋爱日记加 ===恋爱日记===（第一行写 标题：），都是内容写在块里，不想写就不写。";
+  const CP_FMT = f => { const c = cp(); if (cpOn() && c.fid === f.id) return "你们的情侣空间：想改情侣签名加 ===情侣签名===，想给她留小纸条加 ===小纸条===，想写恋爱日记加 ===恋爱日记===（第一行写 标题：），都是内容写在块里，不想写就不写。" + cpTodo(f);
     if (c && c.pending && c.pending.fid === f.id && c.pending.from === "me") return "答复她的情侣空间邀请：同意写 ===同意情侣空间===，不同意写 ===不同意===（块里不用写内容）。";
     if (!cpOn() && !(c && c.pending)) return "想邀请用户开通 QQ 情侣空间的话，加 ===情侣空间邀请===（块里不用写内容）。"; return ""; };
 
-  V.couple = () => { const c = cp(), f = cpFriend(); const tab = S.cpTab || "home";
-    const notes = [...(c.notes || [])].filter(shown).reverse().map(n => `<div class="cp-note ${n.who === "me" ? "me" : n.who === f.id ? "" : "npc"}"><p>${richText(n.text)}</p><small>${n.who === "me" ? esc(A().nick) : n.who === f.id ? esc(nameOf(f)) : `${esc(n.who)} 来过`} · ${esc(ago(S.meta.cur, n.at))}</small></div>`).join("") || `<div class="empty">还没有小纸条</div>`;
-    const diary = [...(c.diary || [])].reverse().map(d => `<div class="cp-diary"><b>${esc(d.title)}</b><small>${d.who === "me" ? esc(A().nick) : esc(nameOf(f))} · ${esc(ymd(thereDate(S.meta.cur, new Date(d.at))))}</small><p>${richText(d.text)}</p></div>`).join("") || `<div class="empty">还没有恋爱日记</div>`;
-    const photos = `<div class="cp-photos"><img class="px" src="${coupleUrl(myShow(), hisShow(f), myShow().bg)}" alt="">${(c.photos || []).map(r => `<img data-ref="${esc(r)}" data-act="view-photo" alt="">`).join("")}</div><div class="zbtn"><button class="btn s" data-act="cp-photo">＋ 传一张合影</button></div>`;
-    return `<div class="couple">${titlebar(`${esc(A().nick)} ❤ ${esc(nameOf(f))}`, "back-main")}
-      <div class="cp-top"><img class="px" src="${coupleUrl(myShow(), hisShow(f), "hearts")}" alt=""><div class="cp-info"><div class="cp-days">在一起的第 <b>${cpDays()}</b> 天</div><small>${esc(ymd(thereDate(S.meta.cur, new Date(c.since))))} 开通</small><div class="cp-sig" data-act="cp-sig">${c.sig ? `「${esc(c.sig)}」` : "点这里写情侣签名"}</div></div></div>
-      <div class="qs-tabs">${[["home", "小纸条"], ["diary", "恋爱日记"], ["photos", "合影墙"]].map(([k, t]) => `<button class="${tab === k ? "on" : ""}" data-act="cp-tab" data-t="${k}">${t}</button>`).join("")}</div>
-      <div class="qs-body">${tab === "home" ? `<div class="cp-write"><input id="cpnote" maxlength="120" placeholder="给他留一张小纸条…"><button class="btn s" data-act="cp-note">贴上</button></div>${notes}` : tab === "diary" ? `<div class="zbtn"><button class="btn s" data-act="cp-diary">✎ 写恋爱日记</button></div>${diary}` : photos}</div></div>`; };
+  // 情侣空间像素版（她定稿：scratchpad peng/cp_px.png，固定粉色）：首页（纪念日、爱情树、今天的心情）、小纸条、恋爱日记、合影墙（软木板，拖着摆、两指改大小、往下长）、问答（每天一题）
+  // c.anniv = [{ id, name, md: "MM-DD" }]；c.tree = { exp, me: 日期, him: 日期, hisAt }；c.mood = { day, me, him }；c.qa = [{ day, q, me, him, score, cm }]；c.photos = [{ id, ref, x, y, w, r, cap, z }]
+  const CP_QS = ["如果明天放假一天，你最想跟我干嘛？", "我们第一次聊天我说的第一句话是什么？", "你最喜欢我哪一点？", "我们以后养猫还是养狗？", "你觉得我生气的时候像什么动物？", "第一次见我是什么感觉？", "我最爱吃的东西是什么？", "如果我们去旅行，你想去哪儿？",
+    "你觉得我们俩谁更粘人？", "我做什么事最让你心动？", "你会给我唱哪首歌？", "下雨天你想和我做什么？", "我们吵架了谁会先认错？", "你手机里存了我几张照片？", "你最想跟我一起看哪部电影？", "如果我变成一只小猫你会怎么办？", "你觉得我最像哪个季节？", "我们第一次约会去哪儿比较好？",
+    "我有什么小毛病是你偷偷觉得可爱的？", "你会怎么跟你朋友介绍我？", "十年后的今天我们在干嘛？", "你最想送我什么礼物？", "我哪句话你记得最清楚？", "要是我们只能用一个表情聊天，你选哪个？", "你最怕我做什么？", "你什么时候最想我？", "我们俩谁做饭更好吃？",
+    "如果有一天我不理你了你会怎么办？", "你觉得我们像哪对 CP？", "我穿什么颜色最好看？", "睡前你最想跟我说什么？", "你会偷偷看我的空间吗？", "我们的情侣签名你想改成什么？", "你最想和我一起完成的一件事？", "我们去游乐园你第一个玩什么？", "冬天和夏天你更想跟我过哪个？"];
+  const cpDay = (d = new Date()) => ymd(thereDate(S.meta.cur, d));
+  const cpQ = day => { const c = cp(), used = new Set((c.qa || []).filter(x => x.day !== day).map(x => x.q)); let h = 0; for (const ch of day + c.since) h = (h * 31 + ch.charCodeAt(0)) >>> 0; const free = CP_QS.filter(q => !used.has(q)); const pool = free.length ? free : CP_QS; return pool[h % pool.length]; };
+  const cpQa = () => { const c = cp(); c.qa = c.qa || []; const day = cpDay(); let e = c.qa.find(x => x.day === day); if (!e) { e = { day, q: cpQ(day) }; c.qa.push(e); c.qa = c.qa.slice(-60); } return e; };
+  const cpTree = () => { const c = cp(); return c.tree || (c.tree = { exp: 0 }); };
+  const cpTreeLv = exp => { let i = 0; window.TREE_LV.forEach(([n], k) => { if (exp >= n) i = k; }); return i; };
+  const cpMood = () => { const c = cp(), day = cpDay(); if (!c.mood || c.mood.day !== day) c.mood = { day }; return c.mood; };
+  /** 纪念日：在一起 100/200/365/520/1000 天这些自动算，她自己加的每年一次；返回 [名字, 还有几天, 日期] 按近到远 */
+  function cpAnnivs() { const c = cp(); const t0 = new Date(); t0.setHours(0, 0, 0, 0); const s0 = new Date(c.since); s0.setHours(0, 0, 0, 0); const out = [];
+    for (const n of [100, 200, 300, 365, 520, 666, 730, 1000, 1314]) { const d = new Date(s0.getTime() + (n - 1) * 864e5); const left = Math.round((d - t0) / 864e5); if (left >= 0) out.push({ name: n === 365 ? "在一起一周年" : n === 730 ? "在一起两周年" : `在一起 ${n} 天`, left, auto: true }); if (out.length >= 2) break; }
+    for (const a of c.anniv || []) { const [m, dd] = a.md.split("-").map(Number); const there = thereDate(S.meta.cur, t0); let d = new Date(there.getFullYear(), m - 1, dd); if (d < new Date(there.getFullYear(), there.getMonth(), there.getDate())) d = new Date(there.getFullYear() + 1, m - 1, dd);
+      out.push({ id: a.id, name: a.name, left: Math.round((d - new Date(there.getFullYear(), there.getMonth(), there.getDate())) / 864e5), md: a.md }); }
+    return out.sort((a, b) => a.left - b.left); }
+  const cpPhotos = () => { const c = cp(); if (!c.photos) c.photos = []; if (c.photos.some(p => typeof p === "string")) c.photos = c.photos.map((p, i) => typeof p === "string" ? { id: uid("cph"), ref: p, x: i % 2 ? 180 : 14, y: 14 + Math.floor(i / 2) * 170, w: 140, r: rand(-6, 6), cap: "", z: i } : p); return c.photos; };
+  const cpTopZ = () => Math.max(0, ...cpPhotos().map(p => p.z || 0));
+  const pxImg = (key, g, k, cls = "") => `<img class="pi ${cls}" src="${pixUrl(key, g, k)}" alt="">`;
+  V.couple = () => { const c = cp(), f = cpFriend(); const tab = S.cpTab || "home"; const me = A().nick, him = nameOf(f), today = cpDay();
+    const notes = [...(c.notes || [])].filter(shown).reverse().map(n => `<div class="cp-note ${n.who === "me" ? "me" : n.who === f.id ? "" : "npc"}"><p>${richText(n.text)}</p><small>${n.who === "me" ? "你" : n.who === f.id ? esc(him) : `${esc(n.who)} 来过`} · ${esc(ago(S.meta.cur, n.at))}</small></div>`).join("") || `<div class="empty">还没有小纸条</div>`;
+    const diary = [...(c.diary || [])].reverse().map(d => `<div class="cp-diary pxc"><b>${esc(d.title)}</b><small>${d.who === "me" ? "你" : esc(him)} · ${esc(ymd(thereDate(S.meta.cur, new Date(d.at))))}</small><p>${richText(d.text)}</p></div>`).join("") || `<div class="empty">还没有恋爱日记</div>`;
+    let body = "";
+    if (tab === "home") { const tr = cpTree(), lv = cpTreeLv(tr.exp), L = window.TREE_LV, next = L[lv + 1], mood = cpMood();
+      const prog = next ? Math.round((tr.exp - L[lv][0]) / (next[0] - L[lv][0]) * 10) : 10;
+      body = `<div class="pxc"><h4>${pxImg("cph1", window.qqheart(true), 2)}纪念日<button data-act="cp-anniv-add">＋ 添加</button></h4>${cpAnnivs().map(a => `<div class="cp-ann" ${a.id ? `data-act="cp-anniv-del" data-id="${a.id}"` : ""}><span>${esc(a.name)}</span><span>${a.left === 0 ? "<em>就是今天</em>" : `还有 <em>${a.left}</em> 天`}</span></div>`).join("")}<div class="cp-ann"><span>开通情侣空间</span><span>${esc(ymd(thereDate(S.meta.cur, new Date(c.since))).slice(5))}</span></div></div>
+        <div class="pxc"><h4>爱情树<span>Lv.${lv + 1} ${L[lv][1]}</span></h4><div class="cp-tree">${pxImg(`tr${lv}`, window.qqtree(lv), 4)}<div><div class="seg">${Array.from({ length: 10 }, (_, i) => `<i class="${i < prog ? "on" : ""}"></i>`).join("")}</div><p>${tr.me === today ? "今天你浇过水了" : "今天你还没浇水"}<br>${tr.him === today ? `${esc(him)} ${tr.hisAt ? esc(hms(thereDate(S.meta.cur, new Date(tr.hisAt))).slice(0, 5)) + " " : ""}浇过了` : `${esc(him)} 今天还没来浇`}</p>${tr.me === today ? "" : `<button class="cp-btn" data-act="cp-water">浇水</button>`}</div></div></div>
+        <div class="pxc"><h4>今天的心情</h4><div class="cp-mood"><div data-act="cp-mood"><b>你</b>${mood.me ? esc(mood.me) : `<span class="empty">点这里写一句</span>`}</div><div><b>${esc(him)}</b>${mood.him ? esc(mood.him) : `<span class="empty">他还没写</span>`}</div></div></div>`; }
+    else if (tab === "notes") body = `<div class="cp-write"><input id="cpnote" maxlength="120" placeholder="给他留一张小纸条…"><button class="cp-btn" data-act="cp-note">贴上</button></div>${notes}`;
+    else if (tab === "diary") body = `<div class="zbtn"><button class="cp-btn" data-act="cp-diary">✎ 写恋爱日记</button></div>${diary}`;
+    else if (tab === "photos") { const ps = cpPhotos(); const h = Math.max(520, ...ps.map(p => p.y + p.w * 1.4 + 160));
+      body = `<p class="cp-hint">按住拖动摆位置 · 两指捏改大小 · 点一下写字、放大、删掉</p><div class="cp-wall" style="height:${h}px;background-image:url(${pixUrl("cork", window.qqcork(), 4)})">${ps.map(p => `<div class="pol" data-id="${p.id}" style="left:${p.x}px;top:${p.y}px;width:${p.w}px;z-index:${p.z || 0};transform:rotate(${p.r}deg)"><img data-ref="${esc(p.ref)}" alt="" draggable="false"><span>${esc(p.cap || "")}</span>${pxImg("pin", window.qqpin(), 2, "pin")}</div>`).join("")}</div><div class="zbtn" style="text-align:center"><button class="cp-btn" data-act="cp-photo">＋ 贴一张合影</button></div>`; }
+    else { const q = cpQa(); const old = [...(c.qa || [])].filter(x => x.day !== q.day).reverse().slice(0, 20);
+      const hearts = n => Array.from({ length: 5 }, (_, i) => pxImg(`ht${i < n}`, window.qqheart(i < n), 3)).join("");
+      const card = (e, now) => `<div class="pxc cp-q"><small>${now ? "今天的问题" : "那天的问题"} · ${esc(e.day.slice(5))}</small><h3>${esc(e.q)}</h3><div class="cp-ans"><b>你</b>${e.me ? `<p>${esc(e.me)}</p>` : now ? `<p class="in"><input id="cpqa" maxlength="120" placeholder="写你的答案…"><button class="cp-btn" data-act="cp-qa">答</button></p>` : `<p class="lock">没答</p>`}</div>
+        <div class="cp-ans"><b>${esc(him)}</b>${e.him ? e.me ? `<p>${esc(e.him)}</p>` : `<p class="lock">他答过了，你答完才能看</p>` : `<p class="lock">${e.me && now ? "等他来答…" : "他还没答"}</p>`}</div>${e.score ? `<div class="cp-score">默契度 ${hearts(e.score)}</div>${e.cm ? `<div class="cp-cm">${esc(him)}：「${esc(e.cm)}」</div>` : ""}` : ""}</div>`;
+      body = card(q, true) + old.map(e => card(e)).join(""); }
+    return `<div class="couple cpx">${titlebar(`${him} ❤ 你`, "back-main")}
+      <div class="cp-top"><div class="cp-doll pxb"><img class="pi" src="${coupleUrl(myShow(), hisShow(f), "hearts")}" alt=""></div><div class="cp-info"><div class="cp-days">在一起的第${pxImg(`dg${cpDays()}`, window.qqdigits(cpDays(), "#c2187a"), 4)}天</div><small>${esc(ymd(thereDate(S.meta.cur, new Date(c.since))))} 开通</small><div class="cp-sig pxb" data-act="cp-sig">${c.sig ? esc(c.sig) : "点这里写情侣签名"}</div></div></div>
+      <div class="cp-tabs">${[["home", "首页"], ["notes", "小纸条"], ["diary", "日记"], ["photos", "合影墙"], ["qa", "问答"]].map(([k, t]) => `<button class="${tab === k ? "on" : ""}" data-act="cp-tab" data-t="${k}">${t}</button>`).join("")}</div>
+      <div class="cp-body pxb">${body}</div></div>`; };
+  ACT["cp-water"] = () => { const tr = cpTree(), d = cpDay(); if (tr.me === d) return; tr.me = d; const lv0 = cpTreeLv(tr.exp); tr.exp += tr.him === d ? 15 : 10; saveMeta();
+    const lv = cpTreeLv(tr.exp); if (lv > lv0) { toast(`爱情树${window.TREE_LV[lv][1]}！`); remember(cpFriend(), `我们情侣空间的爱情树${window.TREE_LV[lv][1]}`); } else toast("浇好了"); render(); };
+  ACT["cp-mood"] = async () => { const m = cpMood(); const r = await ask("今天的心情", [{ label: "一句话", value: m.me || "", max: 40 }]); if (!r || !r[0]) return; m.me = r[0]; saveMeta(); if (!m.him) queueZone(cpFriend(), { kind: "cpMood" }, rand(5, 60) * 60e3); render(); };
+  ACT["cp-qa"] = () => { const t = ($("#cpqa").value || "").trim(); if (!t) return; const e = cpQa(); e.me = t; saveMeta(); queueZone(cpFriend(), { kind: "cpQa" }, rand(3, 40) * 60e3); render(); };
+  ACT["cp-anniv-add"] = async () => { const r = await ask("添加纪念日", [{ label: "叫什么（比如：他的生日）", max: 16 }, { label: "哪天（月-日，比如 03-14）", max: 5 }]); if (!r || !r[0]) return;
+    const m = (r[1] || "").match(/^(\d{1,2})\D+(\d{1,2})$/); if (!m || +m[1] > 12 || +m[2] > 31) return toast("日期写成 月-日，比如 03-14");
+    const c = cp(); c.anniv = [...(c.anniv || []), { id: uid("an"), name: r[0], md: `${m[1].padStart(2, "0")}-${m[2].padStart(2, "0")}` }]; saveMeta(); remember(cpFriend(), `${A().nick} 在情侣空间记了一个纪念日：${r[0]}（${r[1]}）`); render(); };
+  ACT["cp-anniv-del"] = b => { const c = cp(), a = (c.anniv || []).find(x => x.id === b.dataset.id); if (!a) return;
+    sheet(`<h3>${esc(a.name)}（${a.md}）</h3><div class="btns"><button class="btn" data-v="no">留着</button><button class="btn s" data-v="ok">删掉这个纪念日</button></div>`, v => { closeSheet(); if (v !== "ok") return; c.anniv = c.anniv.filter(x => x !== a); saveMeta(); render(); }); };
+  ACT["cp-photo"] = async () => { const ph = await pickPhotoFor(S.meta.cur); if (!ph) return; const ps = cpPhotos(), n = ps.length;
+    ps.push({ id: uid("cph"), ref: ph.ref, x: (n % 2 ? 180 : 12) + rand(0, 10), y: 14 + Math.floor(n / 2) * 175 + rand(0, 10), w: 140, r: rand(-6, 6), cap: "", z: cpTopZ() + 1 }); saveMeta(); render(); };
+  function cpPhotoMenu(ph) { sheet(`<h3>这张合影</h3><div class="mlist"><button data-v="cap">写一句话</button><button data-v="view">放大看</button><button data-v="top">放到最上面</button><button data-v="big">放大一点</button><button data-v="small">缩小一点</button><button data-v="del">删掉</button></div><div class="btns"><button class="btn" data-v="no">取消</button></div>`, async v => { closeSheet();
+    if (v === "cap") { const r = await ask("写一句话", [{ label: "写在照片下面", value: ph.cap || "", max: 16 }]); if (r) ph.cap = r[0]; }
+    if (v === "view") return ACT["view-photo"]({ dataset: { ref: ph.ref } });
+    if (v === "top") ph.z = cpTopZ() + 1; if (v === "big") ph.w = Math.min(260, ph.w + 30); if (v === "small") ph.w = Math.max(70, ph.w - 30);
+    if (v === "del") { const ok = await new Promise(res => sheet(`<h3>删掉这张合影？</h3><div class="btns"><button class="btn" data-v="no">算了</button><button class="btn s" data-v="ok">删掉</button></div>`, x => { closeSheet(); res(x === "ok"); })); if (ok) cp().photos = cp().photos.filter(x => x !== ph); }
+    if (v !== "no") { saveMeta(); render(); } }); }
+  // 合影墙：按住拖、两指捏改大小、没动就是点了一下（出菜单）
+  (() => { let drag = null; const pts = new Map();
+    document.addEventListener("pointerdown", e => { const el = e.target.closest(".cp-wall .pol"); if (!el) return; e.preventDefault(); pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      if (!drag || drag.el !== el) drag = { el, id: el.dataset.id, x0: e.clientX, y0: e.clientY, left: el.offsetLeft, top: el.offsetTop, moved: false };
+      if (pts.size === 2) { const [a, b] = [...pts.values()]; drag.d0 = Math.hypot(a.x - b.x, a.y - b.y); drag.w0 = el.offsetWidth; } el.style.zIndex = 999; });
+    document.addEventListener("pointermove", e => { if (!drag || !pts.has(e.pointerId)) return; pts.set(e.pointerId, { x: e.clientX, y: e.clientY }); e.preventDefault();
+      if (pts.size >= 2 && drag.d0) { const [a, b] = [...pts.values()]; drag.el.style.width = Math.max(70, Math.min(260, drag.w0 * Math.hypot(a.x - b.x, a.y - b.y) / drag.d0)) + "px"; drag.moved = true; return; }
+      const dx = e.clientX - drag.x0, dy = e.clientY - drag.y0; if (Math.abs(dx) + Math.abs(dy) > 6) drag.moved = true; if (!drag.moved) return;
+      const wall = drag.el.parentElement; drag.el.style.left = Math.max(-30, Math.min(wall.clientWidth - 40, drag.left + dx)) + "px"; drag.el.style.top = Math.max(0, drag.top + dy) + "px";
+      const need = drag.el.offsetTop + drag.el.offsetHeight + 160; if (need > wall.offsetHeight) wall.style.height = need + "px"; }, { passive: false });
+    const up = e => { if (!pts.delete(e.pointerId) || pts.size || !drag) return; const d = drag; drag = null; const ph = (cp() && cp().photos || []).find(x => x.id === d.id); if (!ph) return;
+      if (!d.moved) { d.el.style.zIndex = ph.z || 0; return cpPhotoMenu(ph); }
+      ph.x = d.el.offsetLeft; ph.y = d.el.offsetTop; ph.w = d.el.offsetWidth; ph.z = cpTopZ() + 1; d.el.style.zIndex = ph.z; saveMeta(); };
+    document.addEventListener("pointerup", up); document.addEventListener("pointercancel", up); })();
   ACT["open-couple"] = () => { if (!cpOn()) return; S.view = "couple"; S.cpTab = "home"; render(); };
   ACT["cp-tab"] = b => { S.cpTab = b.dataset.t; render(); };
   ACT["cp-invite"] = () => { const f = friendById(S.zoneOf); if (cpOn()) return toast("已经开通情侣空间了"); A().couple = { ...(A().couple || {}), pending: { from: "me", fid: f.id } }; saveMeta();
@@ -567,7 +645,6 @@
   ACT["cp-sig"] = async () => { const r = await ask("情侣签名", [{ label: "你们俩的签名", value: cp().sig || "", max: 40 }]); if (r) { cp().sig = r[0]; saveMeta(); remember(cpFriend(), `${A().nick} 把我们的情侣签名改成了「${r[0]}」`); render(); } };
   ACT["cp-note"] = () => { const t = ($("#cpnote").value || "").trim(); if (!t) return; cp().notes.push({ who: "me", text: t, at: new Date().toISOString() }); saveMeta(); queueZone(cpFriend(), { kind: "cpNote" }, rand(2, 20) * 60e3); render(); };
   ACT["cp-diary"] = async () => { const r = await ask("写恋爱日记", [{ label: "标题", max: 30 }, { label: "正文", long: true, max: 3000 }], "写好了"); if (!r || !r[1]) return; cp().diary.push({ who: "me", title: r[0] || "无题", text: r[1], at: new Date().toISOString() }); saveMeta(); queueZone(cpFriend(), { kind: "cpDiary" }, rand(10, 90) * 60e3); render(); };
-  ACT["cp-photo"] = async () => { const ph = await pickPhotoFor(S.meta.cur); if (!ph) return; cp().photos = [...(cp().photos || []), ph.ref]; saveMeta(); render(); };
   // ───────────────────────── QQ宠物：和他一起养的像素小企鹅（src/pixel.js 画）；饱/干净/开心/精神随时间掉，喂/洗/玩/睡/上学/打工/旅行/看病，商店装扮，它自己写日记，他每天也来照顾 ─────────────────────────
   // A().pet = { fid, name, born, hunger, clean, mood, energy, exp, edu, sick, away: { kind, start, until }, sleepUntil, wokeAt, inv: { 吃的 id: 个数 }, owned: [装扮 id], wear: { hat, face, neck }, skin, diary: [{ day, text }], cards: [{ place, text, at }], last, log: [{ who, act, at, note }] }
   const PET_ACTS = { feed: ["喂", "hunger", 25], bath: ["洗澡", "clean", 40], play: ["陪它玩", "mood", 30] };
@@ -1406,6 +1483,7 @@
     if (evs.some(e => e.kind === "cpOpened")) todo.push(`你和用户刚开通了情侣空间。${CP_FMT(f)}`);
     if (evs.some(e => e.kind === "cpNote")) { const n = (cp().notes || []).filter(x => x.who === "me").slice(-1)[0]; if (n) todo.push(`用户在情侣空间给你留了小纸条：「${n.text}」。${CP_FMT(f)}`); }
     if (evs.some(e => e.kind === "cpDiary")) { const d = (cp().diary || []).filter(x => x.who === "me").slice(-1)[0]; if (d) todo.push(`用户在情侣空间写了恋爱日记《${d.title}》：\n${d.text.slice(0, 1500)}\n${CP_FMT(f)}`); }
+    if (evs.some(e => e.kind === "cpMood" || e.kind === "cpQa") && cpOn() && cp().fid === f.id) { const t = cpTodo(f); if (t) todo.push(`用户在你们的情侣空间${evs.some(e => e.kind === "cpQa") ? "答了今天的问题" : "写了今天的心情"}。${t}`); }
     for (const e of evs.filter(e => e.kind === "gotShow")) todo.push(`用户在 QQ 上送了你一件 QQ秀「${e.name}」。想穿上就写 ===换装===，想谢她可以在她留言板上留言。\n你能用的：\n${catText(hisShow(f).g)}\n===换装===\n衣服：\n发型：\n配饰：\n背景：\n表情：\n===结束===（不换的项空着）`);
     for (const e of evs.filter(e => e.kind === "myBlog")) { const b = (mz.blogs || []).find(x => x.id === e.pid); if (b) { if (b.photo && !b.photo.seen) { await seePhoto(f, b.photo); saveMeta(); } todo.push(`你看到用户在她空间写了一篇日志《${b.title}》${b.priv === "friends" ? "（仅好友可见）" : ""}：\n${b.text.slice(0, 2000)}${photoText(b.photo, true)}\n评不评论按你们的关系和你的人设决定。`); } }
     for (const e of evs.filter(e => e.kind === "myPostReply")) { const p = itemOf(mz, e.pid); const mine = p && (p.comments || []).filter(cm => cm.who === "me" && cm.to === `f:${f.id}`).slice(-1)[0]; if (mine) todo.push(`用户在她自己的${isBlog(p) ? `日志《${p.title}》` : `说说「${p.text.slice(0, 80)}」`}下回复了你：「${mine.text}」。回不回按你的人设来。`); }
@@ -1471,6 +1549,7 @@
           else if (Math.random() < .25) { const k = ["fish", "cake", "ice", "milk"][rand(0, 3)]; p.inv[k] = (p.inv[k] || 0) + 1; petLog(f.id, "buy", `给${p.name}买了${PET_FOOD[k].name}`); saveMeta(); note = `给${p.name}买了${PET_FOOD[k].name}`; }
           else { const act = p.hunger <= p.clean && p.hunger <= p.mood ? "feed" : p.clean <= p.mood ? "bath" : "play"; const fd = act === "feed" ? ["fish", "cake", "ice", "milk"].find(x => p.inv[x]) || "onigiri" : null; if (fd && fd !== "onigiri") p.inv[fd]--; petDo(f.id, act, fd); note = p.log[p.log.length - 1].note; }
           if (recentAt(it.at)) qqPop("QQ宠物", `<img class="pi" src="${pengUrl("happy", p.wear, 2)}" style="width:30px;height:30px"><div><b>${esc(nameOf(f))}</b><br>${esc(note)}</div>`); if (S.view === "pet") render(); } continue; }
+        if (it.kind === "cpdaily") { it.done = true; saveFriend(f); if (cpOn() && cp().fid === f.id && cpDay(new Date(it.at)) === cpDay()) { const t = cpTodo(f); if (t) { const raw = await gen(f, "cpdaily", [ERA_RULE(f.acct), COMMON_RULE, cpCtx(f), `你打开了你和用户（QQ 昵称「${A().nick}」）的情侣空间。${t}\n想做哪件就写哪个块，不想做的就不写。`].join("\n\n")); if (raw) { applyCouple(f, raw); saveMeta(); if (S.view === "couple") render(); } } } continue; }
         if (it.kind === "cpvisit") { it.done = true; saveFriend(f); if (cpOn() && cp().fid === f.id) await cpVisit(f, it); continue; }
         it.tries = (it.tries || 0) + 1;
         const ok = it.kind === "post" ? await selfPost(f, it) : it.kind === "blog" ? await selfBlog(f, it) : await browse(f, it);
@@ -1544,7 +1623,7 @@
     hisShow(f).qb += 20; // 他每天签到
     const start = new Date(); start.setHours(0, 0, 0, 0); const items = [];
     const pick = () => { for (let i = 0; i < 60; i++) { const d = new Date(start.getTime() + rand(0, 1439) * 60e3); if (statusOf(f, d) !== "offline") return d; } return null; };
-    for (const [kind, n] of [["post", rand(1, 3)], ["browse", rand(1, 3)], ["blog", Math.random() < 0.3 ? 1 : 0], ["ping", rand(1, 2)], ["cpvisit", cpOn() && cp().fid === f.id && Math.random() < .5 ? 1 : 0], ["petcare", pet() && pet().fid === f.id ? rand(1, 2) : 0]]) for (let i = 0; i < n; i++) { const d = pick(); if (d) items.push({ kind, at: d.toISOString() }); }
+    for (const [kind, n] of [["post", rand(1, 3)], ["browse", rand(1, 3)], ["blog", Math.random() < 0.3 ? 1 : 0], ["ping", rand(1, 2)], ["cpvisit", cpOn() && cp().fid === f.id && Math.random() < .5 ? 1 : 0], ["cpdaily", cpOn() && cp().fid === f.id ? 1 : 0], ["petcare", pet() && pet().fid === f.id ? rand(1, 2) : 0]]) for (let i = 0; i < n; i++) { const d = pick(); if (d) items.push({ kind, at: d.toISOString() }); }
     f.plan = { day: today, items: items.sort((a, b) => a.at.localeCompare(b.at)) }; return true;
   }
   const recentAt = iso => Date.now() - new Date(iso).getTime() < 30 * 60e3; // 刚刚发生的才弹提示，补上的不吵她

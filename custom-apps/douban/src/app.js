@@ -759,6 +759,8 @@ ${CALM_LINE}
     if (isChar && S.meta.people[k].followsMe && !(old && old.followsMe)) toast(`${charNick(id)} 关注了你`);
     saveMeta(); refreshAll();
   }
+  /** 她自己的豆瓣 ID：第一次用到时定下来，之后不变 */
+  function myUid() { if (!S.meta.uid) { S.meta.uid = `${rand(1000, 9999)}${rand(1000, 9999)}`; saveMeta(); } return S.meta.uid; }
   function openPerson(k) {
     if (k === "anon") { toast("匿名豆友没有主页"); return; }
     if (k === "me") { while (pages.length) { const p = pages.pop(); p.el.remove(); } S.tab = "me"; renderTab(); return; }
@@ -835,7 +837,7 @@ ${CALM_LINE}
       const keyToAuthor = k => k.startsWith("c:") ? { type: "char", charId: k.slice(2) } : { type: "npc", name: k.slice(2) };
       const row = (a, k) => { const w = whoOf(a); const on = (S.meta.follows || []).includes(followKey(a)); const c = a.type === "char" ? charById(a.charId) : null;
         return `<div class="list-cell" ${personAttrs(a)}>${avatarHtml(w)}<div class="cell-main"><div>${esc(w.name)}</div>${c ? `<div class="cell-sub">${esc(c.name)}${(personInfo(k) || {}).followsMe ? " · 关注了你" : ""}</div>` : ""}</div>
-          <button class="g-join ${on ? "on" : ""}" data-act="person-follow" data-k="${esc(k)}">${on ? "已关注" : "关注"}</button></div>`; };
+          <button class="g-join ${on ? "on" : ""}" data-act="person-follow" data-k="${esc(k)}">${on ? ((personInfo(k) || {}).followsMe ? "互相关注" : "已关注") : (personInfo(k) || {}).followsMe ? "回关" : "关注"}</button></div>`; };
       const follows = (S.meta.follows || []).filter(k => !k.startsWith("c:") || charById(k.slice(2)));
       const fans = Object.entries(S.meta.people || {}).filter(([k, v]) => k.startsWith("c:") && v.followsMe && charById(k.slice(2))).map(([k]) => k);
       const list = tab === "fans" ? fans : follows;
@@ -953,7 +955,7 @@ ${CALM_LINE}
     $("#view").innerHTML = `<div class="me-hero" ${S.meta.coverRef ? `data-bg-ref="${esc(S.meta.coverRef)}"` : ""}>
         <div class="me-ava" data-act="me-avatar">${avatarHtml(w)}<i>${I.camera}</i></div>
         <h2>${esc(w.name)}</h2>
-        <div class="me-id" data-act="edit-me">IP：${esc(S.meta.ip || "未填写（编辑资料里填）")}</div>
+        <div class="me-id" data-act="edit-me">ID: ${esc(myUid())} / IP: ${esc(S.meta.ip || "未填写（编辑资料里填）")}</div>
         <div class="me-sign" data-act="edit-me">${I.pen}${esc(S.meta.sign || "介绍下自己")}</div>
         <div class="me-follow"><span data-act="follow-list" data-tab="following">关注 ${(S.meta.follows || []).length}</span><span data-act="follow-list" data-tab="fans">被关注 ${Object.entries(S.meta.people || {}).filter(([k, v]) => k.startsWith("c:") && v.followsMe).length + (S.meta.fansExtra || 0)}</span></div>
       </div>

@@ -8,7 +8,7 @@ const root = dirname(fileURLToPath(import.meta.url));
 const read = p => readFileSync(join(root, p), "utf8");
 const version = JSON.parse(read("manifest.json")).version;
 const peng = "data:image/png;base64," + readFileSync(join(root, "assets/penguin.png")).toString("base64");
-const js = (read("src/qqshow.js") + "\n" + read("src/app.js")).replace("/*__VERSION__*/", () => version).replace("/*__PENGUIN__*/", () => peng);
+const js = (read("src/qqshow.js") + "\n" + read("src/pixel.js") + "\n" + read("src/app.js")).replace("/*__VERSION__*/", () => version).replace("/*__PENGUIN__*/", () => peng);
 const pixel = "data:font/woff2;base64," + readFileSync(join(root, "assets/pixel.woff2")).toString("base64"); // 像素皮肤用的字（缝合像素，OFL）
 const css = read("src/style.css") + "\n" + read("src/themes.css").replace("/*__PIXEL__*/", () => pixel);
 const fill = mock => read("src/index.html").replace("/*__CSS__*/", () => css).replace("/*__JS__*/", () => js).replace("<!--__MOCK__-->", () => mock);

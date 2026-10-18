@@ -54,6 +54,7 @@
     smile: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="8.6"/><circle cx="9" cy="10" r=".9" fill="currentColor"/><circle cx="15" cy="10" r=".9" fill="currentColor"/><path d="M8.3 14.2c1 1.4 2.2 2 3.7 2s2.7-.6 3.7-2"/></svg>',
     image: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><rect x="3.5" y="5" width="17" height="14" rx="2.5"/><circle cx="9" cy="10" r="1.6"/><path d="M4 17.5l5-4.5 4 3.5 3-2.5 4.5 3.8"/></svg>',
     expand: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M14 4h6v6M20 4l-6.5 6.5M10 20H4v-6M4 20l6.5-6.5"/></svg>',
+    plus: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5.5v13M5.5 12h13"/></svg>',
     check: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg>',
     down: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9.5 6 6 6-6"/></svg>',
     dmIcon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M7.5 4.5h9a4 4 0 0 1 4 4v5a4 4 0 0 1-4 4h-6.2L6 20.3v-3A4 4 0 0 1 3.5 13.5v-5a4 4 0 0 1 4-4Z"/></svg>',
@@ -777,7 +778,7 @@ ${CALM_LINE}
       body(pg, `<div class="me-hero" ${info && info.coverRef ? `data-bg-ref="${esc(info.coverRef)}"` : ""}>
           <div class="me-ava">${avatarHtml(w)}</div>
           <div class="ph-row"><div class="cell-main"><h2>${esc(w.name)}</h2></div>
-            <button class="ph-follow ${followed ? "on" : ""}" data-act="person-follow" data-k="${esc(k)}">${followed ? `${I.check}${info && info.followsMe ? "互相关注" : "已关注"}` : info && info.followsMe ? "＋回关" : "＋关注"}</button><button class="ph-dm" data-act="dm-open" data-k="${esc(k)}" aria-label="私信">${I.dmIcon}</button></div>
+            <button class="ph-follow ${followed ? "on" : ""}" data-act="person-follow" data-k="${esc(k)}">${followed ? `${I.check}${info && info.followsMe ? "互相关注" : "已关注"}` : `${I.plus}${info && info.followsMe ? "回关" : "关注"}`}</button><button class="ph-dm" data-act="dm-open" data-k="${esc(k)}" aria-label="私信">${I.dmIcon}</button></div>
           <div class="me-id">${info && info.uid ? `ID: ${esc(info.uid)} / ` : ""}IP: ${esc(ipOf(author, "") || "未知")}</div>
           ${info && info.sign ? `<div class="ph-about" data-act="ph-about">关于我${I.down}</div><div class="ph-sign">${esc(info.sign)}</div>` : ""}
           <div class="me-follow"><span>关注 ${info ? fmtNum(info.following) : "-"}</span><span>被关注 ${info ? fmtNum(info.followers + (followed ? 1 : 0)) : "-"}</span></div>

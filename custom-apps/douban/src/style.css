@@ -830,7 +830,7 @@ img { display: block; }
 .ph-row { display: flex; align-items: center; gap: 12px; }
 .ph-row .cell-main { flex: 1; min-width: 0; }
 .ph-row h2 { line-height: 1.25; word-break: break-all; }
-.ph-follow { flex: none; display: inline-flex; align-items: center; gap: 4px; height: 34px; padding: 0 14px; border-radius: 8px; background: rgba(255,255,255,.2); color: rgba(255,255,255,.9); font-size: 15px; }
+.ph-follow { flex: none; display: inline-flex; align-items: center; gap: 4px; height: 34px; padding: 0 14px 0 11px; border-radius: 8px; background: rgba(255,255,255,.2); color: rgba(255,255,255,.9); font-size: 15px; }
 .ph-follow svg { width: 17px; height: 17px; }
 .ppage .me-id { margin-top: 6px; }
 .ph-about { margin-top: 12px; display: inline-flex; align-items: center; gap: 4px; font-size: 14px; opacity: .7; cursor: pointer; }

@@ -2420,10 +2420,10 @@ function customAppHostActionNeedsSettingsStorage(actionType: string): boolean {
 export async function runDueCustomAppTasks(onNotice?: HostNotice): Promise<number> {
   await hydrateKvDb();
   const now = Date.now();
-  const apps = new Map(loadInstalledCustomApps().map(app => [app.id, app]));
   let tasks = loadCustomAppTasks();
   const due = tasks.filter(task => task.status === "pending" && new Date(task.runAt).getTime() <= now);
-  if (due.length === 0) return 0;
+  if (due.length === 0) return 0; // 每 30 秒跑一次：没有到期任务就别去读整包 APP 列表
+  const apps = new Map(loadInstalledCustomApps().map(app => [app.id, app]));
 
   let executed = 0;
   for (const task of due) {

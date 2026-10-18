@@ -398,12 +398,12 @@
       return `${sep}<div class="m ${m.from === "me" ? "o" : "i"}" data-act="msg-menu" data-id="${esc(m.id)}"><span class="mav">${m.from === "me" ? myAv(40) : fAv(f, 40)}</span><div class="mb2"><div class="h">${esc(who)}　${hms(d)}</div>${body}<div class="mt">${m.from === "me" ? `<span>${idx < lastHim ? "已读" : "送达"}</span><span>${hm(d)}</span>` : `<span>${hm(d)}</span><span>已读</span>`}</div></div></div>`;
     }).join("");
     if (c.msgs.some(m => m.from === "him" && !m.read)) { c.msgs.forEach(m => { m.read = true; }); saveChat(c); }
-    const typing = S.meta.queue.some(q => q.fid === f.id && q.kind === "reply" && q.typing);
+    const typing = S.meta.queue.some(q => q.fid === f.id && (q.kind === "reply" || q.kind === "ping") && (q.typing || q.running));
     return `<div class="chat">
       <div class="ct"><button class="bk" data-act="back-main">‹</button>${fAv(f, 40, st === "offline")}<div class="ctn"><b>${esc(nameOf(f))}</b> <span>[${STATUS_NAME[st]}]</span><small>${esc(f.sig || "")}</small></div><button class="more" data-act="open-zone" data-who="${esc(f.id)}">更多</button></div>
-      <div class="tools"><button data-act="nope" data-t="对方没有安装摄像头">📹 视频</button><button data-act="nope" data-t="对方没有麦克风">🎤 语音</button><button data-act="nope" data-t="文件太大了，传了半天还是失败">📁 传文件</button><button data-act="open-zone" data-who="${esc(f.id)}">🌐 空间</button><button data-act="open-show" data-who="${esc(f.id)}">👗 QQ秀</button>${cpOn() && cp().fid === f.id ? `<button data-act="open-couple">💕 情侣</button>` : ""}${!pet() || pet().fid === f.id ? `<button data-act="open-pet">🐧 宠物</button>` : ""}</div>
+      <div class="tools"><button data-act="nope" data-t="对方没有安装摄像头"><i>📹</i>视频</button><button data-act="nope" data-t="对方没有麦克风"><i>🎤</i>语音</button><button data-act="nope" data-t="文件太大了，传了半天还是失败"><i>📁</i>传文件</button><button data-act="open-zone" data-who="${esc(f.id)}"><i>🌐</i>空间</button><button data-act="open-show" data-who="${esc(f.id)}"><i>👗</i>QQ秀</button>${cpOn() && cp().fid === f.id ? `<button data-act="open-couple"><i>💕</i>情侣</button>` : ""}${!pet() || pet().fid === f.id ? `<button data-act="open-pet"><i>🐧</i>宠物</button>` : ""}</div>
       ${miniBarHtml()}
-      <div class="log" id="log">${lines || `<div class="sys">${st === "offline" ? `${esc(nameOf(f))} 现在不在线，消息会在他上线后收到` : "开始聊天吧"}</div>`}${typing && st === "online" ? `<div class="sys">对方正在输入…</div>` : ""}</div>
+      <div class="log" id="log">${lines || `<div class="sys">${st === "offline" ? `${esc(nameOf(f))} 现在不在线，消息会在他上线后收到` : "开始聊天吧"}</div>`}${typing && st === "online" ? `<div class="sys typing">对方正在输入… <button data-act="stop-gen">暂停生成</button></div>` : ""}</div>
       <div class="itools"><button data-act="font"><b style="color:${S.meta.font.color}">A</b> 字体</button><button data-act="faces">${faceSvg("微笑", 16)} 表情</button><button data-act="shake">〰 抖动</button><button data-act="send-photo">📷 图片</button>${canReroll(f) ? `<button data-act="reroll">↻ 重新回复</button>` : ""}<button data-act="ping">💭 让他来找我</button><span class="sp"></span><button data-act="history">消息记录</button></div>
       <div class="pop-wrap" id="popwrap"></div>
       <div class="ibar"><textarea class="inp" id="inp" style="color:${S.meta.font.color};${S.meta.font.bold ? "font-weight:bold" : ""}" placeholder=""></textarea>
@@ -517,7 +517,7 @@
   // A().couple = { fid, since, sig, notes: [{ who, text, at }], diary: [{ who, title, text, at }], photos: [ref], pending: { from: "me"|fid, fid } }
   const cp = () => A().couple || null;
   const cpOn = () => !!(cp() && cp().since && friendById(cp().fid));
-  const cpDays = () => Math.floor((Date.now() - new Date(cp().since).getTime()) / 864e5) + 1;
+  const cpDays = () => { const d0 = new Date(cp().since), t = new Date(); d0.setHours(0, 0, 0, 0); t.setHours(0, 0, 0, 0); return Math.round((t - d0) / 864e5) + 1; }; // 按日历算：开通那天是第 1 天，过了零点就是第 2 天
   const cpFriend = () => cpOn() ? friendById(cp().fid) : null;
   function cpCtx(f) { const c = cp(); if (!c) return "";
     if (c.pending && c.pending.fid === f.id) return c.pending.from === "me" ? "用户邀请你在 QQ 上开通情侣空间，你还没答复。" : "你邀请用户开通情侣空间，她还没答复。";
@@ -556,7 +556,7 @@
     const diary = [...(c.diary || [])].reverse().map(d => `<div class="cp-diary"><b>${esc(d.title)}</b><small>${d.who === "me" ? esc(A().nick) : esc(nameOf(f))} · ${esc(ymd(thereDate(S.meta.cur, new Date(d.at))))}</small><p>${richText(d.text)}</p></div>`).join("") || `<div class="empty">还没有恋爱日记</div>`;
     const photos = `<div class="cp-photos"><img class="px" src="${coupleUrl(myShow(), hisShow(f), myShow().bg)}" alt="">${(c.photos || []).map(r => `<img data-ref="${esc(r)}" data-act="view-photo" alt="">`).join("")}</div><div class="zbtn"><button class="btn s" data-act="cp-photo">＋ 传一张合影</button></div>`;
     return `<div class="couple">${titlebar(`${esc(A().nick)} ❤ ${esc(nameOf(f))}`, "back-main")}
-      <div class="cp-top"><img class="px" src="${coupleUrl(myShow(), hisShow(f), "hearts")}" alt=""><div class="cp-days">在一起的第 <b>${cpDays()}</b> 天</div><div class="cp-sig" data-act="cp-sig">${c.sig ? `「${esc(c.sig)}」` : "点这里写情侣签名"}</div></div>
+      <div class="cp-top"><img class="px" src="${coupleUrl(myShow(), hisShow(f), "hearts")}" alt=""><div class="cp-info"><div class="cp-days">在一起的第 <b>${cpDays()}</b> 天</div><small>${esc(ymd(thereDate(S.meta.cur, new Date(c.since))))} 开通</small><div class="cp-sig" data-act="cp-sig">${c.sig ? `「${esc(c.sig)}」` : "点这里写情侣签名"}</div></div></div>
       <div class="qs-tabs">${[["home", "小纸条"], ["diary", "恋爱日记"], ["photos", "合影墙"]].map(([k, t]) => `<button class="${tab === k ? "on" : ""}" data-act="cp-tab" data-t="${k}">${t}</button>`).join("")}</div>
       <div class="qs-body">${tab === "home" ? `<div class="cp-write"><input id="cpnote" maxlength="120" placeholder="给他留一张小纸条…"><button class="btn s" data-act="cp-note">贴上</button></div>${notes}` : tab === "diary" ? `<div class="zbtn"><button class="btn s" data-act="cp-diary">✎ 写恋爱日记</button></div>${diary}` : photos}</div></div>`; };
   ACT["open-couple"] = () => { if (!cpOn()) return; S.view = "couple"; S.cpTab = "home"; render(); };
@@ -1341,9 +1341,9 @@
   const forget = (f, id) => { if (id && api.memory && api.memory.deleteTimeline) api.memory.deleteTimeline({ characterId: f.charId, appEventId: id }).catch(() => {}); };
 
   // 定时：处理到点的回复 / 空间事件；看看谁上线了
-  let busy = false;
+  let busy = false, tickId = 0;
   async function tick() {
-    if (busy || !S.meta.cur) return; busy = true;
+    if (busy || !S.meta.cur) return; busy = true; const my = ++tickId;
     try {
       for (const q of S.meta.queue.filter(q => new Date(q.due) <= new Date())) {
         const f = friendById(q.fid); if (!f) { S.meta.queue = S.meta.queue.filter(x => x !== q); continue; }
@@ -1360,7 +1360,8 @@
         }
         if (q.kind === "reply" || q.kind === "ping") {
           if (q.kind === "ping") q.ping = true;
-          const r = await genReply(f, q);
+          q.running = true; if (S.view === "chat" && S.fid === f.id) render(); const r = await genReply(f, q); delete q.running;
+          if (my !== tickId || q.cancel) return; // 她点了暂停生成：这次的回复不要了
           if (r && r.skip) { S.meta.queue = S.meta.queue.filter(x => x !== q); saveMeta(); continue; }
           if (!r || (!r.msgs.length && !r.photo && !r.raw)) { q.tries = (q.tries || 0) + 1; if (q.tries < 3) { q.due = new Date(Date.now() + 20e3).toISOString(); saveMeta(); continue; } }
           S.meta.queue = S.meta.queue.filter(x => x !== q); saveMeta();
@@ -1388,8 +1389,12 @@
         if (ok && (S.view === "zone" || S.view === "main") && !zoneTyping()) render();
       }
       notifyReplies();
-    } finally { busy = false; }
+    } finally { if (my === tickId) busy = false; }
   }
+  // 暂停生成：API 卡住一直「正在输入」时，把这次回复丢掉，队列里别的事接着跑
+  ACT["stop-gen"] = () => { const qs = S.meta.queue.filter(q => q.fid === S.fid && (q.kind === "reply" || q.kind === "ping")); if (!qs.length) return;
+    qs.forEach(q => { q.cancel = true; }); S.meta.queue = S.meta.queue.filter(q => !qs.includes(q)); saveMeta();
+    if (qs.some(q => q.running)) { tickId++; busy = false; } render(); toast("停下了。想让他回就再发一条，或者点「让他来找我」"); };
   const zoneTyping = () => { const a = document.activeElement; return !!(a && /INPUT|TEXTAREA/.test(a.tagName) && a.value); };
   /** 他的消息一条条冒出来（按打字速度隔几秒） */
   async function deliver(f, r) {
@@ -1557,6 +1562,7 @@
     // 以前的版本 AI 失败三次就把好友申请从队列里扔了，人卡在「等待验证」：补回队列
     for (const f of S.friends.filter(f => f.pending && !S.meta.queue.some(q => q.fid === f.id && q.kind === "verify"))) S.meta.queue.push({ fid: f.id, kind: "verify", due: new Date().toISOString() });
     saveMeta();
+    (S.meta.queue || []).forEach(q => delete q.running);
     if (S.meta.auto && S.meta.cur) { S.view = "main"; render(); watchStatus(true); tick(); } else { S.meta.cur = null; S.view = "login"; render(); }
     setInterval(tick, 3000);
     setInterval(() => watchStatus(false), 20000);

@@ -56,6 +56,7 @@
     expand: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M14 4h6v6M20 4l-6.5 6.5M10 20H4v-6M4 20l6.5-6.5"/></svg>',
     check: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg>',
     down: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9.5 6 6 6-6"/></svg>',
+    bell: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M6 16.5V11a6 6 0 0 1 12 0v5.5l1.5 1.5h-15z"/><path d="M10 20a2 2 0 0 0 4 0"/></svg>',
     dmIcon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M7.5 4.5h9a4 4 0 0 1 4 4v5a4 4 0 0 1-4 4h-6.2L6 20.3v-3A4 4 0 0 1 3.5 13.5v-5a4 4 0 0 1 4-4Z"/></svg>',
     mail: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"><rect x="3.5" y="5.5" width="17" height="13" rx="2"/><path d="m4 7 8 6 8-6"/></svg>',
     gear: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="12" cy="12" r="3.1"/><path d="M12 2.8v2.4M12 18.8v2.4M2.8 12h2.4M18.8 12h2.4M5.5 5.5l1.7 1.7M16.8 16.8l1.7 1.7M5.5 18.5l1.7-1.7M16.8 7.2l1.7-1.7"/></svg>',
@@ -98,8 +99,14 @@
 
   // ───────────────────────── 数据 ─────────────────────────
   // groups：小组（搜出来的、建的）；topics：帖子（楼层在帖子里）；meta：我的资料、搜索缓存、调试记录
-  const COL = { groups: "groups", topics: "topics", meta: "meta", works: "works", marks: "marks", doulists: "doulists", dms: "dms", statuses: "statuses", diaries: "diaries" };
-  const S = { identity: null, chars: [], meta: null, groups: [], topics: [], works: [], marks: [], doulists: [], dms: [], statuses: [], diaries: [], tab: "group", debug: [], jobs: new Set(), mediaCache: new Map() };
+  const COL = { groups: "groups", topics: "topics", meta: "meta", works: "works", marks: "marks", doulists: "doulists", dms: "dms", statuses: "statuses", diaries: "diaries", events: "events" };
+  /** 图片缓存：只留最近用到的 n 张在内存里，旧的用到时再从媒体库读（省内存，float 容易被系统关掉） */
+  class LruMap extends Map {
+    constructor(max) { super(); this.max = max; }
+    get(k) { if (!super.has(k)) return undefined; const v = super.get(k); super.delete(k); super.set(k, v); return v; }
+    set(k, v) { super.delete(k); super.set(k, v); while (this.size > this.max) super.delete(this.keys().next().value); return this; }
+  }
+  const S = { identity: null, chars: [], meta: null, groups: [], topics: [], works: [], marks: [], doulists: [], dms: [], statuses: [], diaries: [], events: [], tab: "group", debug: [], jobs: new Set(), mediaCache: new LruMap(80) };
   async function dbList(c) { try { return (await api.db.list(c, { limit: 500 })) || []; } catch (e) { console.warn(e); return []; } }
   async function dbUpsert(c, row) {
     try { const u = await api.db.update(c, row.id, row); if (u) return u; } catch (e) { /* 没有就 create */ }
@@ -119,12 +126,12 @@
     const chars = await api.characters.list().catch(() => []);
     const owners = await Promise.all(chars.map(c => api.user.getProfile({ characterId: c.id }).catch(() => null)));
     S.chars = chars.filter((c, i) => !owners[i] || !identity || owners[i].id === identity.id);
-    const [groups, topics, metas, works, marks, doulists, dms, statuses, diaries] = await Promise.all([dbList(COL.groups), dbList(COL.topics), dbList(COL.meta), dbList(COL.works), dbList(COL.marks), dbList(COL.doulists), dbList(COL.dms), dbList(COL.statuses), dbList(COL.diaries)]);
+    const [groups, topics, metas, works, marks, doulists, dms, statuses, diaries, events] = await Promise.all([dbList(COL.groups), dbList(COL.topics), dbList(COL.meta), dbList(COL.works), dbList(COL.marks), dbList(COL.doulists), dbList(COL.dms), dbList(COL.statuses), dbList(COL.diaries), dbList(COL.events)]);
     const scope = S.identity.id;
     S.groups = groups.filter(g => g.scope === scope);
     S.topics = topics.filter(t => t.scope === scope).map(t => ({ ...t, floors: t.floors || [] }));
     S.works = works.filter(w => w.scope === scope); S.marks = marks.filter(m => m.scope === scope); S.doulists = doulists.filter(d => d.scope === scope).map(d => ({ ...d, workIds: d.workIds || [] })); S.dms = dms.filter(d => d.scope === scope).map(d => ({ ...d, msgs: d.msgs || [] }));
-    S.statuses = statuses.filter(x => x.scope === scope).map(x => ({ ...x, images: x.images || [], comments: x.comments || [] })); S.diaries = diaries.filter(x => x.scope === scope).map(x => ({ ...x, comments: x.comments || [] }));
+    S.statuses = statuses.filter(x => x.scope === scope).map(x => ({ ...x, images: x.images || [], comments: x.comments || [] })); S.diaries = diaries.filter(x => x.scope === scope).map(x => ({ ...x, comments: x.comments || [] })); S.events = events.filter(x => x.scope === scope).map(x => ({ ...x, charWants: x.charWants || [] }));
     S.debug = (metas.find(m => m.id === "debug_log") || {}).entries || [];
     S.meta = metas.find(m => m.id === `meta_${scope}`) || { id: `meta_${scope}`, nickname: S.identity.name || "豆友", sign: "", avatarRef: null,
       joined: [], searches: {}, charNicks: {}, excludedChars: [], avatarPool: [] };
@@ -332,7 +339,7 @@ ${CALM_LINE}
     } finally { S.jobs.delete(job); refreshAll(); }
   }
   /** ===块=== 解析：字段「名：值」，值可以多行（接到上一个字段） */
-  const KEYS = ["发广播原因", "口吻", "类型标签", "类型", "年份", "作者导演", "主演", "国家", "评分", "评价人数", "星级分布", "状态", "星级", "短评", "有用", "和用户亲密", "作品", "豆瓣ID", "豆瓣昵称", "昵称", "关注用户", "签名", "关注数", "被关注数", "小组", "会逛的角色", "楼主赞过", "头衔", "熟人圈", "说的是", "来源", "IP", "组长", "成员称呼", "分区", "发言规则", "配图", "精华", "名称", "成员", "简介", "标题", "作者", "角色", "匿名", "时间", "回应数", "正文", "楼主", "赞", "引用", "内容", "层", "图片", "回关"];
+  const KEYS = ["发广播原因", "口吻", "开始", "结束", "地点", "票价", "想去", "感兴趣", "发起", "去", "类型标签", "类型", "年份", "作者导演", "主演", "国家", "评分", "评价人数", "星级分布", "状态", "星级", "短评", "有用", "和用户亲密", "作品", "豆瓣ID", "豆瓣昵称", "昵称", "关注用户", "签名", "关注数", "被关注数", "小组", "会逛的角色", "楼主赞过", "头衔", "熟人圈", "说的是", "来源", "IP", "组长", "成员称呼", "分区", "发言规则", "配图", "精华", "名称", "成员", "简介", "标题", "作者", "角色", "匿名", "时间", "回应数", "正文", "楼主", "赞", "引用", "内容", "层", "图片", "回关"];
   function parseBlocks(raw, kind) {
     const text = String(raw || "").replace(/```[a-z]*\n?/g, "").replace(/\r/g, "");
     const out = []; let label = null;
@@ -664,7 +671,7 @@ ${CALM_LINE}
       }
       delete t.pendingReply;
     }
-    if (made) { t.lastReplyAt = t.floors[t.floors.length - 1].createdAt; t.replyCount = Math.max(t.replyCount, t.floors.length); likeHers(t, made); }
+    if (made) { t.lastReplyAt = t.floors[t.floors.length - 1].createdAt; t.replyCount = Math.max(t.replyCount, t.floors.length); likeHers(t, made); noticeFloors(t, made); }
     if (mine || (firstGen && t.author.type === "user")) rollCharDm(t, mine, new Set(t.floors.slice(-made || t.floors.length).filter(f => f.author.type === "char").map(f => f.author.charId)));
     else toast("这次没写出能用的回应，去「我的 → 调试记录」看看");
     saveTopic(t); refreshAll();
@@ -756,7 +763,7 @@ ${CALM_LINE}
       S.topics.push(t); saveTopic(t); n++;
       if (isChar) remember(id, `我以前在豆瓣小组「${g.name}」的帖子《${title}》里回过：「${said.slice(0, 60)}」`, `douban_topic_${t.id}`);
     }
-    if (isChar && S.meta.people[k].followsMe && !(old && old.followsMe)) toast(`${charNick(id)} 关注了你`);
+    if (isChar && S.meta.people[k].followsMe && !(old && old.followsMe)) { toast(`${charNick(id)} 关注了你`); notice("关注了你", { type: "char", charId: id }, { act: "open-person", k }); }
     saveMeta(); refreshAll();
   }
   /** 她自己的豆瓣 ID：第一次用到时定下来，之后不变 */
@@ -800,7 +807,7 @@ ${CALM_LINE}
     // 回关：她关注了他、他还没关注她 → 之后每天第一次打开他主页掷一次骰子（不花 API，主页不变）
     const inf = personInfo(k); const day = new Date().toDateString();
     if (isChar && inf && !inf.followsMe && (S.meta.follows || []).includes(followKey(author)) && inf.fbDay !== day && inf.followedAt && new Date(inf.followedAt).toDateString() !== day) {
-      inf.fbDay = day; if (Math.random() < 0.45) { inf.followsMe = true; toast(`${whoOf(author).name} 回关了你`); } saveMeta(); page.render(page);
+      inf.fbDay = day; if (Math.random() < 0.45) { inf.followsMe = true; toast(`${whoOf(author).name} 回关了你`); notice("回关了你", author, { act: "open-person", k }); } saveMeta(); page.render(page);
     }
     return page;
   }
@@ -878,7 +885,7 @@ ${CALM_LINE}
     ({ home: renderHome, book: renderBookTab, group: renderGroupTab, market: renderMarket, me: renderMe })[S.tab]();
     hydrateImages($("#view"));
   }
-  const topSearch = (ph, act, right) => `<div class="topbar-inner"><button class="db-search" data-act="${act}">${I.search}<span>${esc(ph)}</span></button>${right === "trash"
+  const topSearch = (ph, act, right) => `<div class="topbar-inner"><button class="db-search" data-act="${act}">${I.search}<span>${esc(ph)}</span></button><button class="top-icon pm-entry" data-act="nt-open" aria-label="提醒" style="margin-left:0">${I.bell}${noticeUnread() ? `<i class="pm-dot">${noticeUnread() > 99 ? "99+" : noticeUnread()}</i>` : ""}</button>${right === "trash"
     ? `<button class="top-icon" data-act="wipe-all" aria-label="清空豆瓣" style="margin-left:0">${I.trash}</button>`
     : `<button class="top-icon pm-entry" data-act="dm-list" aria-label="私信" style="margin-left:0">${I.mail}${dmUnread() ? `<i class="pm-dot">${dmUnread() > 99 ? "99+" : dmUnread()}</i>` : ""}</button>`}</div>`;
   /** 还没做的：写清楚第几期上线 */
@@ -936,10 +943,6 @@ ${CALM_LINE}
     $("#view").innerHTML = `${segs}<div class="feed-bar"><button class="feed-refresh" data-act="s-refresh" ${busy ? "disabled" : ""}>${busy ? `<span class="spinner"></span>大家在发广播…` : "↻ 刷新（1 次 API）"}</button><button class="feed-auto" data-act="s-auto">自动发<span class="switch sm ${S.meta.autoFeed ? "on" : ""}"><span></span></span></button></div>
       ${items.length ? `<div class="st-list">${items.map(feedCard).join("")}</div>` : `<div class="empty" style="padding:40px 30px">${followedKeys().length ? "大家还没发广播，点上面刷新看看" : "你还没有关注谁<br><span style=\"font-size:13px\">在小组里点进豆友主页、或者搜角色的名字，点关注，他们的广播就会出现在这里</span>"}</div>`}
       <button class="fab" data-act="s-compose" aria-label="写广播">${I.pen}</button>`;
-  }
-  function renderMarket() {
-    $("#topbar").innerHTML = `<div class="topbar-inner"><span class="top-title">市集</span></div>`;
-    $("#view").innerHTML = `<div class="empty" style="padding:36px 30px 10px"><div class="big">🛍️</div>市集暂时不开</div>${comingHtml(["event"])}`;
   }
   function renderGroupTab() {
     $("#topbar").innerHTML = topSearch("搜索小组", "open-search");
@@ -1175,7 +1178,7 @@ ${CALM_LINE}
       b.disabled = true; b.textContent = "生成中…（10~30 秒）";
       try {
         const r = await api.ai.generateImage({ prompt: img.desc, characterId: charId, useReferenceImage: false, timeoutMs: 120000 });
-        if (r && r.dataUrl) { const st = await api.media.put({ dataUrl: r.dataUrl }); img.ref = st.ref; S.mediaCache.set(st.ref, r.dataUrl); onSave && onSave(); await draw(); refreshAll(); }
+        if (r && r.dataUrl) { const small = await shrinkDataUrl(r.dataUrl); const st = await api.media.put({ dataUrl: small }); img.ref = st.ref; S.mediaCache.set(st.ref, small); onSave && onSave(); await draw(); refreshAll(); }
       } catch (err) { toast(`生图失败：${(err && err.message) || err}`.slice(0, 60)); b.disabled = false; b.textContent = "生成这张图"; }
     };
     document.body.appendChild(el); draw();
@@ -1631,7 +1634,7 @@ ${CALM_LINE}
         toast(`${charNick(ch.id)} 也标记了《${w.title}》`);
       }
       const r = parseBlocks(text, "回应")[0];
-      if (r && !none(r["内容"]) && w.my) { w.my.replies = [...(w.my.replies || []), { charId: ch.id, text: String(r["内容"]).trim().slice(0, 200), at: nowIso() }]; saveWork(w); }
+      if (r && !none(r["内容"]) && w.my) { w.my.replies = [...(w.my.replies || []), { charId: ch.id, text: String(r["内容"]).trim().slice(0, 200), at: nowIso() }]; saveWork(w); notice(`回应了你《${w.title}》的短评`, { type: "char", charId: ch.id }, { act: "w-open", id: w.id }); }
       saveMeta(); refreshAll();
     }
   }
@@ -1938,12 +1941,14 @@ ${CALM_LINE}
     return `<div class="st-pics n${Math.min(images.length, 3)}">${images.map((im, i) => `<div class="st-pic" data-act="s-pic" data-owner="${esc(owner)}" data-idx="${i}">${im.ref ? `<img ${refSrc(im.ref)} alt="">` : `${placeholderImg()}<span>${esc(im.desc)}</span>`}</div>`).join("")}</div>`;
   }
   function repostLabel(r) {
-    const t = r.kind === "topic" && topicById(r.id), w = r.kind === "work" && workById(r.id), s = r.kind === "status" && statusById(r.id), d = r.kind === "diary" && diaryById(r.id);
-    return t ? `小组帖子《${t.title}》` : w ? `${KIND_NAME[w.kind]}《${w.title}》` : s ? `${whoOf(s.author).name}的广播「${(s.text || "").slice(0, 40)}」` : d ? `日记《${d.title}》` : "";
+    const t = r.kind === "topic" && topicById(r.id), w = r.kind === "work" && workById(r.id), s = r.kind === "status" && statusById(r.id), d = r.kind === "diary" && diaryById(r.id), g = r.kind === "group" && groupById(r.id);
+    return g ? `小组「${g.name}」` : t ? `小组帖子《${t.title}》` : w ? `${KIND_NAME[w.kind]}《${w.title}》` : s ? `${whoOf(s.author).name}的广播「${(s.text || "").slice(0, 40)}」` : d ? `日记《${d.title}》` : "";
   }
   /** 转发的东西：灰底小框，点了打开原帖 / 条目 / 广播 / 日记 */
   function repostHtml(r) {
     if (!r) return "";
+    if (r.kind === "group") { const g = groupById(r.id); if (!g) return "";
+      return `<div class="st-rp" data-act="open-group" data-id="${esc(g.id)}">${groupAvaHtml(g, "xs")}<div class="cell-main"><b>${esc(g.name)}</b><span>${fmtNum(g.members || 0)} 个成员${g.intro ? ` · ${esc(g.intro)}` : ""}</span></div></div>`; }
     if (r.kind === "topic") { const t = topicById(r.id); if (!t) return `<div class="st-rp gone">原帖已经删除</div>`; const g = groupById(t.groupId) || {};
       return `<div class="st-rp" data-act="open-topic" data-id="${esc(t.id)}">${(t.images || [])[0] && t.images[0].ref ? `<img class="st-rp-pic" ${refSrc(t.images[0].ref)} alt="">` : `<div class="st-rp-ic">${I.group}</div>`}<div class="cell-main"><b>${esc(t.title)}</b><span>来自 ${esc(g.name || "小组")}</span></div></div>`; }
     if (r.kind === "work") { const w = workById(r.id); if (!w) return "";
@@ -1970,7 +1975,7 @@ ${CALM_LINE}
       return `<div class="st-card" data-act="s-diary" data-id="${esc(d.id)}">${head("写了日记")}<div class="st-diary"><b>${esc(d.title)}</b>${d.private ? `<span class="role-tag mask">仅自己可见</span>` : ""}<p>${esc(d.body.replace(/\s+/g, " ").slice(0, 90))}</p></div>${privateChar(d) ? "" : stActs(d, "d")}</div>`;
     }
     const s = it.s;
-    return `<div class="st-card" data-act="s-open" data-id="${esc(s.id)}">${head(s.repost ? "转发" : "说：")}${s.text ? `<div class="st-text">${richText(s.text)}</div>` : ""}${picsHtml(s.images, "s:" + s.id)}${repostHtml(s.repost)}${stActs(s, "s")}</div>`;
+    return `<div class="st-card" data-act="s-open" data-id="${esc(s.id)}">${head(s.repost && s.repost.kind === "group" ? "加入了小组" : s.repost ? "转发" : "说：")}${s.text ? `<div class="st-text">${richText(s.text)}</div>` : ""}${picsHtml(s.images, "s:" + s.id)}${repostHtml(s.repost)}${stActs(s, "s")}</div>`;
   }
 
   // ── 生成：让一批人发广播（掷中的再写日记），一次调用 ──
@@ -2032,16 +2037,18 @@ ${CALM_LINE}
     if (!who.length || S._feedBusy) return null; S._feedBusy = true; refreshAll();
     try {
       const keys = who.map(x => x.k); const charIds = keys.filter(k => k.startsWith("c:")).map(k => k.slice(2));
+      for (const x of who) if (x.k.startsWith("c:") && Math.random() < 0.15) x.join = true; // 时不时自己加个新小组
       const carrier = charIds.length ? charIds : activeChars().slice(0, 1).map(c => c.id);
       const cands = {};
       const lines = who.map(x => { const a = authorOfKey(x.k); cands[x.k] = repostCands(a);
         const plans = Array.from({ length: x.n }, (_, i) => `第${i + 1}条 ${statusPlan(x.k)}`).join("；");
-        return `- ${personLine(x.k)}：写 ${x.n} 条广播（发广播参考：${plans}）${x.diary ? `，再写 1 篇日记（${x.diary.private ? "设成仅自己可见：只写给自己看，心里话可以更直白" : "公开的"}）` : ""}。${cands[x.k].length ? `想转发的话可以转（不想转就不转，转的话照抄）：${cands[x.k].map(r => r.label).join("、")}` : ""}`; });
+        return `- ${personLine(x.k)}：写 ${x.n} 条广播（发广播参考：${plans}）${x.join ? "，最近还加入了一个新的豆瓣小组（按他的口味，和人设爱好不一定有关）" : ""}${x.diary ? `，再写 1 篇日记（${x.diary.private ? "设成仅自己可见：只写给自己看，心里话可以更直白" : "公开的"}）` : ""}。${cands[x.k].length ? `想转发的话可以转（不想转就不转，转的话照抄）：${cands[x.k].map(r => r.label).join("、")}` : ""}`; });
       const text = await generate(carrier, "feed", [
         FEED_RULE, who.some(x => x.diary) ? DIARY_RULE : "", `这次要写的人：\n${lines.join("\n")}`,
         charIds.length ? CHAR_SELF_LINE : "", userLine(),
         "时间都在最近一天以内（「x分钟前」「x小时前」「今天 hh:mm」「昨天 hh:mm」），同一个人的几条错开。",
         "每条广播：\n===广播===\n作者：角色本名 或 路人豆友昵称（照上面写）\n时间：\n转发：无（或者照抄上面能转的一项）\n配图：画面描述（大多数不配图，写 无）\n口吻：\n发广播原因：\n正文：\n……\n===结束===",
+        who.some(x => x.join) ? "新加入的小组：\n===加入小组===\n作者：角色本名\n小组：小组名（像真豆瓣小组的名字）\n简介：一句话\n===结束===" : "",
         who.some(x => x.diary) ? "日记：\n===日记===\n作者：角色本名\n标题：\n时间：\n口吻：\n正文：\n……\n===结束===" : "",
       ].filter(Boolean).join("\n\n"), label, { rule: false });
       if (text == null) return null;
@@ -2056,8 +2063,16 @@ ${CALM_LINE}
         const a = authorOfKey(k); const at = new Date(Math.min(now - rand(1, 20) * 60e3, new Date(parseRelTime(b["时间"], 600)).getTime())).toISOString();
         const s = { id: uid("s"), scope: S.identity.id, author: a, text: body.slice(0, 600), images: pics, at, ...(rp ? { repost: { kind: rp.kind, id: rp.id } } : {}), likes: rand(0, a.type === "char" ? 15 : 6), reposts: 0, comments: [] };
         S.statuses.push(s); saveStatus(s); made++;
-        if (rp && rp.kind === "status") { const o = statusById(rp.id); if (o) { o.reposts = (o.reposts || 0) + 1; saveStatus(o); toast(`${whoOf(a).name} 转发了你的广播`); } }
+        if (rp && rp.kind === "status") { const o = statusById(rp.id); if (o) { o.reposts = (o.reposts || 0) + 1; saveStatus(o); toast(`${whoOf(a).name} 转发了你的广播`); notice("转发了你的广播", a, { act: "s-open", id: s.id }); } }
         if (a.type === "char") remember(a.charId, `我在豆瓣发了一条广播：「${(body || repostLabel(s.repost)).slice(0, 60)}」${rp ? `（转发了${rp.label}）` : ""}`, `douban_status_${s.id}`);
+      }
+      for (const b of parseBlocks(text, "加入小组")) {
+        const k = whoInList(b["作者"], keys); const x = who.find(y => y.k === k); if (!k || !x || !x.join || x.joinDone) continue; x.joinDone = true;
+        const a = authorOfKey(k); const g = ensureGroupByName(b["小组"], a); if (!g) continue;
+        if (!g.intro && !none(b["简介"])) { g.intro = String(b["简介"]).trim().slice(0, 80); saveGroup(g); }
+        const st = { id: uid("s"), scope: S.identity.id, author: a, text: "", images: [], at: new Date(Date.now() - rand(10, 300) * 60e3).toISOString(), repost: { kind: "group", id: g.id }, likes: 0, reposts: 0, comments: [] };
+        S.statuses.push(st); saveStatus(st); made++;
+        remember(a.charId, `我在豆瓣加入了小组「${g.name}」`, `douban_status_${st.id}`);
       }
       for (const b of parseBlocks(text, "日记")) {
         const k = whoInList(b["作者"], keys); const x = who.find(y => y.k === k); if (!k || !x || !x.diary || x.diaryDone) continue; x.diaryDone = true;
@@ -2122,6 +2137,7 @@ ${CALM_LINE}
         const a = authorOfKey(k); const c = { id: uid("sc"), author: a, text: body.slice(0, 300), at: new Date(Date.now() + (i++) * 1000).toISOString(), ...(why !== "new" ? { to: { name: S.meta.nickname, author: { type: "user" } } } : {}) };
         x.comments = [...(x.comments || []), c];
         if (why === "new") x.likes = (x.likes || 0) + 1;
+        if (x.author.type === "user" || why !== "new") notice(`${why === "new" ? `评论了你的${kind === "d" ? "日记" : "广播"}` : "回复了你"}：「${body.slice(0, 30)}」`, a, { act: kind === "d" ? "s-diary" : "s-open", id: x.id });
         if (a.type === "char") remember(a.charId, `我在豆瓣${x.author.type === "user" ? `${herName()}的` : "自己的"}${kind === "d" ? "日记" : "广播"}下面${why === "new" ? "评论" : "回她"}：「${body.slice(0, 60)}」`, `douban_scmt_${c.id}`);
       }
       save(x);
@@ -2291,6 +2307,215 @@ ${CALM_LINE}
     }
   });
 
+  // ───────────────────────── 提醒 ─────────────────────────
+  // S.meta.notices = [{ id, at, text, who（作者对象，可无）, open: { act, id } }]，最新的在前，最多 200 条；noticeSeenAt 之后的算未读
+  function notice(text, who, open) {
+    const n = { id: uid("nt"), at: nowIso(), text: String(text).slice(0, 120), ...(who ? { who } : {}), ...(open ? { open } : {}) };
+    S.meta.notices = [n, ...(S.meta.notices || [])].slice(0, 200); saveMeta();
+  }
+  const noticeUnread = () => (S.meta.notices || []).filter(n => !S.meta.noticeSeenAt || n.at > S.meta.noticeSeenAt).length;
+  function openNotices() {
+    const seen0 = S.meta.noticeSeenAt || ""; S.meta.noticeSeenAt = nowIso(); saveMeta(); renderTab();
+    openPage("notices", pg => {
+      const list = S.meta.notices || [];
+      body(pg, list.length ? `<div class="db-white">${list.map(n => { const w = n.who ? whoOf(n.who) : null;
+        return `<div class="nt-row ${n.at > seen0 ? "new" : ""}" ${n.open ? `data-act="${esc(n.open.act)}" data-id="${esc(n.open.id || "")}" data-k="${esc(n.open.k || "")}"` : ""}>${w ? `<div ${personAttrs(n.who)}>${avatarHtml(w)}</div>` : `<div class="nt-ic">${I.mail}</div>`}<div class="cell-main"><div>${w ? `<b>${esc(w.name)}</b> ` : ""}${esc(n.text)}</div><em>${fmtTime(n.at)}</em></div></div>`; }).join("")}</div>`
+        : `<div class="empty">还没有提醒<br><span style="font-size:13px">有人赞你、回你、关注你、转发你的时候会出现在这里</span></div>`);
+    }, { title: "提醒" });
+  }
+  /** 小组里来了新回应：她的帖子有人回、她的楼被人回 */
+  function noticeFloors(t, made) {
+    if (!made) return;
+    const fresh = t.floors.slice(-made).filter(f => f.author.type !== "user");
+    const mineNs = new Set(t.floors.filter(f => f.author.type === "user").map(f => f.n));
+    for (const f of fresh.filter(f => f.quote && mineNs.has(f.quote)).slice(0, 3)) notice(`回复了你：「${f.text.slice(0, 30)}」`, f.author, { act: "open-topic", id: t.id });
+    if (t.author.type === "user" && fresh.length) notice(`${fresh.length > 1 ? `等 ${fresh.length} 人` : ""}回应了你的帖子《${t.title.slice(0, 20)}》`, fresh[fresh.length - 1].author, { act: "open-topic", id: t.id });
+  }
+
+  // ───────────────────────── 关注了还没回关：他先私信搭话，然后回关 ─────────────────────────
+  /** 每天一次，关注超过 6 小时还没回关的 char 掷骰子（亲密 25%、其他 12%），一次最多一个人；他来私信以后就回关 */
+  function rollFollowBack() {
+    const day = new Date().toDateString(); if (S.meta.fbDmDay === day) return; S.meta.fbDmDay = day; saveMeta();
+    const q = S.meta.dmQueue || [];
+    const cands = shuffle(activeChars().filter(c => { const k = `c:${c.id}`; const inf = personInfo(k); return (S.meta.follows || []).includes(k) && inf && !inf.followsMe && inf.followedAt && Date.now() - new Date(inf.followedAt) > 6 * 3600e3 && !q.some(x => x.charId === c.id); }));
+    const hit = cands.find(c => Math.random() < (isClose(c.id) ? 0.25 : 0.12)); if (!hit) return;
+    S.meta.dmQueue = [...q, { charId: hit.id, kind: "followback", due: new Date(Date.now() + rand(30, 120) * 1000).toISOString() }]; saveMeta();
+    setTimeout(() => runDmQueue().catch(e => console.warn(e)), 125e3);
+  }
+
+  // ───────────────────────── 市集：同城活动 ─────────────────────────
+  // events：{ id, city, title, kind, start, end, time, venue, price, desc, wants, interest, host, coverRef, my: "want", note, charWants: [id], inviteWith, invitedBy, accept: true/false, createdAt }
+  const EV_KINDS = ["展览", "演出", "话剧", "音乐节", "市集", "电影放映"];
+  const saveEvent = e => dbUpsert(COL.events, e).catch(err => console.warn(err));
+  const eventById = id => S.events.find(e => e.id === id);
+  const marketCity = () => (S.meta.marketCity || S.meta.city || S.meta.ip || "").trim();
+  const dayStart = d => { const x = new Date(d); x.setHours(0, 0, 0, 0); return x; };
+  const evEnd = e => new Date(e.end || e.start);
+  const evName = e => /^[「《"“]/.test(e.title) ? e.title : `「${e.title}」`;
+  const evPast = e => dayStart(evEnd(e)) < dayStart(new Date());
+  /** 「10月25日」「2026-10-25」「11/1」→ 日期；月份比现在早两个月以上就当明年 */
+  function parseEvDate(s) {
+    s = String(s || ""); let m = s.match(/(\d{4})[-./年](\d{1,2})[-./月](\d{1,2})/), y, mo, d;
+    if (m) { y = +m[1]; mo = +m[2]; d = +m[3]; } else if ((m = s.match(/(\d{1,2})\s*[月/.-]\s*(\d{1,2})/))) { mo = +m[1]; d = +m[2]; const now = new Date(); y = now.getFullYear(); if (mo < now.getMonth() + 1 - 2) y++; } else return null;
+    const x = new Date(y, mo - 1, d, 12); return isNaN(x) ? null : x.toISOString();
+  }
+  function evDateText(e) {
+    const f = iso => { const d = new Date(iso); return `${d.getMonth() + 1}月${d.getDate()}日`; };
+    return `${f(e.start)}${e.end && dayStart(e.end) > dayStart(e.start) ? `—${f(e.end)}` : ""}${e.time ? ` ${e.time}` : ""}`;
+  }
+  /** 本周 / 下周 / 更晚（正在进行的展览算「正在进行」） */
+  function evGroup(e) {
+    const now = dayStart(new Date()); const s = dayStart(e.start);
+    if (s <= now) return "正在进行";
+    const wd = (now.getDay() + 6) % 7; const nextMon = new Date(now); nextMon.setDate(now.getDate() + 7 - wd); const after = new Date(nextMon); after.setDate(nextMon.getDate() + 7);
+    return s < nextMon ? "本周" : s < after ? "下周" : "更晚一些";
+  }
+  /** 封面上的字：去掉书名号和「· 武汉站」这类尾巴，有冒号的取短的那半，最多 8 个字 */
+  function evShort(t) {
+    t = String(t || "").replace(/[「」《》“”"]/g, "").replace(/\s*[·•\-—]\s*\S{1,6}站\s*$/, "").trim();
+    const parts = t.split(/[：:]/).map(x => x.trim()).filter(Boolean);
+    if (parts.length > 1) t = parts.sort((x, y) => x.length - y.length).find(x => x.length >= 3) || parts[0];
+    return t.length > 8 ? t.slice(0, 8) : t;
+  }
+  function evCover(e) {
+    if (e.coverRef) return `<div class="ev-pic" data-act="mk-cover" data-id="${esc(e.id)}"><img ${refSrc(e.coverRef)} alt=""></div>`;
+    const [bg, fg] = coverColor(e.title);
+    return `<div class="ev-pic" data-act="mk-cover" data-id="${esc(e.id)}" style="background:${bg};color:${fg}"><span>${esc(evShort(e.title))}</span></div>`;
+  }
+  function evCard(e) {
+    const her = e.invitedBy ? `<div class="ev-who" data-act="dm-open" data-k="c:${esc(e.invitedBy)}">${avatarHtml(whoOf({ type: "char", charId: e.invitedBy }))}<span class="pink">${esc(charNick(e.invitedBy))} 约你一起去${e.accept === true ? " · 你们说好了" : ""} ›</span></div>` : "";
+    const withHim = e.inviteWith ? `<div class="ev-who" data-act="dm-open" data-k="c:${esc(e.inviteWith)}">${avatarHtml(whoOf({ type: "char", charId: e.inviteWith }))}<span>${e.accept === true ? `${esc(charNick(e.inviteWith))} 答应和你一起去` : e.accept === false ? `${esc(charNick(e.inviteWith))} 去不了` : `约了 ${esc(charNick(e.inviteWith))}，等他回`} ›</span></div>` : "";
+    const also = !e.invitedBy && !e.inviteWith ? (e.charWants || []).filter(id => charById(id)).slice(0, 1).map(id => `<div class="ev-who">${avatarHtml(whoOf({ type: "char", charId: id }))}<span>${esc(charNick(id))} 也想去 · </span><button class="ev-ask" data-act="mk-invite" data-id="${esc(e.id)}" data-c="${esc(id)}">约他一起 ›</button></div>`).join("") : "";
+    const went = evPast(e) && e.my === "want";
+    return `<div class="ev">${evCover(e)}<div class="cell-main"><h3>${esc(e.title)}</h3><p>${esc(evDateText(e))}${e.venue ? ` · ${esc(e.venue)}` : ""}</p>
+      <p><span class="ev-tag k${EV_KINDS.indexOf(e.kind) + 1}">${esc(e.kind || "活动")}</span>${esc(e.price || "")}</p>
+      ${e.desc ? `<p class="ev-desc">${esc(e.desc)}</p>` : ""}<div class="ev-n">${e.wants ? `${fmtNum(e.wants)}人想去` : ""}${e.interest ? ` · ${fmtNum(e.interest)}人感兴趣` : ""}${e.host ? ` · ${esc(e.host)}` : ""}</div>
+      ${went ? `<div class="ev-went">${(e.accept === true && (e.inviteWith || e.invitedBy)) ? `和 ${esc(charNick(e.inviteWith || e.invitedBy))} 一起去的` : "去过了"}${e.note ? `：${esc(e.note)}` : ""}<button data-act="mk-note" data-id="${esc(e.id)}">${e.note ? "改感想" : "写感想"}</button></div>`
+        : `<div class="ev-btns"><button class="ev-want ${e.my === "want" ? "on" : ""}" data-act="mk-want" data-id="${esc(e.id)}">${e.my === "want" ? "✓ 想去" : "想去"}</button>${e.my === "want" && !e.inviteWith && !e.invitedBy ? `<button class="ev-ask" data-act="mk-invite" data-id="${esc(e.id)}">约 TA 一起 ›</button>` : ""}</div>`}
+      ${her}${withHim}${also}</div></div>`;
+  }
+  function renderMarket() {
+    const city = marketCity(); const tab = S.mkTab || "all"; const kind = S.mkKind || "全部";
+    $("#topbar").innerHTML = `<div class="topbar-inner mk-bar"><span class="top-title">市集</span><button class="mk-city" data-act="mk-city">${esc(city || "选城市")}<i>▾</i></button></div>`;
+    const mine = S.events.filter(e => e.city === city);
+    const want = mine.filter(e => e.my === "want" && !evPast(e)), went = mine.filter(e => e.my === "want" && evPast(e));
+    const tabs = `<div class="sec-tabs db-white mk-tabs">${[["all", "同城活动"], ["want", `我想去的${want.length ? " " + want.length : ""}`], ["went", "去过的"]].map(([v, t]) => `<button class="${tab === v ? "on" : ""}" data-act="mk-tab" data-v="${v}">${t}</button>`).join("")}</div>`;
+    if (!city) { $("#view").innerHTML = `${tabs}<div class="empty">先选一个城市<br><span style="font-size:13px">用的是「编辑资料」里的所在城市，没填就按 IP 属地</span><br><br><button class="btn-ghost" data-act="mk-city">选城市</button></div>`; return; }
+    if (tab !== "all") {
+      const list = (tab === "want" ? want : went).sort((a, b) => new Date(a.start) - new Date(b.start));
+      $("#view").innerHTML = `${tabs}${list.length ? `<div class="db-white">${list.map(evCard).join("")}</div>` : `<div class="empty">${tab === "want" ? "还没有想去的活动" : "活动日期过了以后，想去的会挪到这里"}</div>`}`; return;
+    }
+    const list = mine.filter(e => !evPast(e) && (kind === "全部" || e.kind === kind)).sort((a, b) => new Date(a.start) - new Date(b.start));
+    const groups = {}; for (const e of list) (groups[evGroup(e)] = groups[evGroup(e)] || []).push(e);
+    const busy = S._mkBusy;
+    $("#view").innerHTML = `${tabs}<div class="chips mk-chips">${["全部", ...EV_KINDS].map(k => `<button class="${kind === k ? "on" : ""}" data-act="mk-kind" data-v="${k}">${k}</button>`).join("")}</div>
+      ${["正在进行", "本周", "下周", "更晚一些"].filter(g => groups[g]).map(g => `<div class="mk-sec">${g}</div><div class="db-white">${groups[g].map(evCard).join("")}</div>`).join("")}
+      ${!list.length && !busy ? `<div class="empty" style="padding:40px 30px">${mine.some(e => !evPast(e)) ? "这一类暂时没有活动" : `还没有${esc(city)}的活动`}</div>` : ""}
+      <button class="mk-more" data-act="mk-refresh" ${busy ? "disabled" : ""}>${busy ? `<span class="spinner"></span>正在找活动…` : mine.some(e => !evPast(e)) ? "↻ 换一批（1 次 API）" : "✨ 看看最近有什么活动（1 次 API）"}</button>`;
+  }
+  /** 生成一批活动：想去的、约过的留着，其他换掉；然后掷骰子：char 也想去（不花 API）、亲密的 char 来约她（私信 1 次 API） */
+  async function genEvents() {
+    const city = marketCity(); if (!city || S._mkBusy) return; S._mkBusy = true; renderTab();
+    try {
+      const keep = S.events.filter(e => e.city !== city || e.my || e.inviteWith || e.invitedBy);
+      for (const e of S.events.filter(e => !keep.includes(e))) dbDelete(COL.events, e.id);
+      S.events = keep;
+      const old = keep.filter(e => e.city === city && !evPast(e)).map(e => e.title);
+      const carrier = activeChars().slice(0, 1).map(c => c.id);
+      const today = new Date(); const ds = `${today.getFullYear()}年${today.getMonth() + 1}月${today.getDate()}日（星期${"日一二三四五六"[today.getDay()]}）`;
+      const text = await generate(carrier, "events", [
+        `【豆瓣同城活动】今天是 ${ds}。列出${city}接下来三周内的同城活动 8 个：展览、演出（livehouse、音乐会）、话剧、音乐节、市集、电影放映都要有，按真实情况分配。`,
+        "能联网就先搜一下这个城市最近真实在办的活动，用真实的名字、场馆、日期、票价；搜不到的就按这个城市真实存在的场馆，写合理的活动，不要编明星大事件。",
+        "这一轮不扮演任何角色，不提角色和用户。", old.length ? `已经有的（别重复）：${old.join("、")}` : "",
+        "每个活动：\n===活动===\n名称：\n类型：展览 / 演出 / 话剧 / 音乐节 / 市集 / 电影放映（选一个）\n开始：几月几日\n结束：几月几日（一天的写 无）\n时间：几点开始（全天写 无）\n地点：场馆名\n票价：（免费写 免费）\n想去：多少人\n感兴趣：多少人\n发起：小组或主办方（没有写 无）\n简介：一句话\n===结束===",
+      ].filter(Boolean).join("\n\n"), "同城活动", { rule: false });
+      if (text == null) return;
+      const made = [];
+      for (const b of parseBlocks(text, "活动")) {
+        const title = String(b["名称"] || "").trim().slice(0, 40); const start = parseEvDate(b["开始"]); if (!title || !start || old.includes(title)) continue;
+        const end = none(b["结束"]) ? null : parseEvDate(b["结束"]);
+        const e = { id: uid("ev"), scope: S.identity.id, city, title, kind: EV_KINDS.find(k => String(b["类型"] || "").includes(k)) || "演出", start, end: end && new Date(end) >= new Date(start) ? end : null,
+          time: none(b["时间"]) ? "" : String(b["时间"]).trim().slice(0, 12), venue: String(b["地点"] || "").trim().slice(0, 30), price: String(b["票价"] || "").trim().slice(0, 20),
+          wants: clampInt(b["想去"], rand(100, 3000)), interest: clampInt(b["感兴趣"], 0), host: none(b["发起"]) ? "" : String(b["发起"]).trim().slice(0, 24), desc: none(b["简介"]) ? "" : String(b["简介"]).trim().slice(0, 80), charWants: [], createdAt: nowIso() };
+        if (evPast(e)) continue;
+        S.events.push(e); made.push(e);
+      }
+      if (!made.length) { toast("这次没找到活动，再试一次"); return; }
+      // char 也想去：掷骰子，不花 API
+      for (const c of activeChars()) if (Math.random() < (isClose(c.id) ? 0.3 : 0.1)) { const e = made[rand(0, made.length - 1)]; e.charWants = [...e.charWants, c.id]; }
+      // 亲密的 char 约她：一批最多一个人，私信 1 次 API
+      const q = S.meta.dmQueue || [];
+      const inv = shuffle(activeChars().filter(c => isClose(c.id) && !q.some(x => x.charId === c.id))).find(() => Math.random() < 0.3);
+      const invE = inv ? made.find(x => x.charWants.includes(inv.id)) || made[rand(0, made.length - 1)] : null;
+      if (invE) { invE.invitedBy = inv.id; invE.inviteAt = nowIso(); }
+      made.forEach(saveEvent);
+      if (invE) { const e = invE;
+        S.meta.dmQueue = [...q, { charId: inv.id, kind: "invite", eventId: e.id, due: new Date(Date.now() + rand(20, 60) * 1000).toISOString() }]; saveMeta(); setTimeout(() => runDmQueue().catch(err => console.warn(err)), 61e3); }
+    } finally { S._mkBusy = false; renderTab(); }
+  }
+  /** 她约他：私信里替她发一条邀请，他按人设回（去不去由他回的 ===赴约=== 定） */
+  async function inviteChar(e, charId) {
+    let id = charId;
+    if (!id) { const cs = activeChars(); if (!cs.length) return; id = cs.length === 1 ? cs[0].id : await sheet("约谁一起", cs.map(c => ({ label: `${charNick(c.id)}（${c.name}）`, value: c.id }))); if (!id) return; }
+    e.inviteWith = id; e.inviteAt = nowIso(); e.accept = undefined; if (e.my !== "want") e.my = "want"; saveEvent(e);
+    const d = dmThread(`c:${id}`);
+    d.msgs.push({ id: uid("pm"), me: true, text: `${evDateText(e)}${e.venue ? `，${e.venue}` : ""}有个${e.kind}${evName(e)}，要不要一起去？`, at: nowIso() }); d.lastAt = nowIso(); saveDm(d);
+    openDm(`c:${id}`); replyDm(d).catch(err => console.warn(err));
+  }
+  /** 私信里在聊的活动邀请（还没说定去不去） */
+  const pendingInvite = charId => S.events.filter(e => (e.inviteWith === charId || e.invitedBy === charId) && e.accept == null && !evPast(e)).sort((a, b) => String(b.inviteAt || "").localeCompare(String(a.inviteAt || "")))[0];
+  const inviteLine = charId => { const e = pendingInvite(charId); if (!e) return "";
+    return `你们在聊一起去${e.kind}${evName(e)}（${evDateText(e)}${e.venue ? `，${e.venue}` : ""}）。${e.invitedBy === charId ? "是你约的她。" : "是她约的你。"}按你的人设、日程和你们的关系决定去不去；如果这次已经说定了，在私信后面多写：\n===赴约===\n去：是 或 否\n===结束===\n还没说定就不写。`; };
+  function takeInvite(charId, text) {
+    const e = pendingInvite(charId); const b = e && text && parseBlocks(text, "赴约")[0]; if (!b) return;
+    e.accept = yes(b["去"]); saveEvent(e);
+    notice(e.accept ? `答应和你一起去${evName(e)}` : `去不了${evName(e)}`, { type: "char", charId }, { act: "dm-open", k: `c:${charId}` });
+    if (e.accept) remember(charId, `我和${herName()}说好了${evDateText(e)}一起去${e.kind}${evName(e)}${e.venue ? `（${e.venue}）` : ""}`, `douban_event_${e.id}`);
+  }
+  async function pruneEvents() {
+    const old = S.events.filter(e => evPast(e) && !e.my && Date.now() - evEnd(e) > 3 * 86400e3);
+    for (const e of old) dbDelete(COL.events, e.id);
+    S.events = S.events.filter(e => !old.includes(e));
+  }
+
+  // ───────────────────────── 省内存：图片只在内存里留最近的，生成的图先压小再存 ─────────────────────────
+  /** 生成的图（常常是几 MB 的 PNG）缩到 1280、转成 JPEG 再存 */
+  function shrinkDataUrl(dataUrl, max = 1280) {
+    return new Promise(res => { const img = new Image(); img.onload = () => { const k = Math.min(1, max / Math.max(img.width, img.height)); const cv = document.createElement("canvas"); cv.width = Math.round(img.width * k); cv.height = Math.round(img.height * k); cv.getContext("2d").drawImage(img, 0, 0, cv.width, cv.height); try { res(cv.toDataURL("image/jpeg", .86)); } catch (e) { res(dataUrl); } }; img.onerror = () => res(dataUrl); img.src = dataUrl; });
+  }
+
+  document.addEventListener("click", async e => {
+    const el = e.target.closest("[data-act]"); if (!el || !/^(mk-|nt-)/.test(el.dataset.act)) return;
+    e.stopPropagation();
+    const act = el.dataset.act; const ev = el.dataset.id ? eventById(el.dataset.id) : null;
+    switch (act) {
+      case "nt-open": openNotices(); return;
+      case "mk-tab": S.mkTab = el.dataset.v; renderTab(); $("#view").scrollTop = 0; return;
+      case "mk-kind": S.mkKind = el.dataset.v; renderTab(); return;
+      case "mk-refresh": genEvents().catch(err => console.warn(err)); return;
+      case "mk-city": {
+        const v = await inputSheet("看哪个城市的活动", { placeholder: S.meta.city || S.meta.ip || "城市名", value: marketCity(), maxlength: 12 });
+        if (v == null) return; S.meta.marketCity = v.trim() && v.trim() !== (S.meta.city || S.meta.ip || "") ? v.trim() : ""; saveMeta(); renderTab(); return;
+      }
+      case "mk-want": if (!ev) return; ev.my = ev.my === "want" ? undefined : "want"; saveEvent(ev); renderTab(); return;
+      case "mk-invite": if (ev) inviteChar(ev, el.dataset.c).catch(err => console.warn(err)); return;
+      case "mk-note": { if (!ev) return; const v = await inputSheet("去过以后的感想", { value: ev.note || "", maxlength: 140, area: true }); if (v == null) return; ev.note = v.trim(); saveEvent(ev); renderTab(); return; }
+      case "mk-cover": {
+        if (!ev) return;
+        const v = await sheet("活动封面", [{ label: "从相册选", value: "pick" }, ...(api.ai.generateImage ? [{ label: "生成一张（会用 1 次生图）", value: "gen" }] : []), ...(ev.coverRef ? [{ label: "恢复默认", value: "reset" }] : [])]);
+        if (v === "pick") { try { const [ref] = await pickImages(1, 900); if (ref) { ev.coverRef = ref; saveEvent(ev); renderTab(); } } catch (err) { toast("上传失败"); } }
+        if (v === "reset") { ev.coverRef = null; saveEvent(ev); renderTab(); }
+        if (v === "gen") {
+          toast("正在生成封面…（10~30 秒）");
+          try { const r = await api.ai.generateImage({ prompt: `${ev.kind}${evName(ev)}的海报，${ev.desc || ""}，竖版，有设计感，不要文字`, timeoutMs: 120000 });
+            if (r && r.dataUrl) { const d = await shrinkDataUrl(r.dataUrl, 900); const st = await api.media.put({ dataUrl: d }); S.mediaCache.set(st.ref, d); ev.coverRef = st.ref; saveEvent(ev); renderTab(); } }
+          catch (err) { toast(`生图失败：${(err && err.message) || err}`.slice(0, 60)); }
+        }
+        return;
+      }
+    }
+  });
+
   // ───────────────────────── 启动 ─────────────────────────
   // ───────────────────────── 私信 ─────────────────────────
   // dms：一个人一条会话 { id, scope, k: "c:角色id" | "n:昵称", fromTopic（第一次从哪个帖子点进来）, msgs: [{ id, me, text, images: [{ ref | desc, seen }], quote: { id, text }, at }], unread, lastAt, mem: [记忆 id] }
@@ -2401,8 +2626,9 @@ ${CALM_LINE}
         `【豆瓣私信】你（${ch.name}，豆瓣昵称「${charNick(ch.id)}」）在豆瓣私信里和用户（豆瓣昵称「${S.meta.nickname}」）聊天。你知道这是豆瓣私信不是微信；你看得到你们所有的记忆，微信上聊过的事、她最近在豆瓣上发的东西你都知道，想提就自然地提。语气、称呼、性格完全按你的人设和你们现在的关系，不能 OOC。`,
         herRecentLine(), before ? `你们之前的私信：\n${before}` : "这是你们在豆瓣私信里的第一句话。",
         `用户刚刚${pending.length > 1 ? "连着" : ""}发来：${pending.map(m => `「${dmText(m)}」`).join("")}`,
-        DM_STYLE, CHAR_TALK_LINE, DM_FMT,
+        inviteLine(ch.id), DM_STYLE, CHAR_TALK_LINE, DM_FMT,
       ].filter(Boolean).join("\n\n"), `${ch.name}私信`, { rule: false, vision });
+      takeInvite(ch.id, text);
     } else {
       await seeForNpc(pending);
       const info = personInfo(d.k); const followed = (S.meta.follows || []).includes(d.k);
@@ -2419,7 +2645,7 @@ ${CALM_LINE}
       catch (e) { logAi({ label: `${a.name}私信`, ok: false, error: String((e && e.message) || e) }); toast(`私信回复失败：${(e && e.message) || e}`.slice(0, 60)); }
       finally { S.jobs.delete(job); }
       const fb = text && parseBlocks(text, "互动")[0];
-      if (fb && yes(fb["回关"]) && info && !info.followsMe) { info.followsMe = true; saveMeta(); toast(`${a.name} 回关了你`); }
+      if (fb && yes(fb["回关"]) && info && !info.followsMe) { info.followsMe = true; saveMeta(); toast(`${a.name} 回关了你`); notice("回关了你", a, { act: "open-person", k: d.k }); }
     }
     d._typing = false;
     const items = text ? parseBlocks(text, "私信").map(b => dmFromBlock(b, d)).filter(Boolean).slice(0, 5) : [];
@@ -2462,12 +2688,12 @@ ${CALM_LINE}
     if (S._dqBusy) return; S._dqBusy = true;
     try {
       for (const job of (S.meta.dmQueue || []).filter(x => new Date(x.due) <= new Date())) {
-        const ch = charById(job.charId); const t = topicById(job.topicId); const f = t && job.n ? t.floors.find(x => x.n === job.n) : null;
+        const ch = charById(job.charId); const t = topicById(job.topicId); const f = t && job.n ? t.floors.find(x => x.n === job.n) : null; const ev = job.eventId ? eventById(job.eventId) : null;
         const drop = () => { S.meta.dmQueue = (S.meta.dmQueue || []).filter(x => x !== job); saveMeta(); };
-        if (!ch || !t || (job.n && !f)) { drop(); continue; }
+        if (!ch || (job.kind === "invite" ? !ev : job.kind !== "followback" && (!t || (job.n && !f)))) { drop(); continue; }
         const d = dmThread(`c:${ch.id}`); const last = d.msgs[d.msgs.length - 1]; if (last && !last.me) { drop(); continue; }
-        const g = groupById(t.groupId) || { name: "小组" };
-        const saw = f ? `用户在小组「${g.name}」的帖子《${t.title}》里实名回了：「${f.text}」${job.his ? "（这是你的帖子 / 你的楼，她回的是你）" : "。你刷到了，没在楼里回她"}` : `用户在小组「${g.name}」实名发了帖子《${t.title}》：${t.body.slice(0, 200)}。你刷到了，没在楼里回她`;
+        const g = t ? groupById(t.groupId) || { name: "小组" } : null;
+        const saw = job.kind === "followback" ? "用户在豆瓣关注了你，你还没回关。你想先私信她说几句，然后回关她" : job.kind === "invite" ? `同城活动里有个${ev.kind}${evName(ev)}（${evDateText(ev)}${ev.venue ? `，${ev.venue}` : ""}${ev.desc ? `，${ev.desc}` : ""}）。你想约她一起去，按你的人设和你们的关系自然地开口` : f ? `用户在小组「${g.name}」的帖子《${t.title}》里实名回了：「${f.text}」${job.his ? "（这是你的帖子 / 你的楼，她回的是你）" : "。你刷到了，没在楼里回她"}` : `用户在小组「${g.name}」实名发了帖子《${t.title}》：${t.body.slice(0, 200)}。你刷到了，没在楼里回她`;
         const text = await generate([ch.id], "dm", [
           `当前时间：${new Date().toLocaleString("zh-CN", { hour12: false })}`,
           `【豆瓣私信】你（${ch.name}，豆瓣昵称「${charNick(ch.id)}」）在豆瓣上刷到：${saw}。你想私信她说几句：像真人随手发起聊天，1～3 条。语气、称呼、性格完全按你的人设和你们现在的关系，不能 OOC；你看得到你们所有的记忆，知道这是豆瓣私信不是微信。`,
@@ -2478,9 +2704,11 @@ ${CALM_LINE}
         drop();
         const items = parseBlocks(text, "私信").map(b => dmFromBlock(b, d)).filter(Boolean).slice(0, 3); if (!items.length) continue;
         await dmDeliver(d, items);
-        const ev = `douban_dm_${items[0].id}`; d.mem = [...(d.mem || []), ev]; saveDm(d);
-        remember(ch.id, `我在豆瓣刷到${herName()}${f ? `在《${t.title}》里的回复` : `发的帖子《${t.title}》`}，私信了她：${items.map(m => `「${dmText(m).slice(0, 40)}」`).join("")}`, ev);
+        const evId = `douban_dm_${items[0].id}`; d.mem = [...(d.mem || []), evId]; saveDm(d);
+        remember(ch.id, `${job.kind === "followback" ? `${herName()}在豆瓣关注了我，我私信了她` : job.kind === "invite" ? `我在豆瓣私信约${herName()}一起去${evName(ev)}` : `我在豆瓣刷到${herName()}${f ? `在《${t.title}》里的回复` : `发的帖子《${t.title}》`}，私信了她`}：${items.map(m => `「${dmText(m).slice(0, 40)}」`).join("")}`, evId);
         toast(`${charNick(ch.id)} 给你发了私信`);
+        if (job.kind === "followback") { const inf = personInfo(`c:${ch.id}`); if (inf && !inf.followsMe) { inf.followsMe = true; saveMeta(); notice("回关了你", { type: "char", charId: ch.id }, { act: "open-person", k: `c:${ch.id}` }); } }
+        if (job.kind === "invite") notice(`约你一起去${evName(ev)}`, { type: "char", charId: ch.id }, { act: "dm-open", k: `c:${ch.id}` });
       }
     } finally { S._dqBusy = false; }
   }
@@ -2587,10 +2815,10 @@ ${CALM_LINE}
   async function boot() {
     document.body.insertAdjacentHTML("afterbegin", `<header class="topbar" id="topbar"></header><main class="view" id="view"><div class="gen-tip"><span class="spinner"></span>加载中…</div></main><nav class="tabbar" id="tabbar"></nav>`);
     if (!api) { $("#view").innerHTML = `<div class="empty">请在小手机里打开这个 APP</div>`; return; }
-    try { await loadAll(); pruneTopics().catch(e => console.warn(e)); pruneWorks().catch(e => console.warn(e)); pruneFeed().catch(e => console.warn(e)); } catch (e) { console.error(e); $("#view").innerHTML = `<div class="empty">加载失败：${esc(e.message || e)}</div>`; return; }
+    try { await loadAll(); pruneTopics().catch(e => console.warn(e)); pruneWorks().catch(e => console.warn(e)); pruneFeed().catch(e => console.warn(e)); pruneEvents().catch(e => console.warn(e)); } catch (e) { console.error(e); $("#view").innerHTML = `<div class="empty">加载失败：${esc(e.message || e)}</div>`; return; }
     renderTab();
-    runFollowMarks().catch(e => console.warn(e)); runDmQueue().catch(e => console.warn(e)); runFeed().catch(e => console.warn(e));
-    document.addEventListener("visibilitychange", () => { if (!document.hidden) { runFollowMarks().catch(e => console.warn(e)); runDmQueue().catch(e => console.warn(e)); runFeed().catch(e => console.warn(e)); } });
+    runFollowMarks().catch(e => console.warn(e)); runDmQueue().catch(e => console.warn(e)); runFeed().catch(e => console.warn(e)); rollFollowBack();
+    document.addEventListener("visibilitychange", () => { if (!document.hidden) { runFollowMarks().catch(e => console.warn(e)); runDmQueue().catch(e => console.warn(e)); runFeed().catch(e => console.warn(e)); rollFollowBack(); } });
     setInterval(() => runFeed().catch(e => console.warn(e)), 30 * 60e3);
     setInterval(() => { if (!document.hidden) runDmQueue().catch(e => console.warn(e)); }, 60e3);
   }

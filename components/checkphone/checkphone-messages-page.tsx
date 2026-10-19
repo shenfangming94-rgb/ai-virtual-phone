@@ -13,6 +13,8 @@ import type {
 } from "@/lib/checkphone-config";
 import { generateCheckPhoneMessages } from "@/lib/checkphone-engine";
 import { clearPhoneSnapshot, loadPhoneSnapshot, savePhoneSnapshot } from "@/lib/checkphone-storage";
+import { appendSmsMine, mergeInjectedSms, replySms } from "@/lib/checkphone-reply";
+import { CheckPhoneSendComposer } from "@/components/checkphone/checkphone-send-composer";
 import { formatChatUiTime } from "@/lib/chat-time";
 import { CheckPhoneDebugErrorCard } from "./checkphone-debug-error-card";
 import { normalizeBilingualTextInput, splitBilingualText } from "@/lib/bilingual-text";
@@ -64,7 +66,11 @@ export function CheckPhoneMessagesPage({ character, onBack }: CheckPhoneMessages
     (async () => {
       const cached = await loadPhoneSnapshot<CheckPhoneMessagesPayload>(character.id, "messages");
       if (cancelled) return;
-      setSnapshot(cached);
+      // 她用他的号发过的短信，刷新后补回去
+      const merged = cached ? mergeInjectedSms(cached) : cached;
+      if (merged && merged !== cached) await savePhoneSnapshot(merged);
+      if (cancelled) return;
+      setSnapshot(merged);
       setSelectedThreadId(null);
       setLoaded(true);
     })();
@@ -107,8 +113,9 @@ export function CheckPhoneMessagesPage({ character, onBack }: CheckPhoneMessages
         summary,
         payload,
       };
-      await savePhoneSnapshot(nextSnapshot);
-      setSnapshot(nextSnapshot);
+      const mergedSnapshot = mergeInjectedSms(nextSnapshot);
+      await savePhoneSnapshot(mergedSnapshot);
+      setSnapshot(mergedSnapshot);
       setSelectedThreadId(null);
     }
     setError(nextError ?? null);
@@ -308,6 +315,14 @@ export function CheckPhoneMessagesPage({ character, onBack }: CheckPhoneMessages
                 </div>
               ))}
             </div>
+            <CheckPhoneSendComposer
+              key={`sms-${selectedThread.id}`}
+              tone="sms"
+              charId={character.id}
+              charName={character.name}
+              onAppend={async (text, mode) => { const next = await appendSmsMine(character.id, selectedThread.id, text, mode); if (next) setSnapshot(next); return Boolean(next); }}
+              onReply={async (texts, mode) => { const next = await replySms(character.id, selectedThread.id, texts, mode); if (next) setSnapshot(next); }}
+            />
           </div>
         )}
       </div>

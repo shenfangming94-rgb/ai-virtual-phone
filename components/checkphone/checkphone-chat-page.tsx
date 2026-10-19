@@ -14,9 +14,6 @@ import {
   Trash2,
   Search,
   MoreHorizontal,
-  Plus,
-  Smile,
-  Mic,
   type LucideIcon,
 } from "lucide-react";
 import { CheckPhoneBilingualText, normalizeCheckPhoneText } from "@/components/checkphone/checkphone-bilingual-text";
@@ -43,6 +40,8 @@ import {
   loadPhoneSnapshot,
   savePhoneSnapshot,
 } from "@/lib/checkphone-storage";
+import { appendWechatMine, mergeInjectedWechat, replyWechat } from "@/lib/checkphone-reply";
+import { CheckPhoneSendComposer } from "@/components/checkphone/checkphone-send-composer";
 import { splitBilingualText } from "@/lib/bilingual-text";
 import { resolveUserIdentity } from "@/lib/settings-storage";
 import { loadChatSessions } from "@/lib/chat-storage";
@@ -625,77 +624,6 @@ function CheckPhoneBubbleAvatar({
   );
 }
 
-function CheckPhoneChatComposer() {
-  const iconStyle = {
-    width: "32px",
-    height: "32px",
-    borderRadius: "50%",
-    background: "rgba(255, 255, 255, 0.86)",
-    color: "rgba(62, 67, 95, 0.56)",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    flexShrink: 0,
-    border: "1px solid rgba(255, 255, 255, 0.76)",
-    boxShadow: "0 6px 14px rgba(70, 76, 112, 0.025)",
-  };
-
-  return (
-    <div
-      style={{
-        padding: "10px 14px calc(10px + env(safe-area-inset-bottom, 0px))",
-        background: "rgba(255, 255, 255, 0.78)",
-        backdropFilter: "blur(18px)",
-        borderTop: "1px solid rgba(166, 171, 197, 0.14)",
-        flexShrink: 0,
-        display: "flex",
-        alignItems: "center",
-        gap: "8px",
-        position: "relative",
-        zIndex: 1,
-      }}
-    >
-      <div style={iconStyle} aria-hidden="true">
-        <Plus size={18} strokeWidth={2.2} />
-      </div>
-      <div
-        style={{
-          flex: 1,
-          minWidth: 0,
-          background: "rgba(247, 244, 255, 0.92)",
-          height: "36px",
-          borderRadius: "18px",
-          padding: "0 12px 0 15px",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          gap: "10px",
-          color: "rgba(62, 67, 95, 0.42)",
-          fontSize: "calc(12px*var(--app-text-scale,1))",
-          border: "1px solid rgba(155, 132, 235, 0.08)",
-        }}
-      >
-        <span
-          style={{
-            overflow: "hidden",
-            textOverflow: "ellipsis",
-            whiteSpace: "nowrap",
-          }}
-        >
-          Type a message...
-        </span>
-        <Smile size={17} strokeWidth={2} style={{ flexShrink: 0 }} />
-      </div>
-      <div style={iconStyle} aria-hidden="true">
-        <Mic size={17} strokeWidth={2.2} />
-      </div>
-      <div style={iconStyle} aria-hidden="true">
-        <MoreHorizontal size={18} strokeWidth={2.2} />
-      </div>
-    </div>
-  );
-}
-
 export function CheckPhoneChatPage({
   character,
   onBack,
@@ -728,7 +656,11 @@ export function CheckPhoneChatPage({
         "chat",
       );
       if (cancelled) return;
-      setSnapshot(cached);
+      // 她用他的号发过的消息，刷新后补回去
+      const merged = cached ? mergeInjectedWechat(cached) : cached;
+      if (merged && merged !== cached) await savePhoneSnapshot(merged);
+      if (cancelled) return;
+      setSnapshot(merged);
       setLoaded(true);
     })();
     return () => {
@@ -762,8 +694,9 @@ export function CheckPhoneChatPage({
         summary,
         payload,
       };
-      await savePhoneSnapshot(nextSnapshot);
-      setSnapshot(nextSnapshot);
+      const mergedSnapshot = mergeInjectedWechat(nextSnapshot);
+      await savePhoneSnapshot(mergedSnapshot);
+      setSnapshot(mergedSnapshot);
       setSelectedConversationId(null);
       setSelectedGroupId(null);
     }
@@ -2040,7 +1973,14 @@ export function CheckPhoneChatPage({
                 })}
               </div>
             </div>
-            <CheckPhoneChatComposer />
+            <CheckPhoneSendComposer
+              key={`conversation-${activeConversation.id}`}
+              charId={character.id}
+              charName={character.name}
+              disabledHint={isRealDirectConversation(activeConversation) ? "这是你们俩的聊天，回他去消息 app 吧" : undefined}
+              onAppend={async (text, mode) => { const next = await appendWechatMine(character.id, { kind: "conversation", id: activeConversation.id }, text, mode); if (next) setSnapshot(next); return Boolean(next); }}
+              onReply={async (texts, mode) => { const next = await replyWechat(character.id, { kind: "conversation", id: activeConversation.id }, texts, mode); if (next) setSnapshot(next); }}
+            />
           </div>
         )}
 
@@ -2191,7 +2131,13 @@ export function CheckPhoneChatPage({
                 })}
               </div>
             </div>
-            <CheckPhoneChatComposer />
+            <CheckPhoneSendComposer
+              key={`group-${activeGroup.id}`}
+              charId={character.id}
+              charName={character.name}
+              onAppend={async (text, mode) => { const next = await appendWechatMine(character.id, { kind: "group", id: activeGroup.id }, text, mode); if (next) setSnapshot(next); return Boolean(next); }}
+              onReply={async (texts, mode) => { const next = await replyWechat(character.id, { kind: "group", id: activeGroup.id }, texts, mode); if (next) setSnapshot(next); }}
+            />
           </div>
         )}
       </div>

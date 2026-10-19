@@ -17,6 +17,7 @@ import MusicApp from "@/components/music/music-app";
 import MusicPlayer from "@/components/music/music-player";
 import { ListenTogetherOverlay } from "@/components/music/listen-together";
 import { startListenTogetherService, stopListenTogetherService } from "@/lib/listen-together";
+import { startCheckPhoneReplyService, stopCheckPhoneReplyService } from "@/lib/checkphone-reply";
 import MusicFloat from "@/components/music/music-float";
 import MiniAppWindow from "@/components/music/mini-app-window";
 import { PhoneCalendarApp } from "@/components/calendar-app";
@@ -1820,6 +1821,7 @@ export function DesktopShell({ initialThemeProfile, initialThemeAssets }: Deskto
       startMomentsService();
       startShoppingGiftService();
       startListenTogetherService();
+      startCheckPhoneReplyService();
       startDiaryEntryTimerService();
       const stopWeixinCloudRealtimeSync = startWeixinCloudRealtimeSync();
       servicesStarted = true;
@@ -1840,6 +1842,7 @@ export function DesktopShell({ initialThemeProfile, initialThemeAssets }: Deskto
         stopMomentsService();
         stopShoppingGiftService();
         stopListenTogetherService();
+        stopCheckPhoneReplyService();
         stopDiaryEntryTimerService();
       }
       bgTimerCleanup();

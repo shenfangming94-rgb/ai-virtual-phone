@@ -19971,3 +19971,60 @@
 .cp-scroll-guard > * {
   flex-shrink: 0;
 }
+
+/* 查手机：用他的号发消息 */
+.cp-send-composer {
+  flex-shrink: 0;
+  padding: 8px 14px calc(10px + env(safe-area-inset-bottom, 0px));
+  background: rgba(255, 255, 255, 0.82);
+  backdrop-filter: blur(18px);
+  border-top: 1px solid rgba(166, 171, 197, 0.14);
+  position: relative;
+  z-index: 1;
+}
+.cp-send-composer--disabled {
+  text-align: center;
+  font-size: calc(11px*var(--app-text-scale,1));
+  color: rgba(62, 67, 95, 0.45);
+  padding-top: 12px;
+}
+.cp-send-mode { display: flex; align-items: center; gap: 6px; margin-bottom: 7px; }
+.cp-send-mode button {
+  border: 1px solid rgba(155, 132, 235, 0.18);
+  background: rgba(255, 255, 255, 0.9);
+  color: rgba(62, 67, 95, 0.6);
+  border-radius: 12px;
+  padding: 3px 10px;
+  font-size: calc(11px*var(--app-text-scale,1));
+  font-weight: 600;
+}
+.cp-send-mode button[data-active] { background: #7b57e8; border-color: #7b57e8; color: #fff; }
+.cp-send-status { margin-left: auto; font-size: calc(10px*var(--app-text-scale,1)); color: rgba(62, 67, 95, 0.42); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 45%; }
+.cp-send-row { display: flex; align-items: center; gap: 8px; }
+.cp-send-row input {
+  flex: 1;
+  min-width: 0;
+  height: 36px;
+  border-radius: 18px;
+  border: 1px solid rgba(155, 132, 235, 0.12);
+  background: rgba(247, 244, 255, 0.92);
+  padding: 0 14px;
+  font-size: calc(13px*var(--app-text-scale,1));
+  color: #20243a;
+  outline: none;
+}
+.cp-send-btn {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  border: 0;
+  background: #7b57e8;
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.cp-send-btn:disabled { opacity: 0.35; }
+.cp-send-composer[data-tone="sms"] .cp-send-mode button[data-active],
+.cp-send-composer[data-tone="sms"] .cp-send-btn { background: #34c759; border-color: #34c759; }

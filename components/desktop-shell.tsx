@@ -6,6 +6,7 @@ import { updateStatusBarTone } from "@/lib/bg-tone";
 import { startDiaryEntryTimerService, stopDiaryEntryTimerService } from "@/lib/diary-entry-timer-service";
 import { startFollowUpService, stopFollowUpService } from "@/lib/follow-up-service";
 import { startMomentsService, stopMomentsService } from "@/lib/moments-engine";
+import { startShoppingGiftService, stopShoppingGiftService } from "@/lib/shopping-gift-service";
 import { bgTimerCleanup } from "@/lib/bg-timer";
 import { PhoneThemeApp } from "@/components/phone-theme-app";
 import { PhoneCharacterApp } from "@/components/phone-character-app";
@@ -1814,6 +1815,7 @@ export function DesktopShell({ initialThemeProfile, initialThemeAssets }: Deskto
       if (cancelled) return;
       startFollowUpService();
       startMomentsService();
+      startShoppingGiftService();
       startDiaryEntryTimerService();
       const stopWeixinCloudRealtimeSync = startWeixinCloudRealtimeSync();
       servicesStarted = true;
@@ -1832,6 +1834,7 @@ export function DesktopShell({ initialThemeProfile, initialThemeAssets }: Deskto
       if (servicesStarted) {
         stopFollowUpService();
         stopMomentsService();
+        stopShoppingGiftService();
         stopDiaryEntryTimerService();
       }
       bgTimerCleanup();
@@ -2465,6 +2468,16 @@ html,body{margin:0;padding:0;width:100%;height:100%;background:#121110;color:rgb
       window.dispatchEvent(new CustomEvent(CHAT_OPEN_SESSION_EVENT, { detail: { sessionId } }));
     }, 0);
   }, []);
+
+  // 别的 app（购物「去跟他说」）直接打开某个私聊
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const sessionId = (e as CustomEvent<{ sessionId?: string }>).detail?.sessionId;
+      if (sessionId) openChatSessionFromNotice(sessionId);
+    };
+    window.addEventListener("nox-open-chat-session", handler);
+    return () => window.removeEventListener("nox-open-chat-session", handler);
+  }, [openChatSessionFromNotice]);
 
   useEffect(() => {
     const handler = (e: Event) => {

@@ -1,5 +1,6 @@
 import { loadChatMessages, loadChatSessions } from "./chat-storage";
 import { loadShoppingState } from "./shopping-storage";
+import { loadGiftStore } from "./shopping-gift-store";
 import type { ShoppingOrder } from "./shopping-types";
 import type { CheckPhoneShoppingTone } from "./checkphone-config";
 
@@ -69,9 +70,12 @@ export function loadDeliveredShoppingGifts(options: LoadShoppingGiftOptions = {}
   const sentIds = options.includeSent ? new Set<string>() : loadSentShoppingGiftIds();
   const state = loadShoppingState();
   const gifts: ShoppingGiftCandidate[] = [];
+  const giftMeta = loadGiftStore().orders;
 
   for (const order of state.orders) {
     if (!isOrderDelivered(order, nowMs)) continue;
+    // 直接寄给 char 的那单已经在他手里了，不能再从聊天里「送出」一次
+    if (giftMeta[order.id]?.to) continue;
     const deliveredEvent = getDeliveredEvent(order);
 
     order.items.forEach((item, itemIndex) => {

@@ -5959,6 +5959,8 @@ export function ChatRoom({ session, onBack, onDeleted }: ChatRoomProps) {
                     const renderMsg = msg;
                     const isSystemInstruction = isSystemInstructionMessage(renderMsg);
                     const isCompactSystemInstruction = isSystemInstruction && renderMsg.mediaData?.compactSystemInstruction === true;
+                    // 只写给角色看的事件（比如他偷偷下单的礼物）：没有可见文字就不显示
+                    if (isCompactSystemInstruction && !getSystemInstructionDisplayContent(renderMsg.content)) return null;
                     const bubbleDisplayContent = getMessageDisplayContent(renderMsg);
                     let prevVisibleMsg: RenderChatMessage | null = null;
                     for (let prevIdx = idx - 1; prevIdx >= 0; prevIdx -= 1) {

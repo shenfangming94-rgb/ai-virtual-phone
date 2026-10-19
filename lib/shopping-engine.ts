@@ -99,7 +99,7 @@ type ParsedRecommendationBlock = {
   fields: Record<string, string>;
 };
 
-function resolveShoppingApiConfig(): ApiConfig | null {
+export function resolveShoppingApiConfig(): ApiConfig | null {
   const configs = loadApiConfigs();
   const binding = loadBindingConfig();
   if (binding.globalDefaults.apiConfigId) {

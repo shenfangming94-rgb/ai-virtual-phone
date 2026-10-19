@@ -25,6 +25,7 @@ import {
     userNote,
     userSay,
 } from "@/lib/listen-together";
+import { extractCoverPalette } from "@/lib/cover-color";
 import { useMusicPlayer, type PlayMode } from "@/lib/music-context";
 import { resolveUserIdentity } from "@/lib/settings-storage";
 
@@ -55,6 +56,33 @@ function HeartLine() {
     );
 }
 
+/** 从封面取色：调亮一点当主题色（气泡、心跳线、歌笺），没封面或取不到就用粉色 */
+const DEFAULT_ACCENT: [number, number, number] = [226, 115, 143];
+
+function accentFrom(rgba: string): [number, number, number] | null {
+    const m = rgba.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/);
+    if (!m) return null;
+    let [r, g, b] = [Number(m[1]), Number(m[2]), Number(m[3])];
+    const max = Math.max(r, g, b, 1);
+    const k = 225 / max;
+    [r, g, b] = [r * k, g * k, b * k];
+    const mix = (v: number) => Math.round(v * 0.8 + 255 * 0.2);
+    return [mix(r), mix(g), mix(b)];
+}
+
+function useCoverAccent(coverUrl?: string): [number, number, number] {
+    const [accent, setAccent] = useState<[number, number, number]>(DEFAULT_ACCENT);
+    useEffect(() => {
+        if (!coverUrl) { setAccent(DEFAULT_ACCENT); return; }
+        let cancelled = false;
+        extractCoverPalette(coverUrl).then(palette => {
+            if (!cancelled) setAccent(accentFrom(palette[0]) ?? DEFAULT_ACCENT);
+        }).catch(() => { if (!cancelled) setAccent(DEFAULT_ACCENT); });
+        return () => { cancelled = true; };
+    }, [coverUrl]);
+    return accent;
+}
+
 const MODE_LABEL: Record<PlayMode, string> = { sequence: "顺序播放", shuffle: "随机播放", "repeat-one": "单曲循环" };
 
 export function ListenTogetherOverlay() {
@@ -70,6 +98,7 @@ export function ListenTogetherOverlay() {
     const replyTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
     const listRef = useRef<HTMLDivElement | null>(null);
     const active = store.active;
+    const accent = useCoverAccent(player.currentTrack?.coverUrl);
 
     useEffect(() => {
         const handler = () => { setOpen(true); setMenu(false); };
@@ -134,7 +163,13 @@ export function ListenTogetherOverlay() {
     const busy = isReplying();
 
     return (
-        <div className="lt-root" style={track?.coverUrl ? { ["--lt-cover" as string]: `url("${track.coverUrl}")` } : undefined}>
+        <div
+            className="lt-root"
+            style={{
+                ...(track?.coverUrl ? { ["--lt-cover" as string]: `url("${track.coverUrl}")` } : {}),
+                ["--lt-rgb" as string]: accent.join(", "),
+            }}
+        >
             <div className="lt-bg" />
             <div className="lt-top">
                 <button type="button" className="lt-icon-btn" aria-label="收起" onClick={minimize}>

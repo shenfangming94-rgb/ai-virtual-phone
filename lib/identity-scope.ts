@@ -100,3 +100,20 @@ export function switchCurrentIdentity(nextIdentityId: string, contactCharacterId
     saveBindingConfig(config);
     window.dispatchEvent(new CustomEvent(USER_IDENTITY_SWITCHED_EVENT, { detail: nextIdentityId }));
 }
+
+/** 把一个 char 换到另一个身份（聊天设置里的「属于哪个身份」）。清掉消息 app 单独的身份覆盖，统一跟着角色默认走。 */
+export function moveCharacterToIdentity(characterId: string, identityId: string): void {
+    if (typeof window === "undefined") return;
+    const config = loadBindingConfig();
+    const binding = getCharacterBinding(config, characterId);
+    const appOverrides = { ...binding.appOverrides };
+    const chatSlot = appOverrides[CHAT_APP_ID];
+    if (chatSlot?.userIdentityId) appOverrides[CHAT_APP_ID] = { ...chatSlot, userIdentityId: undefined };
+    saveBindingConfig(setCharacterBinding(config, {
+        ...binding,
+        appOverrides,
+        defaults: { ...binding.defaults, userIdentityId: identityId },
+    }));
+    // 列表、通讯录、购物都按身份筛，借切身份事件让它们重新筛一遍（当前身份没变）
+    window.dispatchEvent(new CustomEvent(USER_IDENTITY_SWITCHED_EVENT, { detail: getCurrentIdentityId() }));
+}

@@ -1,4 +1,6 @@
+import { getCurrentIdentityId } from "./identity-scope";
 import { kvGet, kvSet, registerKvMigration } from "./kv-db";
+import { loadUserIdentities } from "./settings-storage";
 import type { ShoppingCategory, ShoppingSearchResult, ShoppingShippingEvent, ShoppingState } from "./shopping-types";
 import { DEFAULT_SHOPPING_REFRESH_PROMPT, DEFAULT_SHOPPING_SEARCH_PROMPT, SHOPPING_RECOMMENDATION_CATEGORIES } from "./shopping-engine";
 
@@ -8,6 +10,14 @@ const DEFAULT_DELIVERY_MIN_MINUTES = 60;
 const DEFAULT_DELIVERY_MAX_MINUTES = 180;
 
 registerKvMigration(SHOPPING_STATE_KEY);
+
+/** 购物按用户身份分开：第一个身份沿用原来的存储（旧数据都在这里），其他身份各存一份 */
+export function shoppingScopeKey(baseKey: string, identityId?: string): string {
+  if (typeof window === "undefined") return baseKey;
+  const id = identityId ?? getCurrentIdentityId();
+  const first = loadUserIdentities()[0]?.id;
+  return !id || id === first ? baseKey : `${baseKey}::${id}`;
+}
 
 function cleanText(value: unknown, maxLength: number): string {
   return String(value ?? "").replace(/\u0000/g, "").trim().slice(0, maxLength);
@@ -186,10 +196,10 @@ export function createDefaultShoppingState(): ShoppingState {
   };
 }
 
-export function loadShoppingState(): ShoppingState {
+export function loadShoppingState(identityId?: string): ShoppingState {
   if (typeof window === "undefined") return createDefaultShoppingState();
   try {
-    const raw = kvGet(SHOPPING_STATE_KEY);
+    const raw = kvGet(shoppingScopeKey(SHOPPING_STATE_KEY, identityId));
     if (!raw) return createDefaultShoppingState();
     const parsed = JSON.parse(raw) as Record<string, unknown>;
     const catalogRaw = parsed.catalog && typeof parsed.catalog === "object"
@@ -237,9 +247,9 @@ export function loadShoppingState(): ShoppingState {
   }
 }
 
-export function saveShoppingState(state: ShoppingState): ShoppingState {
+export function saveShoppingState(state: ShoppingState, identityId?: string): ShoppingState {
   const next = { ...state, updatedAt: new Date().toISOString() };
-  kvSet(SHOPPING_STATE_KEY, JSON.stringify(next));
+  kvSet(shoppingScopeKey(SHOPPING_STATE_KEY, identityId), JSON.stringify(next));
   if (typeof window !== "undefined") {
     window.dispatchEvent(new CustomEvent(SHOPPING_STATE_UPDATED_EVENT));
   }

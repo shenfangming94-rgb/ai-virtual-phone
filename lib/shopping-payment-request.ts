@@ -1,3 +1,4 @@
+import { getCharacterIdentityId } from "./identity-scope";
 import { loadShoppingState, saveShoppingState } from "./shopping-storage";
 import type { ShoppingOrder, ShoppingShippingEvent, ShoppingState } from "./shopping-types";
 
@@ -161,7 +162,9 @@ export function settleShoppingPaymentRequest(input: {
   payerCharacterName?: string;
 }): ShoppingOrder | null {
   if (!input.orderId && !input.requestId) return null;
-  const state = loadShoppingState();
+  // 代付单在发起请求的那个身份里：按代付的 char 归属的身份找
+  const identityId = input.payerCharacterId ? getCharacterIdentityId(input.payerCharacterId) : undefined;
+  const state = loadShoppingState(identityId);
   let updatedOrder: ShoppingOrder | null = null;
   const now = new Date();
   const nextOrders = state.orders.map(order => {
@@ -196,6 +199,6 @@ export function settleShoppingPaymentRequest(input: {
   });
 
   if (!updatedOrder) return null;
-  saveShoppingState({ ...state, orders: nextOrders });
+  saveShoppingState({ ...state, orders: nextOrders }, identityId);
   return updatedOrder;
 }

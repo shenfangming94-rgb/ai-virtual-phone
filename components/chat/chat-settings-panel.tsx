@@ -42,7 +42,8 @@ import { triggerDeleteFriendReaction } from "@/lib/friend-request-engine";
 import { loadCharacters, saveCharacters } from "@/lib/character-storage";
 import { isAgentComputerConfigured } from "@/lib/agent-computer";
 import { CharacterComputerPage } from "./character-computer-page";
-import { resolveUserIdentity, loadApiConfigs, loadBindingConfig, loadPresets, resolveBinding } from "@/lib/settings-storage";
+import { resolveUserIdentity, loadApiConfigs, loadBindingConfig, loadPresets, resolveBinding, loadUserIdentities } from "@/lib/settings-storage";
+import { getCharacterIdentityId, moveCharacterToIdentity } from "@/lib/identity-scope";
 import { sendLLMRequest } from "@/lib/chat-engine";
 import { clearStatusRegionConfig, getStatusRegionConfig, hasOwnStatusRegionConfig, saveStatusRegionConfig, presetSupportsStatusRegion, isCustomStatusRegionActive, STATUS_REGION_SCHEME_TARGET, STATUS_REGION_UPDATED_EVENT, type StatusRegionConfig } from "@/lib/chat-status-region";
 import { downloadFile } from "@/lib/download-utils";
@@ -325,6 +326,9 @@ export function ChatSettingsPanel({
 }: ChatSettingsPanelProps) {
     const [backgroundImage, setBackgroundImage] = useState<string>(session.backgroundImage || "");
     const [alias, setAlias] = useState<string>(session.alias || "");
+    // 这个 char 属于哪个用户身份（聊天列表、购物、微博豆瓣都按它分）
+    const allIdentities = useMemo(() => (session.isGroup ? [] : loadUserIdentities()), [session.isGroup]);
+    const [charIdentityId, setCharIdentityId] = useState<string>(() => (session.isGroup ? "" : getCharacterIdentityId(session.contactId) || ""));
     const [characterRemarkForUser, setCharacterRemarkForUser] = useState<string>(session.characterRemarkForUser || "");
     const [notifyAliasChange, setNotifyAliasChange] = useState(session.notifyCharacterOnAliasChange === true);
     const [refreshingCharacterRemark, setRefreshingCharacterRemark] = useState(false);
@@ -1053,6 +1057,32 @@ export function ChatSettingsPanel({
                             <ChevronRight size={16} />
                         </div>
                     </button>
+                    {!session.isGroup && allIdentities.length > 1 && (
+                        <label className="menu-item" style={{ position: "relative" }}>
+                            <ChatInfoIcon icon={Users} color={BINDING_ACCENTS.identity} />
+                            <div className="menu-label-group">
+                                <span className="menu-label">属于哪个身份</span>
+                                <span className="menu-desc">换了以后，TA 只出现在那个身份的列表里</span>
+                            </div>
+                            <div className="menu-right">
+                                <span className="menu-desc mr-1">{allIdentities.find(i => i.id === charIdentityId)?.name || "未设置"}</span>
+                                <ChevronRight size={16} />
+                            </div>
+                            <select
+                                aria-label="属于哪个身份"
+                                value={charIdentityId}
+                                onChange={event => {
+                                    const next = event.target.value;
+                                    if (!next || next === charIdentityId) return;
+                                    moveCharacterToIdentity(session.contactId, next);
+                                    setCharIdentityId(next);
+                                }}
+                                style={{ position: "absolute", inset: 0, opacity: 0, width: "100%", cursor: "pointer" }}
+                            >
+                                {allIdentities.map(identity => <option key={identity.id} value={identity.id}>{identity.name}</option>)}
+                            </select>
+                        </label>
+                    )}
                     {!session.isGroup && (
                         <div className="menu-item">
                             <ChatInfoIcon icon={MessageSquare} color={CONTENT_APP_ACCENTS.chat} />

@@ -8,6 +8,7 @@ import { loadCharacters } from "@/lib/character-storage";
 import type { Character } from "@/lib/character-types";
 import type { AppCardChatSharePayload } from "@/lib/chat-share";
 import { createOrGetSession } from "@/lib/chat-storage";
+import { USER_IDENTITY_SWITCHED_EVENT } from "@/lib/identity-scope";
 import { answerQuestion, generateProductExtras, kefuReply, writeCharAddress } from "@/lib/shopping-gift-engine";
 import { giftableChars, isDelivered, SHOPPING_GIFT_ARRIVED_EVENT } from "@/lib/shopping-gift-service";
 import {
@@ -33,17 +34,26 @@ export function useGiftStore(): ShoppingGiftStore {
         const sync = () => setStore(loadGiftStore());
         sync();
         window.addEventListener(SHOPPING_GIFT_STORE_EVENT, sync);
-        return () => window.removeEventListener(SHOPPING_GIFT_STORE_EVENT, sync);
+        window.addEventListener(USER_IDENTITY_SWITCHED_EVENT, sync);
+        return () => {
+            window.removeEventListener(SHOPPING_GIFT_STORE_EVENT, sync);
+            window.removeEventListener(USER_IDENTITY_SWITCHED_EVENT, sync);
+        };
     }, []);
     return store;
 }
 
+/** 当前身份下能送礼的 char。每次渲染现算：购物 app 可能比聊天数据先加载，算一次会漏人 */
 export function useGiftChars(): Character[] {
-    return useMemo(() => {
-        const ids = giftableChars();
-        const chars = loadCharacters();
-        return ids.map(id => chars.find(c => c.id === id)).filter((c): c is Character => Boolean(c));
+    const [, setRevision] = useState(0);
+    useEffect(() => {
+        const bump = () => setRevision(r => r + 1);
+        window.addEventListener(USER_IDENTITY_SWITCHED_EVENT, bump);
+        return () => window.removeEventListener(USER_IDENTITY_SWITCHED_EVENT, bump);
     }, []);
+    const ids = giftableChars(true);
+    const chars = loadCharacters();
+    return ids.map(id => chars.find(c => c.id === id)).filter((c): c is Character => Boolean(c));
 }
 
 export function openChatSession(charId: string) {

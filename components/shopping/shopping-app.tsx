@@ -58,6 +58,7 @@ import {
 import type { WalletState } from "@/lib/wallet-types";
 import { buildGiftShippingTimeline, giftShippingMinutes, isDelivered, isHiddenIncoming, orderCardMediaData } from "@/lib/shopping-gift-service";
 import { bestCoupon, loadGiftStore, updateGiftStore, USER_ADDRESS_ID } from "@/lib/shopping-gift-store";
+import { USER_IDENTITY_SWITCHED_EVENT } from "@/lib/identity-scope";
 import {
   canUserReview,
   GiftSettingsPanel,
@@ -456,6 +457,19 @@ export function ShoppingApp({ onClose, visible = true, onIdle, onBusyChange }: S
     }
     wasVisibleRef.current = visible;
   }, [visible]);
+
+  // 购物按身份分开：切身份后整个换成那个身份的购物车、订单、心愿单
+  useEffect(() => {
+    const handleIdentitySwitched = () => {
+      setState(loadShoppingState());
+      setSelectedProduct(null);
+      setSelectedOrderId(null);
+      setConfirmCheckoutOpen(false);
+      setRecipient({ id: USER_ADDRESS_ID, note: "", share: true });
+    };
+    window.addEventListener(USER_IDENTITY_SWITCHED_EVENT, handleIdentitySwitched);
+    return () => window.removeEventListener(USER_IDENTITY_SWITCHED_EVENT, handleIdentitySwitched);
+  }, []);
 
   useEffect(() => {
     const handleShoppingStateUpdated = () => {

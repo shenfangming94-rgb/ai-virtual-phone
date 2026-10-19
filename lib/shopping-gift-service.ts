@@ -13,7 +13,8 @@ import {
     pushChatMessage,
     updateMessageMediaData,
 } from "./chat-storage";
-import { resolveUserIdentity } from "./settings-storage";
+import { createIdentityMatcher, getCharacterIdentityId } from "./identity-scope";
+import { loadUserIdentities, resolveUserIdentity } from "./settings-storage";
 import { enrichChatGift, formatYuan, pickCharGift, writeCharReview } from "./shopping-gift-engine";
 import { giftId, loadGiftStore, productKey, updateGiftStore, type GiftOrderMeta } from "./shopping-gift-store";
 import { loadShoppingState, saveShoppingState } from "./shopping-storage";
@@ -43,8 +44,8 @@ function timeLabel(date: Date): string {
 }
 
 /** 真实物流开着：20～48 小时；关着：用购物设置里的分钟数 */
-export function giftShippingMinutes(orderId: string, settings: ShoppingState["settings"]): number {
-    const real = loadGiftStore().settings.realShipping;
+export function giftShippingMinutes(orderId: string, settings: ShoppingState["settings"], identityId?: string): number {
+    const real = loadGiftStore(identityId).settings.realShipping;
     const min = real ? 20 * 60 : Math.max(1, Math.min(settings.deliveryMinMinutes, settings.deliveryMaxMinutes));
     const max = real ? 48 * 60 : Math.max(min, settings.deliveryMaxMinutes);
     return min + (hash(`${orderId}:delivery`) % (max - min + 1));
@@ -146,7 +147,7 @@ async function addToCheckPhone(charId: string, order: ShoppingOrder, toName: str
     }
 }
 
-function buildIncomingOrder(product: ShoppingProduct, amount: number, fromName: string, note: string, state: ShoppingState): ShoppingOrder {
+function buildIncomingOrder(product: ShoppingProduct, amount: number, fromName: string, note: string, state: ShoppingState, identityId?: string): ShoppingOrder {
     const now = new Date();
     const id = `shop_order_${now.getTime()}_${Math.random().toString(36).slice(2, 7)}`;
     return {
@@ -157,7 +158,7 @@ function buildIncomingOrder(product: ShoppingProduct, amount: number, fromName: 
         merchantLabel: product.merchantLabel,
         summary: product.title,
         note: note ? `${fromName}的留言：${note}` : `${fromName}送你的礼物`,
-        shippingTimeline: buildGiftShippingTimeline(id, now, giftShippingMinutes(id, state.settings)),
+        shippingTimeline: buildGiftShippingTimeline(id, now, giftShippingMinutes(id, state.settings, identityId)),
         paymentStatus: "paid_by_character",
         payerCharacterName: fromName,
         items: [{
@@ -174,38 +175,46 @@ function buildIncomingOrder(product: ShoppingProduct, amount: number, fromName: 
     };
 }
 
-function saveIncoming(order: ShoppingOrder, meta: GiftOrderMeta, charId: string) {
-    const state = loadShoppingState();
-    saveShoppingState({ ...state, orders: [order, ...state.orders] });
+/** char 送的东西进他所属那个身份的购物 app */
+function saveIncoming(order: ShoppingOrder, meta: GiftOrderMeta, charId: string, identityId?: string) {
+    const state = loadShoppingState(identityId);
+    saveShoppingState({ ...state, orders: [order, ...state.orders] }, identityId);
     updateGiftStore(store => {
         store.orders[order.id] = meta;
         store.lastGiftAt[charId] = new Date().toISOString();
         if (meta.wishItemId) {
             store.wish[meta.wishItemId] = { ...store.wish[meta.wishItemId], giftedBy: charId, giftedName: meta.fromName, orderId: order.id };
         }
-    });
+    }, identityId);
+}
+
+function identityIds(): (string | undefined)[] {
+    const ids = loadUserIdentities().map(i => i.id);
+    return ids.length > 0 ? ids : [undefined];
 }
 
 // ── 签收 ─────────────────────────────────────
 
 function handleArrivals() {
-    const state = loadShoppingState();
-    const store = loadGiftStore();
     const now = Date.now();
-    for (const order of state.orders) {
-        const meta = store.orders[order.id];
-        if (!meta || !isDelivered(order, now)) continue;
-        if (meta.to && !meta.reactedAt) {
-            updateGiftStore(s => { s.orders[order.id] = { ...s.orders[order.id], reactedAt: new Date().toISOString() }; });
-            void giftArrivedAtChar(order, meta);
-        } else if (meta.from && !meta.arrivedAt) {
-            updateGiftStore(s => { s.orders[order.id] = { ...s.orders[order.id], arrivedAt: new Date().toISOString() }; });
-            giftArrivedAtUser(order, meta);
+    for (const identityId of identityIds()) {
+        const state = loadShoppingState(identityId);
+        const store = loadGiftStore(identityId);
+        for (const order of state.orders) {
+            const meta = store.orders[order.id];
+            if (!meta || !isDelivered(order, now)) continue;
+            if (meta.to && !meta.reactedAt) {
+                updateGiftStore(s => { s.orders[order.id] = { ...s.orders[order.id], reactedAt: new Date().toISOString() }; }, identityId);
+                void giftArrivedAtChar(order, meta, identityId);
+            } else if (meta.from && !meta.arrivedAt) {
+                updateGiftStore(s => { s.orders[order.id] = { ...s.orders[order.id], arrivedAt: new Date().toISOString() }; }, identityId);
+                giftArrivedAtUser(order, meta);
+            }
         }
     }
 }
 
-async function giftArrivedAtChar(order: ShoppingOrder, meta: GiftOrderMeta) {
+async function giftArrivedAtChar(order: ShoppingOrder, meta: GiftOrderMeta, identityId?: string) {
     const charId = meta.to!;
     const name = meta.toName || charName(charId);
     const user = userName(charId);
@@ -232,7 +241,7 @@ async function giftArrivedAtChar(order: ShoppingOrder, meta: GiftOrderMeta) {
             extras.reviews = [{ id: giftId("rv"), author: name, stars: review.stars, text: review.text, at: new Date().toISOString(), charId, gift: true }, ...extras.reviews];
             s.products[key] = extras;
             s.orders[order.id] = { ...s.orders[order.id], reviewedAt: new Date().toISOString() };
-        });
+        }, identityId);
     } catch (error) {
         console.warn("[ShoppingGift] 他写评价失败", error);
     }
@@ -267,8 +276,8 @@ const LUNAR_FESTIVALS: Record<string, [number, number, number][]> = {
     春节: [[2027, 2, 6], [2028, 1, 26], [2029, 2, 13], [2030, 2, 3]],
 };
 
-function upcomingFestival(charId: string, today: Date): Festival | null {
-    const store = loadGiftStore();
+function upcomingFestival(charId: string, today: Date, identityId?: string): Festival | null {
+    const store = loadGiftStore(identityId);
     const list: Festival[] = [];
     if (store.settings.festivalGifts) {
         list.push(...FIXED_FESTIVALS);
@@ -293,26 +302,30 @@ function localDate(d = new Date()): string {
     return `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`;
 }
 
-export function giftableChars(): string[] {
+/** 有私聊的 char；onlyCurrentIdentity 时只要当前身份的（购物 app 里「送给谁」用） */
+export function giftableChars(onlyCurrentIdentity = false): string[] {
     const ids = new Set(loadCharacters().map(c => c.id));
-    return loadChatSessions().filter(s => !s.isGroup && ids.has(s.contactId) && !s.isBlacklisted).map(s => s.contactId);
+    const matches = onlyCurrentIdentity ? createIdentityMatcher() : () => true;
+    return loadChatSessions().filter(s => !s.isGroup && ids.has(s.contactId) && !s.isBlacklisted && matches(s.contactId)).map(s => s.contactId);
 }
 
 async function rollGifts() {
-    const store = loadGiftStore();
-    if (!store.settings.allowCharGifts) return;
     const today = localDate();
-    const shopping = loadShoppingState();
     for (const charId of giftableChars()) {
+        // 每个 char 只看他所属那个身份的开关、心愿单和送礼记录
+        const identityId = getCharacterIdentityId(charId);
+        const store = loadGiftStore(identityId);
+        if (!store.settings.allowCharGifts) continue;
+        const shopping = loadShoppingState(identityId);
         if (store.rolledOn[charId] === today) continue;
-        updateGiftStore(s => { s.rolledOn[charId] = today; });
+        updateGiftStore(s => { s.rolledOn[charId] = today; }, identityId);
         const last = new Date(store.lastGiftAt[charId] || 0).getTime();
         if (Date.now() - last < GIFT_GAP_MS) continue;
 
-        const festival = upcomingFestival(charId, new Date());
+        const festival = upcomingFestival(charId, new Date(), identityId);
         const festivalKey = festival ? `${charId}:${festival.key}:${festival.year}` : "";
         if (festival && !store.festivalDone[festivalKey] && Math.random() < 0.6) {
-            updateGiftStore(s => { s.festivalDone[festivalKey] = true; });
+            updateGiftStore(s => { s.festivalDone[festivalKey] = true; }, identityId);
             const when = festival.name;
             await fireCharGift(charId, `快到「${when}」了，你想在这天给她一份礼物。`);
             return;
@@ -324,7 +337,7 @@ async function rollGifts() {
             updateGiftStore(s => {
                 const mark = s.wish[seen.id] || {};
                 s.wish[seen.id] = { ...mark, seenBy: Array.from(new Set([...(mark.seenBy || []), charId])) };
-            });
+            }, identityId);
             if (Math.random() < 0.3) {
                 await fireCharGift(charId, "你偷偷翻了她购物 App 的心愿单。", wish.slice(0, 12));
                 return;
@@ -343,10 +356,11 @@ async function fireCharGift(charId: string, reason: string, wish: ShoppingProduc
     if (!pick) return;
     const fromName = charName(charId);
     const user = userName(charId);
-    const state = loadShoppingState();
-    const order = buildIncomingOrder(pick.product, pick.amount, fromName, pick.note, state);
+    const identityId = getCharacterIdentityId(charId);
+    const state = loadShoppingState(identityId);
+    const order = buildIncomingOrder(pick.product, pick.amount, fromName, pick.note, state, identityId);
     const wishItemId = pick.wishIndex !== undefined ? wish[pick.wishIndex]?.id : undefined;
-    saveIncoming(order, { from: charId, fromName, note: pick.note, share: pick.tell, wishItemId }, charId);
+    saveIncoming(order, { from: charId, fromName, note: pick.note, share: pick.tell, wishItemId }, charId, identityId);
     void addToCheckPhone(charId, order, user, pick.note);
 
     const session = createOrGetSession(charId);
@@ -389,8 +403,9 @@ async function handlePushedMessage(msg: ChatMessage) {
         const built = await enrichChatGift(charId, giftName);
         if (!built) return;
         const fromName = charName(charId);
-        const order = buildIncomingOrder(built.product, built.amount, fromName, "", loadShoppingState());
-        saveIncoming(order, { from: charId, fromName, share: true }, charId);
+        const identityId = getCharacterIdentityId(charId);
+        const order = buildIncomingOrder(built.product, built.amount, fromName, "", loadShoppingState(identityId), identityId);
+        saveIncoming(order, { from: charId, fromName, share: true }, charId, identityId);
         updateMessageMediaData(msg.id, { ...d, noxGiftOrderId: order.id } as ChatMessage["mediaData"]);
         void addToCheckPhone(charId, order, userName(charId), "");
     } catch (error) {
@@ -445,5 +460,5 @@ export function stopShoppingGiftService() {
 
 /** 测试用：马上让某个 char 送一份 */
 export function debugFireCharGift(charId: string, reason = "测试：想给她买点东西。") {
-    return fireCharGift(charId, reason, loadShoppingState().savedItems.slice(0, 12));
+    return fireCharGift(charId, reason, loadShoppingState(getCharacterIdentityId(charId)).savedItems.slice(0, 12));
 }

@@ -1,6 +1,7 @@
 // 购物 app 送礼扩展的本地数据：收货地址、送礼订单标记、评价、问大家、优惠券、客服记录、
 // 特殊日子、char 送礼节奏。和原来的 ShoppingState 分开存，原订单结构不动。
 import { kvGet, kvSet, registerKvMigration } from "./kv-db";
+import { shoppingScopeKey } from "./shopping-storage";
 
 const STORE_KEY = "nox_shopping_gifts_v1";
 export const SHOPPING_GIFT_STORE_EVENT = "nox-shopping-gift-store-updated";
@@ -115,11 +116,11 @@ function obj<T>(value: unknown, fallback: T): T {
     return value && typeof value === "object" && !Array.isArray(value) ? value as T : fallback;
 }
 
-export function loadGiftStore(): ShoppingGiftStore {
+export function loadGiftStore(identityId?: string): ShoppingGiftStore {
     const base = emptyStore();
     if (typeof window === "undefined") return base;
     try {
-        const raw = JSON.parse(kvGet(STORE_KEY) || "{}") as Partial<ShoppingGiftStore>;
+        const raw = JSON.parse(kvGet(shoppingScopeKey(STORE_KEY, identityId)) || "{}") as Partial<ShoppingGiftStore>;
         return {
             addresses: obj(raw.addresses, base.addresses),
             settings: { ...DEFAULT_GIFT_SETTINGS, ...obj(raw.settings, {}) },
@@ -138,17 +139,17 @@ export function loadGiftStore(): ShoppingGiftStore {
     }
 }
 
-/** 读最新的再改，避免后台服务和界面互相覆盖 */
-export function updateGiftStore(mutate: (store: ShoppingGiftStore) => void): ShoppingGiftStore {
-    const store = loadGiftStore();
+/** 读最新的再改，避免后台服务和界面互相覆盖。identityId 不传就是当前身份 */
+export function updateGiftStore(mutate: (store: ShoppingGiftStore) => void, identityId?: string): ShoppingGiftStore {
+    const store = loadGiftStore(identityId);
     mutate(store);
-    kvSet(STORE_KEY, JSON.stringify(store));
+    kvSet(shoppingScopeKey(STORE_KEY, identityId), JSON.stringify(store));
     if (typeof window !== "undefined") window.dispatchEvent(new CustomEvent(SHOPPING_GIFT_STORE_EVENT));
     return store;
 }
 
-export function clearGiftStore() {
-    kvSet(STORE_KEY, JSON.stringify(emptyStore()));
+export function clearGiftStore(identityId?: string) {
+    kvSet(shoppingScopeKey(STORE_KEY, identityId), JSON.stringify(emptyStore()));
     if (typeof window !== "undefined") window.dispatchEvent(new CustomEvent(SHOPPING_GIFT_STORE_EVENT));
 }
 

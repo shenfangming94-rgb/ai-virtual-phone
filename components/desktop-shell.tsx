@@ -15,6 +15,8 @@ import { PhoneChatApp } from "@/components/chat/phone-chat-app";
 import { PhonePlaceholderApp } from "@/components/phone-placeholder-app";
 import MusicApp from "@/components/music/music-app";
 import MusicPlayer from "@/components/music/music-player";
+import { ListenTogetherOverlay } from "@/components/music/listen-together";
+import { startListenTogetherService, stopListenTogetherService } from "@/lib/listen-together";
 import MusicFloat from "@/components/music/music-float";
 import MiniAppWindow from "@/components/music/mini-app-window";
 import { PhoneCalendarApp } from "@/components/calendar-app";
@@ -1037,6 +1039,7 @@ const MusicShellOverlays = memo(function MusicShellOverlays({
   return (
     <>
       {musicPlayer?.showFullPlayer && musicPlayer.currentTrack && <MusicPlayer />}
+      {musicPlayer ? <ListenTogetherOverlay /> : null}
       <MusicFloat hidden={activeApp === "music" || musicPlayer?.showFullPlayer} />
     </>
   );
@@ -1816,6 +1819,7 @@ export function DesktopShell({ initialThemeProfile, initialThemeAssets }: Deskto
       startFollowUpService();
       startMomentsService();
       startShoppingGiftService();
+      startListenTogetherService();
       startDiaryEntryTimerService();
       const stopWeixinCloudRealtimeSync = startWeixinCloudRealtimeSync();
       servicesStarted = true;
@@ -1835,6 +1839,7 @@ export function DesktopShell({ initialThemeProfile, initialThemeAssets }: Deskto
         stopFollowUpService();
         stopMomentsService();
         stopShoppingGiftService();
+        stopListenTogetherService();
         stopDiaryEntryTimerService();
       }
       bgTimerCleanup();

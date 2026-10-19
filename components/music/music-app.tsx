@@ -2,6 +2,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback, type ReactNode } from "react";
+import { ListenTogetherEntry } from "@/components/music/listen-together";
 import {
     loadAllTracks, saveTrack, deleteTrack,
     generateTrackId, parseFilename, getAudioDuration,
@@ -413,6 +414,8 @@ export default function MusicApp({ onClose }: Props) {
                     </button>
                 </>
             )}
+
+            <ListenTogetherEntry besideAddButton={tab === "local"} />
 
             {/* Bottom dock: mini player + tab bar share one glass slab */}
             <div className="music-bottom-dock">

@@ -860,6 +860,12 @@ function AppCardBubble({ msg, characterId, characterName }: { msg: ChatMessage; 
         ...(layout.background ? { "--chat-app-card-bg": layout.background } : {}),
     } as React.CSSProperties;
     const openApp = () => {
+        // 一起听邀请卡片：点了直接进一起听
+        const nox = d as (typeof d & { noxAction?: string; noxCharId?: string; noxSong?: { title: string; artist?: string } }) | undefined;
+        if (nox?.noxAction === "listen_together" && nox.noxCharId && typeof window !== "undefined") {
+            void import("@/lib/listen-together").then(m => m.acceptInvite(nox.noxCharId!, nox.noxSong));
+            return;
+        }
         if (cardOpenDisabled) return;
         if (!d?.appId || typeof window === "undefined") return;
         window.dispatchEvent(new CustomEvent("open-app", {

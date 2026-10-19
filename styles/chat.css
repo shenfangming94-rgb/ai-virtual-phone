@@ -7277,3 +7277,37 @@
   background: currentColor;
   animation: chat-stream-cursor-blink 1s steps(2, start) infinite;
 }
+
+/* 重试保留旧版本：最后一条回复下面的「‹ 2/3 ›」。用灰色半透明，深浅聊天背景都看得清 */
+.chat-reply-versions {
+  align-self: center;
+  margin: 2px auto 6px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: fit-content;
+  padding: 2px 6px;
+  border-radius: 999px;
+  background: rgba(128, 128, 128, 0.16);
+  color: rgba(110, 110, 110, 0.95);
+  font-size: 12px;
+  line-height: 20px;
+  font-variant-numeric: tabular-nums;
+  user-select: none;
+}
+.chat-reply-versions button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+.chat-reply-versions button:disabled {
+  opacity: 0.3;
+  cursor: default;
+}

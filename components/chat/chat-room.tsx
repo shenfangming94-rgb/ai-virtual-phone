@@ -4,6 +4,7 @@ import { forwardRef, Fragment, memo, useCallback, useEffect, useImperativeHandle
 import { ChatSession, ChatMessage, CHAT_APP_SETTINGS_UPDATED_EVENT, CHAT_INITIAL_VISIBLE_MESSAGE_COUNT, CHAT_LOAD_MORE_MESSAGE_COUNT, CHAT_REQUEST_REPLY_EVENT, loadChatAppSettings, loadChatMessages, loadChatContacts, loadChatSessions, saveChatSessions, pushChatMessage, updateChatMessage, deleteChatMessage, deleteChatMessagesFrom, deleteChatMessagesByIds, retractChatMessage, editChatMessage, updateMessageMediaData, replaceResponseBatchWithParts, replaceGroupResponseRound, isReadingDiscussMessage, isSystemInstructionMessage, getSystemInstructionDisplayContent, createResponseBatchId, createResponseRoundId, getLatestStateValues, getLatestCharacterStateValues, compareChatMessages, isSessionStreamingEnabled, resolveChatBackgroundImage, resolveChatUserAvatar } from "@/lib/chat-storage";
 import { cleanStreamText, splitStreamPreviewSegments, stripLiteralTexts, stripXmlTagBlocks } from "@/lib/stream-preview";
 import type { StateValue } from "@/lib/chat-storage";
+import { getReplyVersionInfo, stashReplyBeforeRetry, switchReplyVersion } from "@/lib/reply-versions";
 import { parseStateValues, mergeStateValues } from "@/lib/state-value-parser";
 import { parseAIResponse, type ParsedMessagePart } from "@/lib/rich-message-parser";
 import { isKnownStickerLabel } from "@/lib/sticker-data";
@@ -4530,6 +4531,8 @@ export function ChatRoom({ session, onBack, onDeleted }: ChatRoomProps) {
 
         const contextMessages = messages.slice(0, msgIndex);
 
+        // 旧回复先存成一个版本，重 roll 完还能翻回去
+        stashReplyBeforeRetry(session.id, msgId);
         // Delete this message and everything after it
         deleteChatMessagesFrom(msgId);
         setMessages(prev => prev.slice(0, msgIndex));
@@ -4543,6 +4546,18 @@ export function ChatRoom({ session, onBack, onDeleted }: ChatRoomProps) {
             errorPrefix: "重试失败",
             onDecline: triggerReply,
         });
+    };
+
+    const replyVersionInfo = useMemo(
+        () => (isGenerating || offlineMode ? null : getReplyVersionInfo(session.id)),
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+        [messages, isGenerating, offlineMode, session.id],
+    );
+
+    const handleSwitchReplyVersion = (target: number) => {
+        if (isGenerating) return;
+        cancelFollowUp(session.id);
+        if (switchReplyVersion(session.id, target)) syncMessagesFromStorage();
     };
 
     const handleRetractMessage = (msgId: string) => {
@@ -6387,6 +6402,17 @@ export function ChatRoom({ session, onBack, onDeleted }: ChatRoomProps) {
                                 );
                             })
                         ) : null}
+                    </div>
+                )}
+                {!offlineMode && !streamPreview && !isGenerating && replyVersionInfo && (
+                    <div className="chat-reply-versions" data-ui="reply-versions">
+                        <button type="button" disabled={replyVersionInfo.current === 0} onClick={() => handleSwitchReplyVersion(replyVersionInfo.current - 1)} aria-label="上一版">
+                            <ChevronLeft size={14} strokeWidth={2} />
+                        </button>
+                        <span>{replyVersionInfo.current + 1} / {replyVersionInfo.total}</span>
+                        <button type="button" disabled={replyVersionInfo.current === replyVersionInfo.total - 1} onClick={() => handleSwitchReplyVersion(replyVersionInfo.current + 1)} aria-label="下一版">
+                            <ChevronRight size={14} strokeWidth={2} />
+                        </button>
                     </div>
                 )}
                 {/* Scroll anchor: browser keeps this in view when content above changes height */}

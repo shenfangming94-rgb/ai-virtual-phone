@@ -56,6 +56,25 @@ import {
   WALLET_UPDATED_EVENT,
 } from "@/lib/wallet-storage";
 import type { WalletState } from "@/lib/wallet-types";
+import { buildGiftShippingTimeline, giftShippingMinutes, isDelivered, isHiddenIncoming, orderCardMediaData } from "@/lib/shopping-gift-service";
+import { bestCoupon, loadGiftStore, updateGiftStore, USER_ADDRESS_ID } from "@/lib/shopping-gift-store";
+import {
+  canUserReview,
+  GiftSettingsPanel,
+  KefuSheet,
+  openChatSession,
+  OrderGiftCard,
+  OrderGiftTags,
+  PackagePopup,
+  ProductActions,
+  ProductExtrasSection,
+  RecipientSection,
+  recipientError,
+  useGiftChars,
+  useGiftStore,
+  WishMarkTag,
+  type RecipientChoice,
+} from "@/components/shopping/shopping-gift-ui";
 
 type ShoppingAppProps = {
   onClose: (isBusy?: boolean) => void;
@@ -78,7 +97,7 @@ type ShoppingTranslationPreview = {
 };
 
 type ShoppingPromptTab = "refresh" | "search";
-type ShoppingSettingsTab = "prompts" | "shipping";
+type ShoppingSettingsTab = "prompts" | "shipping" | "gifts";
 
 type ShoppingPromptDrafts = {
   refreshPrompt: string;
@@ -104,13 +123,13 @@ const SHOPPING_TABS: Array<{ id: ShoppingTabId; label: string; icon: LucideIcon 
   { id: "home", label: "Home", icon: Home },
   { id: "orders", label: "Orders", icon: Truck },
   { id: "cart", label: "Cart", icon: ShoppingCart },
-  { id: "account", label: "Favorites", icon: Heart },
+  { id: "account", label: "Wishlist", icon: Heart },
 ];
 
 const SHOPPING_SECTION_SEARCH_PLACEHOLDERS: Record<ShoppingSectionSearchTabId, string> = {
   orders: "搜索订单",
   cart: "搜索购物车",
-  account: "搜索收藏",
+  account: "搜索心愿单",
 };
 
 function isShoppingSectionSearchTab(tab: ShoppingTabId): tab is ShoppingSectionSearchTabId {
@@ -229,37 +248,9 @@ function normalizeDeliverySettings(settings: Pick<ShoppingState["settings"], "de
   };
 }
 
-function pickShoppingDurationMinutes(orderId: string, minMinutes: number, maxMinutes: number): number {
-  const range = Math.max(0, maxMinutes - minMinutes);
-  if (range === 0) return minMinutes;
-  return minMinutes + (getStableShoppingHash(`${orderId}:delivery`) % (range + 1));
-}
-
-function addShoppingMinutes(date: Date, minutes: number): Date {
-  return new Date(date.getTime() + minutes * 60 * 1000);
-}
-
 function buildShippingTimeline(orderId: string, orderedAt: Date, settings: ShoppingState["settings"]): ShoppingShippingEvent[] {
-  const deliverySettings = normalizeDeliverySettings(settings);
-  const totalMinutes = pickShoppingDurationMinutes(
-    orderId,
-    deliverySettings.deliveryMinMinutes,
-    deliverySettings.deliveryMaxMinutes,
-  );
-  const shippedOffset = Math.max(1, Math.floor(totalMinutes * 0.18));
-  const deliveringOffset = Math.max(shippedOffset, Math.floor(totalMinutes * 0.55));
-  const timeline = [
-    { status: "ordered" as const, label: "已下单", date: orderedAt },
-    { status: "shipped" as const, label: "已发货", date: addShoppingMinutes(orderedAt, Math.min(shippedOffset, totalMinutes)) },
-    { status: "delivering" as const, label: "配送中", date: addShoppingMinutes(orderedAt, Math.min(deliveringOffset, totalMinutes)) },
-    { status: "delivered" as const, label: "已到货", date: addShoppingMinutes(orderedAt, totalMinutes) },
-  ];
-  return timeline.map(event => ({
-    status: event.status,
-    label: event.label,
-    timeLabel: formatShoppingDateTime(event.date),
-    timestamp: event.date.toISOString(),
-  }));
+  // 物流时长统一走送礼扩展：真实物流开着按一两天，关着按设置里的分钟数
+  return buildGiftShippingTimeline(orderId, orderedAt, giftShippingMinutes(orderId, settings));
 }
 
 function resolveOrderShipping(order: ShoppingOrder, nowMs: number): ResolvedShoppingShipping {
@@ -424,6 +415,11 @@ export function ShoppingApp({ onClose, visible = true, onIdle, onBusyChange }: S
   const [cartFeedback, setCartFeedback] = useState<ShoppingCartFeedback | null>(null);
   const [confirmRefreshOpen, setConfirmRefreshOpen] = useState(false);
   const [confirmCheckoutOpen, setConfirmCheckoutOpen] = useState(false);
+  const [recipient, setRecipient] = useState<RecipientChoice>({ id: USER_ADDRESS_ID, note: "", share: true });
+  const [giftToast, setGiftToast] = useState<{ charId: string; name: string } | null>(null);
+  const [kefuProduct, setKefuProduct] = useState<ShoppingProduct | null>(null);
+  const giftStore = useGiftStore();
+  const giftChars = useGiftChars();
   const [paymentRequestOpen, setPaymentRequestOpen] = useState(false);
   const [paymentRequestTargets, setPaymentRequestTargets] = useState<Character[]>([]);
   const [selectedPaymentRequestTargetId, setSelectedPaymentRequestTargetId] = useState("");
@@ -541,7 +537,9 @@ export function ShoppingApp({ onClose, visible = true, onIdle, onBusyChange }: S
         })(),
     [selectedPaymentSourceId, walletState],
   );
-  const selectedPaymentSourceCanPay = Boolean(selectedPaymentSource && selectedPaymentSource.balance >= cartTotals.totalPayment);
+  const checkoutCoupon = bestCoupon(giftStore, cartTotals.totalPayment);
+  const payAmount = Math.max(0, Math.round((cartTotals.totalPayment - (checkoutCoupon?.amount ?? 0)) * 100) / 100);
+  const selectedPaymentSourceCanPay = Boolean(selectedPaymentSource && selectedPaymentSource.balance >= payAmount);
 
   const savedIds = useMemo(() => new Set(state.savedItems.map(item => item.id)), [state.savedItems]);
   const cartIds = useMemo(() => new Set(state.cartItems.map(item => item.id)), [state.cartItems]);
@@ -595,8 +593,8 @@ export function ShoppingApp({ onClose, visible = true, onIdle, onBusyChange }: S
     [normalizedCartSearchQuery, state.cartItems],
   );
   const filteredOrders = useMemo(
-    () => state.orders.filter(order => orderMatchesSearch(order, normalizedOrderSearchQuery, nowTick)),
-    [normalizedOrderSearchQuery, nowTick, state.orders],
+    () => state.orders.filter(order => !isHiddenIncoming(order, giftStore.orders[order.id], nowTick) && orderMatchesSearch(order, normalizedOrderSearchQuery, nowTick)),
+    [giftStore.orders, normalizedOrderSearchQuery, nowTick, state.orders],
   );
   const filteredSavedItems = useMemo(
     () => state.savedItems.filter(item => productMatchesSearch(item, normalizedSavedSearchQuery)),
@@ -722,6 +720,14 @@ export function ShoppingApp({ onClose, visible = true, onIdle, onBusyChange }: S
   function clearAllShoppingTraces() {
     // 保留设置（提示词/配送时间），其余全部重置：商城目录、搜索结果、收藏与喜欢、购物车、订单
     persist(current => ({ ...createDefaultShoppingState(), settings: current.settings }));
+    // 送礼扩展：地址、纪念日、开关留着，订单标记、评价、券、客服记录一起清掉
+    updateGiftStore(store => {
+      store.orders = {};
+      store.products = {};
+      store.coupons = [];
+      store.kefu = {};
+      store.wish = {};
+    });
     setSelectedProduct(null);
     setSelectedOrderId(null);
     setSelectedTab("home");
@@ -847,6 +853,7 @@ export function ShoppingApp({ onClose, visible = true, onIdle, onBusyChange }: S
     setWalletState(nextWalletState);
     setSelectedPaymentSourceId(WALLET_BALANCE_ACCOUNT_ID);
     setPaymentError(null);
+    setRecipient(current => ({ ...current, note: "" }));
     setConfirmCheckoutOpen(true);
   }
 
@@ -923,7 +930,16 @@ export function ShoppingApp({ onClose, visible = true, onIdle, onBusyChange }: S
 
   function handleCheckout() {
     if (state.cartItems.length === 0) return;
-    const order = buildOrderFromCart(state.cartItems, formatShoppingAmount(cartTotals.totalPayment), state.settings);
+    const giftTarget = recipient.id === USER_ADDRESS_ID ? null : giftChars.find(char => char.id === recipient.id) ?? null;
+    const addressProblem = recipientError(loadGiftStore(), recipient);
+    if (addressProblem || (recipient.id !== USER_ADDRESS_ID && !giftTarget)) {
+      setPaymentError(addressProblem ?? "请选择收货人。");
+      return;
+    }
+    const coupon = checkoutCoupon;
+    const order = buildOrderFromCart(state.cartItems, formatShoppingAmount(payAmount), state.settings, giftTarget ? {
+      note: recipient.note.trim() ? `送给${giftTarget.name}。备注：${recipient.note.trim()}` : `送给${giftTarget.name}的礼物。`,
+    } : {});
     const paymentSource = selectedPaymentSource;
     if (!paymentSource) {
       setPaymentError("请选择付款方式。");
@@ -931,7 +947,7 @@ export function ShoppingApp({ onClose, visible = true, onIdle, onBusyChange }: S
     }
     const paymentResult = payWithWalletAccount({
       accountId: paymentSource.id,
-      amount: cartTotals.totalPayment,
+      amount: payAmount,
       title: "购物付款",
       detail: `购物订单：${order.summary}`,
       category: "购物",
@@ -955,6 +971,38 @@ export function ShoppingApp({ onClose, visible = true, onIdle, onBusyChange }: S
       orders: [paidOrder, ...current.orders],
       cartItems: [],
     }));
+    if (coupon || giftTarget) {
+      updateGiftStore(store => {
+        if (coupon) {
+          const used = store.coupons.find(item => item.id === coupon.id);
+          if (used) {
+            used.usedAt = new Date().toISOString();
+            used.usedOrderId = paidOrder.id;
+          }
+        }
+        if (giftTarget) {
+          store.orders[paidOrder.id] = { to: giftTarget.id, toName: giftTarget.name, note: recipient.note.trim(), share: recipient.share };
+        }
+      });
+    }
+    if (giftTarget && recipient.share) {
+      const session = createOrGetSession(giftTarget.id);
+      const note = recipient.note.trim();
+      pushChatMessage({
+        sessionId: session.id,
+        role: "user",
+        content: "",
+        mediaType: "app_card",
+        mediaData: orderCardMediaData(paidOrder, {
+          status: "已下单",
+          to: giftTarget.name,
+          note,
+          historyText: `[购物订单卡片] 我在购物 App 给你买了「${paidOrder.summary}」（${paidOrder.totalLabel}），寄到你那里${note ? `，备注：${note}` : ""}，还在路上。`,
+        }),
+      });
+      window.dispatchEvent(new CustomEvent("chat-messages-updated", { detail: { sessionId: session.id } }));
+      setGiftToast({ charId: giftTarget.id, name: giftTarget.name });
+    }
     setSelectedTab("orders");
     setSelectedOrderId(paidOrder.id);
     setPaymentError(null);
@@ -1016,7 +1064,7 @@ export function ShoppingApp({ onClose, visible = true, onIdle, onBusyChange }: S
 
   const selectedProductRecentlyAdded = Boolean(selectedProduct && recentlyAddedProductId === selectedProduct.id);
 
-  function ProductCard({ item, compact = false }: { item: ShoppingProduct; compact?: boolean }) {
+  function ProductCard({ item, compact = false, wish = false }: { item: ShoppingProduct; compact?: boolean; wish?: boolean }) {
     const isSaved = savedIds.has(item.id);
     const inCart = cartIds.has(item.id);
     const recentlyAdded = recentlyAddedProductId === item.id;
@@ -1047,6 +1095,7 @@ export function ShoppingApp({ onClose, visible = true, onIdle, onBusyChange }: S
           cursor: "pointer",
         }}
       >
+        {wish ? <WishMarkTag productId={item.id} /> : null}
         <button
           type="button"
           aria-label={isSaved ? "取消收藏" : "收藏"}
@@ -1441,6 +1490,7 @@ export function ShoppingApp({ onClose, visible = true, onIdle, onBusyChange }: S
                           <strong style={{ fontSize: "calc(13px*var(--app-text-scale,1))", color: "#222" }}>{order.merchantLabel}</strong>
                           <span style={{ fontSize: "calc(12px*var(--app-text-scale,1))", color: shipping.statusLabel === "已到货" ? "#16a34a" : "#ff6b00", fontWeight: 500 }}>{shipping.statusLabel}</span>
                         </div>
+                        <OrderGiftTags meta={giftStore.orders[order.id]} order={order} now={nowTick} />
                         <div style={{ display: "flex", gap: "10px", width: "100%", alignItems: "stretch" }}>
                           <div style={{ width: "56px", height: "56px", background: "#f5f5f5", borderRadius: "12px", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "calc(24px*var(--app-text-scale,1))", flexShrink: 0 }}>
                             {order.items[0]?.previewIcon || "□"}
@@ -1466,19 +1516,20 @@ export function ShoppingApp({ onClose, visible = true, onIdle, onBusyChange }: S
 
               {selectedTab === "account" && (
                 <section style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
-                  <h2 style={{ fontSize: "calc(19px*var(--app-text-scale,1))", fontWeight: "bold", color: "#222", margin: "0 0 8px 4px" }}>Favorites</h2>
+                  <h2 style={{ fontSize: "calc(19px*var(--app-text-scale,1))", fontWeight: "bold", color: "#222", margin: "0 0 8px 4px" }}>心愿单</h2>
                   {state.savedItems.length === 0 ? (
                     <div className="cp-shopping-status cp-empty-copy" style={{ minHeight: "220px" }}>
-                      <p>暂无收藏</p>
+                      <p>心愿单是空的</p>
+                      <span className="cp-shopping-hint">商品上点 ♡ 加进来，他们偶尔会来偷看</span>
                     </div>
                   ) : null}
                   {state.savedItems.length > 0 && filteredSavedItems.length === 0 ? (
                     <div className="cp-shopping-status cp-empty-copy" style={{ minHeight: "220px" }}>
-                      <p>没有找到相关收藏</p>
+                      <p>心愿单里没有找到</p>
                     </div>
                   ) : null}
                   <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: "16px" }}>
-                    {filteredSavedItems.map(item => <ProductCard key={item.id} item={item} />)}
+                    {filteredSavedItems.map(item => <ProductCard key={item.id} item={item} wish />)}
                   </div>
                 </section>
               )}
@@ -1571,7 +1622,10 @@ export function ShoppingApp({ onClose, visible = true, onIdle, onBusyChange }: S
                 </p>
               </div>
 
-              <div style={{ marginTop: "auto", display: "flex", alignItems: "center", justifyContent: "space-between", paddingTop: "14px" }}>
+              <ProductActions product={selectedProduct} onKefu={() => setKefuProduct(selectedProduct)} />
+              <ProductExtrasSection key={selectedProduct.id} product={selectedProduct} canReview={canUserReview(selectedProduct, state.orders, giftStore, nowTick)} />
+
+              <div style={{ marginTop: "auto", display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 0 calc(6px + env(safe-area-inset-bottom, 0px))", position: "sticky", bottom: "-34px", background: "#fff", borderTop: "1px solid #f4f4f4", zIndex: 2 }}>
                 <div style={{ display: "flex", flexDirection: "column" }}>
                   <span style={{ fontSize: "calc(11px*var(--app-text-scale,1))", color: "#999" }}>Price</span>
                   <strong style={{ fontSize: "calc(18px*var(--app-text-scale,1))", color: "#222" }}>{selectedProduct.priceLabel}</strong>
@@ -1635,7 +1689,9 @@ export function ShoppingApp({ onClose, visible = true, onIdle, onBusyChange }: S
                       ? `等待${activeOrder.payerCharacterName || "TA"}代付`
                       : activeOrder.paymentStatus === "payment_declined"
                         ? `${activeOrder.payerCharacterName || "TA"}已拒绝代付`
-                        : activeOrder.paymentCardLabel ?? "未记录付款方式"}
+                        : giftStore.orders[activeOrder.id]?.from
+                          ? `${giftStore.orders[activeOrder.id]?.fromName || "TA"}付的`
+                          : activeOrder.paymentCardLabel ?? "未记录付款方式"}
                   </span>
                 </div>
               </div>
@@ -1666,6 +1722,8 @@ export function ShoppingApp({ onClose, visible = true, onIdle, onBusyChange }: S
                   </div>
                 </div>
               ) : null}
+
+              <OrderGiftCard meta={giftStore.orders[activeOrder.id]} order={activeOrder} />
 
               <h3 style={{ fontSize: "calc(14px*var(--app-text-scale,1))", fontWeight: "bold", color: "#222", margin: "8px 0 0 0" }}>Items</h3>
               <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
@@ -1710,6 +1768,22 @@ export function ShoppingApp({ onClose, visible = true, onIdle, onBusyChange }: S
         )}
       </div>
 
+      {kefuProduct ? <KefuSheet product={kefuProduct} onClose={() => setKefuProduct(null)} /> : null}
+
+      <PackagePopup orders={state.orders} visible={visible && !blackMarketOpen} />
+
+      {giftToast ? (
+        <div className="cp-shopping-translation-overlay" role="presentation" onClick={() => setGiftToast(null)} style={{ zIndex: 55 }}>
+          <div className="cp-shopping-translation-sheet" role="dialog" aria-modal="true" onClick={event => event.stopPropagation()} style={{ maxWidth: "300px", textAlign: "center" }}>
+            <p style={{ margin: "6px 0 16px", fontSize: "calc(14px*var(--app-text-scale,1))", color: "#333", lineHeight: 1.6 }}>订单卡片已经发给{giftToast.name}了</p>
+            <div style={{ display: "flex", gap: "10px" }}>
+              <button type="button" onClick={() => setGiftToast(null)} style={{ flex: 1, border: "1px solid #eee", background: "#fff", color: "#555", borderRadius: "16px", padding: "10px 0", fontWeight: 700 }}>好的</button>
+              <button type="button" onClick={() => { const id = giftToast.charId; setGiftToast(null); openChatSession(id); }} style={{ flex: 1.4, border: "none", background: "#ff6b00", color: "#fff", borderRadius: "16px", padding: "10px 0", fontWeight: 800 }}>去跟他聊</button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
       {translationPreview && (
         <div className="cp-shopping-translation-overlay" role="presentation" onClick={() => setTranslationPreview(null)}>
           <div className="cp-shopping-translation-sheet" role="dialog" aria-modal="true" aria-label="中文翻译" onClick={event => event.stopPropagation()}>
@@ -1752,10 +1826,11 @@ export function ShoppingApp({ onClose, visible = true, onIdle, onBusyChange }: S
               <span>购物设置</span>
               <button type="button" onClick={() => setPromptOpen(false)}>Close</button>
             </div>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px", marginBottom: "12px" }}>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "8px", marginBottom: "12px" }}>
               {([
                 { id: "prompts" as const, label: "提示词" },
                 { id: "shipping" as const, label: "物流时间" },
+                { id: "gifts" as const, label: "送礼" },
               ]).map(tab => {
                 const active = settingsTab === tab.id;
                 return (
@@ -1816,6 +1891,8 @@ export function ShoppingApp({ onClose, visible = true, onIdle, onBusyChange }: S
                   })}
                 </div>
               </>
+            ) : settingsTab === "gifts" ? (
+              <GiftSettingsPanel />
             ) : (
               <div style={{ border: "1px solid #eee", borderRadius: "16px", padding: "12px", background: "#fff" }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "12px", marginBottom: "10px" }}>
@@ -1851,12 +1928,12 @@ export function ShoppingApp({ onClose, visible = true, onIdle, onBusyChange }: S
               </div>
               </div>
             )}
-            <div style={{ display: "flex", gap: "10px", justifyContent: "space-between", marginTop: "14px" }}>
+            {settingsTab !== "gifts" ? <div style={{ display: "flex", gap: "10px", justifyContent: "space-between", marginTop: "14px" }}>
               <button type="button" onClick={settingsTab === "prompts" ? resetPromptDraft : resetDeliveryDraft} style={{ border: "1px solid #eee", background: "#fff", color: "#555", borderRadius: "16px", padding: "9px 14px", fontSize: "calc(12px*var(--app-text-scale,1))" }}>
                 {settingsTab === "prompts" ? "恢复默认提示词" : "恢复默认时间"}
               </button>
               <button type="button" onClick={handleSavePrompt} style={{ border: "none", background: "#ff6b00", color: "#fff", borderRadius: "16px", padding: "9px 18px", fontSize: "calc(12px*var(--app-text-scale,1))", fontWeight: 700 }}>保存</button>
-            </div>
+            </div> : null}
           </div>
         </div>
       )}
@@ -1866,19 +1943,26 @@ export function ShoppingApp({ onClose, visible = true, onIdle, onBusyChange }: S
           setConfirmCheckoutOpen(false);
           setPaymentError(null);
         }}>
-          <div className="cp-shopping-translation-sheet" role="dialog" aria-modal="true" aria-label="选择付款方式" onClick={event => event.stopPropagation()}>
+          <div className="cp-shopping-translation-sheet" role="dialog" aria-modal="true" aria-label="确认订单" onClick={event => event.stopPropagation()} style={{ maxHeight: "86vh" }}>
             <div className="cp-shopping-translation-head">
-              <span>选择付款方式</span>
+              <span>确认订单</span>
               <button type="button" onClick={() => {
                 setConfirmCheckoutOpen(false);
                 setPaymentError(null);
               }}>Close</button>
             </div>
 
+            <RecipientSection value={recipient} onChange={next => { setRecipient(next); setPaymentError(null); }} />
+
             <div style={{ background: "#fff7ed", border: "1px solid rgba(255,107,0,0.14)", borderRadius: "18px", padding: "14px 16px", marginBottom: "14px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: "12px" }}>
               <div style={{ display: "flex", flexDirection: "column", gap: "3px" }}>
                 <span style={{ fontSize: "calc(11px*var(--app-text-scale,1))", color: "#9a5a18", fontWeight: 700 }}>应付金额</span>
-                <strong style={{ fontSize: "calc(22px*var(--app-text-scale,1))", color: "#222", lineHeight: 1 }}>{formatShoppingAmount(cartTotals.totalPayment)}</strong>
+                <strong style={{ fontSize: "calc(22px*var(--app-text-scale,1))", color: "#222", lineHeight: 1 }}>{formatShoppingAmount(payAmount)}</strong>
+                {checkoutCoupon ? (
+                  <span style={{ fontSize: "calc(11px*var(--app-text-scale,1))", color: "#c2410c" }}>
+                    原价 {formatShoppingAmount(cartTotals.totalPayment)}，已用 ¥{checkoutCoupon.amount} 无门槛券
+                  </span>
+                ) : null}
               </div>
               <CreditCard size={24} color="#ff6b00" />
             </div>
@@ -1901,7 +1985,7 @@ export function ShoppingApp({ onClose, visible = true, onIdle, onBusyChange }: S
                 })),
               ].map(source => {
                 const active = selectedPaymentSource?.id === source.id;
-                const insufficient = source.balance < cartTotals.totalPayment;
+                const insufficient = source.balance < payAmount;
                 return (
                   <button
                     key={source.id}

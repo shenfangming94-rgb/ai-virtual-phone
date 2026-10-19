@@ -701,6 +701,8 @@ function isSessionPreviewCandidate(msg: ChatMessage): boolean {
     if (msg.mediaType === "tool_result" || msg.mediaType === "tool_call") return false;
     if (msg.mediaType === "tool_notice") return false;
     if (msg.mediaType === "memory_write_request") return false;
+    // 只写给角色看的事件不进会话预览，也不把会话顶上去
+    if (isSystemInstructionMessage(msg) && msg.mediaData?.compactSystemInstruction && !getSystemInstructionDisplayContent(msg.content)) return false;
     if (msg.role === "tool") return false;
     if (msg.nativeToolCalls?.length && !hasPreviewText(msg.content)) return false;
 

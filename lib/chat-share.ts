@@ -17,7 +17,17 @@ export type XiaohongshuNoteChatSharePayload = {
     tone?: string;
 };
 
-export type ChatSharePayload = MusicChatSharePayload | XiaohongshuNoteChatSharePayload;
+/** 内置 app 分享的通用卡片（购物「问问他」等） */
+export type AppCardChatSharePayload = {
+    type: "app_card";
+    appName: string;
+    title: string;
+    summary: string;
+    historyText: string;
+    layout: Record<string, unknown>;
+};
+
+export type ChatSharePayload = MusicChatSharePayload | XiaohongshuNoteChatSharePayload | AppCardChatSharePayload;
 
 function compactShareText(value: string | undefined, fallback: string): string {
     const text = (value || "").replace(/\s+/g, " ").trim();

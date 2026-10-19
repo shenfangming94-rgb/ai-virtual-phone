@@ -195,6 +195,20 @@ export const PhoneChatApp = memo(function PhoneChatApp({ onClose, initialSession
                         label: `${sharePayload.title} - ${sharePayload.artist}`,
                     },
                 });
+            } else if (sharePayload.type === "app_card") {
+                pushChatMessage({
+                    sessionId: sess.id,
+                    role: "user",
+                    content: "",
+                    mediaType: "app_card",
+                    mediaData: {
+                        appName: sharePayload.appName,
+                        appCardTitle: sharePayload.title,
+                        appCardSummary: sharePayload.summary || undefined,
+                        appHistoryText: sharePayload.historyText,
+                        appCardLayout: sharePayload.layout,
+                    },
+                });
             } else {
                 const content = formatXiaohongshuShareForPrompt({
                     author: sharePayload.authorName,

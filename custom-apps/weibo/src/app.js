@@ -1113,8 +1113,10 @@
   async function generate(payload, label, opts = {}) {
     const job = uid("job"); S.jobs.add(job);
     const scene = (payload.appTags || [])[1];
-    const inline = typeof INLINE_RULES === "object" && INLINE_RULES[scene];
-    if (inline) payload = { ...payload, instruction: `【微博：${scene === "charalt" ? "角色小号" : scene}规则】\n${inline}\n\n${payload.instruction}` };
+    // 默认随请求带上整套规则（原版宿主只把预设条目挂进默认预设，用户自己的预设里没有）；设置里打开「规则用预设里的」才只靠预设。小号规则一直带
+    const fromPreset = !!S.meta.rulesFromPreset && scene !== "charalt";
+    const inline = typeof INLINE_RULES === "object" && !fromPreset && [scene === "charalt" ? "" : INLINE_RULES.world, INLINE_RULES[scene]].filter(Boolean).join("\n\n");
+    if (inline) payload = { ...payload, instruction: `【微博规则】\n${inline}\n\n${payload.instruction}` };
     const who = `用户的名字是「${S.identity.name || "用户"}」，微博昵称是「${S.meta.nickname}」。事情多大情绪就多大，不放大、不戏剧化。提到用户时禁止无缘无故贬低、嘲讽、阴阳、吐槽她。${scene === "hot" ? "" : `\n${nameLine()}`}` + (scene === "hot" ? "" : `\n${publicLine(false)}`) + (loveLine() ? `\n${loveLine()}` : "") + (scene === "hot" || !isAlt() ? "" : `\n${altLine()}`);
     const wx = scene === "hot" ? "" : await weatherLine(payload.characterIds || (payload.characterId ? [payload.characterId] : []));
     if (scene === "dm") payload = { ...payload, instruction: [
@@ -4438,6 +4440,8 @@
         <div class="list-cell"><div class="cell-main"><div>你不在的时候</div><div class="cell-sub">隔一阵再打开微博时，补上这段时间 char 发的博、改的简介、偷偷点的赞和谁来看过你（每次 1 次 API，恋人另算）</div></div>
           <button class="switch ${awayOn() ? "on" : ""}" data-act="toggle-away" aria-label="你不在的时候"><span></span></button></div>
         ${awayOn() ? `<div class="list-cell"><div class="cell-main"><div>离开多久才补</div></div><div class="seg" style="width:180px;flex:none">${AWAY_HOURS.map(h => `<button class="${awayHours() === h ? "on" : ""}" data-act="set-away-h" data-v="${h}">${h} 小时</button>`).join("")}</div></div>` : ""}
+        <div class="list-cell"><div class="cell-main"><div>规则用预设里的</div><div class="cell-sub">打开后能在预设里改规则（预设里没有会乱）</div></div>
+          <button class="switch ${S.meta.rulesFromPreset ? "on" : ""}" data-act="toggle-rules-preset" aria-label="规则用预设里的"><span></span></button></div>
         <div class="form-note" style="margin-top:8px">路人头像库 · 路人从这里分头像，同一个路人一直是同一张。点图片可以删除</div>
         <div class="album avatar-pool">${pool.map((ref, i) => `<div class="pic" data-act="pool-rm" data-idx="${i}"><img data-ref="${esc(ref)}" alt=""></div>`).join("")}
           <button class="compose-add" data-act="pool-add">＋</button></div>
@@ -5033,6 +5037,7 @@
         return;
       }
       case "toggle-away": S.meta.awayOn = !awayOn(); saveMeta(); refreshAll(); return;
+      case "toggle-rules-preset": S.meta.rulesFromPreset = !S.meta.rulesFromPreset; saveMeta(); refreshAll(); return;
       case "set-away-h": S.meta.awayHours = +el.dataset.v; saveMeta(); refreshAll(); return;
       case "away-try":
         if (S.awayBusy) return;

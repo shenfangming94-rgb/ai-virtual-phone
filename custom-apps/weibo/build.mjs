@@ -12,8 +12,8 @@ const rules = JSON.parse(read("rules.json")).rules;
 const placeholder = "data:image/jpeg;base64," + readFileSync(join(root, "assets/placeholder.jpg")).toString("base64");
 const npcCovers = [1, 2, 3].map(i => "data:image/jpeg;base64," + readFileSync(join(root, `assets/cover${i}.jpg`)).toString("base64"));
 const js = read("src/app.js").replace("/*__PLACEHOLDER__*/", () => placeholder).replace('["/*__NPC_COVERS__*/"]', () => JSON.stringify(npcCovers)).replace("/*__VERSION__*/", () => JSON.parse(read("manifest.json")).version)
-  // 新加的规则直接打进 app，随请求发送：不依赖宿主把它挂进用户自己的预设
-  .replace('"/*__INLINE_RULES__*/"', () => JSON.stringify({ charalt: JSON.parse(read("rules.json")).rules.charalt }));
+  // 整套规则打进 app，随请求发送：不依赖宿主把它挂进用户自己的预设（设置里可改成只用预设）
+  .replace('"/*__INLINE_RULES__*/"', () => JSON.stringify(rules));
 const NAMES = { world: "平台规则", feed: "首页刷新", comments: "评论区", reaction: "用户发博后的反应", reply: "回复评论", profile: "角色主页", hot: "热搜榜", topic: "话题页", search: "搜索", npc: "路人主页", dm: "私信聊天", super: "超话", charalt: "角色小号" };
 const presets = Object.entries(rules).map(([scene, content]) => ({
   // charalt 换了 id：旧 id 在用户预设里可能留下「在条目里、不在排序里」的隐形残留，宿主会当成已存在跳过

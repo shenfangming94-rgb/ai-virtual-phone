@@ -25,6 +25,7 @@ export function MediaPreviewOverlay({
     saveFilename,
     onRegenerate,
     regenerating,
+    onSaveToAlbum,
     onClose,
 }: {
     imageUrl?: string | null;
@@ -32,10 +33,13 @@ export function MediaPreviewOverlay({
     saveFilename?: string;
     onRegenerate?: () => void;
     regenerating?: boolean;
+    /** 朋友圈等地方的图：存进相册 app */
+    onSaveToAlbum?: () => Promise<void>;
     onClose: () => void;
 }) {
     // 保存要重新拉一次图片，慢网络下会卡一下——按钮上给个状态
     const [saving, setSaving] = useState(false);
+    const [albumState, setAlbumState] = useState<"idle" | "saving" | "saved">("idle");
     if (typeof document === "undefined") return null;
     return createPortal(
         <div
@@ -71,6 +75,25 @@ export function MediaPreviewOverlay({
                         style={ACTION_BUTTON_STYLE}
                     >
                         {saving ? "保存中…" : "保存图片"}
+                    </button>
+                )}
+                {onSaveToAlbum && (
+                    <button
+                        onPointerDown={e => e.stopPropagation()}
+                        disabled={albumState !== "idle"}
+                        onClick={async e => {
+                            e.stopPropagation();
+                            setAlbumState("saving");
+                            try {
+                                await onSaveToAlbum();
+                                setAlbumState("saved");
+                            } catch {
+                                setAlbumState("idle");
+                            }
+                        }}
+                        style={ACTION_BUTTON_STYLE}
+                    >
+                        {albumState === "saving" ? "存入中…" : albumState === "saved" ? "已存到相册" : "存到相册"}
                     </button>
                 )}
                 {onRegenerate && (

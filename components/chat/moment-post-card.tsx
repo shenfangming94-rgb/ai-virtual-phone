@@ -5,6 +5,7 @@ import { createPortal } from "react-dom";
 import type { MomentPost, MomentComment } from "@/lib/moments-types";
 import { BilingualTextBlock, MediaImageWithPreview } from "@/components/chat/message-bubble";
 import { MediaPreviewOverlay } from "@/components/chat/media-preview-overlay";
+import { saveToAlbum } from "@/lib/album-engine";
 import {
     loadMomentComments,
     toggleMomentLike,
@@ -385,6 +386,7 @@ export function MomentPostCard({ post, onUpdate, onRequestDelete, onOpenCommentC
                         }}
                         onRegenerate={canRegeneratePhoto ? openPhotoPromptEditor : undefined}
                         regenerating={photoRegenerating}
+                        onSaveToAlbum={() => saveToAlbum({ url: resolvedPhotoUrl, desc: post.photoDescription || post.content.slice(0, 80) })}
                     />
                 )}
                 {resolvedPhotoUrl && photoRegenerating && (
@@ -411,6 +413,7 @@ export function MomentPostCard({ post, onUpdate, onRequestDelete, onOpenCommentC
             {showFallbackPreview && fallbackPhotoDescription && (
                 <MediaPreviewOverlay
                     description={fallbackPhotoDescription}
+                    onSaveToAlbum={() => saveToAlbum({ desc: fallbackPhotoDescription })}
                     onRegenerate={canRetryPhoto ? () => { setShowFallbackPreview(false); openPhotoPromptEditor(); } : undefined}
                     regenerating={photoRegenerating}
                     onClose={() => setShowFallbackPreview(false)}

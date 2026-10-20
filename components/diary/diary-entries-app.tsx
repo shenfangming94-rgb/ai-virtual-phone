@@ -16,6 +16,7 @@ import {
   createDiaryEntry,
   deleteDiaryEntry,
   loadDiaryEntries,
+  saveDiaryEntries,
   loadDiaryEntryFontAssetId,
   loadDiaryEntryFontScale,
   loadDiaryEntryTimerSettings,
@@ -25,6 +26,25 @@ import {
 } from "@/lib/diary-entry-storage";
 import type { DiaryEntry, DiaryEntryBlock, DiaryEntryTimerSettings, DiaryEntryTrigger } from "@/lib/diary-entry-types";
 import { getThemeAssetDataUrl, saveThemeAssetFromBlob } from "@/lib/theme-storage";
+import { resolveUserIdentity } from "@/lib/settings-storage";
+import {
+  addAnnotations,
+  compressCoverImage,
+  countUnseenUserDiaryAnnotations,
+  deleteAnnotation,
+  deleteAnnotationsForEntries,
+  loadAnnotationsForEntry,
+  loadUserDiaryCover,
+  loadUserDiaryEntries,
+  saveUserDiaryCover,
+  SELF_ANNOTATION_COLORS,
+  USER_DIARY_SELF_KEY,
+  USER_DIARY_UPDATED_EVENT,
+  type DiaryAnnotation,
+  type UserDiaryCover,
+} from "@/lib/user-diary";
+import { MyDiaryView } from "./my-diary";
+import { AnnotationComposer, assignAnnotations, LeftoverAnnotations, renderAnnotatedParagraph, useTextSelection } from "./diary-annotations";
 
 const DIARY_USER_FONT_FAMILY = "AIPhoneDiaryEntryUserFont";
 const DIARY_USER_FONT_STYLE_ID = "ai-phone-diary-entry-user-font-face";
@@ -135,6 +155,15 @@ export function DiaryEntriesApp({ onBack, onNotice }: DiaryEntriesAppProps) {
     [localGeneratingIds, trackedGeneratingIds],
   );
   const [entryDrag, setEntryDrag] = useState<DiaryEntryDragState | null>(null);
+  const [myDiaryOpen, setMyDiaryOpen] = useState(false);
+  const [myCover, setMyCover] = useState<UserDiaryCover>(() => loadUserDiaryCover());
+  const [myEntryCount, setMyEntryCount] = useState(() => loadUserDiaryEntries().length);
+  const [myUnseen, setMyUnseen] = useState(() => countUnseenUserDiaryAnnotations());
+  const [coverSheetOpen, setCoverSheetOpen] = useState(false);
+  const coverFileRef = useRef<HTMLInputElement | null>(null);
+  const [bookDrag, setBookDrag] = useState<{ book: DiaryBook; x: number; y: number; width: number; height: number; isOverTrash: boolean } | null>(null);
+  const bookDragRef = useRef<{ book: DiaryBook; pointerId: number; target: HTMLButtonElement; startX: number; startY: number; width: number; height: number; timer: number | null; dragging: boolean } | null>(null);
+  const [deleteCandidateBook, setDeleteCandidateBook] = useState<DiaryBook | null>(null);
   const entryMainRef = useRef<HTMLElement | null>(null);
   const entryTrashRef = useRef<HTMLDivElement | null>(null);
   const fontFileRef = useRef<HTMLInputElement | null>(null);
@@ -234,6 +263,7 @@ export function DiaryEntriesApp({ onBack, onNotice }: DiaryEntriesAppProps) {
 
   const deleteEntry = useCallback((entry: DiaryEntry) => {
     deleteDiaryEntry(entry.id);
+    deleteAnnotationsForEntries([entry.id]);
     setActiveEntry(current => current?.id === entry.id ? null : current);
     setDeleteCandidateEntry(current => current?.id === entry.id ? null : current);
     refreshEntries();
@@ -244,6 +274,38 @@ export function DiaryEntriesApp({ onBack, onNotice }: DiaryEntriesAppProps) {
     setCharacters(loadCharacters());
     refreshEntries();
   }, [refreshEntries]);
+
+  useEffect(() => {
+    const refreshMine = () => {
+      setMyCover(loadUserDiaryCover());
+      setMyEntryCount(loadUserDiaryEntries().length);
+      setMyUnseen(countUnseenUserDiaryAnnotations());
+    };
+    window.addEventListener(USER_DIARY_UPDATED_EVENT, refreshMine);
+    return () => window.removeEventListener(USER_DIARY_UPDATED_EVENT, refreshMine);
+  }, []);
+
+  const handleCoverUpload = useCallback(async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+    try {
+      const dataUrl = await compressCoverImage(file);
+      saveUserDiaryCover({ type: "image", dataUrl });
+      setCoverSheetOpen(false);
+    } catch {
+      notify("封面上传失败");
+    }
+  }, [notify]);
+
+  const deleteBook = useCallback((book: DiaryBook) => {
+    const ids = book.entries.map(entry => entry.id);
+    saveDiaryEntries(loadDiaryEntries().filter(entry => entry.characterId !== book.characterId));
+    deleteAnnotationsForEntries(ids);
+    setDeleteCandidateBook(null);
+    refreshEntries();
+    notify(`已删除 ${book.characterName} 的全部日记。`);
+  }, [notify, refreshEntries]);
 
   useEffect(() => {
     saveDiaryEntryTimerSettings(settings);
@@ -569,6 +631,90 @@ export function DiaryEntriesApp({ onBack, onNotice }: DiaryEntriesAppProps) {
     entryDragRef.current = null;
   }, [clearEntryDragTimer]);
 
+  // ── 拖整本日记本到垃圾桶 ──
+  const resetBookDrag = useCallback(() => {
+    const session = bookDragRef.current;
+    if (session?.timer) window.clearTimeout(session.timer);
+    if (session?.dragging) suppressEntryClick();
+    if (session) {
+      try { session.target.releasePointerCapture(session.pointerId); } catch { /* already released */ }
+    }
+    bookDragRef.current = null;
+    setBookDrag(null);
+    unlockEntryDragScroll();
+  }, [suppressEntryClick, unlockEntryDragScroll]);
+
+  const handleBookPointerDown = useCallback((event: PointerEvent<HTMLButtonElement>, book: DiaryBook) => {
+    if (event.pointerType === "mouse" && event.button !== 0) return;
+    const rect = event.currentTarget.getBoundingClientRect();
+    const target = event.currentTarget;
+    const pointerId = event.pointerId;
+    const startX = event.clientX;
+    const startY = event.clientY;
+    bookDragRef.current = {
+      book, pointerId, target, startX, startY, width: rect.width, height: rect.height, dragging: false,
+      timer: window.setTimeout(() => {
+        const session = bookDragRef.current;
+        if (!session || session.pointerId !== pointerId || session.dragging) return;
+        session.dragging = true;
+        session.timer = null;
+        suppressEntryClick(900);
+        lockEntryDragScroll();
+        try { session.target.setPointerCapture(pointerId); } catch { /* ignore */ }
+        setBookDrag({ book, x: startX, y: startY, width: session.width, height: session.height, isOverTrash: false });
+      }, 430),
+    };
+  }, [lockEntryDragScroll, suppressEntryClick]);
+
+  const handleBookPointerMove = useCallback((event: PointerEvent<HTMLButtonElement>) => {
+    const session = bookDragRef.current;
+    if (!session || session.pointerId !== event.pointerId || session.dragging) return;
+    if (Math.hypot(event.clientX - session.startX, event.clientY - session.startY) > 8) {
+      if (session.timer) window.clearTimeout(session.timer);
+      bookDragRef.current = null;
+    }
+  }, []);
+
+  const handleBookPointerEnd = useCallback((event: PointerEvent<HTMLButtonElement>) => {
+    const session = bookDragRef.current;
+    if (!session || session.pointerId !== event.pointerId || session.dragging) return;
+    if (session.timer) window.clearTimeout(session.timer);
+    bookDragRef.current = null;
+  }, []);
+
+  useEffect(() => {
+    if (!bookDrag) return;
+    const onMove = (event: globalThis.PointerEvent) => {
+      const session = bookDragRef.current;
+      if (!session?.dragging || session.pointerId !== event.pointerId) return;
+      event.preventDefault();
+      const lock = entryDragScrollLockRef.current;
+      if (lock?.main) lock.main.scrollTop = lock.mainScrollTop;
+      setBookDrag({
+        book: session.book, x: event.clientX, y: event.clientY, width: session.width, height: session.height,
+        isOverTrash: isEntryOverTrash(event.clientX, event.clientY, session.width * 0.6, session.height * 0.6),
+      });
+    };
+    const onUp = (event: globalThis.PointerEvent) => {
+      const session = bookDragRef.current;
+      if (!session || session.pointerId !== event.pointerId) return;
+      event.preventDefault();
+      const over = session.dragging && isEntryOverTrash(event.clientX, event.clientY, session.width * 0.6, session.height * 0.6);
+      const book = session.book;
+      resetBookDrag();
+      if (over) setDeleteCandidateBook(book);
+    };
+    const onCancel = () => resetBookDrag();
+    window.addEventListener("pointermove", onMove, { passive: false });
+    window.addEventListener("pointerup", onUp, { passive: false });
+    window.addEventListener("pointercancel", onCancel);
+    return () => {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+      window.removeEventListener("pointercancel", onCancel);
+    };
+  }, [bookDrag, isEntryOverTrash, resetBookDrag]);
+
   const books = useMemo<DiaryBook[]>(() => {
     const map = new Map<string, DiaryEntry[]>();
     for (const entry of entries) {
@@ -590,8 +736,22 @@ export function DiaryEntriesApp({ onBack, onNotice }: DiaryEntriesAppProps) {
   );
   const activeBookBusy = Boolean(activeBook && generatingCharacterIds.includes(activeBook.characterId));
 
+  if (myDiaryOpen) {
+    return (
+      <MyDiaryView
+        characters={characters}
+        style={diaryEntryStyle}
+        onBack={() => setMyDiaryOpen(false)}
+        onNotice={onNotice}
+      />
+    );
+  }
+
+  const userIdentity = resolveUserIdentity(undefined, "diary");
+  const characterIds = new Set(characters.map(character => character.id));
+
   return (
-    <section className={`diary-app diary-entry-app ${entryDrag ? "is-entry-dragging" : ""}`} style={diaryEntryStyle}>
+    <section className={`diary-app diary-entry-app ${entryDrag || bookDrag ? "is-entry-dragging" : ""}`} style={diaryEntryStyle}>
       {generatingCharacterIds.length > 0 && (
         <div className="diary-generating-toast" role="status">
           <span className="diary-generating-toast-spinner" aria-hidden="true" />
@@ -635,14 +795,7 @@ export function DiaryEntriesApp({ onBack, onNotice }: DiaryEntriesAppProps) {
       </header>
 
       <main ref={entryMainRef} className="diary-entry-main">
-        {entries.length === 0 ? (
-          <div className="diary-entry-empty">
-            <NotebookPen size={34} strokeWidth={1.5} />
-            <h2>还没有日记</h2>
-            <p>让角色先写一篇，纸面会从这里开始铺开。</p>
-            <button type="button" onClick={() => setWritePanelOpen(true)}>让TA写一篇</button>
-          </div>
-        ) : activeBook ? (
+        {activeBook ? (
           <div className="diary-entry-list">
             {activeBook.entries.map(entry => (
               <DiaryEntryCard
@@ -666,20 +819,53 @@ export function DiaryEntriesApp({ onBack, onNotice }: DiaryEntriesAppProps) {
             ))}
           </div>
         ) : (
-          <div className="diary-shelf">
-            {[0, 1].map(column => (
-              <div className="diary-shelf-column" key={column}>
-                {books.filter((_, index) => index % 2 === column).map(book => (
-                  <DiaryBookCover
-                    key={book.characterId}
-                    book={book}
-                    busy={generatingCharacterIds.includes(book.characterId)}
-                    onOpen={() => setActiveCharacterId(book.characterId)}
-                  />
-                ))}
+          <>
+            <div className="diary-shelf">
+              {[0, 1].map(column => {
+                const shelfItems: ({ mine: true } | DiaryBook)[] = [{ mine: true }, ...books];
+                return (
+                  <div className="diary-shelf-column" key={column}>
+                    {shelfItems.filter((_, index) => index % 2 === column).map(item => (
+                      "mine" in item ? (
+                        <MyDiaryBookCover
+                          key="__mine__"
+                          name={userIdentity?.name || "我"}
+                          avatar={userIdentity?.avatarUrl || ""}
+                          cover={myCover}
+                          count={myEntryCount}
+                          unseen={myUnseen}
+                          onOpen={() => setMyDiaryOpen(true)}
+                          onLongPress={() => setCoverSheetOpen(true)}
+                        />
+                      ) : (
+                        <DiaryBookCover
+                          key={item.characterId}
+                          book={item}
+                          busy={generatingCharacterIds.includes(item.characterId)}
+                          deleted={!characterIds.has(item.characterId)}
+                          isDragSource={bookDrag?.book.characterId === item.characterId}
+                          onPointerDown={(event) => handleBookPointerDown(event, item)}
+                          onPointerMove={handleBookPointerMove}
+                          onPointerUp={handleBookPointerEnd}
+                          onPointerCancel={handleBookPointerEnd}
+                          onOpen={() => {
+                            if (entryDragClickSuppressedRef.current) return;
+                            setActiveCharacterId(item.characterId);
+                          }}
+                        />
+                      )
+                    ))}
+                  </div>
+                );
+              })}
+            </div>
+            {entries.length === 0 ? (
+              <div className="diary-entry-empty diary-entry-empty-inline">
+                <p>让角色先写一篇，纸面会从这里开始铺开。</p>
+                <button type="button" onClick={() => setWritePanelOpen(true)}>让TA写一篇</button>
               </div>
-            ))}
-          </div>
+            ) : null}
+          </>
         )}
       </main>
 
@@ -765,11 +951,68 @@ export function DiaryEntriesApp({ onBack, onNotice }: DiaryEntriesAppProps) {
 
       <div
         ref={entryTrashRef}
-        className={`diary-entry-trash-bin ${entryDrag ? "is-visible" : ""} ${entryDrag?.isOverTrash ? "is-over" : ""}`}
-        aria-hidden={!entryDrag}
+        className={`diary-entry-trash-bin ${entryDrag || bookDrag ? "is-visible" : ""} ${entryDrag?.isOverTrash || bookDrag?.isOverTrash ? "is-over" : ""}`}
+        aria-hidden={!entryDrag && !bookDrag}
       >
         <Trash2 size={30} strokeWidth={1.8} />
       </div>
+
+      {bookDrag ? (
+        <div
+          className="diary-book-drag-ghost"
+          style={{ left: bookDrag.x, top: bookDrag.y, width: bookDrag.width * 0.6, height: bookDrag.height * 0.6 }}
+        >
+          <DiaryBookCover book={bookDrag.book} busy={false} onOpen={() => undefined} />
+        </div>
+      ) : null}
+
+      {deleteCandidateBook ? (
+        <div className="nw-modal-backdrop" role="dialog" aria-modal="true" onClick={() => setDeleteCandidateBook(null)}>
+          <section className="nw-delete-confirm" onClick={event => event.stopPropagation()}>
+            <div className="nw-delete-confirm-icon">
+              <Trash2 size={24} strokeWidth={1.8} />
+            </div>
+            <h2>删除整本日记</h2>
+            <p>{deleteCandidateBook.characterName} 的全部日记（共 {deleteCandidateBook.entries.length} 篇）都会删掉，对应的记忆也会消失。</p>
+            <div>
+              <button type="button" className="nw-secondary-btn" onClick={() => setDeleteCandidateBook(null)}>取消</button>
+              <button type="button" className="nw-danger-btn" onClick={() => deleteBook(deleteCandidateBook)}>
+                <span className="note-wall-primary-content"><span>全部删除</span></span>
+              </button>
+            </div>
+          </section>
+        </div>
+      ) : null}
+
+      <input ref={coverFileRef} type="file" accept="image/*" className="hidden" onChange={handleCoverUpload} />
+      {coverSheetOpen ? (
+        <div className="diary-anno-sheet-backdrop" onClick={() => setCoverSheetOpen(false)}>
+          <section className="diary-anno-sheet" onClick={event => event.stopPropagation()}>
+            <h3 className="my-diary-sheet-title">换封面</h3>
+            <div className="my-diary-cover-options">
+              <button
+                type="button"
+                className="my-diary-cover-option"
+                aria-pressed={myCover.type === "default"}
+                onClick={() => { saveUserDiaryCover({ type: "default" }); setCoverSheetOpen(false); }}
+              >
+                <span className="diary-book" data-cover="mine"><span className="diary-book-spine" /><span className="diary-book-frame" /></span>
+                默认
+              </button>
+              {myCover.type === "image" ? (
+                <button type="button" className="my-diary-cover-option" aria-pressed onClick={() => setCoverSheetOpen(false)}>
+                  <span className="diary-book" data-cover="photo" style={{ backgroundImage: `url(${myCover.dataUrl})` }}><span className="diary-book-spine" /></span>
+                  你传的图
+                </button>
+              ) : null}
+              <button type="button" className="my-diary-cover-option" onClick={() => coverFileRef.current?.click()}>
+                <span className="my-diary-cover-upload">＋<small>上传图片</small></span>
+                &nbsp;
+              </button>
+            </div>
+          </section>
+        </div>
+      ) : null}
 
       {entryDrag ? (
         <div
@@ -798,16 +1041,42 @@ function hashText(value: string): number {
   return hash;
 }
 
-function DiaryBookCover({ book, busy, onOpen }: { book: DiaryBook; busy: boolean; onOpen: () => void }) {
+function DiaryBookCover({
+  book,
+  busy,
+  deleted = false,
+  isDragSource = false,
+  onOpen,
+  onPointerDown,
+  onPointerMove,
+  onPointerUp,
+  onPointerCancel,
+}: {
+  book: DiaryBook;
+  busy: boolean;
+  deleted?: boolean;
+  isDragSource?: boolean;
+  onOpen: () => void;
+  onPointerDown?: (event: PointerEvent<HTMLButtonElement>) => void;
+  onPointerMove?: (event: PointerEvent<HTMLButtonElement>) => void;
+  onPointerUp?: (event: PointerEvent<HTMLButtonElement>) => void;
+  onPointerCancel?: (event: PointerEvent<HTMLButtonElement>) => void;
+}) {
   const hash = hashText(book.characterId);
   const latest = book.entries[0];
   return (
     <button
       type="button"
-      className="diary-book"
+      className={`diary-book ${isDragSource ? "is-drag-source" : ""}`}
       data-cover={hash % DIARY_BOOK_COVER_COUNT}
       onClick={onOpen}
+      onPointerDown={onPointerDown}
+      onPointerMove={onPointerMove}
+      onPointerUp={onPointerUp}
+      onPointerCancel={onPointerCancel}
+      onContextMenu={event => event.preventDefault()}
     >
+      {deleted ? <span className="diary-book-deleted">已删除</span> : null}
       <span className="diary-book-spine" aria-hidden="true" />
       <span className="diary-book-frame" aria-hidden="true" />
       <span className="diary-book-label">
@@ -820,6 +1089,71 @@ function DiaryBookCover({ book, busy, onOpen }: { book: DiaryBook; busy: boolean
       <span className="diary-book-meta">
         <span>{book.entries.length} 篇</span>
         <time>{formatEntryTime(latest.createdAt)}</time>
+      </span>
+    </button>
+  );
+}
+
+/** 她自己的本子：默认米白格子封面，或者她上传的图；长按换封面 */
+function MyDiaryBookCover({
+  name,
+  avatar,
+  cover,
+  count,
+  unseen,
+  onOpen,
+  onLongPress,
+}: {
+  name: string;
+  avatar: string;
+  cover: UserDiaryCover;
+  count: number;
+  unseen: number;
+  onOpen: () => void;
+  onLongPress: () => void;
+}) {
+  const pressRef = useRef<{ timer: number; x: number; y: number; fired: boolean } | null>(null);
+  const cancel = () => {
+    if (pressRef.current) window.clearTimeout(pressRef.current.timer);
+  };
+  return (
+    <button
+      type="button"
+      className="diary-book diary-book-mine"
+      data-cover={cover.type === "image" ? "photo" : "mine"}
+      style={cover.type === "image" ? { backgroundImage: `url(${cover.dataUrl})` } : undefined}
+      onPointerDown={event => {
+        cancel();
+        const state = { x: event.clientX, y: event.clientY, fired: false, timer: 0 };
+        state.timer = window.setTimeout(() => { state.fired = true; onLongPress(); }, 520);
+        pressRef.current = state;
+      }}
+      onPointerMove={event => {
+        const state = pressRef.current;
+        if (state && Math.hypot(event.clientX - state.x, event.clientY - state.y) > 8) cancel();
+      }}
+      onPointerUp={cancel}
+      onPointerCancel={cancel}
+      onPointerLeave={cancel}
+      onContextMenu={event => event.preventDefault()}
+      onClick={() => {
+        if (pressRef.current?.fired) return;
+        onOpen();
+      }}
+    >
+      {unseen > 0 ? <span className="diary-book-unseen">{unseen}</span> : null}
+      <span className="diary-book-spine" aria-hidden="true" />
+      {cover.type === "image" ? null : <span className="diary-book-frame" aria-hidden="true" />}
+      <span className="diary-book-label">
+        <span className="diary-book-avatar">
+          {avatar ? <img src={avatar} alt="" /> : <Bot size={20} />}
+        </span>
+        <strong>{name}</strong>
+        <em>我的日记本</em>
+      </span>
+      <span className="diary-book-meta">
+        <span>{count} 篇</span>
+        <time>MINE</time>
       </span>
     </button>
   );
@@ -1115,9 +1449,22 @@ function CharacterAvatarGrid({ characters, selectedIds, busyIds, disabled, onTog
 
 function DiaryEntryDetail({ entry, onClose }: { entry: DiaryEntry; onClose: () => void }) {
   const markers = getEntryMarkers(entry);
+  const [notes, setNotes] = useState<DiaryAnnotation[]>(() => loadAnnotationsForEntry(entry.id));
+  const [activeNote, setActiveNote] = useState<string | null>(null);
+  const [composing, setComposing] = useState<string | null>(null);
+  const blocksRef = useRef<HTMLDivElement | null>(null);
+  const { selection, clear } = useTextSelection(blocksRef, !composing);
+  useEffect(() => {
+    const refresh = () => setNotes(loadAnnotationsForEntry(entry.id));
+    window.addEventListener(USER_DIARY_UPDATED_EVENT, refresh);
+    return () => window.removeEventListener(USER_DIARY_UPDATED_EVENT, refresh);
+  }, [entry.id]);
+  const toggle = (id: string) => setActiveNote(current => current === id ? null : id);
+  const { perText, leftover } = assignAnnotations(entry.blocks.map(block => (block.type === "paragraph" || block.type === "quote") ? block.text : ""), notes);
+  const userName = resolveUserIdentity(entry.characterId, "diary")?.name || "我";
   return (
     <div className="nw-modal-backdrop" role="dialog" aria-modal="true" onClick={onClose}>
-      <article className="diary-entry-detail-paper" onClick={(event) => event.stopPropagation()}>
+      <article className="diary-entry-detail-paper" onClick={(event) => { event.stopPropagation(); setActiveNote(null); }}>
         <span className="diary-entry-paper-clip" aria-hidden="true">
           <span />
         </span>
@@ -1136,24 +1483,75 @@ function DiaryEntryDetail({ entry, onClose }: { entry: DiaryEntry; onClose: () =
               ) : null}
             </div>
           </header>
-          <div className="diary-entry-blocks">
+          <div className="diary-entry-blocks" ref={blocksRef}>
             {entry.blocks.map((block, index) => (
-              <DiaryBlockView key={`${block.type}-${index}`} block={block} />
+              <DiaryBlockView
+                key={`${block.type}-${index}`}
+                block={block}
+                notes={perText[index]}
+                activeNote={activeNote}
+                onToggleNote={toggle}
+              />
             ))}
+            <LeftoverAnnotations annotations={leftover} used={new Set()} activeId={activeNote} onToggle={toggle} />
+            {selection ? (
+              <button
+                type="button"
+                className="diary-anno-pop"
+                style={{ left: selection.x, top: selection.y }}
+                onPointerDown={event => event.preventDefault()}
+                onClick={event => { event.stopPropagation(); setComposing(selection.text); clear(); }}
+              >
+                ✎ 批注
+              </button>
+            ) : null}
           </div>
           <footer className="diary-entry-detail-signature">
             <span>{entry.characterName}</span>
             <time>{formatEntryTime(entry.createdAt)}</time>
           </footer>
+          {notes.some(note => note.authorKey === USER_DIARY_SELF_KEY) && activeNote && notes.find(n => n.id === activeNote)?.authorKey === USER_DIARY_SELF_KEY ? (
+            <div className="my-diary-detail-actions">
+              <button type="button" className="is-danger" onClick={() => { deleteAnnotation(activeNote); setActiveNote(null); }}>撕掉这条批注</button>
+            </div>
+          ) : null}
         </div>
       </article>
+      {composing ? (
+        <AnnotationComposer
+          quote={composing}
+          colors={SELF_ANNOTATION_COLORS}
+          onClose={() => setComposing(null)}
+          onSubmit={(text, color) => {
+            addAnnotations([{
+              entryId: entry.id,
+              authorKey: USER_DIARY_SELF_KEY,
+              authorName: userName,
+              quote: composing,
+              text,
+              color,
+            }]);
+            setComposing(null);
+          }}
+        />
+      ) : null}
     </div>
   );
 }
 
-function DiaryBlockView({ block }: { block: DiaryEntryBlock }) {
+function DiaryBlockView({
+  block,
+  notes = [],
+  activeNote = null,
+  onToggleNote = () => undefined,
+}: {
+  block: DiaryEntryBlock;
+  notes?: DiaryAnnotation[];
+  activeNote?: string | null;
+  onToggleNote?: (id: string) => void;
+}) {
   if (block.type === "quote") {
-    return <blockquote className="diary-entry-quote">{block.text}</blockquote>;
+    return <blockquote className="diary-entry-quote">{renderAnnotatedParagraph(block.text, notes, activeNote, onToggleNote, new Set())}</blockquote>;
   }
   if (block.type === "correction") {
     return (
@@ -1186,5 +1584,5 @@ function DiaryBlockView({ block }: { block: DiaryEntryBlock }) {
       </figure>
     );
   }
-  return <p className="diary-entry-paragraph">{block.text}</p>;
+  return <p className="diary-entry-paragraph">{renderAnnotatedParagraph(block.text, notes, activeNote, onToggleNote, new Set())}</p>;
 }

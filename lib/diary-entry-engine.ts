@@ -21,9 +21,10 @@ type ResolvedDiaryEntryGeneration = {
   userName: string;
 };
 
-async function resolveDiaryEntryGeneration(
+export async function resolveDiaryEntryGeneration(
   characterId: string,
   entries: DiaryEntry[],
+  appTags: string[] = ["diary", "entries"],
 ): Promise<ResolvedDiaryEntryGeneration> {
   const character = loadCharacters().find(entry => entry.id === characterId);
   if (!character) throw new ChatEngineError("找不到要写日记的角色。");
@@ -69,7 +70,7 @@ async function resolveDiaryEntryGeneration(
     regexes,
     userIdentity,
     appId: "diary",
-    appTags: ["diary", "entries"],
+    appTags,
     longTermMemories: formatLongTermMemories(memories),
     coreMemories: formatCoreMemories(coreMemories),
     worldBookActivationContext: prepared.wbActivationContext,

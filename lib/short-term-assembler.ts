@@ -17,6 +17,7 @@ import { loadVnProjectionEntries } from "./vn-storage";
 import { loadMapProjectionEntries, loadMapSharedProjectionEntries } from "./map-storage";
 import { loadGameProjectionEntries } from "./game-storage";
 import { loadDiaryEntries } from "./diary-entry-storage";
+import { loadAnnotationsForEntry, loadSelfAnnotations, loadUserDiaryEntries } from "./user-diary";
 import type { DiaryEntry, DiaryEntryBlock } from "./diary-entry-types";
 import { loadNoteWallProjectionEntries } from "./notewall-memory";
 import { loadXiaohongshuProjectionEntries } from "./xiaohongshu-memory";
@@ -662,6 +663,40 @@ export function loadNativeTimeline(
             timestamp: diaryEntry.createdAt,
             content: formatDiaryEntryForTimeline(diaryEntry, timeAware, timestampOptions),
         });
+    }
+
+    // ── 我的日记：她给他看的日记和他写的批注；她在他日记上写的批注 ──
+    for (const userEntry of loadUserDiaryEntries()) {
+        if (!userEntry.sharedWith.includes(characterId)) continue;
+        const notes = loadAnnotationsForEntry(userEntry.id).filter(a => a.authorKey === characterId);
+        if (notes.length === 0) continue;
+        const ts = notes[notes.length - 1].createdAt;
+        if (options?.afterTimestamp && ts <= options.afterTimestamp) continue;
+        const body = userEntry.body.length > 400 ? `${userEntry.body.slice(0, 400)}…` : userEntry.body;
+        entries.push({
+            id: `user_diary_${userEntry.id}_${characterId}`,
+            sourceApp: "diary",
+            sourceDetail: "diary_entry",
+            authorType: "user",
+            timestamp: ts,
+            content: `${formatPromptEventLabel("手记", ts, timeAware, timestampOptions)} ${userName}把她的日记「${userEntry.title}」给你看了：${body}\n你在上面写了批注：${notes.map(n => `「${n.quote}」旁边写「${n.text}」`).join("；")}`,
+        });
+    }
+    {
+        const ownEntries = new Map(loadDiaryEntries().filter(e => e.characterId === characterId).map(e => [e.id, e]));
+        for (const note of loadSelfAnnotations()) {
+            const target = ownEntries.get(note.entryId);
+            if (!target) continue;
+            if (options?.afterTimestamp && note.createdAt <= options.afterTimestamp) continue;
+            entries.push({
+                id: note.id,
+                sourceApp: "diary",
+                sourceDetail: "diary_entry",
+                authorType: "user",
+                timestamp: note.createdAt,
+                content: `${formatPromptEventLabel("手记", note.createdAt, timeAware, timestampOptions)} ${userName}翻了你的日记「${target.title}」，在「${note.quote}」旁边批注：${note.text}`,
+            });
+        }
     }
 
     // ── Note wall projections ──

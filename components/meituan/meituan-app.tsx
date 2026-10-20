@@ -49,6 +49,7 @@ import {
     redeemVoucher,
 } from "@/lib/meituan-engine";
 import { orderHeadline, orderWhoLabel, useMtNow } from "./meituan-chat-card";
+import { seedDeals, seedShops } from "@/lib/meituan-seed";
 
 type Page =
     | { id: "home" }
@@ -174,15 +175,13 @@ export function MeituanApp({ onClose, onNotice }: { onClose: () => void; onNotic
         try { await fn(); } catch (e) { console.warn("[Meituan]", e); notice(fail); } finally { setBusy(""); refresh(); }
     };
 
-    // 首页没店就生成一批
-    const homeTried = useRef(false);
+    // 首页没店就先放内置的示例店（不调 AI），点「换一批」才生成
     useEffect(() => {
-        if (homeTried.current || st.shops.some(s => s.source === "home")) return;
-        if (page.id !== "home" && page.id !== "waimai") return;
-        homeTried.current = true;
-        void run("home", generateHomeShops, "没生成出店铺，检查一下 API 再点「换一批」");
+        if (st.shops.some(s => s.source === "home")) return;
+        updateMeituan(s => { s.shops = [...seedShops(), ...s.shops]; if (!s.deals.length) s.deals = seedDeals(); });
+        refresh();
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [page.id]);
+    }, []);
 
     const homeShops = useMemo(() => {
         const list = st.shops.filter(s => s.source === "home");
@@ -284,8 +283,8 @@ export function MeituanApp({ onClose, onNotice }: { onClose: () => void; onNotic
         return (
             <div className="mt-page">
                 <Nav title={cat?.name || "分类"} onBack={back} />
-                <CatAutoGen catId={catId} count={list.length} run={run} />
                 <div className="mt-list">{list.map(shopRow)}</div>
+                {!list.length ? <p className="mt-hint">这个分类还没有店，点下面让 AI 找几家</p> : null}
                 <button type="button" className="mt-more" disabled={!!busy} onClick={() => run(`cat:${catId}`, () => generateCategoryShops(catId))}>{busy === `cat:${catId}` ? "正在找…" : "再来几家"}</button>
             </div>
         );
@@ -411,7 +410,6 @@ export function MeituanApp({ onClose, onNotice }: { onClose: () => void; onNotic
         const known = loadGiftStore().addresses[to];
         if (known?.address) { setToAddr(known); return; }
         setToAddr(null);
-        void charAddress(to).then(a => setToAddr(a));
     }, [to]);
     const checkout = (shopId: string) => {
         const shop = st.shops.find(s => s.id === shopId);
@@ -439,7 +437,7 @@ export function MeituanApp({ onClose, onNotice }: { onClose: () => void; onNotic
                     </div>
                     <button type="button" className="mt-ck-addr" onClick={() => setSheet(to === MT_SELF ? "address" : `charAddr:${to}`)}>
                         {PIN}
-                        <div>{address?.address ? <><b>{address.address}</b><small>{address.name} {address.phone}</small></> : <b>{to === MT_SELF ? "填一下收货地址" : "正在问他住哪…"}</b>}</div>
+                        <div>{address?.address ? <><b>{address.address}</b><small>{address.name} {address.phone}</small></> : <b>{to === MT_SELF ? "填一下收货地址" : "填一下他的地址"}</b>}</div>
                         <ChevronRight size={16} />
                     </button>
                     {to !== MT_SELF ? <p className="mt-hint">送到他那里，下单后会发卡片告诉他</p> : null}
@@ -590,13 +588,6 @@ export function MeituanApp({ onClose, onNotice }: { onClose: () => void; onNotic
     };
 
     // ── 团购 ──
-    const dealsTried = useRef(false);
-    useEffect(() => {
-        if (page.id !== "deals" || dealsTried.current || st.deals.length) return;
-        dealsTried.current = true;
-        void run("deals", generateDeals);
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [page.id]);
     const deals = (
         <div className="mt-page is-gray">
             <Nav title="美食团购 · 休闲玩乐" onBack={back} right={<button type="button" disabled={!!busy} onClick={() => run("deals", generateDeals)}>换一批</button>} />
@@ -736,22 +727,11 @@ function ShopAutoMenu({ shop, run }: { shop: MtShop; run: (label: string, fn: ()
     const tried = useRef("");
     useEffect(() => {
         if (tried.current === shop.id) return;
-        if (shop.dishes && shop.dishes.length >= 4 && shop.reviews?.length) return;
+        if (shop.dishes?.length) return;
         tried.current = shop.id;
         void run(`menu:${shop.id}`, () => generateShopMenu(shop.id), "菜单没出来，去「商家」里重新生成");
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [shop.id]);
-    return null;
-}
-
-function CatAutoGen({ catId, count, run }: { catId: string; count: number; run: (label: string, fn: () => Promise<unknown>, fail?: string) => Promise<void> }) {
-    const tried = useRef("");
-    useEffect(() => {
-        if (tried.current === catId || count >= 3) return;
-        tried.current = catId;
-        void run(`cat:${catId}`, () => generateCategoryShops(catId));
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [catId]);
     return null;
 }
 

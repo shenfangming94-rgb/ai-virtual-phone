@@ -84,7 +84,8 @@ import {
     rollChatDiceFace,
 } from "@/lib/chat-screen-effects";
 import { abortableDelay, throwIfAborted } from "@/lib/abort-utils";
-import { GROUP_SELF_KEY, canGroupAdminAct, applyGroupAdminAction, buildGroupAdminNoticeText, getGroupMemberDisplayName, getGroupMuteRemainingMs, getGroupRole, isGroupMuted, formatMuteRemainingLabel, resolveGroupMemberKeyByName, type GroupAdminAction } from "@/lib/group-admin";
+import { addFriendFromGroup, isGroupStranger, maybeRequestFriendFromGroup } from "@/lib/group-friend";
+import { GROUP_SELF_KEY, canGroupAdminAct, applyGroupAdminAction, buildGroupAdminNoticeText, getGroupMemberDisplayName, getGroupMuteRemainingMs, getGroupRole, getGroupTitle, groupLevelFromCount, isGroupMuted, formatMuteRemainingLabel, normalizeGroupTitle, resolveGroupMemberKeyByName, type GroupAdminAction } from "@/lib/group-admin";
 import { extractTextToolDirectiveText } from "@/lib/text-tool-protocol";
 import { emitChatPluginEvent, getChatPluginHookBus, runChatPluginTransform } from "@/lib/chat-plugin-hooks";
 import { CHAT_PLUGIN_TOAST_EVENT, getChatPluginRuntime } from "@/lib/chat-plugin-runtime";
@@ -1135,6 +1136,8 @@ export function ChatRoom({ session, onBack, onDeleted }: ChatRoomProps) {
     const [showVoiceCall, setShowVoiceCall] = useState(false);
     const [showVideoCall, setShowVideoCall] = useState(false);
     const [callMinimized, setCallMinimized] = useState(false);
+    const [strangerCardId, setStrangerCardId] = useState<string | null>(null);
+    const strangerCardTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const [callInitiator, setCallInitiator] = useState<"user" | "character">("user");
     const [callInitiatorName, setCallInitiatorName] = useState<string>("");
     const [userIdentity, setUserIdentity] = useState<UserIdentity | null>(null);
@@ -1717,7 +1720,7 @@ export function ChatRoom({ session, onBack, onDeleted }: ChatRoomProps) {
                 const d = part.mediaData;
                 if (!d?.adminAction || !d.adminActorName) return [];
                 return [{
-                    content: buildGroupAdminNoticeText(d.adminAction, d.adminActorName, d.adminTargetName || "", d.adminMuteMinutes),
+                    content: buildGroupAdminNoticeText(d.adminAction, d.adminActorName, d.adminTargetName || "", d.adminMuteMinutes, d.adminTitle),
                     mediaType: "group_admin_notice" as const,
                     mediaData: d,
                 }];
@@ -2410,16 +2413,19 @@ export function ChatRoom({ session, onBack, onDeleted }: ChatRoomProps) {
         const targetKey = resolveGroupMemberKeyByName(session, data.adminTargetName || "", userN, { includeOutsiders: action === "invite" });
         if (!targetKey) return null;
         if (!canGroupAdminAct(session, actorKey, action, targetKey)) return null;
-        applyGroupAdminAction(session, action, actorKey, targetKey, data.adminMuteMinutes);
+        const titleText = action === "set_title" ? normalizeGroupTitle(data.adminTitle || "") : "";
+        if (action === "set_title" && !titleText && !session.groupTitles?.[targetKey]) return null;
+        applyGroupAdminAction(session, action, actorKey, targetKey, data.adminMuteMinutes, action === "set_title" ? { text: titleText } : undefined);
         const actorDisplay = getGroupMemberDisplayName(actorKey, userN);
         const targetDisplay = getGroupMemberDisplayName(targetKey, userN);
         return {
-            content: buildGroupAdminNoticeText(action, actorDisplay, targetDisplay, data.adminMuteMinutes),
+            content: buildGroupAdminNoticeText(action, actorDisplay, targetDisplay, data.adminMuteMinutes, titleText),
             mediaData: {
                 adminAction: action,
                 adminActorName: actorDisplay,
                 adminTargetName: targetDisplay,
                 ...(action === "mute" ? { adminMuteMinutes: data.adminMuteMinutes || 10 } : {}),
+                ...(action === "set_title" ? { adminTitle: titleText } : {}),
             } as ChatMessage["mediaData"],
             senderName: actorDisplay,
         };
@@ -3273,14 +3279,34 @@ export function ChatRoom({ session, onBack, onDeleted }: ChatRoomProps) {
         return text;
     };
 
-    // QQ 式头衔徽标：群主/管理员，按当前群身份实时计算（被踢/卸任后旧消息不再显示）
-    const renderGroupRoleBadge = (senderCharacterId?: string) => {
-        if (!session.isGroup || !senderCharacterId) return null;
-        if (!(session.participantIds || []).includes(senderCharacterId)) return null;
-        const role = getGroupRole(session, senderCharacterId);
-        if (role === "owner") return <span className="chat-role-badge chat-role-badge-owner">群主</span>;
-        if (role === "admin") return <span className="chat-role-badge chat-role-badge-admin">管理员</span>;
-        return null;
+    // 群里每个人发过的消息条数 → 群等级（Lv）
+    const groupMessageCounts = useMemo(() => {
+        const counts = new Map<string, number>();
+        if (!session.isGroup) return counts;
+        for (const m of loadChatMessages(session.id)) {
+            if (m.role === "user") counts.set(GROUP_SELF_KEY, (counts.get(GROUP_SELF_KEY) || 0) + 1);
+            else if (m.role === "assistant" && m.senderCharacterId && m.mediaType !== "group_admin_notice") {
+                counts.set(m.senderCharacterId, (counts.get(m.senderCharacterId) || 0) + 1);
+            }
+        }
+        return counts;
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [session.id, session.isGroup, messages.length]);
+
+    // QQ 式群标签：Lv + 群主/管理员/成员 或 头衔（按当前群身份实时计算，被踢后旧消息不再显示）
+    const renderGroupRoleBadge = (memberKey?: string) => {
+        if (!session.isGroup || !memberKey) return null;
+        if (memberKey === GROUP_SELF_KEY ? session.isSpectator : !(session.participantIds || []).includes(memberKey)) return null;
+        const role = getGroupRole(session, memberKey);
+        const title = getGroupTitle(session, memberKey);
+        const level = groupLevelFromCount(groupMessageCounts.get(memberKey) || 0);
+        const tone = role === "owner" ? "owner" : role === "admin" ? "admin" : title ? title.color : "member";
+        const label = title?.text || (role === "owner" ? "群主" : role === "admin" ? "管理员" : "成员");
+        return (
+            <span className="chat-role-badge" data-tone={tone}>
+                <i>Lv{level}</i>{role === "owner" ? <span className="chat-role-badge-crown" aria-hidden="true">👑</span> : null}{label}
+            </span>
+        );
     };
 
     const runManagedGeneration = async ({
@@ -3350,6 +3376,7 @@ export function ChatRoom({ session, onBack, onDeleted }: ChatRoomProps) {
                 );
                 if (!isCurrentGeneration()) return;
                 await processGroupParts(results, setMessages, generationGuard, roundReasoning, { instantReveal: isSessionStreamingEnabled(session, true) });
+                void maybeRequestFriendFromGroup(session);
             } else {
                 let capturedReasoning: string | undefined;
                 const cr = await generateChatCompletion(
@@ -3785,6 +3812,7 @@ export function ChatRoom({ session, onBack, onDeleted }: ChatRoomProps) {
                             .filter(item => item.responseText.trim());
                         if (visibleResults.length > 0) {
                             await processGroupParts(visibleResults, setMessages, generationGuard, reasoning, { instantReveal: isSessionStreamingEnabled(session, true) });
+                            void maybeRequestFriendFromGroup(session);
                         }
 
                         throwIfGenerationStopped(generationGuard);
@@ -3827,6 +3855,7 @@ export function ChatRoom({ session, onBack, onDeleted }: ChatRoomProps) {
                     throwIfGenerationStopped(generationGuard);
                 }
                 await processGroupParts(results, setMessages, generationGuard, pendingGroupReasoning, { instantReveal: isSessionStreamingEnabled(session, true) });
+                void maybeRequestFriendFromGroup(session);
             } else {
                 let lastSendResult: Awaited<ReturnType<typeof splitAndSaveAIMessages>> | undefined;
                 // 每轮 LLM 调用的思维链，onReasoning 先于该轮 onTextPart 触发
@@ -5918,7 +5947,10 @@ export function ChatRoom({ session, onBack, onDeleted }: ChatRoomProps) {
                                                 <div key={gMsg.id} className={`flex ${gMsg.role === "user" ? "justify-end" : "justify-start"}`}>
                                                     <div className="flex flex-col min-w-0 max-w-[75%]">
                                                         {session.isGroup && gMsg.role !== "user" && (
-                                                            <span className="chat-group-sender-name">{gMsg.senderName || ""}{renderGroupRoleBadge(gMsg.senderCharacterId)}</span>
+                                                            <span className="chat-group-sender-name">{renderGroupRoleBadge(gMsg.senderCharacterId)}{gMsg.senderName || ""}</span>
+                                                        )}
+                                                        {session.isGroup && gMsg.role === "user" && !session.isSpectator && (
+                                                            <span className="chat-group-sender-name chat-group-sender-name-self">{renderGroupRoleBadge(GROUP_SELF_KEY)}{userIdentity?.name || ""}</span>
                                                         )}
                                                         <div
                                                             onPointerDown={(e) => { e.stopPropagation(); handleMessagePointerDown(e, gMsg.id); }}
@@ -6178,7 +6210,16 @@ export function ChatRoom({ session, onBack, onDeleted }: ChatRoomProps) {
                                                             : character;
                                                         return (
                                                             <>
-                                                    <div onDoubleClick={() => {
+                                                    <div onClick={() => {
+                                                        if (!session.isGroup || !msg.senderCharacterId) return;
+                                                        const strangerId = msg.senderCharacterId;
+                                                        if (!(session.participantIds || []).includes(strangerId) || !isGroupStranger(strangerId)) return;
+                                                        // 等一下看是不是双击（双击是拍一拍）
+                                                        if (strangerCardTimerRef.current) clearTimeout(strangerCardTimerRef.current);
+                                                        strangerCardTimerRef.current = setTimeout(() => setStrangerCardId(strangerId), 280);
+                                                    }} onDoubleClick={() => {
+                                                        if (strangerCardTimerRef.current) clearTimeout(strangerCardTimerRef.current);
+                                                        strangerCardTimerRef.current = null;
                                                         const targetChar = session.isGroup && msg.senderCharacterId
                                                             ? groupCharMap.get(msg.senderCharacterId) || character
                                                             : character;
@@ -6201,7 +6242,10 @@ export function ChatRoom({ session, onBack, onDeleted }: ChatRoomProps) {
                                             {...(isStandaloneHtmlPreview ? { "data-html": "true" } : {})}
                                         >
                                             {session.isGroup && msg.role !== "user" && (
-                                                <span className="chat-group-sender-name">{msg.senderName || ""}{renderGroupRoleBadge(msg.senderCharacterId)}</span>
+                                                <span className="chat-group-sender-name">{renderGroupRoleBadge(msg.senderCharacterId)}{msg.senderName || ""}</span>
+                                            )}
+                                            {session.isGroup && msg.role === "user" && !session.isSpectator && (
+                                                <span className="chat-group-sender-name chat-group-sender-name-self">{renderGroupRoleBadge(GROUP_SELF_KEY)}{userIdentity?.name || ""}</span>
                                             )}
                                             <div
                                             {...(editingMessageId !== msg.id ? {
@@ -6970,6 +7014,41 @@ export function ChatRoom({ session, onBack, onDeleted }: ChatRoomProps) {
                     </div>
                 </div>
             )}
+
+            {strangerCardId && (() => {
+                const stranger = groupCharMap.get(strangerCardId) || loadCharacters().find(c => c.id === strangerCardId);
+                if (!stranger) return null;
+                const added = !isGroupStranger(stranger.id);
+                return (
+                    <div className="modal-overlay" onClick={() => setStrangerCardId(null)}>
+                        <div className="modal-dialog group-stranger-card" onClick={e => e.stopPropagation()}>
+                            <div className="group-stranger-head">
+                                <div className="group-stranger-avatar">
+                                    {stranger.avatar ? <img src={stranger.avatar} alt="" /> : <ChatFallbackAvatar />}
+                                </div>
+                                <div className="min-w-0">
+                                    <div className="group-stranger-name">{stranger.name}</div>
+                                    <div className="group-stranger-from">来自群聊「{session.groupName || "群聊"}」</div>
+                                </div>
+                            </div>
+                            <button
+                                className="ui-btn ui-btn-success w-full"
+                                disabled={added}
+                                onClick={() => {
+                                    addFriendFromGroup(stranger.id, session.groupName || "群聊");
+                                    setStrangerCardId(null);
+                                    clearTimeout(chatToastTimer.current);
+                                    setChatToast("已添加到通讯录");
+                                    chatToastTimer.current = setTimeout(() => setChatToast(null), 2000);
+                                }}
+                            >
+                                {added ? "已是好友" : "添加到通讯录"}
+                            </button>
+                            <button className="ui-btn ui-btn-ghost w-full" onClick={() => setStrangerCardId(null)}>关闭</button>
+                        </div>
+                    </div>
+                );
+            })()}
 
             {/* 单聊语音/视频通话：内联挂载（而非提前 return），使缩小为悬浮窗时通话组件
                 不被卸载，计时/字幕等状态得以保留；组件内部依据 minimized 决定渲染

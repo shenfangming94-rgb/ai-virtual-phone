@@ -214,6 +214,7 @@ export function loadNativeTimeline(
                     msg.mediaData.adminActorName || "",
                     msg.mediaData.adminTargetName || "",
                     msg.mediaData.adminMuteMinutes,
+                    msg.mediaData.adminTitle,
                 );
             }
             // Represent rich media as text when content is empty

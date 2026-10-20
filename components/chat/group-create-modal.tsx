@@ -25,6 +25,9 @@ export function GroupCreateModal({ onClose, onCreate }: GroupCreateModalProps) {
     const enriched = contacts
         .map(c => ({ ...c, char: chars.find(ch => ch.id === c.characterId) }))
         .filter(c => c.char) as (typeof contacts[number] & { char: Character })[];
+    // 不加好友也能拉进群：档案库里其他人
+    const friendIds = new Set(enriched.map(c => c.characterId));
+    const archiveChars = chars.filter(c => !friendIds.has(c.id));
 
     const toggle = (id: string) => {
         setSelectedIds(prev => {
@@ -49,29 +52,39 @@ export function GroupCreateModal({ onClose, onCreate }: GroupCreateModalProps) {
                 {step === "pick" ? (
                     <>
                         <span className="modal-header-title">选择群成员</span>
-                        {enriched.length === 0 ? (
-                            <span className="menu-desc">暂无联系人，请先添加好友</span>
+                        {enriched.length === 0 && archiveChars.length === 0 ? (
+                            <span className="menu-desc">档案库里还没有角色</span>
                         ) : (
-                            <div className="chat-contact-list">
-                                {enriched.map(c => {
-                                    const isSelected = selectedIds.has(c.characterId);
-                                    return (
-                                        <div
-                                            key={c.characterId}
-                                            className="chat-contact-item"
-                                            onClick={() => toggle(c.characterId)}
-                                        >
-                                            <div className="chat-contact-avatar" style={isSelected ? { outline: "3px solid var(--c-success)", outlineOffset: "2px" } : undefined}>
-                                                {c.char.avatar ? (
-                                                    <img src={c.char.avatar} alt="" />
-                                                ) : (
-                                                    <ChatFallbackAvatar />
-                                                )}
-                                            </div>
-                                            <span className="chat-contact-name">{c.char.name}</span>
+                            <div className="group-create-pick-scroll">
+                                {[
+                                    { title: "好友", list: enriched.map(c => c.char) },
+                                    { title: "档案库（不用加好友）", list: archiveChars },
+                                ].filter(section => section.list.length > 0).map(section => (
+                                    <div key={section.title} className="w-full">
+                                        <div className="group-create-section-title">{section.title}</div>
+                                        <div className="chat-contact-list">
+                                            {section.list.map(char => {
+                                                const isSelected = selectedIds.has(char.id);
+                                                return (
+                                                    <div
+                                                        key={char.id}
+                                                        className="chat-contact-item"
+                                                        onClick={() => toggle(char.id)}
+                                                    >
+                                                        <div className="chat-contact-avatar" style={isSelected ? { outline: "3px solid var(--c-success)", outlineOffset: "2px" } : undefined}>
+                                                            {char.avatar ? (
+                                                                <img src={char.avatar} alt="" />
+                                                            ) : (
+                                                                <ChatFallbackAvatar />
+                                                            )}
+                                                        </div>
+                                                        <span className="chat-contact-name">{char.name}</span>
+                                                    </div>
+                                                );
+                                            })}
                                         </div>
-                                    );
-                                })}
+                                    </div>
+                                ))}
                             </div>
                         )}
                         {selectedIds.size >= 2 && (

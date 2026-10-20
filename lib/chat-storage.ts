@@ -94,6 +94,7 @@ export type ChatSession = {
     groupOwnerId?: string; // "self" | characterId; legacy groups default to "self", spectator groups to first member
     groupAdminIds?: string[]; // characterId | "self"
     groupMutes?: Record<string, string>; // (characterId | "self") → mute expiry ISO
+    groupTitles?: Record<string, { text: string; color?: string }>; // (characterId | "self") → 群头衔
     allowAdminActionsOnUser?: boolean; // characters may kick/mute the user (default off)
     isSpectator?: boolean; // 围观群：用户不在群内，只能生成/线下
 };
@@ -201,7 +202,8 @@ export type ChatMessage = {
         blackMarketTheaterStartedAt?: string;
         claimer?: string;         // 领取/接受动作的执行人名
         owner?: string;           // 领取/接受动作的目标人名（谁发的红包/转账）
-        adminAction?: "transfer_owner" | "set_admin" | "unset_admin" | "kick" | "invite" | "mute" | "unmute"; // 群管理操作类型
+        adminAction?: "transfer_owner" | "set_admin" | "unset_admin" | "kick" | "invite" | "mute" | "unmute" | "set_title"; // 群管理操作类型
+        adminTitle?: string; // set_title：新头衔（空=取消）
         adminActorName?: string;  // 群管理操作执行人显示名
         adminTargetName?: string; // 群管理操作目标显示名
         adminMuteMinutes?: number;// 禁言时长（分钟）
@@ -981,6 +983,11 @@ function markContactRemoved(characterId: string): void {
     if (ids.has(characterId)) return;
     ids.add(characterId);
     saveRemovedContactIds(ids);
+}
+
+/** 用户主动删过、还没加回来的好友 */
+export function isContactRemovedByUser(characterId: string): boolean {
+    return loadRemovedContactIds().has(characterId);
 }
 
 function unmarkContactRemoved(characterId: string): void {

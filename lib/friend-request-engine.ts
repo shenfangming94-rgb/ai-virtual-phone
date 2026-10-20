@@ -92,6 +92,7 @@ export async function triggerRejectReaction(characterId: string): Promise<void> 
 export async function handleAcceptFriendRequest(
     characterId: string,
     requestMessage: string,
+    sourceGroupName?: string,
 ): Promise<ChatSession> {
     const chars = loadCharacters();
     const char = chars.find(c => c.id === characterId);
@@ -107,7 +108,9 @@ export async function handleAcceptFriendRequest(
     pushChatMessage({
         sessionId: session.id,
         role: "system",
-        content: `${userName}通过了${char?.name ?? "角色"}的好友申请`,
+        content: sourceGroupName
+            ? `${userName}通过了${char?.name ?? "角色"}的好友申请（你们是在群聊「${sourceGroupName}」里认识的，验证消息：${requestMessage}）`
+            : `${userName}通过了${char?.name ?? "角色"}的好友申请`,
     });
 
     // Clean up friend requests for this character

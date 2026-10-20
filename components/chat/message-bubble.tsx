@@ -1916,6 +1916,7 @@ export function MediaImageWithPreview({
     onError,
     onRegenerate,
     regenerating,
+    onSaveToAlbum,
 }: {
     url: string;
     title: string;
@@ -1923,6 +1924,7 @@ export function MediaImageWithPreview({
     onError?: () => void;
     onRegenerate?: () => void;
     regenerating?: boolean;
+    onSaveToAlbum?: () => Promise<void>;
 }) {
     const [preview, setPreview] = useState(false);
     const saveName = filename || title;
@@ -1940,6 +1942,7 @@ export function MediaImageWithPreview({
                     saveFilename={ensureExtension(saveName, "image")}
                     onRegenerate={onRegenerate ? () => { setPreview(false); onRegenerate(); } : undefined}
                     regenerating={regenerating}
+                    onSaveToAlbum={onSaveToAlbum}
                     onClose={() => setPreview(false)}
                 />
             )}

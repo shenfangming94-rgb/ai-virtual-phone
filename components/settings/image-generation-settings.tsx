@@ -1,5 +1,7 @@
 "use client";
 
+import { SELF_REFERENCE_ID } from "@/lib/image-generation-service";
+import { resolveUserIdentity } from "@/lib/settings-storage";
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from "react";
 import { AlertCircle, Camera, ChevronDown, Image, Info, Plus, Power, RefreshCw, ScanFace, Sparkles, Trash2, Upload } from "lucide-react";
 import type { ImageGenerationSettings as ImageGenerationSettingsType, NovelAiPreset, OpenAiImagePreset } from "@/lib/settings-types";
@@ -140,7 +142,14 @@ export function ImageGenerationSettings() {
         } else {
             setSettings(loaded);
         }
-        const loadedCharacters = loadCharacters();
+        // 「我」也放进参考图列表最上面：相册生图里照片有我时用这张
+        const me = resolveUserIdentity(undefined, "album");
+        const selfEntry = {
+            id: SELF_REFERENCE_ID,
+            name: `我${me?.name ? `（${me.name}）` : ""}`,
+            avatar: me?.avatarUrl || "",
+        } as Character;
+        const loadedCharacters = [selfEntry, ...loadCharacters()];
         setCharacters(loadedCharacters);
         setSelectedCharacterId(loadedCharacters[0]?.id || null);
     }, []);

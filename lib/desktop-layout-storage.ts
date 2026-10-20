@@ -200,6 +200,15 @@ export function appendMissingCustomAppIcons(
     present.add(icon.id);
   }
   const missing = Array.from(getInstalledCustomIconIds()).filter((id) => !present.has(id)) as DesktopIconId[];
+  return appendIconsToFreeSlots(layout, missing, widgets);
+}
+
+/** 把这些图标依次放进桌面上第一个空位（页满顺延） */
+export function appendIconsToFreeSlots(
+  layout: DesktopIconLayout,
+  missing: DesktopIconId[],
+  widgets: WidgetInstance[] = [],
+): DesktopIconLayout {
   if (missing.length === 0) {
     return layout;
   }

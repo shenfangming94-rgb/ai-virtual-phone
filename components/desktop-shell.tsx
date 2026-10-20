@@ -1,6 +1,8 @@
 "use client";
 
 import { GlobalCallHost } from "./chat/global-call-host";
+import { AlbumApp } from "./album/album-app";
+import { startAlbumService } from "@/lib/album-engine";
 import { Component, memo, useCallback, useEffect, useInsertionEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ErrorInfo, type ReactNode } from "react";
 
 import { updateStatusBarTone } from "@/lib/bg-tone";
@@ -114,6 +116,7 @@ import { buildOccupancyGrid, canPlaceWidget, placeWidget, createDefaultWidgets, 
 import {
   createDefaultDesktopIconLayout,
   getDesktopIconLayoutItems,
+  appendIconsToFreeSlots,
   getDesktopPageKey,
   getDesktopPageKeys,
   getDesktopPageNumber,
@@ -155,6 +158,7 @@ const EMOJI_FONTS = '"Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", 
 
 const ICON_LAYOUT_STORAGE_KEY = "ai_phone_icon_layout_v2";
 const ICON_LAYOUT_STORAGE_KEY_V1 = "ai_phone_icon_layout_v1";
+const ALBUM_ICON_ADDED_KEY = "nox_album_icon_added_v1";
 // Sentinel "page" used by the drag engine to mean "the dock". getDesktopPageNumber
 // returns 0 for it and getDesktopPageKeys filters it out, so page iteration never
 // treats the dock as a real page.
@@ -1494,7 +1498,17 @@ export function DesktopShell({ initialThemeProfile, initialThemeAssets }: Deskto
       const rawV2 = kvGet(ICON_LAYOUT_STORAGE_KEY);
       if (rawV2) {
         try {
-          const normalized = normalizeLayout(JSON.parse(rawV2), hydratedWidgets, dockIds, hydratedFolders);
+          let normalized = normalizeLayout(JSON.parse(rawV2), hydratedWidgets, dockIds, hydratedFolders);
+          // 新加的「相册」：老桌面上没有就放进第一个空位（只放一次，之后她挪走/收进文件夹都不管）
+          if (!kvGet(ALBUM_ICON_ADDED_KEY)) {
+            const present = new Set<string>([...hydratedDock, ...Object.values(hydratedFolders).flatMap(f => f.icons)]);
+            for (const icon of getDesktopIconLayoutItems(normalized)) present.add(icon.id);
+            if (!present.has("album")) {
+              normalized = appendIconsToFreeSlots(normalized, ["album"], hydratedWidgets) as typeof normalized;
+              kvSet(ICON_LAYOUT_STORAGE_KEY, JSON.stringify(normalized));
+            }
+            kvSet(ALBUM_ICON_ADDED_KEY, "1");
+          }
           const sane = sanitizeDesktopFolders(hydratedFolders, normalized, hydratedDock, hydratedWidgets);
           setFolders(sane.folders);
           setLayout(sane.layout);
@@ -1521,7 +1535,8 @@ export function DesktopShell({ initialThemeProfile, initialThemeAssets }: Deskto
           return;
         } catch {}
       }
-      setLayout(createDefaultDesktopIconLayout(hydratedWidgets));
+      setLayout(appendIconsToFreeSlots(createDefaultDesktopIconLayout(hydratedWidgets), ["album"], hydratedWidgets) as DesktopLayout);
+      kvSet(ALBUM_ICON_ADDED_KEY, "1");
       setDesktopReady(true);
     });
   }, []);
@@ -1821,6 +1836,7 @@ export function DesktopShell({ initialThemeProfile, initialThemeAssets }: Deskto
       startFollowUpService();
       startMomentsService();
       startShoppingGiftService();
+      startAlbumService();
       startListenTogetherService();
       startCheckPhoneReplyService();
       startDiaryEntryTimerService();
@@ -4128,6 +4144,9 @@ html,body{margin:0;padding:0;width:100%;height:100%;background:#121110;color:rgb
       return <GameHubApp onClose={() => setActiveApp(null)} />;
     }
 
+    if (activeApp === "album") {
+      return <AlbumApp onClose={() => setActiveApp(null)} onNotice={setNotice} />;
+    }
     if (activeApp === "mixology") {
       return <MixologyApp onClose={() => setActiveApp(null)} />;
     }

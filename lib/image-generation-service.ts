@@ -340,6 +340,8 @@ async function generateImageDirect(params: {
   settings: ImageGenerationSettings;
   prompt: string;
   referenceImageDataUrl: string | null;
+  /** 合照：多张参考图（以 image[] 一起发） */
+  extraReferenceImageDataUrls?: string[];
   signal?: AbortSignal;
   /** 走通用代理:请求发往代理地址,真实上游放进 x-upstream-base-url 头 */
   proxyBaseUrl?: string;
@@ -360,7 +362,15 @@ async function generateImageDirect(params: {
     form.set("prompt", prompt);
     if (settings.size && settings.size !== "auto") form.set("size", settings.size);
     if (settings.quality && settings.quality !== "auto") form.set("quality", settings.quality);
-    form.append("image", converted.blob, `reference.${imageExtension(converted.mimeType)}`);
+    const extras = (params.extraReferenceImageDataUrls || [])
+      .map(dataUrlToBlob)
+      .filter((item): item is NonNullable<typeof item> => Boolean(item));
+    if (extras.length > 0) {
+      form.append("image[]", converted.blob, `reference-0.${imageExtension(converted.mimeType)}`);
+      extras.forEach((item, index) => form.append("image[]", item.blob, `reference-${index + 1}.${imageExtension(item.mimeType)}`));
+    } else {
+      form.append("image", converted.blob, `reference.${imageExtension(converted.mimeType)}`);
+    }
     body = form;
   } else {
     headers["Content-Type"] = "application/json";
@@ -746,6 +756,8 @@ export async function generateImageFromConfiguredApi(params: {
   /** 内容所属 APP；用于按“角色 > APP > 全局”解析生图方案。 */
   appId?: string;
   useReferenceImage?: boolean;
+  /** 相册生图：照片里有谁（id 用 characterId，「我」用 SELF_REFERENCE_ID），各自带参考图和外貌描述 */
+  people?: { id: string; name: string }[];
   settings?: ImageGenerationSettings;
   signal?: AbortSignal;
 }): Promise<ImageGenerationResult | null> {
@@ -781,6 +793,11 @@ export async function generateImageFromConfiguredApi(params: {
       ? novelAiCharacterReference?.featurePrompt?.trim()
       : "";
     if (characterFeaturePrompt) positiveParts.push(characterFeaturePrompt);
+    for (const person of params.people || []) {
+      const ref = settings.characterReferences?.[person.id];
+      const feature = ref?.novelAiFeaturePromptEnabled !== false ? ref?.featurePrompt?.trim() : "";
+      if (feature) positiveParts.push(feature);
+    }
     if (description) positiveParts.push(description);
     const fullPrompt = positiveParts.join(", ");
 
@@ -811,6 +828,10 @@ export async function generateImageFromConfiguredApi(params: {
     || settings.openaiPresets?.[0];
   const openaiSettings = openaiPreset ? { ...settings, ...openaiPreset } : settings;
   if (!openaiSettings.apiKey.trim() || !openaiSettings.baseUrl.trim() || !openaiSettings.model.trim()) return null;
+
+  if (params.people && params.people.length > 0) {
+    return generatePeoplePhoto(openaiSettings, settings, description, params.people, params.signal);
+  }
 
   const reference = params.characterId ? settings.characterReferences?.[params.characterId] : undefined;
   // 「非自拍不使用参考图」开关已从生图设置页删除：参考图启用后始终参与生成
@@ -861,6 +882,54 @@ export function generatedImageFilename(description: string, mimeType = "image/pn
     .slice(0, 28) || "generated-image";
   return `${safe}.${imageExtension(mimeType)}`;
 }
+
+/** 相册里有人的照片：每个人的参考图一起带上，外貌描述写进提示词。
+ *  浏览器直连时多张参考图一起发；走服务器/代理只能带一张，其他人靠外貌描述。 */
+async function generatePeoplePhoto(
+  openaiSettings: ImageGenerationSettings,
+  settings: ImageGenerationSettings,
+  description: string,
+  people: { id: string; name: string }[],
+  signal?: AbortSignal,
+): Promise<ImageGenerationResult> {
+  const refImages: string[] = [];
+  const features: string[] = [];
+  for (const person of people) {
+    const ref = settings.characterReferences?.[person.id];
+    if (ref?.featurePrompt?.trim()) features.push(`${person.name}：${ref.featurePrompt.trim()}`);
+    if (!ref?.assetId || ref.enabled === false) continue;
+    const raw = await getChatImageFromIndexedDB(ref.assetId);
+    throwIfAborted(signal);
+    if (!raw) continue;
+    refImages.push(await normalizeReferenceImageForEdit(raw, ref.faceCrop));
+  }
+  const peopleLine = `照片里的人：${people.map(p => p.name).join("、")}${refImages.length > 1 ? "（参考图按这个顺序）" : ""}`;
+  const prompt = mergePrompt(
+    [description, peopleLine, features.length ? `【人物固定外观】${features.join("；")}` : ""].filter(Boolean).join("\n\n"),
+    openaiSettings.extraPrompt,
+  );
+  const [first, ...rest] = refImages;
+  const data = openaiSettings.requestMode === "direct"
+    ? await generateImageDirect({ settings: openaiSettings, prompt, referenceImageDataUrl: first || null, extraReferenceImageDataUrls: rest, signal })
+    : await generateImageViaServerOrProxy({ settings: openaiSettings, prompt, referenceImageDataUrl: first || null, signal });
+  throwIfAborted(signal);
+  const mimeType = data.mimeType || "image/png";
+  const blob = base64ToBlob(data.b64, mimeType);
+  const mediaRef = await storeMediaBlob(blob, mimeType, "image");
+  throwIfAborted(signal);
+  return {
+    mediaRef,
+    dataUrl: `data:${mimeType};base64,${data.b64}`,
+    blob,
+    mimeType,
+    prompt,
+    usedReferenceImage: refImages.length > 0,
+    revisedPrompt: data.revisedPrompt,
+  };
+}
+
+/** 生图设置里「我」的参考图存在 characterReferences 的这个 key 下 */
+export const SELF_REFERENCE_ID = "__self__";
 
 export function hasCharacterReferenceImage(characterId?: string): boolean {
   if (!characterId) return false;

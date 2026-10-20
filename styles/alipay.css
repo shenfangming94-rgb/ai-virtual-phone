@@ -1,0 +1,194 @@
+/* 支付宝 app：黑底宋体，和卡包统一（金色点缀、Georgia 数字） */
+.ali-app {
+  --ali-bg: #0a0a0c;
+  --ali-pn: #131316;
+  --ali-bd: #232328;
+  --ali-tx: #ece7de;
+  --ali-t2: #9c978e;
+  --ali-t3: #5e5a54;
+  --ali-gold: #c9a96e;
+  --ali-in: #d9b77a;
+  position: relative;
+  height: 100%;
+  min-height: 100%;
+  background: var(--ali-bg);
+  color: var(--ali-tx);
+  font-family: "Songti SC", "STSong", "Noto Serif SC", "Source Han Serif SC", serif;
+  overflow: hidden;
+}
+.ali-app button { font-family: inherit; color: inherit; background: none; border: none; padding: 0; cursor: pointer; }
+.ali-app button:disabled { opacity: .45; cursor: default; }
+.ali-page {
+  height: 100%;
+  overflow-y: auto;
+  padding: 0 16px 60px;
+  -webkit-overflow-scrolling: touch;
+}
+.ali-page::-webkit-scrollbar { display: none; }
+.ali-page.is-dark { padding-left: 0; padding-right: 0; }
+.ali-page.is-dark > :not(.ali-rail) { margin-left: 16px; margin-right: 16px; }
+
+.ali-en {
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: calc(10px*var(--app-text-scale,1));
+  letter-spacing: .3em;
+  text-transform: uppercase;
+  color: var(--ali-t3);
+}
+.ali-big {
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: calc(34px*var(--app-text-scale,1));
+  margin: 6px 0 2px;
+  letter-spacing: .01em;
+  word-break: break-all;
+}
+.ali-big.is-m { font-size: calc(28px*var(--app-text-scale,1)); }
+.ali-big.is-s { font-size: calc(22px*var(--app-text-scale,1)); }
+.ali-sub { font-size: calc(12px*var(--app-text-scale,1)); color: var(--ali-t3); }
+.ali-hint { font-size: calc(12px*var(--app-text-scale,1)); color: var(--ali-t3); line-height: 1.7; margin: 6px 0 0; }
+.ali-dim { color: var(--ali-t3); flex: none; }
+.in { color: var(--ali-in); }
+.ali-gl { height: 1px; background: linear-gradient(90deg, transparent, var(--ali-gold), transparent); opacity: .45; margin: 16px 0; }
+
+.ali-home-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: calc(var(--page-header-safe-top, 44px) + 4px) 0 22px;
+}
+.ali-idsw {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  border: 1px solid var(--ali-bd) !important;
+  border-radius: 999px;
+  padding: 5px 12px 5px 6px !important;
+  font-size: calc(12.5px*var(--app-text-scale,1));
+  color: var(--ali-t2) !important;
+}
+.ali-close { font-size: calc(13px*var(--app-text-scale,1)); color: var(--ali-gold) !important; letter-spacing: .1em; }
+
+.ali-nav {
+  position: sticky;
+  top: 0;
+  z-index: 4;
+  height: calc(var(--page-header-safe-top, 44px) + 46px);
+  padding-top: var(--page-header-safe-top, 44px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--ali-bg);
+  margin: 0 -16px 6px;
+}
+.ali-page.is-dark > .ali-nav { margin: 0 0 6px; }
+.ali-nav b { font-weight: 400; font-size: calc(16px*var(--app-text-scale,1)); letter-spacing: .2em; max-width: 60%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ali-back { position: absolute; left: 10px; bottom: 8px; width: 34px; height: 34px; display: grid; place-items: center; }
+.ali-nav-right { position: absolute; right: 16px; bottom: 14px; font-size: calc(13px*var(--app-text-scale,1)); }
+.ali-nav-right button { color: var(--ali-gold) !important; letter-spacing: .08em; }
+
+.ali-row3 { display: flex; justify-content: space-between; gap: 8px; font-size: calc(12px*var(--app-text-scale,1)); color: var(--ali-t2); }
+.ali-row3 b { display: block; margin-top: 4px; font-weight: 400; font-family: Georgia, serif; font-size: calc(15px*var(--app-text-scale,1)); color: var(--ali-tx); }
+.ali-row3 b.in { color: var(--ali-in); }
+
+.ali-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px 0; margin: 6px 0 22px; }
+.ali-ic { display: flex; flex-direction: column; align-items: center; gap: 7px; font-size: calc(12px*var(--app-text-scale,1)); color: var(--ali-t2) !important; }
+.ali-ic > span { width: 44px; height: 44px; border-radius: 50%; display: grid; place-items: center; border: 1px solid var(--ali-bd); background: #18181c; }
+.ali-ic svg { width: 18px; height: 18px; stroke: var(--ali-gold); stroke-width: 1.4; }
+
+.ali-pn { display: block; width: 100%; text-align: left; background: var(--ali-pn); border: 1px solid var(--ali-bd) !important; border-radius: 14px; padding: 16px !important; margin-bottom: 12px; }
+.ali-line { display: flex !important; align-items: center; gap: 12px; }
+.ali-h { display: flex; justify-content: space-between; align-items: baseline; font-size: calc(14px*var(--app-text-scale,1)); letter-spacing: .15em; margin-bottom: 8px; }
+.ali-h button, .ali-h span { font-size: calc(11.5px*var(--app-text-scale,1)); color: var(--ali-t3) !important; letter-spacing: 0; }
+.ali-bill { display: flex; align-items: center; gap: 12px; padding: 11px 0; border-bottom: 1px solid #1c1c20; }
+.ali-bill:last-child { border-bottom: none; }
+.ali-bt { flex: 1; min-width: 0; font-size: calc(14px*var(--app-text-scale,1)); }
+.ali-bt small { display: block; margin-top: 3px; font-size: calc(11.5px*var(--app-text-scale,1)); color: var(--ali-t3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ali-ba { flex: none; font-family: Georgia, serif; font-size: calc(15px*var(--app-text-scale,1)); }
+
+.ali-av { flex: none; border-radius: 50%; display: grid; place-items: center; overflow: hidden; background: linear-gradient(135deg, #d8c8f0, #8f6fc8); color: #111; font-size: calc(13px*var(--app-text-scale,1)); width: 34px; height: 34px; }
+.ali-av img { width: 100%; height: 100%; object-fit: cover; }
+.ali-av.is-me { background: linear-gradient(135deg, #e8d5b0, #a8875a); }
+.ali-av.is-o { background: #1c1c20; border: 1px solid var(--ali-bd); color: var(--ali-gold); }
+.ali-pair { display: flex; }
+.ali-pair .ali-av + .ali-av { margin-left: -7px; box-shadow: 0 0 0 1.5px var(--ali-pn); }
+.ali-who { display: flex; align-items: center; gap: 11px; }
+.ali-who b { display: block; font-weight: 400; font-size: calc(16px*var(--app-text-scale,1)); letter-spacing: .08em; }
+.ali-who small { display: block; margin-top: 3px; font-size: calc(11.5px*var(--app-text-scale,1)); color: var(--ali-t3); }
+.ali-spread { display: flex; justify-content: space-between; align-items: flex-end; gap: 10px; }
+
+.ali-rail { padding-top: 4px; }
+.ali-btns { display: flex; gap: 10px; padding: 0 0 16px; }
+.ali-btns.is-in { padding: 14px 0 4px; }
+.ali-btns button { flex: 1; text-align: center; padding: 11px 6px !important; border-radius: 10px; border: 1px solid var(--ali-bd) !important; background: var(--ali-pn) !important; color: var(--ali-t2) !important; font-size: calc(13.5px*var(--app-text-scale,1)); }
+.ali-btns button.g { background: linear-gradient(135deg, #d9bd85, #a8875a) !important; color: #111 !important; border: none !important; }
+.ali-gold-link { display: block; width: 100%; text-align: center; padding: 10px !important; font-size: calc(13px*var(--app-text-scale,1)); color: var(--ali-gold) !important; letter-spacing: .1em; }
+.ali-gold-link.is-left { text-align: left; padding: 12px 0 0 !important; }
+
+.ali-meter { height: 3px; border-radius: 2px; background: #26262b; overflow: hidden; margin: 12px 0 7px; }
+.ali-meter i { display: block; height: 100%; background: var(--ali-gold); }
+.ali-tabs { display: flex; border-bottom: 1px solid var(--ali-bd); margin: 2px 0 14px; }
+.ali-tabs.is-scroll { overflow-x: auto; }
+.ali-tabs.is-scroll::-webkit-scrollbar { display: none; }
+.ali-tabs button { flex: 1; min-width: 64px; text-align: center; padding: 9px !important; font-size: calc(13.5px*var(--app-text-scale,1)); color: var(--ali-t3) !important; letter-spacing: .1em; border-bottom: 1.5px solid transparent !important; }
+.ali-tabs button.on { color: var(--ali-tx) !important; border-bottom-color: var(--ali-gold) !important; }
+.ali-kv { display: flex; justify-content: space-between; align-items: center; padding: 10px 0 0; font-size: calc(13.5px*var(--app-text-scale,1)); color: var(--ali-t2); }
+.ali-kv button { color: var(--ali-gold) !important; }
+.ali-note { border-left: 2px solid var(--ali-gold); padding: 4px 0 4px 12px; font-size: calc(13.5px*var(--app-text-scale,1)); line-height: 1.75; }
+.ali-mini-select { background: transparent; border: none; color: var(--ali-t3); font-family: inherit; font-size: calc(11.5px*var(--app-text-scale,1)); letter-spacing: 0; outline: none; }
+
+.ali-cover {
+  position: relative;
+  display: flex !important;
+  flex-direction: column;
+  justify-content: flex-end;
+  width: 100%;
+  height: 150px;
+  margin-bottom: 12px;
+  padding: 14px !important;
+  border-radius: 12px;
+  overflow: hidden;
+  text-align: left;
+  border: 1px solid var(--ali-bd) !important;
+}
+.ali-app .ali-cover { background: linear-gradient(135deg, #3a4a6b, #1a2234); background-size: cover; background-position: center; }
+.ali-cover:disabled { opacity: 1 !important; }
+.ali-cover.is-short { height: 130px; }
+.ali-cover::after { content: ""; position: absolute; inset: 0; background: linear-gradient(transparent 35%, rgba(0, 0, 0, .75)); }
+.ali-cover > * { position: relative; z-index: 1; }
+.ali-cover h3 { margin: 0; font-weight: 400; font-size: calc(18px*var(--app-text-scale,1)); letter-spacing: .1em; color: #fff; }
+.ali-cover p { margin: 5px 0 0; font-family: Georgia, "Songti SC", serif; font-size: calc(12px*var(--app-text-scale,1)); color: #cfc8bc; }
+.ali-pct { position: absolute !important; top: 12px; right: 14px; font-family: Georgia, serif; font-size: calc(12px*var(--app-text-scale,1)); color: #fff; }
+
+.ali-pie-row { display: flex !important; align-items: center; gap: 18px; }
+.ali-pie { position: relative; flex: none; width: 100px; height: 100px; border-radius: 50%; }
+.ali-pie::after { content: ""; position: absolute; inset: 14px; border-radius: 50%; background: var(--ali-pn); }
+.ali-lg { font-size: calc(12.5px*var(--app-text-scale,1)); line-height: 1.95; color: var(--ali-t2); }
+.ali-lg i { display: inline-block; width: 7px; height: 7px; border-radius: 50%; margin-right: 7px; }
+.ali-spark { display: block; height: 64px; margin-top: 14px; }
+
+/* 弹层 */
+.ali-sheet-backdrop { position: absolute; inset: 0; z-index: 30; background: rgba(0, 0, 0, .55); display: flex; align-items: flex-end; }
+.ali-sheet { width: 100%; max-height: 82%; overflow-y: auto; background: #111114; border-top: 1px solid var(--ali-bd); border-radius: 20px 20px 0 0; padding: 10px 18px calc(22px + var(--page-footer-safe-bottom, 0px)); }
+.ali-sheet-bar { width: 38px; height: 4px; border-radius: 3px; background: #2c2c31; margin: 0 auto 12px; }
+.ali-sheet h3 { margin: 0 0 14px; font-weight: 400; font-size: calc(16px*var(--app-text-scale,1)); letter-spacing: .15em; text-align: center; }
+.ali-field { display: block; margin-bottom: 14px; }
+.ali-field > span { display: block; margin-bottom: 7px; font-size: calc(12px*var(--app-text-scale,1)); color: var(--ali-t2); letter-spacing: .1em; }
+.ali-input { width: 100%; box-sizing: border-box; background: var(--ali-pn); border: 1px solid var(--ali-bd); border-radius: 10px; padding: 11px 12px; color: var(--ali-tx); font-family: Georgia, "Songti SC", serif; font-size: calc(15px*var(--app-text-scale,1)); outline: none; }
+.ali-input:focus { border-color: var(--ali-gold); }
+select.ali-input { appearance: none; font-family: inherit; font-size: calc(14px*var(--app-text-scale,1)); }
+.ali-primary { display: block; width: 100%; margin-top: 8px; padding: 13px !important; border-radius: 12px; text-align: center; background: linear-gradient(135deg, #d9bd85, #a8875a) !important; color: #111 !important; font-size: calc(15px*var(--app-text-scale,1)); letter-spacing: .15em; }
+.ali-danger { display: block; width: 100%; margin-top: 10px; padding: 12px !important; text-align: center; color: #c97a6e !important; font-size: calc(13.5px*var(--app-text-scale,1)); }
+.ali-opt { display: block; width: 100%; padding: 13px 4px !important; text-align: left; border-bottom: 1px solid #1c1c20 !important; font-size: calc(15px*var(--app-text-scale,1)); }
+.ali-opt.on { color: var(--ali-gold) !important; }
+.ali-chips { display: flex; gap: 8px; }
+.ali-chips button { flex: 1; padding: 10px !important; border-radius: 10px; border: 1px solid var(--ali-bd) !important; color: var(--ali-t2) !important; font-size: calc(13px*var(--app-text-scale,1)); }
+.ali-chips button.on { border-color: var(--ali-gold) !important; color: var(--ali-gold) !important; }
+.ali-people { display: flex; gap: 12px; overflow-x: auto; padding: 2px 0 14px; }
+.ali-people::-webkit-scrollbar { display: none; }
+.ali-people button { flex: none; display: flex; flex-direction: column; align-items: center; gap: 6px; width: 58px; font-size: calc(12px*var(--app-text-scale,1)); color: var(--ali-t2) !important; }
+.ali-people button span:last-child { max-width: 58px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ali-people button .ali-av { box-shadow: 0 0 0 1.5px transparent; }
+.ali-people button.on { color: var(--ali-gold) !important; }
+.ali-people button.on .ali-av { box-shadow: 0 0 0 2px var(--ali-gold); }
+.ali-cover-pick { display: flex !important; align-items: center; justify-content: center; gap: 6px; width: 100%; height: 110px; border-radius: 12px; border: 1px dashed #3a3a40 !important; color: var(--ali-t3) !important; font-size: calc(13px*var(--app-text-scale,1)); }
+.ali-app .ali-cover-pick { background-size: cover; background-position: center; }

@@ -47,7 +47,7 @@ function getDisplayCardNumber(value: string): string {
   return `**** **** **** ${tail}`;
 }
 
-function WalletBankCard({
+export function WalletBankCard({
   card,
   active,
 }: {

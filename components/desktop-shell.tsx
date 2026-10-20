@@ -5,6 +5,8 @@ import { AlbumApp } from "./album/album-app";
 import { startAlbumService } from "@/lib/album-engine";
 import { AlipayApp } from "./alipay/alipay-app";
 import { startAlipayService } from "@/lib/alipay-engine";
+import { MeituanApp } from "./meituan/meituan-app";
+import { startMeituanService } from "@/lib/meituan-engine";
 import { Component, memo, useCallback, useEffect, useInsertionEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ErrorInfo, type ReactNode } from "react";
 
 import { updateStatusBarTone } from "@/lib/bg-tone";
@@ -162,6 +164,7 @@ const ICON_LAYOUT_STORAGE_KEY = "ai_phone_icon_layout_v2";
 const ICON_LAYOUT_STORAGE_KEY_V1 = "ai_phone_icon_layout_v1";
 const ALBUM_ICON_ADDED_KEY = "nox_album_icon_added_v1";
 const ALIPAY_ICON_ADDED_KEY = "nox_alipay_icon_added_v1";
+const MEITUAN_ICON_ADDED_KEY = "nox_meituan_icon_added_v1";
 // Sentinel "page" used by the drag engine to mean "the dock". getDesktopPageNumber
 // returns 0 for it and getDesktopPageKeys filters it out, so page iteration never
 // treats the dock as a real page.
@@ -1522,6 +1525,15 @@ export function DesktopShell({ initialThemeProfile, initialThemeAssets }: Deskto
             }
             kvSet(ALIPAY_ICON_ADDED_KEY, "1");
           }
+          if (!kvGet(MEITUAN_ICON_ADDED_KEY)) {
+            const present = new Set<string>([...hydratedDock, ...Object.values(hydratedFolders).flatMap(f => f.icons)]);
+            for (const icon of getDesktopIconLayoutItems(normalized)) present.add(icon.id);
+            if (!present.has("meituan")) {
+              normalized = appendIconsToFreeSlots(normalized, ["meituan"], hydratedWidgets) as typeof normalized;
+              kvSet(ICON_LAYOUT_STORAGE_KEY, JSON.stringify(normalized));
+            }
+            kvSet(MEITUAN_ICON_ADDED_KEY, "1");
+          }
           const sane = sanitizeDesktopFolders(hydratedFolders, normalized, hydratedDock, hydratedWidgets);
           setFolders(sane.folders);
           setLayout(sane.layout);
@@ -1548,9 +1560,10 @@ export function DesktopShell({ initialThemeProfile, initialThemeAssets }: Deskto
           return;
         } catch {}
       }
-      setLayout(appendIconsToFreeSlots(createDefaultDesktopIconLayout(hydratedWidgets), ["album", "alipay"], hydratedWidgets) as DesktopLayout);
+      setLayout(appendIconsToFreeSlots(createDefaultDesktopIconLayout(hydratedWidgets), ["album", "alipay", "meituan"], hydratedWidgets) as DesktopLayout);
       kvSet(ALBUM_ICON_ADDED_KEY, "1");
       kvSet(ALIPAY_ICON_ADDED_KEY, "1");
+      kvSet(MEITUAN_ICON_ADDED_KEY, "1");
       setDesktopReady(true);
     });
   }, []);
@@ -1852,6 +1865,7 @@ export function DesktopShell({ initialThemeProfile, initialThemeAssets }: Deskto
       startShoppingGiftService();
       startAlbumService();
       startAlipayService();
+      startMeituanService();
       startListenTogetherService();
       startCheckPhoneReplyService();
       startDiaryEntryTimerService();
@@ -4164,6 +4178,9 @@ html,body{margin:0;padding:0;width:100%;height:100%;background:#121110;color:rgb
     }
     if (activeApp === "alipay") {
       return <AlipayApp onClose={() => setActiveApp(null)} onNotice={setNotice} />;
+    }
+    if (activeApp === "meituan") {
+      return <MeituanApp onClose={() => setActiveApp(null)} onNotice={setNotice} />;
     }
     if (activeApp === "mixology") {
       return <MixologyApp onClose={() => setActiveApp(null)} />;

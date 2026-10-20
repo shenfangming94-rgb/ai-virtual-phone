@@ -1,5 +1,7 @@
 "use client";
 
+import { MeituanChatCard } from "@/components/meituan/meituan-chat-card";
+import type { MeituanCardData } from "@/lib/meituan-chat";
 import { useState, useEffect, useCallback, useRef, useMemo, memo } from "react";
 import { findCustomStickerByName, resolveCustomStickerUrl } from "@/lib/custom-sticker-storage";
 import { isMediaStoreRef, loadMediaObjectUrl } from "@/lib/media-cache-storage";
@@ -873,6 +875,8 @@ function AppCardBubble({ msg, characterId, characterName }: { msg: ChatMessage; 
     const d = msg.mediaData;
     const alipayCard = (d as { noxAlipayCard?: { kind: string; title: string; subtitle: string; note?: string; status?: string } } | undefined)?.noxAlipayCard;
     if (alipayCard) return <AlipayCardBubble card={alipayCard} />;
+    const meituanCard = (d as { noxMeituanCard?: MeituanCardData } | undefined)?.noxMeituanCard;
+    if (meituanCard) return <MeituanChatCard card={meituanCard} />;
     // 早先发的支付宝卡片没带 noxAlipayCard，也按支付宝样式显示
     if (d?.appName === "支付宝" && !d.appId) {
         const legacy = normalizeAppCardLayout(d.appCardLayout);

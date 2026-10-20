@@ -14,6 +14,7 @@ import type { StateValue } from "./chat-storage";
 import { parseStateValues, mergeStateValues } from "./state-value-parser";
 import { stripActionShells } from "./action-parser";
 import { parseKinCardTag } from "./alipay-chat";
+import { parseTakeoutTag } from "./meituan-chat";
 import { stripTextToolDirectives } from "./text-tool-protocol";
 import {
     formatCustomAppDirectiveSummary,
@@ -89,6 +90,11 @@ const RICH_PATTERNS: {
             mediaType: "red_packet",
             mediaData: { amount: parseFloat(m[1]), count: 1, label: m[2] || "恭喜发财", status: "pending" },
         }),
+    },
+    {
+        // 美团外卖：[点外卖:店名:菜名/单价/数量; 菜名/单价/数量:备注]
+        regex: new RegExp(`\\[点外卖${C}([^\\]：:]+)${C}([^\\]：:]+)(?:${C}([^\\]]*))?\\]`),
+        build: (m) => parseTakeoutTag(m[1], m[2], m[3]),
     },
     {
         // 支付宝亲属卡：[亲属卡:每月额度:留言]

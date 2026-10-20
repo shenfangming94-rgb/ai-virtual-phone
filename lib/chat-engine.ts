@@ -1,6 +1,7 @@
 // lib/chat-engine.ts
 
 import { buildAlipayChatHint } from "./alipay-chat";
+import { buildMeituanChatHint } from "./meituan-chat";
 import { createSseJsonParser } from "./sse-json";
 import { maybeAppendShortcutCapability } from "./offline-shortcut-capability";
 import { loadCharacters } from "./character-storage";
@@ -1906,7 +1907,7 @@ export async function buildChatPromptMessages(
         hint: buildChatPluginPromptFragments(session.id),
     });
     const pluginPromptHint = pluginPrompt.hint?.trim() ? `\n\n### 扩展插件\n${pluginPrompt.hint.trim()}\n` : "";
-    const customAppRichMediaDirectives = formatCustomAppChatDirectivesForPrompt() + buildScreenEffectPromptHint() + buildAlipayChatHint(character.id, !!session.isGroup) + pluginPromptHint;
+    const customAppRichMediaDirectives = formatCustomAppChatDirectivesForPrompt() + buildScreenEffectPromptHint() + buildAlipayChatHint(character.id, !!session.isGroup) + buildMeituanChatHint(!!session.isGroup) + pluginPromptHint;
     const toolsPrompt = toolsEnabled && !usesNativeActions ? formatToolsForPrompt(enabledTools) : "";
     const chatBilingualInstruction = !session.isGroup
         ? buildChatBilingualInstruction(session.bilingualTranslationEnabled !== false, "single", session.bilingualTranslationPrompt)

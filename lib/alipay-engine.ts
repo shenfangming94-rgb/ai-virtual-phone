@@ -10,14 +10,18 @@
 
 import { loadCharacters } from "./character-storage";
 import {
+    CHAT_MESSAGE_PUSHED_EVENT,
     CHAT_REQUEST_REPLY_EVENT,
     createOrGetSession,
+    loadChatSessions,
     loadChatContacts,
     pushChatMessage,
+    updateMessageMediaData,
     type ChatMessage,
     type ChatSession,
 } from "./chat-storage";
 import { generateGroupRawCompletion } from "./group-chat-engine";
+import { alipayCardMediaData, type AlipayCardData } from "./alipay-chat";
 import { createIdentityMatcher, getCharacterIdentityId } from "./identity-scope";
 import { resolveUserIdentity } from "./settings-storage";
 import {
@@ -82,29 +86,29 @@ function pushEvent(charId: string, visible: string, hidden: string): ChatSession
     return session;
 }
 
-function pushCard(charId: string, role: "user" | "assistant", data: { title: string; subtitle: string; status?: string; body?: string; history: string; rows?: { label: string; value: string }[] }): void {
+function pushCard(charId: string, role: "user" | "assistant", card: AlipayCardData, history: string): ChatMessage {
     const session = createOrGetSession(charId);
-    pushChatMessage({
+    const msg = pushChatMessage({
         sessionId: session.id,
         role,
         content: "",
         mediaType: "app_card",
-        mediaData: {
-            appName: "支付宝",
-            appCardTitle: data.title,
-            appHistoryText: data.history,
-            appCardLayout: {
-                appLabel: "支付宝",
-                title: data.title,
-                subtitle: data.subtitle,
-                ...(data.status ? { status: data.status } : {}),
-                ...(data.body ? { body: data.body } : {}),
-                rows: data.rows || [],
-                openDisabled: true,
-            },
-        } as ChatMessage["mediaData"],
+        mediaData: alipayCardMediaData(card, history),
     });
     window.dispatchEvent(new CustomEvent("chat-messages-updated", { detail: { sessionId: session.id } }));
+    return msg;
+}
+
+/** 申请卡片在他回了以后改状态 */
+function setCardStatus(msg: ChatMessage, status: string): void {
+    const data = msg.mediaData as (ChatMessage["mediaData"] & { noxAlipayCard?: AlipayCardData; appCardLayout?: Record<string, unknown> }) | undefined;
+    if (!data?.noxAlipayCard) return;
+    updateMessageMediaData(msg.id, {
+        ...data,
+        noxAlipayCard: { ...data.noxAlipayCard, status },
+        appCardLayout: { ...(data.appCardLayout || {}), status },
+    } as ChatMessage["mediaData"]);
+    window.dispatchEvent(new CustomEvent("chat-messages-updated", { detail: { sessionId: msg.sessionId } }));
 }
 
 function requestReply(sessionId: string) {
@@ -183,13 +187,10 @@ async function grantKinCard(charId: string, reason: "request" | "proactive"): Pr
         return false;
     }
     upsertKinCard({ charId, charName: charName(charId), monthlyLimit: limit }, identityId);
-    pushCard(charId, "assistant", {
-        title: `给你开了亲属卡`,
-        subtitle: `每月额度 ${yuan(limit)}`,
-        status: "已开通",
-        body: note,
-        history: `[亲属卡] 你给${me}开了亲属卡，每月额度 ${yuan(limit)}${note ? `，留言：${note}` : ""}`,
-    });
+    pushCard(charId, "assistant",
+        { kind: "kin", title: "给你开了亲属卡", subtitle: `每月额度 ${yuan(limit)}`, status: "已开通", note, amount: limit, applied: true },
+        `[亲属卡] 你给${me}开了亲属卡，每月额度 ${yuan(limit)}${note ? `，留言：${note}` : ""}`,
+    );
     pushEvent(
         charId,
         "",
@@ -204,16 +205,16 @@ export async function requestKinCard(charId: string): Promise<void> {
     const me = userName(charId);
     const identityId = getCharacterIdentityId(charId);
     updateAlipay(s => { s.pendingRequests[charId] = new Date().toISOString(); }, identityId);
-    pushCard(charId, "user", {
-        title: "申请亲属卡",
-        subtitle: `${me} 想要你给她开一张亲属卡`,
-        status: "等他回应",
-        history: `[申请亲属卡] ${me}向你申请亲属卡`,
-    });
+    const card = pushCard(charId, "user",
+        { kind: "kin_request", title: "申请亲属卡", subtitle: `${me} 想要你给她开一张亲属卡`, status: "等他回应" },
+        `[申请亲属卡] ${me}向你申请亲属卡`,
+    );
     try {
-        await grantKinCard(charId, "request");
+        const opened = await grantKinCard(charId, "request");
+        setCardStatus(card, opened ? "已开通" : "他没开");
     } catch (error) {
         updateAlipay(s => { delete s.pendingRequests[charId]; }, identityId);
+        setCardStatus(card, "没发出去");
         throw error;
     }
 }
@@ -251,6 +252,20 @@ function onKinSpent(event: Event) {
     kinTimer = window.setTimeout(flushKinSpends, 20_000);
 }
 
+// ── 他在聊天里自己发的 [亲属卡:额度:留言] ──
+
+function onPushed(event: Event) {
+    const msg = (event as CustomEvent<{ message?: ChatMessage }>).detail?.message;
+    const card = (msg?.mediaData as { noxAlipayCard?: AlipayCardData } | undefined)?.noxAlipayCard;
+    if (!msg || msg.role !== "assistant" || card?.kind !== "kin" || !card.amount || card.applied) return;
+    const session = loadChatSessions().find(s => s.id === msg.sessionId);
+    if (!session || session.isGroup) return;
+    const charId = loadChatContacts().find(c => c.id === session.contactId)?.characterId || session.contactId;
+    const identityId = getCharacterIdentityId(charId);
+    upsertKinCard({ charId, charName: charName(charId), monthlyLimit: card.amount }, identityId);
+    updateAlipay(s => { delete s.pendingRequests[charId]; }, identityId);
+}
+
 // ── 她给他开亲属卡 ──
 
 export function giveKinCard(charId: string, monthlyLimit: number, accountId: string): void {
@@ -268,12 +283,10 @@ export function giveKinCard(charId: string, monthlyLimit: number, accountId: str
             s.given.push({ charId, monthlyLimit, accountId, month, used: 0, spends: [], createdAt: new Date().toISOString() });
         }
     }, identityId);
-    pushCard(charId, "user", {
-        title: renewed ? "亲属卡额度已调整" : "给你开了亲属卡",
-        subtitle: `每月额度 ${yuan(monthlyLimit)}`,
-        status: "已开通",
-        history: `[亲属卡] ${me}${renewed ? "把给你开的亲属卡额度调成" : "给你开了亲属卡，每月额度"} ${yuan(monthlyLimit)}`,
-    });
+    pushCard(charId, "user",
+        { kind: "kin_given", title: renewed ? "亲属卡额度已调整" : "给你开了亲属卡", subtitle: `每月额度 ${yuan(monthlyLimit)}`, status: "已开通", amount: monthlyLimit },
+        `[亲属卡] ${me}${renewed ? "把给你开的亲属卡额度调成" : "给你开了亲属卡，每月额度"} ${yuan(monthlyLimit)}`,
+    );
     const session = pushEvent(
         charId,
         "",
@@ -345,12 +358,10 @@ export function createPouch(input: { name: string; charId: string; target: numbe
     };
     updateAlipay(s => { s.pouches.unshift(pouch); }, identityId);
     const me = userName(input.charId);
-    pushCard(input.charId, "user", {
-        title: `一起存「${pouch.name}」`,
-        subtitle: pouch.target > 0 ? `目标 ${yuan(pouch.target)}` : "小荷包",
-        status: "已加入",
-        history: `[小荷包] ${me}建了一个和你一起存钱的小荷包「${pouch.name}」${pouch.target > 0 ? `，目标 ${yuan(pouch.target)}` : ""}`,
-    });
+    pushCard(input.charId, "user",
+        { kind: "pouch", title: `一起存「${pouch.name}」`, subtitle: pouch.target > 0 ? `目标 ${yuan(pouch.target)}` : "小荷包", status: "已加入" },
+        `[小荷包] ${me}建了一个和你一起存钱的小荷包「${pouch.name}」${pouch.target > 0 ? `，目标 ${yuan(pouch.target)}` : ""}`,
+    );
     const session = pushEvent(input.charId, "", `${me}在支付宝建了一个和你一起存钱的小荷包「${pouch.name}」${pouch.target > 0 ? `，目标 ${yuan(pouch.target)}` : ""}，你们俩都能往里存。接着在聊天里自然地回她。`);
     requestReply(session.id);
     return pouch;
@@ -501,6 +512,7 @@ let stopTimer: (() => void) | null = null;
 export function startAlipayService(): void {
     if (stopTimer || typeof window === "undefined") return;
     window.addEventListener(WALLET_KIN_SPENT_EVENT, onKinSpent);
+    window.addEventListener(CHAT_MESSAGE_PUSHED_EVENT, onPushed);
     if (process.env.NODE_ENV !== "production") {
         (window as unknown as Record<string, unknown>).__noxAlipay = {
             spend: charSpendGiven,
@@ -514,6 +526,7 @@ export function startAlipayService(): void {
     const every = window.setInterval(() => void alipayDailyTick(), 30 * 60_000);
     stopTimer = () => {
         window.removeEventListener(WALLET_KIN_SPENT_EVENT, onKinSpent);
+        window.removeEventListener(CHAT_MESSAGE_PUSHED_EVENT, onPushed);
         window.clearTimeout(first);
         window.clearInterval(every);
     };

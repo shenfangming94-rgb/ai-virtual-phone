@@ -13,6 +13,7 @@ import type { ChatMessage } from "./chat-storage";
 import type { StateValue } from "./chat-storage";
 import { parseStateValues, mergeStateValues } from "./state-value-parser";
 import { stripActionShells } from "./action-parser";
+import { parseKinCardTag } from "./alipay-chat";
 import { stripTextToolDirectives } from "./text-tool-protocol";
 import {
     formatCustomAppDirectiveSummary,
@@ -88,6 +89,11 @@ const RICH_PATTERNS: {
             mediaType: "red_packet",
             mediaData: { amount: parseFloat(m[1]), count: 1, label: m[2] || "恭喜发财", status: "pending" },
         }),
+    },
+    {
+        // 支付宝亲属卡：[亲属卡:每月额度:留言]
+        regex: new RegExp(`\\[亲属卡${C}(\\d+(?:\\.\\d+)?)(?:${C}([^\\]]*))?\\]`),
+        build: (m) => parseKinCardTag(m[1], m[2]),
     },
     {
         // 兼容两种格式：[转账:金额:留言] (1:1) 和 [转账:金额:留言:转账人:收款人] (群聊)

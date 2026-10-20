@@ -844,8 +844,40 @@ function PaymentRequestBubble({ msg, charName, userName, onShowDetail }: {
 
 // ── Custom App Card ─────────────────────────────
 
+const ALIPAY_CARD_LABEL: Record<string, string> = {
+    kin: "FAMILY CARD",
+    kin_request: "FAMILY CARD",
+    kin_given: "FAMILY CARD",
+    pouch: "SHARED POCKET",
+};
+
+/** 支付宝的卡片：黑底宋体，和支付宝 app 一个样 */
+function AlipayCardBubble({ card }: { card: { kind: string; title: string; subtitle: string; note?: string; status?: string } }) {
+    const open = () => {
+        if (typeof window !== "undefined") window.dispatchEvent(new CustomEvent("open-app", { detail: { appId: "alipay" } }));
+    };
+    return (
+        <div className="ali-chat-card" onClick={open}>
+            <div className="ali-chat-card-top">
+                <small>{ALIPAY_CARD_LABEL[card.kind] || "ALIPAY"}</small>
+                <b>{card.title}</b>
+                <p>{card.subtitle}</p>
+                {card.note ? <q>{card.note}</q> : null}
+            </div>
+            <div className="ali-chat-card-foot"><span>{card.status || "支付宝"}</span><span>›</span></div>
+        </div>
+    );
+}
+
 function AppCardBubble({ msg, characterId, characterName }: { msg: ChatMessage; characterId?: string; characterName?: string }) {
     const d = msg.mediaData;
+    const alipayCard = (d as { noxAlipayCard?: { kind: string; title: string; subtitle: string; note?: string; status?: string } } | undefined)?.noxAlipayCard;
+    if (alipayCard) return <AlipayCardBubble card={alipayCard} />;
+    // 早先发的支付宝卡片没带 noxAlipayCard，也按支付宝样式显示
+    if (d?.appName === "支付宝" && !d.appId) {
+        const legacy = normalizeAppCardLayout(d.appCardLayout);
+        return <AlipayCardBubble card={{ kind: /小荷包|一起存/.test(legacy.title || "") ? "pouch" : "kin", title: legacy.title || d.appCardTitle || "支付宝", subtitle: legacy.subtitle || "", note: legacy.body, status: legacy.status }} />;
+    }
     const appName = d?.appName || "APP";
     const layout = normalizeAppCardLayout(d?.appCardLayout);
     const title = layout.title || d?.appCardTitle || d?.label || appName;

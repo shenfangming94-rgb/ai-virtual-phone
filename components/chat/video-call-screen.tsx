@@ -21,6 +21,8 @@ import { useCallKeyboardOffsetStyle } from "./use-call-keyboard-offset";
 import { CallSttWarningDialog, hideCallSttWarningPermanently, isCallSttWarningHidden } from "./call-stt-warning-dialog";
 import { isAndroidBrowser, isIOSDevice } from "./voice-input-platform";
 import { CallVolumeControl } from "./call-volume-control";
+import { CallMiniFloat } from "./call-mini-float";
+import { revealCallLines, splitCallLines } from "@/lib/call-lines";
 import { startIncomingCallVibration } from "@/lib/call-vibration";
 import { useCallScreenSounds } from "@/lib/chat-sound";
 
@@ -97,7 +99,6 @@ export function VideoCallScreen({ session, character, onEnd, onConnect, initiato
     const timerRef = useRef<NodeJS.Timeout | null>(null);
     const subtitlesScrollRef = useRef<HTMLDivElement | null>(null);
     const callStartRef = useRef<number>(0);
-    const pausedAtRef = useRef<number | null>(null);
     const minimizedRef = useRef(false);
     const stateRef = useRef<string>("CONNECTING");
     const interimTextRef = useRef<string>("");
@@ -114,14 +115,9 @@ export function VideoCallScreen({ session, character, onEnd, onConnect, initiato
     useEffect(() => { stateRef.current = callState; }, [callState]);
     useEffect(() => { minimizedRef.current = minimized; }, [minimized]);
 
-    // 缩小为悬浮窗：冻结通话——停止监听、打断在播放的语音（摄像头继续保留，方便恢复时不用重新申请权限）
-    useEffect(() => {
-        if (!minimized) return;
-        if (sttRef.current) { sttRef.current.abort(); sttRef.current = null; }
-        setInterimText("");
-        if (audioAbortRef.current) { audioAbortRef.current(); audioAbortRef.current = null; }
-        if (window.speechSynthesis) window.speechSynthesis.cancel();
-    }, [minimized]);
+    // 缩小期间他说的句数（小窗上的红点），回到通话界面清零
+    const [unseenLines, setUnseenLines] = useState(0);
+    useEffect(() => { if (!minimized) setUnseenLines(0); }, [minimized]);
 
     // 来电等待接听：循环振动（开关在聊天主页，iOS 网页不支持自动无效果）
     // + 来电/致电铃声与挂断音（角色专属提示音优先，其余在"全局聊天信息 → 提示音"）
@@ -290,24 +286,12 @@ export function VideoCallScreen({ session, character, onEnd, onConnect, initiato
         if (callState === "CONNECTING" || callState === "ENDED") return;
         if (!callStartRef.current) callStartRef.current = Date.now();
 
-        // 缩小为悬浮窗：冻结计时显示，不再推进
-        if (minimized) {
-            if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
-            if (pausedAtRef.current === null) pausedAtRef.current = Date.now();
-            return;
-        }
-        // 从悬浮窗恢复：把冻结期间流逝的时间补回起点，避免时长跳变
-        if (pausedAtRef.current !== null) {
-            callStartRef.current += Date.now() - pausedAtRef.current;
-            pausedAtRef.current = null;
-        }
-
         timerRef.current = setInterval(() => {
             setCallDuration(Math.floor((Date.now() - callStartRef.current) / 1000));
         }, 1000);
 
         return () => { if (timerRef.current) clearInterval(timerRef.current); };
-    }, [callState, minimized]);
+    }, [callState]);
 
     // ── Connecting animation ─────────────────────────
 
@@ -442,34 +426,31 @@ export function VideoCallScreen({ session, character, onEnd, onConnect, initiato
             if (stateRef.current === "ENDED") return;
 
             const { cleanParts } = processAIResponse(aiResponseText);
-            const displayText = cleanParts.join("\n");
-            const speechText = stripBilingualForSpeech(displayText);
+            const lines = splitCallLines(cleanParts);
 
-            if (!displayText) { setCallState("IDLE"); return; }
+            if (lines.length === 0) { setCallState("IDLE"); return; }
 
-            setSubtitles(prev => [...prev, { id: `ai-${Date.now()}`, role: "assistant", text: displayText }]);
-
-            // 缩小为悬浮窗期间收到的回复：只静默记录文字，不播放语音
-            if (minimizedRef.current) {
-                setCallState("IDLE");
-                return;
-            }
-
+            // 一句一条字幕；有语音就跟着语音一句一句出来
             setCallState("AI_SPEAKING");
-
             const voiceConfig = resolveVoiceConfig(session.contactId);
-            if (voiceConfig && !isSpeakerMutedRef.current) {
-                try {
-                    const audioBlob = await synthesizeSpeech(speechText, voiceConfig);
-                    if (stateRef.current === "ENDED") return;
-                    if (audioBlob && !isSpeakerMutedRef.current) {
-                        const { promise, abort } = playCallAudio(audioBlob);
-                        audioAbortRef.current = abort;
-                        await promise;
-                        audioAbortRef.current = null;
-                    }
-                } catch (e) { console.warn("[VideoCall] TTS failed:", e); }
-            }
+            const batchId = Date.now();
+            await revealCallLines(lines, {
+                isStopped: () => stateRef.current === "ENDED",
+                onLine: (line, index) => {
+                    setSubtitles(prev => [...prev, { id: `ai-${batchId}-${index}`, role: "assistant", text: line }]);
+                    if (minimizedRef.current) setUnseenLines(n => n + 1);
+                },
+                synthesize: voiceConfig && !isSpeakerMutedRef.current
+                    ? (line) => synthesizeSpeech(stripBilingualForSpeech(line), voiceConfig)
+                    : null,
+                play: async (blob) => {
+                    if (isSpeakerMutedRef.current) return;
+                    const { promise, abort } = playCallAudio(blob);
+                    audioAbortRef.current = abort;
+                    await promise;
+                    audioAbortRef.current = null;
+                },
+            });
 
             if (stateRef.current !== "ENDED") setCallState("IDLE");
         } catch (error: any) {
@@ -538,12 +519,12 @@ export function VideoCallScreen({ session, character, onEnd, onConnect, initiato
             sttRef.current = null;
             setInterimText("");
         }
-        if (!androidTextInputOnly && inputMode === "voice" && callState === "IDLE" && !isMuted && !minimized) {
-            const timer = setTimeout(() => { if (stateRef.current === "IDLE" && !minimizedRef.current) startListening(); }, 500);
+        if (!androidTextInputOnly && inputMode === "voice" && callState === "IDLE" && !isMuted) {
+            const timer = setTimeout(() => { if (stateRef.current === "IDLE") startListening(); }, 500);
             return () => clearTimeout(timer);
         }
         if (isMuted && sttRef.current) { sttRef.current.abort(); sttRef.current = null; }
-    }, [androidTextInputOnly, holdToTalk, callState, isMuted, inputMode, minimized, startListening]);
+    }, [androidTextInputOnly, holdToTalk, callState, isMuted, inputMode, startListening]);
 
     const handleInputModeToggle = useCallback(() => {
         if (androidTextInputOnly) {
@@ -631,17 +612,17 @@ export function VideoCallScreen({ session, character, onEnd, onConnect, initiato
 
     if (minimized) {
         return (
-            <button
-                type="button"
-                className="call-mini-window"
-                style={{ backgroundImage: `url(${bgImageResolved || character.avatar || ""})` }}
-                onClick={onRestore}
-                aria-label={`返回与${character.name}的视频通话`}
-                title="点击返回通话"
-            >
-                <span className="call-mini-window-overlay" />
-                <span className="call-mini-window-name">{character.name}</span>
-            </button>
+            <CallMiniFloat
+                kind="video"
+                name={character.name}
+                avatar={character.avatar}
+                background={bgImageResolved}
+                duration={callDuration}
+                connecting={callState === "CONNECTING"}
+                unseen={unseenLines}
+                speaking={callState === "AI_SPEAKING"}
+                onRestore={onRestore}
+            />
         );
     }
 

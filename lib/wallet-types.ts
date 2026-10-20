@@ -10,8 +10,19 @@ export type WalletCard = {
   note: string;
   accentLabel: string;
   isDefault?: boolean;
+  /** 亲属卡（char 给她开的）：余额就是本月剩余额度，每月自动恢复；不算她的资产 */
+  kin?: WalletKinInfo;
   createdAt: string;
   updatedAt: string;
+};
+
+export type WalletKinInfo = {
+  charId: string;
+  charName: string;
+  monthlyLimit: number;
+  /** 余额对应的月份 YYYY-MM，换月时恢复成满额度 */
+  month: string;
+  notify: boolean;
 };
 
 export type WalletAccountType = "balance" | "card";

@@ -3,6 +3,8 @@
 import { GlobalCallHost } from "./chat/global-call-host";
 import { AlbumApp } from "./album/album-app";
 import { startAlbumService } from "@/lib/album-engine";
+import { AlipayApp } from "./alipay/alipay-app";
+import { startAlipayService } from "@/lib/alipay-engine";
 import { Component, memo, useCallback, useEffect, useInsertionEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ErrorInfo, type ReactNode } from "react";
 
 import { updateStatusBarTone } from "@/lib/bg-tone";
@@ -159,6 +161,7 @@ const EMOJI_FONTS = '"Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", 
 const ICON_LAYOUT_STORAGE_KEY = "ai_phone_icon_layout_v2";
 const ICON_LAYOUT_STORAGE_KEY_V1 = "ai_phone_icon_layout_v1";
 const ALBUM_ICON_ADDED_KEY = "nox_album_icon_added_v1";
+const ALIPAY_ICON_ADDED_KEY = "nox_alipay_icon_added_v1";
 // Sentinel "page" used by the drag engine to mean "the dock". getDesktopPageNumber
 // returns 0 for it and getDesktopPageKeys filters it out, so page iteration never
 // treats the dock as a real page.
@@ -1509,6 +1512,16 @@ export function DesktopShell({ initialThemeProfile, initialThemeAssets }: Deskto
             }
             kvSet(ALBUM_ICON_ADDED_KEY, "1");
           }
+          // 新加的「支付宝」：同上，只放一次
+          if (!kvGet(ALIPAY_ICON_ADDED_KEY)) {
+            const present = new Set<string>([...hydratedDock, ...Object.values(hydratedFolders).flatMap(f => f.icons)]);
+            for (const icon of getDesktopIconLayoutItems(normalized)) present.add(icon.id);
+            if (!present.has("alipay")) {
+              normalized = appendIconsToFreeSlots(normalized, ["alipay"], hydratedWidgets) as typeof normalized;
+              kvSet(ICON_LAYOUT_STORAGE_KEY, JSON.stringify(normalized));
+            }
+            kvSet(ALIPAY_ICON_ADDED_KEY, "1");
+          }
           const sane = sanitizeDesktopFolders(hydratedFolders, normalized, hydratedDock, hydratedWidgets);
           setFolders(sane.folders);
           setLayout(sane.layout);
@@ -1535,8 +1548,9 @@ export function DesktopShell({ initialThemeProfile, initialThemeAssets }: Deskto
           return;
         } catch {}
       }
-      setLayout(appendIconsToFreeSlots(createDefaultDesktopIconLayout(hydratedWidgets), ["album"], hydratedWidgets) as DesktopLayout);
+      setLayout(appendIconsToFreeSlots(createDefaultDesktopIconLayout(hydratedWidgets), ["album", "alipay"], hydratedWidgets) as DesktopLayout);
       kvSet(ALBUM_ICON_ADDED_KEY, "1");
+      kvSet(ALIPAY_ICON_ADDED_KEY, "1");
       setDesktopReady(true);
     });
   }, []);
@@ -1837,6 +1851,7 @@ export function DesktopShell({ initialThemeProfile, initialThemeAssets }: Deskto
       startMomentsService();
       startShoppingGiftService();
       startAlbumService();
+      startAlipayService();
       startListenTogetherService();
       startCheckPhoneReplyService();
       startDiaryEntryTimerService();
@@ -4146,6 +4161,9 @@ html,body{margin:0;padding:0;width:100%;height:100%;background:#121110;color:rgb
 
     if (activeApp === "album") {
       return <AlbumApp onClose={() => setActiveApp(null)} onNotice={setNotice} />;
+    }
+    if (activeApp === "alipay") {
+      return <AlipayApp onClose={() => setActiveApp(null)} onNotice={setNotice} />;
     }
     if (activeApp === "mixology") {
       return <MixologyApp onClose={() => setActiveApp(null)} />;

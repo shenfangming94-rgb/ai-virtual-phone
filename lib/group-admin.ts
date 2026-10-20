@@ -15,7 +15,8 @@ export type GroupAdminAction =
     | "kick"
     | "invite"
     | "mute"
-    | "unmute";
+    | "unmute"
+    | "set_title";
 
 export type GroupRole = "owner" | "admin" | "member";
 
@@ -39,6 +40,38 @@ export function getGroupRole(session: ChatSession, key: string): GroupRole {
 export function isGroupMemberKey(session: ChatSession, key: string): boolean {
     if (key === GROUP_SELF_KEY) return !session.isSpectator;
     return (session.participantIds || []).includes(key);
+}
+
+// ── Titles (群头衔) & levels ──────────────────────────
+
+export const GROUP_TITLE_MAX_LENGTH = 6;
+/** 成员头衔可选色（群主固定橙、管理员固定绿，这里不放绿色） */
+export const GROUP_TITLE_COLORS = ["pink", "blue", "purple", "cyan", "peach"] as const;
+export type GroupTitleColor = typeof GROUP_TITLE_COLORS[number];
+
+export function normalizeGroupTitle(text: string): string {
+    return Array.from(String(text || "").replace(/[\s「」“”"\[\]]/g, "")).slice(0, GROUP_TITLE_MAX_LENGTH).join("");
+}
+
+export function pickGroupTitleColor(seed: string): GroupTitleColor {
+    let hash = 0;
+    for (const ch of `${seed}${Date.now()}`) hash = (hash * 31 + ch.charCodeAt(0)) >>> 0;
+    return GROUP_TITLE_COLORS[hash % GROUP_TITLE_COLORS.length];
+}
+
+export function getGroupTitle(session: ChatSession, key: string): { text: string; color: GroupTitleColor } | null {
+    const entry = session.groupTitles?.[key];
+    if (!entry?.text) return null;
+    const color = (GROUP_TITLE_COLORS as readonly string[]).includes(entry.color || "") ? entry.color as GroupTitleColor : "pink";
+    return { text: entry.text, color };
+}
+
+/** 群等级：按这个人在本群发过的消息条数 */
+export function groupLevelFromCount(count: number): number {
+    const steps = [10, 50, 150, 400, 1000];
+    let level = 1;
+    for (const step of steps) if (count >= step) level += 1;
+    return level;
 }
 
 // ── Mute state ─────────────────────────────────────────
@@ -85,7 +118,7 @@ export function canGroupAdminAct(
     if (!isGroupMemberKey(session, actorKey)) return false;
     const actorRole = getGroupRole(session, actorKey);
     if (actorRole === "member") return false;
-    if (actorKey === targetKey && action !== "unmute") return false;
+    if (actorKey === targetKey && action !== "unmute" && action !== "set_title") return false;
 
     // Characters targeting the user: kicking is never allowed (the session
     // can't lose its user), muting requires the opt-in switch; handing the
@@ -119,6 +152,12 @@ export function canGroupAdminAct(
             if (!isGroupMuted(session, targetKey)) return false;
             const targetRole = getGroupRole(session, targetKey);
             if (actorRole === "admin" && targetRole === "admin" && actorKey !== targetKey) return false;
+            return true;
+        }
+        case "set_title": {
+            // 群主改谁都行；管理员改除群主以外的人（包括自己）
+            if (!isGroupMemberKey(session, targetKey)) return false;
+            if (actorRole === "admin" && getGroupRole(session, targetKey) === "owner") return false;
             return true;
         }
         case "invite": {
@@ -169,8 +208,12 @@ export function buildGroupAdminNoticeText(
     actorName: string,
     targetName: string,
     muteMinutes?: number,
+    title?: string,
 ): string {
     switch (action) {
+        case "set_title":
+            if (!title) return `${actorName}取消了${targetName}的头衔`;
+            return `${actorName}将${targetName}的头衔改为「${title}」`;
         case "transfer_owner":
             if (actorName === targetName) return `${actorName}收回了群主身份`;
             return `${actorName}将群主转让给了${targetName}`;
@@ -193,8 +236,12 @@ export function buildGroupAdminBracketText(
     actorName: string,
     targetName: string,
     muteMinutes?: number,
+    title?: string,
 ): string {
     switch (action) {
+        case "set_title":
+            if (!title) return `[${actorName}取消了${targetName}的头衔]`;
+            return `[${actorName}将${targetName}的头衔改为「${title}」]`;
         case "transfer_owner":
             // 上帝按钮收回群主：非协议动作，写成事实陈述即可
             if (actorName === targetName) return `[${actorName}收回了群主身份]`;
@@ -221,9 +268,18 @@ export function applyGroupAdminAction(
     actorKey: string,
     targetKey: string,
     muteMinutes?: number,
+    title?: { text: string; color?: string },
 ): Partial<ChatSession> {
     const updates: Partial<ChatSession> = {};
     switch (action) {
+        case "set_title": {
+            const titles = { ...(session.groupTitles || {}) };
+            const text = normalizeGroupTitle(title?.text || "");
+            if (text) titles[targetKey] = { text, color: title?.color || pickGroupTitleColor(targetKey) };
+            else delete titles[targetKey];
+            updates.groupTitles = titles;
+            break;
+        }
         case "transfer_owner": {
             updates.groupOwnerId = targetKey;
             // New owner leaves the admin list; ex-owner becomes a plain member
@@ -249,6 +305,11 @@ export function applyGroupAdminAction(
                 const mutes = { ...session.groupMutes };
                 delete mutes[targetKey];
                 updates.groupMutes = mutes;
+            }
+            if (session.groupTitles?.[targetKey]) {
+                const titles = { ...session.groupTitles };
+                delete titles[targetKey];
+                updates.groupTitles = titles;
             }
             break;
         }
@@ -340,6 +401,14 @@ export function buildGroupRosterMacro(
     if (mutedEntries.length > 0) {
         lines.push(`禁言中：${mutedEntries.join("、")}（被禁言者在解除前不得发出任何群消息，线下场景不受影响）`);
     }
+    const titleEntries = allKeys
+        .map(key => {
+            const text = session.groupTitles?.[key]?.text;
+            return text ? `${nameOf(key)}「${text}」` : "";
+        })
+        .filter(Boolean);
+    if (titleEntries.length > 0) lines.push(`群头衔：${titleEntries.join("、")}`);
+    lines.push("群主可以改任何人的群头衔，管理员可以改除群主以外任何人的（包括用户），不需要对方同意。格式：[A将B的头衔改为「新头衔」]（最多6个字），取消用 [A取消了B的头衔]。只在聊天里有由头时偶尔改。");
     lines.push("</group_roster>");
     return lines.join("\n");
 }

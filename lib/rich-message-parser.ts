@@ -308,6 +308,14 @@ const RICH_PATTERNS: {
         build: (m) => ({ content: "", mediaType: "group_admin_notice" as const, mediaData: { adminAction: "transfer_owner" as const, adminActorName: m[1]?.trim(), adminTargetName: m[2]?.trim() } }),
     },
     {
+        regex: /\[([^\]]+?)将([^\]]+?)的(?:群)?头衔(?:改|设|换)(?:为|成)了?[「“"『]?([^\]」”"』]*)[」”"』]?\]/,
+        build: (m) => ({ content: "", mediaType: "group_admin_notice" as const, mediaData: { adminAction: "set_title" as const, adminActorName: m[1]?.trim(), adminTargetName: m[2]?.trim(), adminTitle: m[3]?.trim() || "" } }),
+    },
+    {
+        regex: /\[([^\]]+?)(?:取消|清空|撤掉)了([^\]]+?)的(?:群)?头衔\]/,
+        build: (m) => ({ content: "", mediaType: "group_admin_notice" as const, mediaData: { adminAction: "set_title" as const, adminActorName: m[1]?.trim(), adminTargetName: m[2]?.trim(), adminTitle: "" } }),
+    },
+    {
         regex: /\[([^\]]+?)将([^\]]+?)设为了?管理员\]/,
         build: (m) => ({ content: "", mediaType: "group_admin_notice" as const, mediaData: { adminAction: "set_admin" as const, adminActorName: m[1]?.trim(), adminTargetName: m[2]?.trim() } }),
     },

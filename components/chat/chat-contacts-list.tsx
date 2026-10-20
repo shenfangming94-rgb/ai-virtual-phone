@@ -157,7 +157,7 @@ export function ChatContactsList({ onCloseApp, onSelectSession, onSelectMascot, 
     const handleAccept = async (req: FriendRequest) => {
         setIsProcessing(true);
         try {
-            const session = await handleAcceptFriendRequest(req.characterId, req.message);
+            const session = await handleAcceptFriendRequest(req.characterId, req.message, req.sourceGroupName);
             setSelectedRequest(null);
             setShowRequestList(false);
             refresh();
@@ -176,8 +176,8 @@ export function ChatContactsList({ onCloseApp, onSelectSession, onSelectMascot, 
             dispatchFriendRequestUpdated();
             setSelectedRequest(null);
 
-            // Trigger AI's next attempt (fire-and-forget)
-            triggerRejectReaction(req.characterId).catch(() => {});
+            // Trigger AI's next attempt (fire-and-forget)；群里认识的人隔几天在群里再来
+            if (!req.sourceGroupId) triggerRejectReaction(req.characterId).catch(() => {});
             refresh();
         } finally {
             setIsProcessing(false);
@@ -364,6 +364,9 @@ export function ChatContactsList({ onCloseApp, onSelectSession, onSelectMascot, 
                                                 <div className="ts-12 text-[var(--c-text)] truncate mt-[2px]">
                                                     {req.message}
                                                 </div>
+                                                {req.sourceGroupName && (
+                                                    <div className="ts-11 text-[var(--c-icon)] truncate mt-[2px]">来自群聊「{req.sourceGroupName}」</div>
+                                                )}
                                             </div>
                                         </div>
                                     );
@@ -406,6 +409,9 @@ export function ChatContactsList({ onCloseApp, onSelectSession, onSelectMascot, 
                             <div className="freq-detail-msg">
                                 {selectedRequest.message}
                             </div>
+                            {selectedRequest.sourceGroupName && (
+                                <div className="ts-12 text-center text-[var(--c-icon)]">来自群聊「{selectedRequest.sourceGroupName}」</div>
+                            )}
 
                             {/* Actions */}
                             <div className="flex gap-3 w-full">

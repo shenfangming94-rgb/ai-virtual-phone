@@ -1196,7 +1196,7 @@ export function formatRichMediaForHistory(msg: ChatMessage, userName: string, ch
             return `[位置:${d?.label ?? "位置"}]`;
         case "group_admin_notice":
             return d?.adminAction
-                ? buildGroupAdminBracketText(d.adminAction, d.adminActorName || charName, d.adminTargetName || "", d.adminMuteMinutes)
+                ? buildGroupAdminBracketText(d.adminAction, d.adminActorName || charName, d.adminTargetName || "", d.adminMuteMinutes, d.adminTitle)
                 : msg.content;
         case "poke": {
             if (isGroup) {

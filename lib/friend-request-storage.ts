@@ -12,6 +12,8 @@ export type FriendRequest = {
     status: "pending" | "accepted" | "rejected" | "abandoned";
     round: number;           // attempt number (1, 2, 3)
     createdAt: string;       // ISO date
+    sourceGroupId?: string;  // 在群里认识、主动来加的：来自哪个群
+    sourceGroupName?: string;
 };
 
 const STORAGE_KEY = "ai_phone_friend_requests_v1";
@@ -32,7 +34,12 @@ function saveFriendRequests(requests: FriendRequest[]): void {
     kvSet(STORAGE_KEY, JSON.stringify(requests));
 }
 
-export function addFriendRequest(characterId: string, message: string, round: number): FriendRequest {
+export function addFriendRequest(
+    characterId: string,
+    message: string,
+    round: number,
+    source?: { groupId: string; groupName: string },
+): FriendRequest {
     const all = loadFriendRequests();
     const req: FriendRequest = {
         id: `freq_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
@@ -41,6 +48,7 @@ export function addFriendRequest(characterId: string, message: string, round: nu
         status: "pending",
         round,
         createdAt: new Date().toISOString(),
+        ...(source ? { sourceGroupId: source.groupId, sourceGroupName: source.groupName } : {}),
     };
     all.push(req);
     saveFriendRequests(all);

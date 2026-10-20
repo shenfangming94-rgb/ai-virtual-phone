@@ -33,12 +33,18 @@ import {
     getGroupMuteRemainingMs,
     getGroupOwnerKey,
     getGroupRole,
+    getGroupTitle,
+    GROUP_TITLE_COLORS,
+    GROUP_TITLE_MAX_LENGTH,
+    normalizeGroupTitle,
     pruneExpiredGroupMutes,
     type GroupAdminAction,
+    type GroupTitleColor,
 } from "@/lib/group-admin";
 import { clearChatOfflineTurns } from "@/lib/chat-offline-storage";
 import { removeChatSessionCompletely } from "@/lib/chat-session-remove";
 import { triggerDeleteFriendReaction } from "@/lib/friend-request-engine";
+import { addFriendFromGroup, isGroupStranger } from "@/lib/group-friend";
 import { loadCharacters, saveCharacters } from "@/lib/character-storage";
 import { isAgentComputerConfigured } from "@/lib/agent-computer";
 import { CharacterComputerPage } from "./character-computer-page";
@@ -659,6 +665,9 @@ export function ChatSettingsPanel({
     const [, setRosterVersion] = useState(0); // bump to re-render after admin actions
     const [memberActionKey, setMemberActionKey] = useState<string | null>(null);
     const [mutePickerKey, setMutePickerKey] = useState<string | null>(null);
+    const [titleEditKey, setTitleEditKey] = useState<string | null>(null);
+    const [titleDraft, setTitleDraft] = useState("");
+    const [titleColorDraft, setTitleColorDraft] = useState<GroupTitleColor>("pink");
     const [showInvitePicker, setShowInvitePicker] = useState(false);
     const [allowAdminOnUser, setAllowAdminOnUser] = useState(session.allowAdminActionsOnUser === true);
     if (session.isGroup) pruneExpiredGroupMutes(session);
@@ -691,34 +700,37 @@ export function ChatSettingsPanel({
         if (canGroupAdminAct(session, GROUP_SELF_KEY, "transfer_owner", key)) items.push({ action: "transfer_owner", label: "转让群主" });
         if (canGroupAdminAct(session, GROUP_SELF_KEY, "set_admin", key)) items.push({ action: "set_admin", label: "设为管理员" });
         if (canGroupAdminAct(session, GROUP_SELF_KEY, "unset_admin", key)) items.push({ action: "unset_admin", label: "取消管理员" });
+        if (canGroupAdminAct(session, GROUP_SELF_KEY, "set_title", key)) items.push({ action: "set_title", label: session.groupTitles?.[key]?.text ? "修改头衔" : "设置头衔" });
         if (canGroupAdminAct(session, GROUP_SELF_KEY, "mute", key)) items.push({ action: "mute", label: "禁言" });
         if (canGroupAdminAct(session, GROUP_SELF_KEY, "unmute", key)) items.push({ action: "unmute", label: "解除禁言" });
         if (canGroupAdminAct(session, GROUP_SELF_KEY, "kick", key)) items.push({ action: "kick", label: "移出群聊", danger: true });
         return items;
     };
-    const pushAdminNotice = (action: GroupAdminAction, actorName: string, targetKey: string, muteMinutes?: number) => {
+    const pushAdminNotice = (action: GroupAdminAction, actorName: string, targetKey: string, muteMinutes?: number, titleText?: string) => {
         const targetName = getGroupMemberDisplayName(targetKey, userName);
         // role 用 user（操作人是用户本人）：与 AI 侧 assistant 动作消息对称，
         // UI 仍按系统通知渲染，进历史时还原为 [A将B移出了群聊] 协议格式
         pushChatMessage({
             sessionId: session.id,
             role: "user",
-            content: buildGroupAdminNoticeText(action, actorName, targetName, muteMinutes),
+            content: buildGroupAdminNoticeText(action, actorName, targetName, muteMinutes, titleText),
             mediaType: "group_admin_notice",
             mediaData: {
                 adminAction: action,
                 adminActorName: actorName,
                 adminTargetName: targetName,
                 ...(action === "mute" ? { adminMuteMinutes: muteMinutes || 10 } : {}),
+                ...(action === "set_title" ? { adminTitle: titleText || "" } : {}),
             },
         });
     };
-    const performAdminAction = (action: GroupAdminAction, targetKey: string, muteMinutes?: number) => {
+    const performAdminAction = (action: GroupAdminAction, targetKey: string, muteMinutes?: number, title?: { text: string; color?: string }) => {
         if (!canGroupAdminAct(session, GROUP_SELF_KEY, action, targetKey)) return;
-        applyGroupAdminAction(session, action, GROUP_SELF_KEY, targetKey, muteMinutes);
-        pushAdminNotice(action, userName, targetKey, muteMinutes);
+        applyGroupAdminAction(session, action, GROUP_SELF_KEY, targetKey, muteMinutes, title);
+        pushAdminNotice(action, userName, targetKey, muteMinutes, title?.text);
         setMemberActionKey(null);
         setMutePickerKey(null);
+        setTitleEditKey(null);
         setShowInvitePicker(false);
         setRosterVersion(v => v + 1);
     };
@@ -741,11 +753,17 @@ export function ChatSettingsPanel({
         });
         setRosterVersion(v => v + 1);
     };
-    const inviteCandidates = session.isGroup
-        ? loadChatContacts()
-            .map(c => characters.find(ch => ch.id === c.characterId))
-            .filter((c): c is NonNullable<typeof c> => Boolean(c && !(session.participantIds || []).includes(c.id)))
-        : [];
+    // 好友在前，档案库里其他人在后（不加好友也能拉进群）
+    const inviteCandidates = (() => {
+        if (!session.isGroup) return [];
+        const friendIds = loadChatContacts().map(c => c.characterId);
+        const inGroup = new Set(session.participantIds || []);
+        const friends = friendIds
+            .map(id => characters.find(ch => ch.id === id))
+            .filter((c): c is NonNullable<typeof c> => Boolean(c && !inGroup.has(c.id)));
+        const others = characters.filter(c => !inGroup.has(c.id) && !friendIds.includes(c.id));
+        return [...friends, ...others];
+    })();
     const canInvite = session.isGroup && !session.isSpectator
         && getGroupRole(session, GROUP_SELF_KEY) !== "member";
     const MUTE_DURATION_OPTIONS = [10, 60, 720, 1440, 4320];
@@ -993,13 +1011,14 @@ export function ChatSettingsPanel({
                         <div className={`chat-msg-content-wrap flex flex-col min-w-0 max-w-[70%] ${isStandaloneHtmlPreview ? "chat-msg-content-wrap-html" : ""}`}>
                             {session.isGroup && msg.role !== "user" && (
                                 <span className="chat-group-sender-name">
-                                    {senderName}
                                     {msg.senderCharacterId && (session.participantIds || []).includes(msg.senderCharacterId) && (() => {
                                         const role = getGroupRole(session, msg.senderCharacterId);
-                                        if (role === "owner") return <span className="chat-role-badge chat-role-badge-owner">群主</span>;
-                                        if (role === "admin") return <span className="chat-role-badge chat-role-badge-admin">管理员</span>;
-                                        return null;
+                                        const title = getGroupTitle(session, msg.senderCharacterId);
+                                        const tone = role === "owner" ? "owner" : role === "admin" ? "admin" : title ? title.color : "member";
+                                        const label = title?.text || (role === "owner" ? "群主" : role === "admin" ? "管理员" : "成员");
+                                        return <span className="chat-role-badge" data-tone={tone}>{role === "owner" ? <span className="chat-role-badge-crown" aria-hidden="true">👑</span> : null}{label}</span>;
                                     })()}
+                                    {senderName}
                                 </span>
                             )}
                             <div
@@ -1193,8 +1212,9 @@ export function ChatSettingsPanel({
                             </div>
                         </div>
                         {memberEntries.map(entry => {
-                            const badge = roleLabel(entry.key);
-                            const actionable = memberActionsFor(entry.key).length > 0;
+                            const badge = [roleLabel(entry.key), getGroupTitle(session, entry.key)?.text ? `「${getGroupTitle(session, entry.key)!.text}」` : ""].filter(Boolean).join(" ");
+                            const stranger = entry.key !== GROUP_SELF_KEY && isGroupStranger(entry.key);
+                            const actionable = memberActionsFor(entry.key).length > 0 || stranger;
                             return (
                                 <button
                                     key={entry.key}
@@ -1663,6 +1683,18 @@ export function ChatSettingsPanel({
                             {roleLabel(memberActionKey) ? `（${roleLabel(memberActionKey)}）` : ""}
                         </span>
                         <div className="flex flex-col gap-2 w-full">
+                            {memberActionKey !== GROUP_SELF_KEY && isGroupStranger(memberActionKey) && (
+                                <button
+                                    className="ui-btn ui-btn-success flex-1"
+                                    onClick={() => {
+                                        addFriendFromGroup(memberActionKey, groupName || session.groupName || "群聊");
+                                        setMemberActionKey(null);
+                                        setRosterVersion(v => v + 1);
+                                    }}
+                                >
+                                    添加到通讯录
+                                </button>
+                            )}
                             {memberActionsFor(memberActionKey).map(item => (
                                 <button
                                     key={item.action}
@@ -1670,6 +1702,12 @@ export function ChatSettingsPanel({
                                     onClick={() => {
                                         if (item.action === "mute") {
                                             setMutePickerKey(memberActionKey);
+                                            setMemberActionKey(null);
+                                        } else if (item.action === "set_title") {
+                                            const current = getGroupTitle(session, memberActionKey);
+                                            setTitleDraft(current?.text || "");
+                                            setTitleColorDraft(current?.color || "pink");
+                                            setTitleEditKey(memberActionKey);
                                             setMemberActionKey(null);
                                         } else {
                                             performAdminAction(item.action, memberActionKey);
@@ -1705,6 +1743,62 @@ export function ChatSettingsPanel({
                     </div>
                 </div>
             )}
+
+            {/* Modal: 群头衔 */}
+            {titleEditKey && (() => {
+                const targetRole = getGroupRole(session, titleEditKey);
+                const fixedTone = targetRole === "owner" ? "owner" : targetRole === "admin" ? "admin" : null;
+                const hadTitle = Boolean(session.groupTitles?.[titleEditKey]?.text);
+                const cleaned = normalizeGroupTitle(titleDraft);
+                return (
+                    <div className="modal-overlay" onClick={() => setTitleEditKey(null)}>
+                        <div className="modal-dialog" onClick={e => e.stopPropagation()}>
+                            <span className="modal-header-title">给 {getGroupMemberDisplayName(titleEditKey, userName)} 设置头衔</span>
+                            <input
+                                className="ui-input w-full"
+                                value={titleDraft}
+                                maxLength={GROUP_TITLE_MAX_LENGTH + 4}
+                                placeholder={`最多 ${GROUP_TITLE_MAX_LENGTH} 个字`}
+                                onChange={e => setTitleDraft(e.target.value)}
+                            />
+                            <div className="group-title-preview">
+                                <span className="chat-role-badge" data-tone={fixedTone || titleColorDraft}>
+                                    <i>Lv1</i>{targetRole === "owner" ? <span className="chat-role-badge-crown" aria-hidden="true">👑</span> : null}{cleaned || "头衔"}
+                                </span>
+                            </div>
+                            {fixedTone ? (
+                                <span className="menu-desc">{fixedTone === "owner" ? "群主的标签固定是橙色" : "管理员的标签固定是绿色"}</span>
+                            ) : (
+                                <div className="group-title-colors">
+                                    {GROUP_TITLE_COLORS.map(color => (
+                                        <button
+                                            key={color}
+                                            type="button"
+                                            className="group-title-color"
+                                            data-tone={color}
+                                            aria-pressed={titleColorDraft === color}
+                                            onClick={() => setTitleColorDraft(color)}
+                                        />
+                                    ))}
+                                </div>
+                            )}
+                            <div className="flex gap-2 w-full">
+                                {hadTitle && (
+                                    <button className="ui-btn ui-btn-ghost flex-1" onClick={() => performAdminAction("set_title", titleEditKey, undefined, { text: "" })}>取消头衔</button>
+                                )}
+                                <button
+                                    className="ui-btn ui-btn-primary flex-1"
+                                    disabled={!cleaned}
+                                    onClick={() => performAdminAction("set_title", titleEditKey, undefined, { text: cleaned, color: titleColorDraft })}
+                                >
+                                    确定
+                                </button>
+                            </div>
+                            <button className="ui-btn ui-btn-ghost w-full" onClick={() => setTitleEditKey(null)}>取消</button>
+                        </div>
+                    </div>
+                );
+            })()}
 
             {/* Modal: Invite picker */}
             {showInvitePicker && (

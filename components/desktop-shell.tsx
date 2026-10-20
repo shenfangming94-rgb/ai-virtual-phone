@@ -1,5 +1,6 @@
 "use client";
 
+import { GlobalCallHost } from "./chat/global-call-host";
 import { Component, memo, useCallback, useEffect, useInsertionEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ErrorInfo, type ReactNode } from "react";
 
 import { updateStatusBarTone } from "@/lib/bg-tone";
@@ -4347,6 +4348,9 @@ html,body{margin:0;padding:0;width:100%;height:100%;background:#121110;color:rgb
                   ))}
                 </div>
               ) : null}
+
+              {/* 单聊通话：全局层，切 app 不挂断 */}
+              <GlobalCallHost />
 
               {/* Incoming call bar — global overlay */}
               {incomingCall && (

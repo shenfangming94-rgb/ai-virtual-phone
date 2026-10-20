@@ -21,6 +21,8 @@ import { useCallKeyboardOffsetStyle } from "./use-call-keyboard-offset";
 import { CallSttWarningDialog, hideCallSttWarningPermanently, isCallSttWarningHidden } from "./call-stt-warning-dialog";
 import { isAndroidBrowser, isIOSDevice } from "./voice-input-platform";
 import { CallVolumeControl } from "./call-volume-control";
+import { CallMiniFloat } from "./call-mini-float";
+import { revealCallLines, splitCallLines } from "@/lib/call-lines";
 import { startIncomingCallVibration } from "@/lib/call-vibration";
 import { useCallScreenSounds } from "@/lib/chat-sound";
 
@@ -46,7 +48,7 @@ type VoiceCallScreenProps = {
     onEnd: () => void;
     onConnect?: () => void;
     initiator?: "user" | "character";
-    /** 通话是否处于缩小的悬浮窗状态：暂停麦克风监听/计时/语音播放，仅显示背景+名字 */
+    /** 通话是否缩小成屏幕边上的小卡片：通话照常进行（计时、他说话、听你说话都不停） */
     minimized?: boolean;
     /** 点击左上角返回键：请求缩小为悬浮窗（通话逻辑冻结，不挂断） */
     onMinimize?: () => void;
@@ -92,7 +94,6 @@ export function VoiceCallScreen({ session, character, onEnd, onConnect, initiato
     const audioAbortRef = useRef<(() => void) | null>(null);
     const timerRef = useRef<NodeJS.Timeout | null>(null);
     const callStartRef = useRef<number>(0);
-    const pausedAtRef = useRef<number | null>(null);
     const minimizedRef = useRef(false);
     const stateRef = useRef<string>("CONNECTING");
     const interimTextRef = useRef<string>("");  // ref 版本，闭包安全
@@ -106,14 +107,9 @@ export function VoiceCallScreen({ session, character, onEnd, onConnect, initiato
     useEffect(() => { stateRef.current = callState; }, [callState]);
     useEffect(() => { minimizedRef.current = minimized; }, [minimized]);
 
-    // 缩小为悬浮窗：冻结通话——停止监听、打断在播放的语音
-    useEffect(() => {
-        if (!minimized) return;
-        if (sttRef.current) { sttRef.current.abort(); sttRef.current = null; }
-        setInterimText("");
-        if (audioAbortRef.current) { audioAbortRef.current(); audioAbortRef.current = null; }
-        if (window.speechSynthesis) window.speechSynthesis.cancel();
-    }, [minimized]);
+    // 缩小期间他说的句数（小卡片上的红点），回到通话界面清零
+    const [unseenLines, setUnseenLines] = useState(0);
+    useEffect(() => { if (!minimized) setUnseenLines(0); }, [minimized]);
 
     // 来电等待接听：循环振动（开关在聊天主页，iOS 网页不支持自动无效果）
     // + 来电/致电铃声与挂断音（角色专属提示音优先，其余在"全局聊天信息 → 提示音"）
@@ -195,18 +191,6 @@ export function VoiceCallScreen({ session, character, onEnd, onConnect, initiato
             callStartRef.current = Date.now();
         }
 
-        // 缩小为悬浮窗：冻结计时显示，不再推进
-        if (minimized) {
-            if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
-            if (pausedAtRef.current === null) pausedAtRef.current = Date.now();
-            return;
-        }
-        // 从悬浮窗恢复：把冻结期间流逝的时间补回起点，避免时长跳变
-        if (pausedAtRef.current !== null) {
-            callStartRef.current += Date.now() - pausedAtRef.current;
-            pausedAtRef.current = null;
-        }
-
         timerRef.current = setInterval(() => {
             setCallDuration(Math.floor((Date.now() - callStartRef.current) / 1000));
         }, 1000);
@@ -214,7 +198,7 @@ export function VoiceCallScreen({ session, character, onEnd, onConnect, initiato
         return () => {
             if (timerRef.current) clearInterval(timerRef.current);
         };
-    }, [callState, minimized]);
+    }, [callState]);
 
     // ── Connecting animation (3s fake dial) ─────────
 
@@ -375,43 +359,31 @@ export function VoiceCallScreen({ session, character, onEnd, onConnect, initiato
 
             // 4. Process response
             const { cleanParts } = processAIResponse(aiResponseText);
-            const displayText = cleanParts.join("\n");
-            const speechText = stripBilingualForSpeech(displayText);
+            const lines = splitCallLines(cleanParts);
 
-            if (!displayText) {
+            if (lines.length === 0) {
                 setCallState("IDLE");
                 return;
             }
 
-            // 5. Add AI subtitle
-            const subtitleId = `ai-${Date.now()}`;
-            setSubtitles(prev => [...prev, { id: subtitleId, role: "assistant", text: displayText }]);
-
-            // 缩小为悬浮窗期间收到的回复：只静默记录文字，不播放语音
-            if (minimizedRef.current) {
-                setCallState("IDLE");
-                return;
-            }
-
-            // 6. TTS
+            // 5. 一句一条字幕；有语音就跟着语音一句一句出来
             setCallState("AI_SPEAKING");
-
             const voiceConfig = resolveVoiceConfig(session.contactId);
-            if (voiceConfig) {
-                try {
-                    const audioBlob = await synthesizeSpeech(speechText, voiceConfig);
-                    if (stateRef.current === "ENDED") return;
-
-                    if (audioBlob) {
-                        const { promise, abort } = playCallAudio(audioBlob);
-                        audioAbortRef.current = abort;
-                        await promise;
-                        audioAbortRef.current = null;
-                    }
-                } catch (e) {
-                    console.warn("[VoiceCall] TTS failed:", e);
-                }
-            }
+            const batchId = Date.now();
+            await revealCallLines(lines, {
+                isStopped: () => stateRef.current === "ENDED",
+                onLine: (line, index) => {
+                    setSubtitles(prev => [...prev, { id: `ai-${batchId}-${index}`, role: "assistant", text: line }]);
+                    if (minimizedRef.current) setUnseenLines(n => n + 1);
+                },
+                synthesize: voiceConfig ? (line) => synthesizeSpeech(stripBilingualForSpeech(line), voiceConfig) : null,
+                play: async (blob) => {
+                    const { promise, abort } = playCallAudio(blob);
+                    audioAbortRef.current = abort;
+                    await promise;
+                    audioAbortRef.current = null;
+                },
+            });
 
             if (stateRef.current !== "ENDED") {
                 setCallState("IDLE");
@@ -518,10 +490,10 @@ export function VoiceCallScreen({ session, character, onEnd, onConnect, initiato
             sttRef.current = null;
             setInterimText("");
         }
-        if (!androidTextInputOnly && inputMode === "voice" && callState === "IDLE" && !isMuted && !minimized) {
+        if (!androidTextInputOnly && inputMode === "voice" && callState === "IDLE" && !isMuted) {
             // 短暂延迟让 UI 过渡完成
             const timer = setTimeout(() => {
-                if (stateRef.current === "IDLE" && !minimizedRef.current) {
+                if (stateRef.current === "IDLE") {
                     startListening();
                 }
             }, 500);
@@ -532,7 +504,7 @@ export function VoiceCallScreen({ session, character, onEnd, onConnect, initiato
             sttRef.current.abort();
             sttRef.current = null;
         }
-    }, [androidTextInputOnly, holdToTalk, callState, isMuted, inputMode, minimized, startListening]);
+    }, [androidTextInputOnly, holdToTalk, callState, isMuted, inputMode, startListening]);
 
     const handleInputModeToggle = useCallback(() => {
         if (androidTextInputOnly) {
@@ -636,17 +608,16 @@ export function VoiceCallScreen({ session, character, onEnd, onConnect, initiato
 
     if (minimized) {
         return (
-            <button
-                type="button"
-                className="call-mini-window"
-                style={{ backgroundImage: `url(${bgImageResolved || character.avatar || ""})` }}
-                onClick={onRestore}
-                aria-label={`返回与${character.name}的语音通话`}
-                title="点击返回通话"
-            >
-                <span className="call-mini-window-overlay" />
-                <span className="call-mini-window-name">{character.name}</span>
-            </button>
+            <CallMiniFloat
+                kind="voice"
+                name={character.name}
+                avatar={character.avatar}
+                duration={callDuration}
+                connecting={callState === "CONNECTING"}
+                unseen={unseenLines}
+                speaking={callState === "AI_SPEAKING"}
+                onRestore={onRestore}
+            />
         );
     }
 

@@ -37,8 +37,6 @@ import { CustomAppRunner } from "@/components/app-market/custom-app-runner";
 import { CustomAppForegroundBoundary } from "@/components/app-market/custom-app-failure";
 
 import { ChatSettingsPanel } from "./chat-settings-panel";
-import { VoiceCallScreen } from "./voice-call-screen";
-import { VideoCallScreen } from "./video-call-screen";
 import { GroupCallScreen } from "./group-call-screen";
 import { TransferTargetModal } from "./transfer-target-modal";
 import { GiftPickerModal } from "./gift-picker-modal";
@@ -85,6 +83,7 @@ import {
 } from "@/lib/chat-screen-effects";
 import { abortableDelay, throwIfAborted } from "@/lib/abort-utils";
 import { addFriendFromGroup, isGroupStranger, maybeRequestFriendFromGroup } from "@/lib/group-friend";
+import { ACTIVE_CALL_ENDED_EVENT, startActiveCall } from "@/lib/active-call";
 import { GROUP_SELF_KEY, canGroupAdminAct, applyGroupAdminAction, buildGroupAdminNoticeText, getGroupMemberDisplayName, getGroupMuteRemainingMs, getGroupRole, getGroupTitle, groupLevelFromCount, isGroupMuted, formatMuteRemainingLabel, normalizeGroupTitle, resolveGroupMemberKeyByName, type GroupAdminAction } from "@/lib/group-admin";
 import { extractTextToolDirectiveText } from "@/lib/text-tool-protocol";
 import { emitChatPluginEvent, getChatPluginHookBus, runChatPluginTransform } from "@/lib/chat-plugin-hooks";
@@ -5561,6 +5560,26 @@ export function ChatRoom({ session, onBack, onDeleted }: ChatRoomProps) {
         setMessages(nextMessages);
     }, [session.id, stopLoadMoreAnchorTracking]);
 
+    // 单聊通话交给全局通话层（离开聊天页也不挂断）：这里一发起就转交
+    useEffect(() => {
+        if (session.isGroup || !character) return;
+        if (!showVoiceCall && !showVideoCall) return;
+        const kind = showVoiceCall ? "voice" : "video";
+        setShowVoiceCall(false);
+        setShowVideoCall(false);
+        startActiveCall({ sessionId: session.id, characterId: character.id, kind, initiator: callInitiator });
+    }, [showVoiceCall, showVideoCall, session.isGroup, session.id, character, callInitiator]);
+
+    useEffect(() => {
+        const onEnded = (e: Event) => {
+            const detail = (e as CustomEvent<{ sessionId?: string }>).detail;
+            if (detail?.sessionId !== session.id || !mountedRef.current) return;
+            returnFromCall(() => {});
+        };
+        window.addEventListener(ACTIVE_CALL_ENDED_EVENT, onEnded);
+        return () => window.removeEventListener(ACTIVE_CALL_ENDED_EVENT, onEnded);
+    });
+
     // Shared handler: reload messages + re-trigger scroll-to-bottom after call ends
     const returnFromCall = (hide: () => void) => {
         hide();
@@ -7050,35 +7069,7 @@ export function ChatRoom({ session, onBack, onDeleted }: ChatRoomProps) {
                 );
             })()}
 
-            {/* 单聊语音/视频通话：内联挂载（而非提前 return），使缩小为悬浮窗时通话组件
-                不被卸载，计时/字幕等状态得以保留；组件内部依据 minimized 决定渲染
-                全屏界面还是左侧悬浮窗 */}
-            {/* 通话层挂到聊天室的父容器，脱离 session 自定义 CSS 的作用域。
-                这样用户美化 header/footer、定位和 z-index 时不会遮挡通话顶栏/底栏。 */}
-            {wrapperRef.current?.parentElement && showVoiceCall && character && createPortal(
-                <VoiceCallScreen
-                    session={session}
-                    character={character}
-                    initiator={callInitiator}
-                    minimized={callMinimized}
-                    onMinimize={() => setCallMinimized(true)}
-                    onRestore={() => setCallMinimized(false)}
-                    onEnd={() => returnFromCall(() => setShowVoiceCall(false))}
-                />,
-                wrapperRef.current.parentElement,
-            )}
-            {wrapperRef.current?.parentElement && showVideoCall && character && createPortal(
-                <VideoCallScreen
-                    session={session}
-                    character={character}
-                    initiator={callInitiator}
-                    minimized={callMinimized}
-                    onMinimize={() => setCallMinimized(true)}
-                    onRestore={() => setCallMinimized(false)}
-                    onEnd={() => returnFromCall(() => setShowVideoCall(false))}
-                />,
-                wrapperRef.current.parentElement,
-            )}
+
 
         </div >
     );

@@ -7428,3 +7428,111 @@ html body .chat-role-badge[data-tone="peach"] { background: linear-gradient(90de
   color: var(--c-icon);
   margin: 0 0 6px 2px;
 }
+
+/* ── 通话缩小后的悬浮小卡片（仿微信） ── */
+.call-mini-float {
+  position: absolute;
+  right: 10px;
+  top: 38%;
+  z-index: 260;
+  pointer-events: auto;
+  width: 68px;
+  height: 86px;
+  padding: 0;
+  border: none;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.97);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.18);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  cursor: pointer;
+  font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Helvetica Neue", sans-serif;
+}
+.call-mini-float-avatar {
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  overflow: hidden;
+  background: #e9e9ee;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #888;
+  font-size: 16px;
+  transition: box-shadow 0.2s ease;
+}
+.call-mini-float-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.call-mini-float-avatar[data-speaking] {
+  box-shadow: 0 0 0 3px rgba(52, 199, 89, 0.4);
+}
+.call-mini-float-time {
+  font-size: 11px;
+  font-weight: 600;
+  color: #2aa64a;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+.call-mini-float[data-kind="video"] {
+  width: 74px;
+  height: 104px;
+  overflow: visible;
+  border: 2px solid #fff;
+  background: #1a1a2e;
+  justify-content: flex-end;
+  padding-bottom: 7px;
+}
+.call-mini-float-video {
+  position: absolute;
+  inset: 0;
+  border-radius: 12px;
+  background-size: cover;
+  background-position: center;
+}
+.call-mini-float-video::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 12px;
+  background: linear-gradient(to top, rgba(0, 0, 0, 0.55), rgba(0, 0, 0, 0) 50%);
+}
+.call-mini-float[data-kind="video"] .call-mini-float-time {
+  position: relative;
+  color: #fff;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
+}
+.call-mini-float-dot {
+  position: absolute;
+  right: -5px;
+  top: -5px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 9px;
+  border: 1.5px solid #fff;
+  background: #ff3b30;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 15px;
+  text-align: center;
+}
+
+/* 全局通话层：全屏时盖住当前 app；缩小时只留小卡片可点，其余点击穿透 */
+.global-call-host {
+  position: absolute;
+  inset: 0;
+  z-index: 250;
+}
+.global-call-host[data-minimized] {
+  pointer-events: none;
+}

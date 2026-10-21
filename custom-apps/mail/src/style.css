@@ -1,4 +1,6 @@
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+/* 小手机右上角有自己的胶囊按钮：顶部的东西让开右边、和胶囊对齐 */
+:root{--bar-top:var(--ai-phone-app-bar-top,56px);--bar-h:var(--ai-phone-app-bar-height,30px);--bar-clear:var(--ai-phone-app-bar-clear-right,96px)}
 html,body{margin:0;height:100%;background:#fff;color:#1f1f1f;font-family:Roboto,-apple-system,"PingFang SC","Helvetica Neue",sans-serif;overflow:hidden}
 button{font:inherit;color:inherit;background:none;border:0;padding:0;cursor:pointer}
 input,textarea{font:inherit;color:inherit}
@@ -31,7 +33,7 @@ svg{display:block;flex:none}
 .ava.lg{width:72px;height:72px;font-size:30px}
 
 /* 收件箱 */
-.sbar{margin:calc(env(safe-area-inset-top) + 8px) 16px 6px;background:#eef2f9;border-radius:28px;height:48px;display:flex;align-items:center;gap:6px;padding:0 6px;flex:none}
+.sbar{margin:calc(var(--bar-top) + (var(--bar-h) - 48px) / 2) var(--bar-clear) 6px 16px;background:#eef2f9;border-radius:28px;height:48px;display:flex;align-items:center;gap:6px;padding:0 6px;flex:none}
 .sb-q{flex:1;color:#5f6368;font-size:16px;padding:0 4px}
 .me-ava{width:36px;height:36px;display:grid;place-items:center}
 .lb{font-size:12.5px;color:#5f6368;padding:10px 16px 4px;letter-spacing:.2px}
@@ -68,9 +70,10 @@ svg{display:block;flex:none}
 .banner button{margin-left:auto;color:#0b57d0;font-weight:600;font-size:13px;white-space:nowrap}
 .banner.warn{background:#fdecea;color:#8c1d18}
 .banner.blue{background:#e8f0fe;color:#0b57d0}
-.topbar{flex:none;display:flex;align-items:center;gap:6px;padding:calc(env(safe-area-inset-top) + 6px) 8px 4px;min-height:52px}
+.topbar{flex:none;display:flex;align-items:center;gap:6px;padding:calc(var(--bar-top) + (var(--bar-h) - 44px) / 2) var(--bar-clear) 4px 8px;min-height:48px}
+.topbar .ib{width:38px;height:38px}
 .topbar .sp{flex:1}
-.topbar .tt{font-size:20px;font-weight:400;flex:1;padding-left:6px}
+.topbar .tt{font-size:19px;font-weight:400;flex:1;padding-left:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:3.5em}
 .topbar>b:not(.tt){font-size:22px;font-weight:500;padding-left:10px;flex:1}
 .topbar.dark{color:#fff}.topbar.dark .ib{color:#fff}
 .tb-btn{display:flex;align-items:center;gap:6px;padding:8px 14px;border-radius:20px;font-size:14px;font-weight:600;color:#0b57d0}
@@ -80,7 +83,7 @@ svg{display:block;flex:none}
 /* 抽屉 */
 .dim{position:absolute;inset:0;background:rgba(0,0,0,.32);animation:fin .2s}
 @keyframes fin{from{opacity:0}}
-.drawer{position:absolute;left:0;top:0;bottom:0;width:300px;max-width:84%;background:#f6f8fc;border-radius:0 16px 16px 0;padding:calc(env(safe-area-inset-top) + 18px) 12px 30px;overflow-y:auto;animation:din .22s ease}
+.drawer{position:absolute;left:0;top:0;bottom:0;width:300px;max-width:84%;background:#f6f8fc;border-radius:0 16px 16px 0;padding:calc(var(--bar-top) + var(--bar-h) + 4px) 12px 30px;overflow-y:auto;animation:din .22s ease}
 @keyframes din{from{transform:translateX(-100%)}}
 .drawer .logo{font-size:22px;color:#444;padding:4px 16px 14px;font-weight:500}.drawer .logo b{color:#d93025;font-weight:700}
 .fd{display:flex;align-items:center;gap:18px;height:48px;padding:0 16px;border-radius:24px;font-size:15px;cursor:pointer}

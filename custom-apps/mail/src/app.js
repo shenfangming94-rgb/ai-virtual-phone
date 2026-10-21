@@ -580,7 +580,7 @@ ${ask ? "邮箱：你的邮箱地址（按你的人设、年代和习惯起一�
     const d = p.data; d.att = d.att || [];
     const toChip = d.to ? `<span class="to">${avatarHtml(d.to, "xs")}${esc(nameOf(d.to))}${d.to.addr ? `<small>${esc(d.to.addr)}</small>` : ""}<button data-act="to-clear">${I.close}</button></span>` : `<input id="to-q" placeholder="选一个人，或者直接输入名字、邮箱" value="${esc(d.toQ || "")}" autocomplete="off">`;
     const sugg = !d.to ? toSuggestions(d.toQ || "") : "";
-    return `<div class="topbar"><button class="ib" data-act="compose-close">${I.back}</button><b class="tt">写邮件</b><span class="sp"></span>
+    return `<div class="topbar"><button class="ib" data-act="compose-close">${I.back}</button><b class="tt">写邮件</b>
       <button class="ib" data-act="attach">${I.clip}</button><button class="ib send" data-act="send">${I.sendFill}</button><button class="ib" data-act="compose-more">${I.more}</button></div>
       <div class="scroll compose"><div class="fld">发件人<span class="v">${esc(myAddr() || S.meta.myName || "我")}${myAddr() ? "" : `<small data-act="settings" class="link">设置邮箱号</small>`}</span></div>
       <div class="fld to-fld">收件人${toChip}</div>${sugg}
@@ -616,7 +616,7 @@ ${ask ? "邮箱：你的邮箱地址（按你的人设、年代和习惯起一�
   PAGES.cardedit = p => {
     const d = p.data; const st = CARDS.STYLES[d.style]; d.f = d.f || {};
     const photoUrl = d.photoRef ? S.mediaCache.get(d.photoRef) : null;
-    return `<div class="topbar"><button class="ib" data-act="back">${I.back}</button><b class="tt">${esc(st.name)}</b><span class="sp"></span><button class="tb-btn blue" data-act="card-done">放进邮件</button></div>
+    return `<div class="topbar"><button class="ib" data-act="back">${I.back}</button><b class="tt">${esc(st.name)}</b><button class="tb-btn blue" data-act="card-done">放进邮件</button></div>
       <div class="scroll"><div class="cprev" id="cprev">${CARDS.cardBox(d.style, d.f, nowIso(), st.wide ? 330 : 250, photoUrl)}</div>
       <div class="form">${st.photo ? `<div class="frow"><label>照片</label><button class="btn-ghost" data-act="card-photo">${d.photoRef ? "换一张" : "从相册选"}</button></div>` : ""}
       ${st.fields.map(fd => `<div class="frow col"><label>${esc(fd.label)}</label>${fd.multi ? `<textarea data-k="${fd.k}" rows="4" placeholder="${esc(fd.def || "（留空用这一季的默认句子）")}">${esc(d.f[fd.k] || "")}</textarea>` : `<input data-k="${fd.k}" ${fd.max ? `maxlength="${fd.max}"` : ""} placeholder="${esc(fd.def)}" value="${esc(d.f[fd.k] || "")}">`}</div>`).join("")}

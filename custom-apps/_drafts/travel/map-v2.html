@@ -1,0 +1,65 @@
+<!doctype html><html><head><meta charset="utf-8">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css">
+<script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
+*{box-sizing:border-box}
+body{margin:0;padding:24px 20px;background:#d9dadd;display:grid;grid-template-columns:repeat(1,375px);gap:22px;font-family:-apple-system,"PingFang SC",sans-serif}
+.col{display:flex;flex-direction:column;align-items:center;gap:10px}
+.lab{font-size:19px;font-weight:800;color:#333;text-align:center}.lab small{display:block;font-size:12.5px;color:#777;font-weight:600;margin-top:3px}
+.ph{width:375px;height:800px;border-radius:36px;overflow:hidden;position:relative;background:#fff;box-shadow:0 10px 30px rgba(0,0,0,.12)}
+.map{position:absolute;inset:0}
+.cap{position:absolute;right:8px;top:50px;width:84px;height:30px;border-radius:15px;background:rgba(255,255,255,.85);box-shadow:0 1px 4px rgba(0,0,0,.15);z-index:900;display:flex;align-items:center;justify-content:space-around;font-size:13px;color:#333}
+.status{position:absolute;left:0;right:0;top:0;height:44px;display:flex;align-items:center;justify-content:space-between;padding:0 28px;font-size:15px;font-weight:700;z-index:900}
+.hd{position:absolute;left:14px;right:104px;top:48px;z-index:900;display:flex;align-items:center;gap:8px}
+.hd b{font-size:22px;font-weight:800;letter-spacing:1px}
+.seg{position:absolute;left:14px;top:92px;z-index:900;display:flex;gap:6px}
+.seg span{padding:6px 12px;border-radius:16px;font-size:13px;font-weight:600;background:var(--chip);color:var(--chipink);box-shadow:0 1px 4px rgba(0,0,0,.12)}
+.seg span.on{background:var(--acc);color:#fff}
+.pin{position:relative;width:54px;height:54px}
+.pin .ph-c{width:54px;height:54px;border-radius:50%;border:3px solid var(--pinbd);box-shadow:0 3px 10px rgba(0,0,0,.25);background-size:cover}
+.pin .tail{position:absolute;left:50%;bottom:-7px;width:12px;height:12px;background:var(--pinbd);transform:translateX(-50%) rotate(45deg);z-index:-1}
+.pin .av{position:absolute;right:-6px;bottom:-4px;width:22px;height:22px;border-radius:50%;border:2px solid #fff;background:#7a8fb8}
+.pin .cnt{position:absolute;left:-6px;top:-6px;background:var(--acc);color:#fff;font-size:11px;font-weight:700;border-radius:10px;padding:1px 6px;border:2px solid #fff}
+.pin.solo .ph-c{border-style:dashed}
+.sheet{position:absolute;left:0;right:0;bottom:80px;z-index:900;background:var(--sheet);color:var(--ink);border-radius:22px 22px 0 0;padding:10px 18px 14px;box-shadow:0 -4px 20px rgba(0,0,0,.12)}
+.sheet .h{width:36px;height:4px;border-radius:2px;background:#ccc;margin:0 auto 10px}
+.sheet .t{display:flex;align-items:baseline;gap:8px}.sheet .t b{font-size:18px}.sheet .t small{color:var(--sub);font-size:13px}
+.stats{display:flex;gap:10px;margin-top:10px}
+.stats div{flex:1;background:var(--card);border-radius:14px;padding:8px 10px}.stats b{display:block;font-size:20px;color:var(--acc)}.stats span{font-size:11.5px;color:var(--sub)}
+.recent{display:flex;gap:8px;margin-top:12px;overflow:hidden}
+.recent div{flex:none;width:96px;height:70px;border-radius:12px;position:relative;overflow:hidden}
+.recent div span{position:absolute;left:6px;bottom:5px;color:#fff;font-size:11.5px;font-weight:700;text-shadow:0 1px 3px rgba(0,0,0,.5)}
+.nav{position:absolute;left:0;right:0;bottom:0;height:80px;z-index:900;background:var(--sheet);display:flex;justify-content:space-around;padding-top:10px;font-size:11.5px;color:var(--sub);border-top:1px solid var(--line)}
+.nav div{text-align:center;color:#666}.nav i{display:block;width:24px;height:24px;margin:0 auto 3px}.nav i svg{width:24px;height:24px}
+.nav .on{color:#111;font-weight:700}.nav .on svg{stroke-width:2.3}
+.leaflet-control-attribution{display:none}
+</style></head><body>
+<script>
+const STY=[
+ {k:"amap",lab:"① 高德原样",desc:"最像真地图",url:"https://webrd0{s}.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=1&style=8&x={x}&y={y}&z={z}",sd:"1234",filter:"",acc:"#3b7cff",sheet:"#fff",card:"#f3f6fb",ink:"#1f1f1f",sub:"#888",chip:"#fff",chipink:"#333",pinbd:"#fff",line:"#eee"},
+];
+const PTS=[["杭州",30.25,120.16,"#f6a7b9","#a7c7f6",3,1],["成都",30.66,104.07,"#f7c873","#e78a5f",2,1],["大理",25.6,100.27,"#8fd3c7","#6fa8dc",4,1],["青岛",36.07,120.38,"#9fc5f8","#5b8bd9",1,0],["哈尔滨",45.8,126.53,"#d7e3f4","#9bb3d6",2,1],["厦门",24.48,118.09,"#ffd6a5","#f4978e",1,0],["北京",39.9,116.4,"#e0c3fc","#a18cd1",2,1]];
+for(const s of STY){
+ document.write(`<div class="col"><div class="lab">${s.lab}<small>${s.desc}</small></div><div class="ph" style="--acc:${s.acc};--sheet:${s.sheet};--card:${s.card};--ink:${s.ink};--sub:${s.sub};--chip:${s.chip};--chipink:${s.chipink};--pinbd:${s.pinbd};--line:${s.line}">
+ <div class="map" id="m_${s.k}" style="filter:${s.filter}"></div>
+ <div class="status" style="color:${s.k==='night'?'#fff':'#111'}">9:41<span>●●● ▮</span></div><div class="cap">··· | ○</div>
+ <div class="hd" style="color:${s.k==='night'?'#fff':'#222'}"><b>我们的足迹</b></div>
+ <div class="seg"><span class="on">全部 7</span><span>一起去的 5</span><span>我自己 2</span></div>
+ <div class="sheet"><div class="h"></div><div class="t"><b>去过 7 座城市</b><small>其中 5 座是和沈砚一起</small></div>
+  <div class="stats"><div><b>23</b><span>打卡地点</span></div><div><b>148</b><span>张照片</span></div><div><b>6,820</b><span>公里</span></div></div>
+  <div class="recent"><div style="background:linear-gradient(135deg,#f6a7b9,#a7c7f6)"><span>杭州 · 10月</span></div><div style="background:linear-gradient(135deg,#8fd3c7,#6fa8dc)"><span>大理 · 8月</span></div><div style="background:linear-gradient(135deg,#d7e3f4,#9bb3d6)"><span>哈尔滨 · 1月</span></div></div></div>
+ <div class="nav"><div class="on"><i><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M9 4 3.5 6v14L9 18l6 2 5.5-2V4L15 6 9 4z"/><path d="M9 4v14M15 6v14"/></svg></i>足迹</div><div class=""><i><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round"><path d="M6 3.5h9l3 3v14H6z"/><path d="M9 10h6M9 14h6M9 18h3.5"/></svg></i>攻略</div><div class=""><i><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M3.5 7.5h17v3a2 2 0 0 0 0 3v3h-17v-3a2 2 0 0 0 0-3z"/><path d="M14.5 7.5v9" stroke-dasharray="1.6 2"/></svg></i>订票</div><div class=""><i><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M10.5 13.5 4 11l1.5-1.5 7 1L17 6c1-1 2.6-1.2 3-.8.4.4.2 2-.8 3L14.5 12.5l1 7L14 21l-2.5-6.5L8 18v2.5L6.5 22 5 19l-3-1.5L3.5 16H6l3.5-3.5"/></svg></i>航班</div><div class=""><i><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M3.5 6.5h6l2 2h9v11h-17z"/><path d="M3.5 10.5h17"/></svg></i>票根夹</div></div>
+ </div></div>`);
+}
+for(const s of STY){
+ const m=L.map("m_"+s.k,{zoomControl:false,attributionControl:false}).setView([31.5,113],4);
+ const t=L.tileLayer(s.url,{subdomains:s.sd,maxZoom:18}).addTo(m);
+ if(s.filter){} 
+ for(const [n,la,lo,c1,c2,cnt,tog] of PTS){
+  L.marker([la,lo],{icon:L.divIcon({className:"",iconSize:[54,54],iconAnchor:[27,60],html:`<div class="pin ${tog?'':'solo'}"><div class="ph-c" style="background:linear-gradient(135deg,${c1},${c2})"></div><div class="tail"></div>${tog?'<div class="av"></div>':''}${cnt>1?`<div class="cnt">${cnt}</div>`:''}</div>`})}).addTo(m);
+ }
+}
+// 滤镜只给瓦片，不给点
+document.querySelectorAll('.map').forEach(el=>{const f=el.style.filter; if(f){el.style.filter=''; const st=document.createElement('style'); st.textContent=`#${el.id} .leaflet-tile-pane{filter:${f}}`; document.head.appendChild(st);} });
+</script>
+</body></html>

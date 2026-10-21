@@ -1,0 +1,131 @@
+<!doctype html><html><head><meta charset="utf-8">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css">
+<script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
+*{box-sizing:border-box}
+body{margin:0;padding:24px 20px;background:#d9dadd;display:grid;grid-template-columns:repeat(5,375px);gap:22px;font-family:-apple-system,"PingFang SC",sans-serif;color:#1f1f1f}
+.col{display:flex;flex-direction:column;align-items:center;gap:10px}
+.lab{font-size:19px;font-weight:800;color:#333;text-align:center}.lab small{display:block;font-size:12.5px;color:#777;font-weight:600;margin-top:3px}
+.ph{width:375px;height:800px;border-radius:36px;overflow:hidden;position:relative;background:#fff;box-shadow:0 10px 30px rgba(0,0,0,.12)}
+.status{position:absolute;left:0;right:0;top:0;height:44px;display:flex;align-items:center;justify-content:space-between;padding:0 28px;font-size:15px;font-weight:700;z-index:900}
+.cap{position:absolute;right:8px;top:50px;width:84px;height:30px;border-radius:15px;background:rgba(255,255,255,.9);box-shadow:0 1px 4px rgba(0,0,0,.15);z-index:950;display:flex;align-items:center;justify-content:space-around;font-size:13px;color:#333}
+.top{position:absolute;left:0;right:104px;top:48px;height:36px;display:flex;align-items:center;gap:6px;padding-left:10px;z-index:900}
+.top svg{width:24px;height:24px}.top b{font-size:18px}
+.body{position:absolute;left:0;right:0;top:90px;bottom:80px;overflow:hidden}
+.nav{position:absolute;left:0;right:0;bottom:0;height:80px;z-index:900;background:#fff;display:flex;justify-content:space-around;padding-top:10px;font-size:11.5px;border-top:1px solid #eee}
+.nav div{text-align:center;color:#666}.nav i{display:block;width:24px;height:24px;margin:0 auto 3px}.nav svg{width:24px;height:24px}
+.nav .on{color:#111;font-weight:700}.nav .on svg{stroke-width:2.3}
+.leaflet-control-attribution{display:none}
+/* 发现 */
+.srch{margin:0 14px;height:40px;border-radius:20px;background:#f2f3f5;display:flex;align-items:center;gap:8px;padding:0 14px;font-size:15px}.srch svg{width:18px;height:18px;color:#888}
+.tabs{display:flex;gap:22px;padding:12px 16px 8px;font-size:15px;color:#888}.tabs .on{color:#111;font-weight:800;position:relative}.tabs .on:after{content:"";position:absolute;left:20%;right:20%;bottom:-6px;height:3px;border-radius:2px;background:#ff2442}
+.aiNote{margin:2px 14px 8px;font-size:11.5px;color:#999;display:flex;align-items:center;gap:4px}
+.masonry{columns:2;column-gap:8px;padding:0 10px}
+.nt{break-inside:avoid;margin-bottom:8px;border-radius:12px;overflow:hidden;background:#fff;box-shadow:0 1px 4px rgba(0,0,0,.06)}
+.nt .cv{position:relative}.nt .cv span{position:absolute;left:8px;bottom:6px;color:#fff;font-size:11px;text-shadow:0 1px 3px rgba(0,0,0,.4)}
+.nt b{display:block;font-size:13.5px;line-height:1.45;padding:7px 8px 4px}
+.nt .ft{display:flex;align-items:center;gap:5px;padding:0 8px 8px;font-size:11.5px;color:#888}.nt .ft i{width:16px;height:16px;border-radius:50%;flex:none}.nt .ft em{margin-left:auto;font-style:normal}
+.food{display:flex;gap:12px;padding:12px 14px;border-bottom:1px solid #f2f2f2}
+.food .im{width:84px;height:84px;border-radius:12px;flex:none}
+.food .bd{flex:1;min-width:0}.food .bd b{font-size:15.5px;display:block}
+.stars{color:#ff8a00;font-size:12px;margin-top:3px;display:flex;align-items:center;gap:6px}.stars em{font-style:normal;color:#ff8a00;font-weight:700}.stars span{color:#888}
+.food .tg{display:flex;gap:5px;margin-top:5px;flex-wrap:wrap}.food .tg span{font-size:11px;background:#fff3e6;color:#c76a00;border-radius:4px;padding:1px 5px}
+.food .rv{font-size:12.5px;color:#666;margin-top:5px;line-height:1.5}
+.food .add{align-self:center;border:1px solid #111;border-radius:14px;font-size:12px;padding:4px 10px;white-space:nowrap}
+/* 订票 */
+.route{margin:0 14px;background:linear-gradient(135deg,#2b5bd7,#5a8dee);border-radius:18px;padding:14px 16px;color:#fff}
+.route .r{display:flex;align-items:center;justify-content:space-between}.route .r b{font-size:24px}.route .r svg{width:26px;height:26px}
+.route .opt{display:flex;gap:8px;margin-top:10px;font-size:12.5px}.route .opt span{background:rgba(255,255,255,.2);border-radius:10px;padding:3px 9px}
+.kinds{display:flex;gap:8px;padding:12px 14px 4px}.kinds span{padding:6px 14px;border-radius:16px;background:#f2f3f5;font-size:13.5px;font-weight:600}.kinds span.on{background:#111;color:#fff}
+.dates{display:flex;gap:6px;padding:8px 14px;overflow:hidden}
+.dates div{flex:none;width:56px;text-align:center;border-radius:12px;padding:6px 0;font-size:12px;color:#666;background:#f7f8fa}.dates div b{display:block;font-size:14px;color:#111}.dates div small{color:#2b5bd7;font-weight:700}
+.dates .on{background:#e8efff;outline:2px solid #2b5bd7}
+.fl{margin:8px 14px 0;border-radius:16px;border:1px solid #eee;padding:12px 14px;display:flex;align-items:center;gap:10px}
+.fl .t{text-align:center}.fl .t b{font-size:19px;display:block}.fl .t small{font-size:11.5px;color:#888}
+.fl .mid{flex:1;text-align:center;font-size:11px;color:#999}.fl .mid i{display:block;height:1px;background:#ddd;margin:4px 6px}
+.fl .pr{text-align:right;min-width:72px}.fl .pr b{font-size:19px;color:#ff5a1f}.fl .pr b small{font-size:12px}.fl .pr div{font-size:11px;color:#888}
+.fl .air{font-size:11.5px;color:#666;margin-top:2px}
+.fl.hot{border-color:#ffd2c2;background:#fffaf7}
+.ppl{margin:10px 14px 0;font-size:12.5px;color:#555;display:flex;align-items:center;gap:6px}.ppl i{width:20px;height:20px;border-radius:50%}
+/* 选座 */
+.cabin{margin:0 auto;width:300px;background:#f6f7f9;border-radius:120px 120px 20px 20px;padding:60px 18px 16px;position:relative}
+.cabin:before{content:"经济舱";position:absolute;top:26px;left:0;right:0;text-align:center;font-size:12px;color:#999;letter-spacing:4px}
+.cols{display:grid;grid-template-columns:repeat(3,30px) 24px repeat(3,30px);gap:8px 7px;justify-content:center;font-size:11px;color:#999;text-align:center}
+.st{width:30px;height:30px;border-radius:8px 8px 5px 5px;background:#fff;border:1.5px solid #cfd6e3}
+.st.x{background:#e3e6ec;border-color:#e3e6ec}
+.st.me{background:#f6a7c3;border-color:#e0789f;position:relative}.st.him{background:#9ab8f0;border-color:#5b86d6}
+.st.me:after,.st.him:after{content:attr(data-n);position:absolute}
+.rown{line-height:30px}
+.seatTip{margin:14px 14px 0;background:#fff7e8;border-radius:14px;padding:10px 12px;font-size:13px;line-height:1.6;display:flex;gap:10px}
+.seatTip i{width:28px;height:28px;border-radius:50%;background:#7a8fb8;flex:none}
+.seatSel{margin:12px 14px 0;display:flex;gap:8px}.seatSel div{flex:1;border-radius:12px;padding:8px 10px;font-size:12.5px}.seatSel b{font-size:16px;display:block}
+.payBtn{position:absolute;left:14px;right:14px;bottom:92px;height:48px;border-radius:24px;background:#111;color:#fff;display:flex;align-items:center;justify-content:space-between;padding:0 20px;font-weight:700;z-index:901}
+.payBtn small{font-weight:400;font-size:12px;opacity:.8}
+/* 航班 */
+.fcard{position:absolute;left:12px;right:12px;bottom:92px;background:#fff;border-radius:20px;padding:14px 16px;box-shadow:0 6px 24px rgba(0,0,0,.15);z-index:900}
+.fcard .h{display:flex;align-items:center;gap:10px}.fcard .h i{width:34px;height:34px;border-radius:50%;background:#7a8fb8}.fcard .h b{font-size:15px;display:block}.fcard .h small{font-size:12px;color:#888}
+.fcard .stt{margin-left:auto;background:#e6f6ec;color:#1a9a4b;font-weight:700;font-size:12.5px;border-radius:10px;padding:3px 10px}
+.prog{display:flex;align-items:center;justify-content:space-between;margin-top:14px}
+.prog .e b{font-size:22px;display:block}.prog .e small{font-size:12px;color:#888}
+.prog .bar{flex:1;margin:0 12px;height:4px;border-radius:2px;background:#e8ebf0;position:relative}.prog .bar i{position:absolute;left:0;top:0;bottom:0;width:62%;border-radius:2px;background:#2b5bd7}
+.prog .bar svg{position:absolute;left:62%;top:-11px;width:24px;height:24px;transform:translateX(-50%) rotate(45deg);color:#2b5bd7}
+.left{text-align:center;font-size:12.5px;color:#555;margin-top:6px}
+.fgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-top:12px;font-size:11.5px;color:#888;text-align:center}.fgrid b{display:block;font-size:15px;color:#111}
+.fbtns{display:flex;gap:8px;margin-top:12px}.fbtns div{flex:1;text-align:center;border-radius:14px;padding:10px 0;font-size:13.5px;font-weight:700;border:1px solid #ddd}.fbtns .p{background:#111;color:#fff;border-color:#111}
+.ftop{position:absolute;left:12px;top:92px;z-index:900;background:#fff;border-radius:14px;padding:8px 12px;box-shadow:0 2px 10px rgba(0,0,0,.12);font-size:13px}
+.ftop b{font-size:15px}
+</style></head><body>
+<script>
+const NAVI={"足迹":'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M9 4 3.5 6v14L9 18l6 2 5.5-2V4L15 6 9 4z"/><path d="M9 4v14M15 6v14"/></svg>',"发现":'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><circle cx="12" cy="12" r="8.5"/><path d="m15.5 8.5-2 5-5 2 2-5z"/></svg>',"攻略":'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round"><path d="M6 3.5h9l3 3v14H6z"/><path d="M9 10h6M9 14h6M9 18h3.5"/></svg>',"订票":'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M3.5 7.5h17v3a2 2 0 0 0 0 3v3h-17v-3a2 2 0 0 0 0-3z"/><path d="M14.5 7.5v9" stroke-dasharray="1.6 2"/></svg>',"票根夹":'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M3.5 6.5h6l2 2h9v11h-17z"/><path d="M3.5 10.5h17"/></svg>'};
+const PLANE='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M10.5 13.5 4 11l1.5-1.5 7 1L17 6c1-1 2.6-1.2 3-.8.4.4.2 2-.8 3L14.5 12.5l1 7L14 21l-2.5-6.5L8 18v2.5L6.5 22 5 19l-3-1.5L3.5 16H6l3.5-3.5"/></svg>';
+const nav=on=>`<div class="nav">${Object.entries(NAVI).map(([k,v])=>`<div class="${k===on?'on':''}"><i>${v}</i>${k}</div>`).join("")}</div>`;
+const BACK='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5 8 12l7 7"/></svg>';
+const head=(t,back)=>`<div class="status">9:41<span>●●● ▮</span></div><div class="cap">··· | ○</div><div class="top">${back?BACK:""}<b>${t}</b></div>`;
+const SR='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="6.5"/><path d="m16 16 4.5 4.5"/></svg>';
+const g=(a,b)=>`linear-gradient(160deg,${a},${b})`;
+const notes=[["大理三天两夜不踩雷路线｜第一次去照抄",g("#a8e0ff","#5bb4e5"),180,"洱海边的风","2.1万"],["洱海边看日落最好的三个位置🌅",g("#ffd29d","#ff8c69"),140,"Momo去旅行","8,602"],["喜洲古镇｜麦田里骑车真的会治愈",g("#d4f5a3","#8ccf6d"),200,"一只小羊","5,214"],["大理古城别只逛人民路！这几条巷子更好拍",g("#f9d1e0","#e89bb6"),160,"拍照的阿卷","3,960"],["苍山索道值不值得坐？说实话",g("#c9d6ff","#8fa7e8"),130,"不想上班","1,233"],["双廊住了三晚，说说真实感受",g("#bfeee7","#5cc4b3"),170,"海边小屋","2,876"]];
+document.write(`
+<div class="col"><div class="lab">① 发现 · 网友推荐<small>像小红书，点开有正文和评论</small></div><div class="ph">${head("发现")}
+ <div class="body"><div class="srch">${SR}大理</div>
+ <div class="tabs"><span class="on">网友推荐</span><span>景点</span><span>吃的</span><span>住的</span></div>
+ <div class="aiNote">ⓘ AI 整理的内容，出门前再确认一下哦</div>
+ <div class="masonry">${notes.map(([t,c,h,u,l])=>`<div class="nt"><div class="cv" style="height:${h}px;background:${c}"></div><b>${t}</b><div class="ft"><i style="background:${c}"></i>${u}<em>♡ ${l}</em></div></div>`).join("")}</div></div>${nav("发现")}</div></div>
+
+<div class="col"><div class="lab">② 发现 · 吃的<small>评分、人均、招牌菜，一键加进攻略</small></div><div class="ph">${head("发现")}
+ <div class="body"><div class="srch">${SR}大理</div>
+ <div class="tabs"><span>网友推荐</span><span>景点</span><span class="on">吃的</span><span>住的</span></div>
+ ${[["段公子·白族私房菜",g("#ffd8a8","#f59f4c"),"4.7","¥86/人","古城","酸辣鱼 · 乳扇 · 饵块","「酸辣鱼必点，老板会推荐别点太多」"],["喜洲破酥粑粑（老店）",g("#f8e3b0","#e2b55c"),"4.6","¥12/人","喜洲","甜咸都有 · 现烤","「排队二十分钟，刚出炉的咸的绝了」"],["洱海边的咖啡馆",g("#d6efff","#87c0e8"),"4.4","¥45/人","双廊","海景位 · 手冲","「位置很好，咖啡一般，坐着看海值了」"],["野生菌火锅",g("#e4f2c7","#9cc76a"),"4.5","¥120/人","古城","见手青 · 鸡枞","「一定煮够时间！服务员会盯着你」"]].map(([n,c,s,p,a,tg,rv])=>`<div class="food"><div class="im" style="background:${c}"></div><div class="bd"><b>${n}</b><div class="stars">★★★★★<em>${s}</em><span>${p} · ${a}</span></div><div class="tg">${tg.split(" · ").map(x=>`<span>${x}</span>`).join("")}</div><div class="rv">${rv}</div></div><div class="add">+ 攻略</div></div>`).join("")}
+ </div>${nav("发现")}</div></div>
+
+<div class="col"><div class="lab">③ 订票 · 搜班次<small>机票 / 火车 / 酒店，两个人一起订</small></div><div class="ph">${head("订票")}
+ <div class="body"><div class="route"><div class="r"><b>北京</b>${PLANE}<b>大理</b></div><div class="opt"><span>10月31日 周六</span><span>2 人</span><span>经济舱</span></div></div>
+ <div class="kinds"><span class="on">机票</span><span>火车票</span><span>酒店</span></div>
+ <div class="dates">${[["30","周五","¥1,180"],["31","周六","¥960"],["1","周日","¥1,050"],["2","周一","¥820"],["3","周二","¥790"]].map(([d,w,p],i)=>`<div class="${i===1?'on':''}">${w}<b>${d}</b><small>${p}</small></div>`).join("")}</div>
+ <div class="ppl"><i style="background:#c58af9"></i><i style="background:#7a8fb8;margin-left:-10px"></i>我 + 沈砚 · 价格是一人</div>
+ ${[["07:25","首都T3","11:10","大理","3h45m","东方航空 MU5719","¥960",1],["09:40","大兴","13:05","大理","3h25m","南方航空 CZ6129","¥1,040",0],["13:15","首都T3","18:50","大理","5h35m","经停昆明 · 祥鹏 8L9816","¥780",0],["19:05","大兴","22:40","大理","3h35m","东方航空 MU2577","¥1,120",0]].map(([a,af,b,bf,d,air,p,hot])=>`<div class="fl ${hot?'hot':''}"><div class="t"><b>${a}</b><small>${af}</small></div><div class="mid">${d}<i></i>直飞</div><div class="t"><b>${b}</b><small>${bf}</small></div><div class="pr"><b><small>¥</small>${p.slice(1)}</b><div>${air.split(" ")[0]}</div></div></div>`).join("")}
+ </div>${nav("订票")}</div></div>
+
+<div class="col"><div class="lab">④ 选座<small>挑挨着的两个，他会按人设反应</small></div><div class="ph">${head("选座",1)}
+ <div class="body" style="padding-top:6px"><div class="cabin"><div class="cols"><span>A</span><span>B</span><span>C</span><span></span><span>D</span><span>E</span><span>F</span>
+ ${Array.from({length:8},(_,r)=>{const row=30+r;const cell=(c)=>{const id=row+c;if(id==="32A")return'<div class="st me"></div>';if(id==="32B")return'<div class="st him"></div>';return `<div class="st ${((r*7+c.charCodeAt(0))%3===0)?'x':''}"></div>`};return ["A","B","C"].map(cell).join("")+`<span class="rown">${row}</span>`+["D","E","F"].map(cell).join("")}).join("")}
+ </div></div>
+ <div class="seatSel"><div style="background:#fde7ef"><small>我</small><b>32A 靠窗</b></div><div style="background:#e5edfb"><small>沈砚</small><b>32B 中间</b></div></div>
+ <div class="seatTip"><i></i><div>「靠窗给你，你睡着了别靠我肩膀上流口水。」</div></div></div>
+ <div class="payBtn"><span>¥1,920 <small>两人 · 钱包支付</small></span><span>去付款</span></div>
+ ${nav("订票")}</div></div>
+
+<div class="col"><div class="lab">⑤ 关注他的航班<small>他来找你，看着他飞过来</small></div><div class="ph"><div id="fm" style="position:absolute;inset:0"></div>${head("他的航班",1)}
+ <div class="ftop"><b>上海</b> → <b>北京</b>　MU5101</div>
+ <div class="fcard"><div class="h"><i></i><div><b>沈砚 · 东方航空 MU5101</b><small>10月25日 · 来找你</small></div><span class="stt">飞行中</span></div>
+ <div class="prog"><div class="e"><b>14:05</b><small>虹桥 T2 起飞</small></div><div class="bar"><i></i>${PLANE}</div><div class="e" style="text-align:right"><b>16:20</b><small>首都 T2 预计</small></div></div>
+ <div class="left">还有 52 分钟落地</div>
+ <div class="fgrid"><div>到达口<b>T2 A</b></div><div>行李转盘<b>27</b></div><div>准点率<b>86%</b></div></div>
+ <div class="fbtns"><div>给他留言</div><div class="p">我去接机</div></div></div>
+ ${nav("订票")}</div></div>`);
+const m=L.map("fm",{zoomControl:false,attributionControl:false}).setView([35.6,118.6],5.6);setTimeout(()=>m.fitBounds([[31.2,121.33],[40.08,116.6]],{paddingTopLeft:[40,150],paddingBottomRight:[40,330]}),50);
+L.tileLayer("https://webrd0{s}.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=1&style=8&x={x}&y={y}&z={z}",{subdomains:"1234"}).addTo(m);
+const A=[31.2,121.33],B=[40.08,116.6];const pts=[];for(let i=0;i<=40;i++){const t=i/40;const la=A[0]+(B[0]-A[0])*t,lo=A[1]+(B[1]-A[1])*t+Math.sin(t*Math.PI)*1.6;pts.push([la,lo]);}
+L.polyline(pts,{color:"#2b5bd7",weight:3,dashArray:"6 8"}).addTo(m);L.polyline(pts.slice(0,26),{color:"#2b5bd7",weight:4}).addTo(m);
+L.marker(pts[25],{icon:L.divIcon({className:"",iconSize:[34,34],iconAnchor:[17,17],html:`<div style="width:34px;height:34px;border-radius:50%;background:#2b5bd7;display:grid;place-items:center;color:#fff;box-shadow:0 2px 8px rgba(0,0,0,.3)"><div style="width:20px;height:20px;transform:rotate(-20deg)">${PLANE.replace('<svg','<svg width="20" height="20"')}</div></div>`})}).addTo(m);
+for(const [p,n] of [[A,"上海"],[B,"北京"]])L.marker(p,{icon:L.divIcon({className:"",iconSize:[14,14],iconAnchor:[7,7],html:`<div style="width:14px;height:14px;border-radius:50%;background:#fff;border:4px solid #2b5bd7"></div>`})}).addTo(m);
+</script></body></html>

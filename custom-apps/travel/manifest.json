@@ -1,0 +1,30 @@
+{
+  "sdkVersion": "1.0",
+  "id": "nox.travel",
+  "name": "旅行",
+  "version": "0.1.0",
+  "author": "Nox for Flora",
+  "description": "和 char 一起旅行：足迹地图（打卡、照片、两个人的话）、发现（城市攻略、景点、美食、酒店）、攻略（他写/你写/给他看）、订票选座、票根夹。",
+  "icon": "icon.png",
+  "entry": "index.html",
+  "permissions": [
+    "app.data.read",
+    "app.data.write",
+    "characters.read",
+    "user.profile.read",
+    "ai.generate",
+    "ai.chat",
+    "ai.generateImage",
+    "media.pick",
+    "memory.write",
+    "wallet.read",
+    "wallet.pay",
+    "network.fetch",
+    "ui.toast"
+  ],
+  "network": {
+    "allowedDomains": [
+      "geocoding-api.open-meteo.com"
+    ]
+  }
+}

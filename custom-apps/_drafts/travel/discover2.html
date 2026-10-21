@@ -1,0 +1,110 @@
+<!doctype html><html><head><meta charset="utf-8">
+<style>
+*{box-sizing:border-box}
+body{margin:0;padding:24px 20px;background:#d9dadd;display:grid;grid-template-columns:repeat(4,375px);gap:22px;font-family:-apple-system,"PingFang SC",sans-serif;color:#1f1f1f}
+.col{display:flex;flex-direction:column;align-items:center;gap:10px}
+.lab{font-size:19px;font-weight:800;color:#333;text-align:center}.lab small{display:block;font-size:12.5px;color:#777;font-weight:600;margin-top:3px}
+.ph{width:375px;height:800px;border-radius:36px;overflow:hidden;position:relative;background:#f4f5f7;box-shadow:0 10px 30px rgba(0,0,0,.12)}
+.status{position:absolute;left:0;right:0;top:0;height:44px;display:flex;align-items:center;justify-content:space-between;padding:0 28px;font-size:15px;font-weight:700;z-index:900}
+.cap{position:absolute;right:8px;top:50px;width:84px;height:30px;border-radius:15px;background:rgba(255,255,255,.9);box-shadow:0 1px 4px rgba(0,0,0,.15);z-index:950;display:flex;align-items:center;justify-content:space-around;font-size:13px;color:#333}
+.top{position:absolute;left:0;right:104px;top:48px;height:36px;display:flex;align-items:center;gap:6px;padding-left:10px;z-index:900}
+.top svg{width:24px;height:24px}.top b{font-size:18px}
+.nav{position:absolute;left:0;right:0;bottom:0;height:80px;z-index:900;background:#fff;display:flex;justify-content:space-around;padding-top:10px;font-size:11.5px;border-top:1px solid #eee}
+.nav div{text-align:center;color:#666}.nav i{display:block;width:24px;height:24px;margin:0 auto 3px}.nav svg{width:24px;height:24px}
+.nav .on{color:#111;font-weight:700}.nav .on svg{stroke-width:2.3}
+.scr{position:absolute;left:0;right:0;top:0;bottom:80px;overflow:hidden}
+/* 城市首页 */
+.hero{height:250px;position:relative;background:linear-gradient(180deg,#8ec5fc 0%,#a7d8f0 40%,#7fb7a4 62%,#4d7f6a 100%)}
+.hero:before{content:"";position:absolute;left:0;right:0;bottom:70px;height:60px;background:linear-gradient(170deg,transparent 40%,#5d8f9e 41%);opacity:.8}
+.hero:after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(0,0,0,.15),transparent 30%,transparent 60%,rgba(0,0,0,.45))}
+.hero .t{position:absolute;left:18px;bottom:18px;color:#fff;z-index:2}.hero .t b{font-size:30px;font-weight:800;display:block;letter-spacing:2px}.hero .t small{font-size:13px;opacity:.9}
+.card{background:#fff;border-radius:16px;margin:10px 12px 0;padding:14px}
+.facts{display:grid;grid-template-columns:repeat(4,1fr);text-align:center;margin-top:-34px;position:relative;z-index:3;box-shadow:0 4px 14px rgba(0,0,0,.08)}
+.facts small{font-size:11px;color:#999;display:block}.facts b{font-size:14px;display:block;margin-top:3px}
+.tabs{display:flex;gap:6px;margin:12px 12px 0}
+.tabs span{flex:1;text-align:center;padding:8px 0;border-radius:12px;background:#fff;font-size:14px;font-weight:600;color:#666}.tabs .on{background:#2b5bd7;color:#fff}
+.route{display:flex;gap:12px}
+.route .im{width:96px;height:96px;border-radius:12px;flex:none}
+.route b{font-size:15.5px;display:block}
+.chips{display:flex;gap:5px;flex-wrap:wrap;margin-top:6px}.chips span{font-size:11px;border-radius:4px;padding:1px 6px;background:#eef3ff;color:#2b5bd7}.chips .p{background:#ffeef2;color:#e0457b}
+.route p{margin:6px 0 0;font-size:12.5px;color:#777;line-height:1.5}
+.dline{font-size:12.5px;color:#444;margin-top:8px;line-height:1.7}.dline b{display:inline;font-size:12.5px;color:#2b5bd7;margin-right:4px}
+.imp{display:flex;align-items:center;justify-content:space-between;margin-top:10px;padding-top:10px;border-top:1px solid #f0f0f0;font-size:12.5px;color:#888}
+.imp span{background:#111;color:#fff;border-radius:14px;padding:5px 12px;font-weight:700}
+.tip{font-size:12.5px;color:#555;line-height:1.7}.tip b{color:#e8833a}
+.h3{font-size:16px;font-weight:800;margin:0 0 8px;display:flex;justify-content:space-between;align-items:baseline}.h3 small{font-size:12px;color:#999;font-weight:400}
+/* 榜单 */
+.rank{display:flex;gap:12px;padding:12px 0;border-bottom:1px solid #f2f2f2;position:relative}
+.rank:last-child{border:0}
+.rank .im{width:92px;height:92px;border-radius:12px;flex:none;position:relative}
+.rank .no{position:absolute;left:0;top:0;width:28px;height:30px;background:#e8833a;color:#fff;font-weight:800;font-size:14px;display:grid;place-items:center;border-radius:12px 0 10px 0}
+.rank .no.n2{background:#9aa5b4}.rank .no.n3{background:#c58b5b}.rank .no.n4{background:#c9ced6}
+.rank .bd{flex:1;min-width:0}.rank b{font-size:15.5px;display:block}
+.sc{display:flex;align-items:center;gap:6px;margin-top:4px;font-size:12px;color:#888}.sc em{font-style:normal;background:#2b5bd7;color:#fff;font-weight:800;border-radius:6px 6px 6px 2px;padding:1px 6px;font-size:13px}.sc strong{color:#2b5bd7;font-weight:700}
+.rank .meta{font-size:12px;color:#888;margin-top:4px}
+.rank .q{font-size:12.5px;color:#555;margin-top:5px;background:#f7f8fa;border-radius:6px;padding:4px 8px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.seg2{display:flex;gap:16px;font-size:13.5px;color:#888;margin-bottom:4px}.seg2 .on{color:#111;font-weight:800}
+/* 详情 */
+.dhero{height:240px;background:linear-gradient(180deg,#cfd9df 0%,#a3b6c2 45%,#e2c58f 70%,#c49a5c 100%);position:relative}
+.dhero:after{content:"1/26";position:absolute;right:12px;bottom:12px;background:rgba(0,0,0,.45);color:#fff;font-size:12px;border-radius:10px;padding:2px 8px}
+.big{display:flex;align-items:center;gap:12px}
+.big .n{font-size:34px;font-weight:800;color:#2b5bd7;line-height:1}.big .w b{font-size:15px;color:#2b5bd7;display:block}.big .w small{font-size:12px;color:#888}
+.sub3{display:flex;gap:8px;margin-top:10px}.sub3 div{flex:1;background:#f4f7ff;border-radius:10px;padding:6px 8px;font-size:11.5px;color:#666}.sub3 b{font-size:15px;color:#111;display:block}
+.info{font-size:13px;color:#444;line-height:2}.info span{color:#999;display:inline-block;width:64px}
+.rv{padding:10px 0;border-top:1px solid #f2f2f2}.rv:first-of-type{border:0}
+.rv .u{display:flex;align-items:center;gap:8px;font-size:13px}.rv .u i{width:26px;height:26px;border-radius:50%}.rv .u em{font-style:normal;color:#2b5bd7;font-weight:700;margin-left:auto;font-size:13px}
+.rv .tg{font-size:11px;color:#e0457b;background:#ffeef2;border-radius:4px;padding:1px 6px;margin-left:4px}
+.rv p{margin:6px 0 0;font-size:13px;color:#444;line-height:1.65}
+.rv small{font-size:11.5px;color:#aaa}
+.bbar{position:absolute;left:0;right:0;bottom:0;height:80px;background:#fff;border-top:1px solid #eee;display:flex;gap:10px;padding:10px 14px;z-index:900}
+.bbar div{flex:1;border-radius:22px;display:grid;place-items:center;font-weight:700;font-size:14.5px;height:44px;border:1px solid #ddd}.bbar .p{background:#2b5bd7;color:#fff;border-color:#2b5bd7}
+/* 酒店 */
+.ht{display:flex;gap:12px;padding:12px 0;border-bottom:1px solid #f2f2f2}
+.ht .im{width:104px;height:120px;border-radius:12px;flex:none}
+.ht .bd{flex:1;min-width:0}.ht b{font-size:15px;display:block;line-height:1.35}
+.ht .lv{font-size:11px;color:#c58b5b;margin-top:2px}
+.ht .fac{display:flex;gap:4px;flex-wrap:wrap;margin-top:5px}.ht .fac span{font-size:10.5px;border:1px solid #dde3ee;color:#667;border-radius:4px;padding:0 5px}
+.ht .pr{text-align:right;margin-top:6px;font-size:11.5px;color:#999}.ht .pr b{display:inline;font-size:19px;color:#ff5a1f}
+.filt{display:flex;gap:6px;margin-bottom:6px;flex-wrap:wrap}.filt span{font-size:12px;background:#f2f3f5;border-radius:12px;padding:4px 10px}.filt .on{background:#e8efff;color:#2b5bd7;font-weight:700}
+</style></head><body>
+<script>
+const NAVI={"足迹":'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M9 4 3.5 6v14L9 18l6 2 5.5-2V4L15 6 9 4z"/><path d="M9 4v14M15 6v14"/></svg>',"发现":'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><circle cx="12" cy="12" r="8.5"/><path d="m15.5 8.5-2 5-5 2 2-5z"/></svg>',"攻略":'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round"><path d="M6 3.5h9l3 3v14H6z"/><path d="M9 10h6M9 14h6M9 18h3.5"/></svg>',"订票":'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M3.5 7.5h17v3a2 2 0 0 0 0 3v3h-17v-3a2 2 0 0 0 0-3z"/><path d="M14.5 7.5v9" stroke-dasharray="1.6 2"/></svg>',"票根夹":'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M3.5 6.5h6l2 2h9v11h-17z"/><path d="M3.5 10.5h17"/></svg>'};
+const nav=on=>`<div class="nav">${Object.entries(NAVI).map(([k,v])=>`<div class="${k===on?'on':''}"><i>${v}</i>${k}</div>`).join("")}</div>`;
+const BACK='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5 8 12l7 7"/></svg>';
+const sb=(c)=>`<div class="status" style="color:${c||'#111'}">9:41<span>●●● ▮</span></div><div class="cap">··· | ○</div>`;
+const g=(a,b)=>`linear-gradient(150deg,${a},${b})`;
+const tabs=on=>`<div class="tabs">${["攻略","景点","美食","酒店"].map(t=>`<span class="${t===on?'on':''}">${t}</span>`).join("")}</div>`;
+document.write(`
+<div class="col"><div class="lab">① 城市首页 · 攻略<small>像旅行指南第一页</small></div><div class="ph"><div class="scr">
+ <div class="hero"><div class="t"><b>大理</b><small>苍山洱海 · 风花雪月</small></div></div>${sb("#fff")}<div class="top" style="color:#fff">${BACK}</div>
+ <div class="card facts"><div><small>最佳季节</small><b>3-5月</b></div><div><small>建议游玩</small><b>3-4 天</b></div><div><small>人均花费</small><b>¥2,500</b></div><div><small>怎么去</small><b>飞机/高铁</b></div></div>
+ ${tabs("攻略")}
+ <div class="card"><div class="route"><div class="im" style="background:${g('#a8e0ff','#5bb4e5')}"></div><div><b>大理经典 3 日游</b><div class="chips"><span>第一次去</span><span class="p">适合情侣</span><span>轻松</span></div><p>古城、洱海、喜洲、双廊，节奏不赶，每天睡到自然醒。</p></div></div>
+  <div class="dline"><b>D1</b>大理古城 → 人民路 → 洋人街夜市<br><b>D2</b>洱海生态廊道骑行 → 喜洲古镇 → 稻田<br><b>D3</b>双廊 → 南诏风情岛 → 洱海日落</div>
+  <div class="imp">约 ¥1,800/人 · 3 天<span>导入我们的攻略</span></div></div>
+ <div class="card"><div class="h3">出行提醒</div><div class="tip"><b>10-11 月</b>：秋高气爽，早晚温差大，带件外套。<br><b>紫外线强</b>：防晒一定要做，墨镜帽子带上。<br><b>高反</b>：海拔约 2000 米，一般不会有明显反应。</div></div>
+ </div>${nav("发现")}</div></div>
+
+<div class="col"><div class="lab">② 景点 · 必玩榜<small>美食也是这种榜单</small></div><div class="ph"><div class="scr" style="top:0">
+ ${sb()}<div class="top">${BACK}<b>大理 · 景点</b></div><div style="height:90px"></div>${tabs("景点")}
+ <div class="card"><div class="seg2"><span class="on">必玩榜</span><span>评分最高</span><span>适合情侣</span><span>免费</span></div>
+ ${[["洱海",g('#a8e0ff','#3f8fd2'),"4.8","超棒","12.6万条点评","免费 · 建议 半天-1天","「骑电动车环湖一圈，每个弯都是壁纸」"],["苍山",g('#b7d9c4','#5a8f6e'),"4.6","很好","5.2万条点评","¥40 起 · 建议 半天","「索道上去云就在脚下，冷，带外套」"],["大理古城",g('#f2d7b6','#c79a6b'),"4.5","很好","9.8万条点评","免费 · 建议 半天","「晚上比白天好逛，人民路小店很多」"],["喜洲古镇",g('#e6f2b9','#9cbf5b'),"4.7","超棒","3.1万条点评","免费 · 建议 2-3小时","「麦田骑车很治愈，破酥粑粑必吃」"]].map(([n,c,s,w,cnt,m,q],i)=>`<div class="rank"><div class="im" style="background:${c}"><div class="no ${['','n2','n3','n4'][i]}">${i+1}</div></div><div class="bd"><b>${n}</b><div class="sc"><em>${s}</em><strong>${w}</strong>${cnt}</div><div class="meta">${m}</div><div class="q">${q}</div></div></div>`).join("")}
+ </div></div>${nav("发现")}</div></div>
+
+<div class="col"><div class="lab">③ 景点详情<small>分项评分、开放时间、精选点评</small></div><div class="ph"><div class="scr" style="bottom:80px">
+ <div class="dhero"></div>${sb()}<div class="top">${BACK}</div>
+ <div class="card" style="margin-top:-20px;position:relative"><div style="font-size:21px;font-weight:800">喜洲古镇</div><div style="font-size:12.5px;color:#888;margin-top:2px">古镇 · 白族民居 · 田园</div>
+  <div class="big" style="margin-top:12px"><div class="n">4.7</div><div class="w"><b>超棒</b><small>3.1 万条点评 · 92% 推荐</small></div></div>
+  <div class="sub3"><div>景色<b>4.8</b></div><div>趣味<b>4.6</b></div><div>性价比<b>4.8</b></div></div>
+  <div class="info" style="margin-top:10px"><span>开放时间</span>全天开放<br><span>门票</span>免费<br><span>建议游玩</span>2-3 小时<br><span>交通</span>古城打车约 40 分钟</div></div>
+ <div class="card"><div class="h3">精选点评<small>全部 3.1 万 ›</small></div>
+  <div class="rv"><div class="u"><i style="background:#f6a7b9"></i>旅行的小鹿<span class="tg">情侣出游</span><em>5.0</em></div><p>九月去的，稻子刚好黄了，租了辆自行车在田埂上骑，风很舒服。破酥粑粑要早点去排队。</p><small>2025年9月</small></div>
+  <div class="rv"><div class="u"><i style="background:#9fc5f8"></i>阿木木<span class="tg" style="background:#eef3ff;color:#2b5bd7">家庭出游</span><em>4.0</em></div><p>古镇不大，商业化比古城轻。中午太晒，建议下午四点以后去。</p><small>2025年8月</small></div></div>
+ </div><div class="bbar"><div>收藏</div><div class="p">加进攻略</div></div></div></div>
+
+<div class="col"><div class="lab">④ 酒店<small>看中直接跳去订票</small></div><div class="ph"><div class="scr" style="top:0">
+ ${sb()}<div class="top">${BACK}<b>大理 · 酒店</b></div><div style="height:90px"></div>${tabs("酒店")}
+ <div class="card"><div class="filt"><span class="on">10/31 - 11/2 · 2晚</span><span>洱海边</span><span>古城内</span><span>¥500 以下</span></div>
+ ${[["洱海·海景大床房 · 云栖民宿",g('#bfe3ff','#6aa9d8'),"4.9","超棒","双廊 · 距洱海 50 米","海景 · 浴缸 · 免费接机","¥688"],["古城·庭院小院 · 三月里",g('#f6dcc0','#d8a77a'),"4.8","超棒","大理古城内 · 人民路 300 米","庭院 · 早餐 · 可停车","¥420"],["苍山脚下 · 半山云舍",g('#cfe8d5','#7fae8a'),"4.7","很好","苍山 · 距古城 3 公里","山景 · 露台 · 安静","¥560"]].map(([n,c,s,w,loc,f,p])=>`<div class="ht"><div class="im" style="background:${c}"></div><div class="bd"><b>${n}</b><div class="sc"><em>${s}</em><strong>${w}</strong>2,341 条点评</div><div class="meta" style="font-size:12px;color:#888;margin-top:3px">${loc}</div><div class="fac">${f.split(" · ").map(x=>`<span>${x}</span>`).join("")}</div><div class="pr"><b>${p}</b> /晚起</div></div></div>`).join("")}
+ </div></div>${nav("发现")}</div></div>`);
+</script></body></html>

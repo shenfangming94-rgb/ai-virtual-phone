@@ -42,7 +42,7 @@
         if (s === "spotnote") return { text: "那天你冻得直跺脚还非要拍玄武岩。下次夏天来，我还拽你。" };
         if (s === "seat") return { text: "靠窗给你，你睡着了别靠我肩膀上流口水。" };
         if (s === "gift" && !window.__MODE_VISIT2 && /come 是/.test(p.instruction)) return { text: '{"mode":"come","date":"' + new Date(Date.now() + 4 * 864e5).toISOString().slice(0, 10) + '","days":3,"reason":"想她了","message":"周五晚上到，来接我。"}' };
-        if (s === "invite_yes") return { text: "票订好了，到了给我打电话，我在出口等你。" };
+        if (s === "go_him") return { text: "票订好了，到了给我打电话，我在出口等你。" };
         if (s === "invite_no") return { text: "好吧，那等你忙完。我先把想带你去的地方记着。" };
         if (s === "gift" && window.__MODE_VISIT2) return { text: '{"mode":"visit","date":"' + new Date(Date.now() + 9 * 864e5).toISOString().slice(0, 10) + '","days":3,"reason":"x","message":"下下周末有空吗？想你了，来上海找我吧。"}' };
         if (s === "gift" && window.__MODE_VISIT) return { text: '{"mode":"visit","together":false,"city":"成都","date":"' + new Date(Date.now() + 9 * 864e5).toISOString().slice(0, 10) + '","days":3,"reason":"x","message":"来找我。"}' };

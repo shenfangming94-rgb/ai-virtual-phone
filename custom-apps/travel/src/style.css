@@ -309,6 +309,4 @@ body.busy-on:after{content:"";position:fixed;left:0;right:0;top:0;height:3px;bac
 .g-top{display:flex;align-items:center;gap:10px}.g-top b{font-size:17px}
 .g-msg{margin:14px 4px 4px;font-size:14.5px;line-height:1.7;color:#444}
 .giftbox .btn-b{margin-top:12px}
-.inv-card{margin:12px 14px 0;background:#fff;border-radius:18px;padding:14px;border:1.5px solid #dfe7fb}
-.inv-btns{display:flex;gap:10px;margin-top:14px}.inv-btns button{flex:1;margin:0;height:42px}
-.inv-pop{top:24%}
+.duo+.duo{margin-top:10px}

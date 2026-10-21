@@ -517,7 +517,7 @@
       ${s.notes.map((n, i) => `<div class="note ${n.who === "me" ? "" : "his"}">${ava(n.who)}<div class="bub"><small>${esc(nameOf(n.who))}<em data-act="note-rm" data-id="${s.id}" data-i="${i}">删除</em></small>${esc(n.text)}</div></div>`).join("")}
       <div class="acts"><div data-act="spot-photo" data-id="${s.id}">${I.img}加照片</div><div data-act="spot-gen" data-id="${s.id}">${I.spark}生一张</div><div data-act="spot-note" data-id="${s.id}">${I.pen}写一句</div></div>
       ${people.length ? `<div class="ask">${people.map(id => `<button data-act="spot-ask" data-id="${s.id}" data-c="${id}">${ava(id, "s")}让${esc(nameOf(id))}写一句</button>`).join("")}</div>` : ""}
-      <div class="mini-links"><span data-act="spot-move" data-id="${s.id}">${I.crosshair}改位置</span><span data-act="spot-edit" data-id="${s.id}">${I.pen}改名字时间</span><span data-act="spot-del" data-id="${s.id}" class="red">${I.trash}删除</span></div></div><div class="pad-b"></div></div>
+      <div class="mini-links"><span data-act="share-spot" data-id="${s.id}">${I.doc}发到聊天</span><span data-act="spot-move" data-id="${s.id}">${I.crosshair}改位置</span><span data-act="spot-edit" data-id="${s.id}">${I.pen}改名字时间</span><span data-act="spot-del" data-id="${s.id}" class="red">${I.trash}删除</span></div></div><div class="pad-b"></div></div>
       <div class="float-top">${topbar("", "")}</div>`;
   };
   PAGES.photo = p => {
@@ -626,7 +626,10 @@
           <div class="bf-row"><label>${b.kind === "hotel" ? "入住" : "日期"}</label><input id="bk-date" type="date" value="${esc(b.date)}">${b.kind === "hotel" ? `<label class="nl">住</label><select id="bk-nights">${[1, 2, 3, 4, 5, 6, 7].map(n => `<option ${b.nights === n ? "selected" : ""} value="${n}">${n} 晚</option>`).join("")}</select>` : ""}</div>
           <div class="bf-row ppl"><label>和谁</label><div class="pchips"><span class="on">${ava("me", "s")}我</span>${S.chars.map(c => `<span class="${b.with.includes(c.id) ? "on" : ""}" data-act="bk-with" data-id="${c.id}">${ava(c.id, "s")}${esc(c.name)}</span>`).join("")}</div></div>
           <button class="btn-b wide" data-act="bk-search">${I.search}搜${b.kind === "flight" ? "航班" : b.kind === "train" ? "车次" : "酒店"}${people.length > 1 ? `（${people.length} 人）` : ""}</button></div>
-        ${S.tickets.filter(t => ts(t.date) >= ts(ymd(new Date()))).length ? `<div class="lb">接下来的行程</div>${S.tickets.filter(t => ts(t.date) >= ts(ymd(new Date()))).sort((a, b2) => ts(a.date) - ts(b2.date)).slice(0, 3).map(tkRow).join("")}` : ""}
+        <div class="duo"><div data-act="come">${I.plane}<b>他来找我</b><small>他订票飞过来，你去接机</small></div><div data-act="gift-ask">${I.ticket}<b>让TA给我订</b><small>去哪他来定</small></div></div>
+        ${S.tickets.filter(t => t.toMe && flightState(t).k !== "land").length ? `<div class="lb">在路上的</div>${S.tickets.filter(t => t.toMe && flightState(t).k !== "land").map(tkRow).join("")}` : ""}
+        ${S.tickets.filter(t => ts(t.date) >= ts(ymd(new Date())) && !t.toMe).length ? `<div class="lb">接下来的行程</div>${S.tickets.filter(t => ts(t.date) >= ts(ymd(new Date())) && !t.toMe).sort((a, b2) => ts(a.date) - ts(b2.date)).slice(0, 3).map(tkRow).join("")}` : ""}
+        <div class="lb">设置</div><div class="setbox"><div class="srow2" data-act="set-home"><span>我在</span><b>${esc(S.meta.home || "还没填")}</b></div><div class="srow2"><span>他们偶尔给我订票惊喜<small>十来天最多一次，会发到聊天里</small></span><button class="sw ${S.meta.surprise === false ? "" : "on"}" data-act="set-surprise"><i></i></button></div></div>
         <div class="pad-b"></div></div>`;
     },
     after(el) {
@@ -673,7 +676,8 @@
   function tkRow(t) {
     const icon = t.kind === "flight" ? I.plane : t.kind === "train" ? I.train : I.bed;
     const title = t.kind === "hotel" ? t.hotel : `${t.from} → ${t.to}`;
-    return `<div class="tkrow" data-act="ticket" data-id="${t.id}"><i class="tk-ic ${t.kind}">${icon}</i><div><b>${esc(title)}</b><small>${esc(mdw(t.date))}${t.kind === "hotel" ? ` · ${t.nights} 晚` : ` · ${hm(t.dep)} · ${esc(t.no)}`}</small></div>${t.people.length > 1 ? avaStack(t.people.filter(x => x !== "me")) : ""}</div>`;
+    const tag = t.toMe ? `<em class="tk-tag">${esc(nameOf(t.people[0]))}来找你 · ${esc(flightState(t).n)}</em>` : t.giftBy ? `<em class="tk-tag gift">${esc(nameOf(t.giftBy))}订的</em>` : "";
+    return `<div class="tkrow" data-act="${t.toMe ? "flight" : "ticket"}" data-id="${t.id}"><i class="tk-ic ${t.kind}">${icon}</i><div><b>${esc(title)}</b><small>${esc(mdw(t.date))}${t.kind === "hotel" ? ` · ${t.nights} 晚` : ` · ${hm(t.dep)} · ${esc(t.no)}`}</small>${tag}</div>${t.people.filter(x => x !== "me").length ? avaStack(t.people.filter(x => x !== "me")) : ""}</div>`;
   }
   TABS.tickets = {
     render() {
@@ -687,7 +691,10 @@
     const trip = S.trips.find(x => x.id === t.tripId);
     const cards = t.people.map(w => ticketCard(t, w)).join("");
     return topbar(t.kind === "hotel" ? "酒店订单" : "我的票", `<button class="ib" data-act="tk-more">${I.more}</button>`) + `<div class="scroll tk-bg">${cards}
+      ${t.giftBy ? `<div class="note his">${ava(t.giftBy)}<div class="bub"><small>${esc(nameOf(t.giftBy))}给你订的${t.giftReason ? ` · ${esc(t.giftReason)}` : ""}</small>${esc(t.giftMsg || "")}</div></div>` : ""}
       ${t.remark ? `<div class="note his">${ava(t.remark.who)}<div class="bub"><small>${esc(nameOf(t.remark.who))}</small>${esc(t.remark.text)}</div></div>` : ""}
+      ${t.toMe ? `<div class="tk-trip" data-act="flight" data-id="${t.id}">${I.plane}看${esc(nameOf(t.people[0]))}的${t.kind === "flight" ? "航班" : "车次"}动态 ›</div>` : ""}
+      <div class="tk-trip" data-act="share-ticket" data-id="${t.id}">${I.doc}发到聊天 ›</div>
       ${trip ? `<div class="tk-trip" data-act="trip" data-id="${trip.id}">${I.map}属于「${esc(trip.title)}」 ›</div>` : ""}<div class="pad-b"></div></div>`;
   };
   function ticketCard(t, who) {
@@ -703,6 +710,168 @@
     return who === "me" ? `<div class="hv"><div class="hv-hd">${I.bed}<b>${esc(t.hotel)}</b></div><div class="hv-g"><div>入住<b>${esc(mdw(t.date))}</b></div><div>退房<b>${esc(mdw(addDays(t.date, t.nights)))}</b></div><div>${t.nights} 晚<b>${t.rooms} 间</b></div></div><div class="hv-ft">入住人：${esc(t.people.map(nameOf).join("、"))}<span>${yuan(t.total)}</span></div></div>` : "";
   }
   PAGES.debug = () => topbar("调试记录") + `<div class="scroll">${S.debug.map(d => `<div class="dbg"><b>${esc(d.label)} · ${esc(new Date(d.at).toLocaleString())} ${d.ok ? "" : "❌"}</b><pre>${esc(d.ok ? d.text : d.error)}</pre></div>`).join("") || `<div class="empty">还没有记录</div>`}</div>`;
+
+  // ───────────────────────── 第二批：他的航班 / 他给我订票 / 发到聊天 ─────────────────────────
+  /** 航班现在到哪了（按真实时间算；延误整体往后推） */
+  function flightState(t) {
+    const delay = (t.delay || 0) * 60e3; const dep = ts(t.dep) + delay, arr = ts(t.arr) + delay; const now = Date.now();
+    if (now < dep - 2 * 3600e3) return { k: "plan", n: "计划中", p: 0, dep, arr };
+    if (now < dep - 40 * 60e3) return { k: "checkin", n: "值机中", p: 0, dep, arr };
+    if (now < dep) return { k: "board", n: "登机中", p: 0, dep, arr };
+    if (now < arr) return { k: "fly", n: "飞行中", p: (now - dep) / (arr - dep), dep, arr };
+    return { k: "land", n: "已到达", p: 1, dep, arr };
+  }
+  const leftText = ms => { const m = Math.max(0, Math.round(ms / 60e3)); return m >= 60 ? `${Math.floor(m / 60)} 小时 ${m % 60} 分钟` : `${m} 分钟`; };
+  function homeOf(id) { return (S.meta.charHome || {})[id] || ""; }
+  async function needHome() {
+    if (S.meta.home) return S.meta.home;
+    const r = await form("你在哪个城市？", [{ k: "c", label: "订票和接机要用", ph: "北京" }]); if (!r || !r.c.trim()) return "";
+    S.meta.home = r.c.trim(); saveMeta(); return S.meta.home;
+  }
+  /** 挑一班：到达时间在白天的优先 */
+  function pickFlight(list) { const good = list.filter(f => { const h = new Date(f.arr).getHours(); return h >= 11 && h <= 21; }); return (good.length ? good : list)[0]; }
+  function adjacentSeats(no, dep, n, isF) {
+    const rows = isF ? ROWS_F : ROWS_T; const cols = (isF ? COLS_F : COLS_T).filter(Boolean); const r = seeded(`${no}${dep}seat`);
+    const taken = new Set(rows.flatMap(rw => cols.filter(() => r() < .38).map(c => `${rw}${c}`)));
+    for (const rw of rows) { const free = cols.filter(c => !taken.has(`${rw}${c}`)); for (let i = 0; i + n <= cols.length; i++) { const run = cols.slice(i, i + n); if (run.every(c => free.includes(c)) && !(isF && run.includes("C") && run.includes("D")) && !(!isF && run.includes("C") && run.includes("D"))) return run.map(c => `${rw}${c}`); } }
+    return Array.from({ length: n }, (_, i) => `${rows[rows.length - 1]}${cols[i]}`);
+  }
+  async function makeTicket(kind, from, to, f, people, seatsArr, extra) {
+    const ri = await routeInfo(from, to);
+    const seats = {}; people.forEach((w, i) => { seats[w] = seatsArr[i]; });
+    return addRow(COL.tickets, "tickets", { id: uid("tk"), kind, from, to, date: ymd(f.dep), dep: f.dep, arr: f.arr, mins: f.mins, no: f.no, carrier: f.carrier || "", fromAp: f.fromAp || "", toAp: f.toAp || "", fromSt: f.fromSt || "", toSt: f.toSt || "", price: f.price, total: f.price * people.length, people, seats,
+      gate: `${pick(["A", "B", "C", "D", "E"])}${rand(1, 32)}`, car: pad(rand(1, 16)), serial: `${pick(["E", "F", "G", "H"])}0${rand(10000, 99999)}`, km: ri ? Math.round(ri.km) : 0,
+      fromLL: ri ? [ri.a.lat, ri.a.lng] : null, toLL: ri ? [ri.b.lat, ri.b.lng] : null, createdAt: nowIso(), ...(extra || {}) });
+  }
+  /** 他来找我：他订一班飞到我城市的航班 */
+  async function charComes() {
+    if (!S.chars.length) { toast("还没有角色"); return; }
+    const home = await needHome(); if (!home) return;
+    const r = await form("他来找你", [{ k: "who", label: "谁来", type: "choice", options: charOptions(), value: S.chars[0].id }, { k: "from", label: "他从哪来（会记住）", value: homeOf(S.chars[0].id), ph: "上海" }, { k: "date", label: "哪天到", type: "date", value: ymd(addDays(new Date(), 3)) }], "让他订票");
+    if (!r || !r.who || !r.from.trim()) return;
+    const from = r.from.trim(); S.meta.charHome = { ...(S.meta.charHome || {}), [r.who]: from }; saveMeta();
+    if (from === home) { toast("你们在同一个城市呀"); return; }
+    const ri = await routeInfo(from, home); if (!ri) { toast("没找到这两个城市"); return; }
+    const useTrain = ri.domestic && ri.km < 700;
+    const list = useTrain ? genTrains(from, home, r.date, ri) : genFlights(from, home, r.date, ri); if (!list.length) { toast("那天没有班次"); return; }
+    const f = pickFlight(list); const kind = useTrain ? "train" : "flight";
+    const dr = seeded(`${f.no}${f.dep}delay`); const delay = kind === "flight" && dr() < .22 ? 20 + Math.floor(dr() * 100) : 0;
+    const tk = await makeTicket(kind, from, home, f, [r.who], adjacentSeats(f.no, f.dep, 1, kind === "flight"), { toMe: true, delay, msgs: [] });
+    const trip = addRow(COL.trips, "trips", { id: uid("trip"), title: `${nameOf(r.who)}来${home}`, city: home, country: "", lat: ri.b.lat, lng: ri.b.lng, start: ymd(f.arr), days: 2, companions: [r.who], createdAt: nowIso() });
+    tk.tripId = trip.id; save(COL.tickets, tk);
+    remember([r.who], `我订了${mdw(f.dep)}从${from}去${home}找${herName()}的${kind === "flight" ? "航班" : "高铁"} ${f.no}，${hm(f.dep)}出发，${hm(f.arr)}到。`, `come_${tk.id}`);
+    toast(`${nameOf(r.who)}订好了 ${f.no}`); renderAll(); push("flight", { id: tk.id });
+  }
+  /** 他给我订票（surprise=true 是他自己突然订的） */
+  async function charBooksForMe(charId, hint, surprise) {
+    const c = charById(charId); if (!c) return null; const home = S.meta.home; if (!home) return null;
+    const his = homeOf(charId);
+    const ins = [nowLine(), CHAR_RULE, `【这次要做的】${surprise ? `你想给${herName()}一个惊喜：瞒着她订好票，然后告诉她。` : `${herName()}让你给她订一次出行。${hint ? `她说：${hint}` : "她没说去哪，你来定。"}`}她住在${home}。${his ? `你住在${his}。` : ""}`,
+      `按你的性格和你们最近聊的事决定：去哪（真实城市）、哪天出发（今天以后一个月内）、玩几天、你去不去（together=true 是你们一起去；false 是让她来${his || "你那里"}找你）、为什么这么安排、订完对她说的话。`,
+      `【输出】只输出 JSON：{"city":"目的地城市","date":"YYYY-MM-DD","days":3,"together":true,"reason":"一句话","message":"订完对她说的话"}`].join("\n\n");
+    const raw = await aiGen(charId, "gift", ins, `${c.name}订票`); if (raw == null) return null;
+    const j = parseJSON(raw); if (!j || !j.city) { toast("他没订成"); return null; }
+    let to = String(j.together === false && his ? his : j.city).trim(); if (to === home) to = String(j.city).trim(); if (to === home) { toast("他想来你这儿，用「他来找我」吧"); return null; }
+    let date = /^\d{4}-\d{2}-\d{2}$/.test(String(j.date)) ? j.date : ymd(addDays(new Date(), 7)); if (dayDiff(new Date(), date) < 1) date = ymd(addDays(new Date(), 3));
+    const ri = await routeInfo(home, to); if (!ri) { toast(`没找到「${to}」`); return null; }
+    const useTrain = ri.domestic && ri.km < 900; const list = useTrain ? genTrains(home, to, date, ri) : genFlights(home, to, date, ri); if (!list.length) { toast("那天没有班次"); return null; }
+    const f = pickFlight(list.slice().sort((a, b) => new Date(a.dep).getHours() >= 8 ? -1 : 1)); const kind = useTrain ? "train" : "flight";
+    const together = j.together !== false; const people = together ? ["me", charId] : ["me"];
+    const seats = adjacentSeats(f.no, f.dep, people.length, kind === "flight");
+    const tk = await makeTicket(kind, home, to, f, people, seats, { giftBy: charId, giftMsg: String(j.message || "").slice(0, 400), giftReason: String(j.reason || "").slice(0, 120), surprise: !!surprise });
+    tk.total = 0; save(COL.tickets, tk);
+    const geo = await geocode(to);
+    const trip = addRow(COL.trips, "trips", { id: uid("trip"), title: together ? to : `去${to}找${c.name}`, city: to, country: geo ? geo.country : "", lat: geo ? geo.lat : null, lng: geo ? geo.lng : null, start: ymd(f.dep), days: Math.max(1, Math.min(15, +j.days || 3)), companions: [charId], createdAt: nowIso() });
+    tk.tripId = trip.id; save(COL.tickets, tk);
+    remember([charId], `我给${herName()}订了${kind === "flight" ? "机票" : "火车票"}：${home} → ${to}，${mdw(f.dep)} ${hm(f.dep)} ${f.no}${together ? `，我和她一起去，座位 ${herName()} ${tk.seats.me}、我 ${tk.seats[charId]}` : `，她来${to}找我`}。我对她说：${tk.giftMsg}`, `gift_${tk.id}`);
+    // 他在聊天里把票发给她
+    try {
+      if (api.chat && api.chat.sendCard) await api.chat.sendCard({ characterId: charId, role: "assistant", historyRole: "assistant", sceneId: tk.id, sceneTag: "travel_gift",
+        summary: `[旅行] ${c.name}给你订了${kind === "flight" ? "机票" : "火车票"}：${home} → ${to}`, historyText: `[旅行] 我给${herName()}订了${kind === "flight" ? "机票" : "火车票"}：${home} → ${to}，${mdw(f.dep)} ${hm(f.dep)} ${f.no}${together ? "，我们一起去" : ""}。`,
+        card: { appLabel: "旅行", title: `${home} → ${to}`, subtitle: `${mdw(f.dep)} ${hm(f.dep)} · ${f.no}`, body: `${c.name}给你订了${kind === "flight" ? "机票" : "火车票"}${together ? `，座位挨着：${tk.seats.me} / ${tk.seats[charId]}` : ""}`, accentColor: "#2b5bd7" } });
+      if (tk.giftMsg && api.chat && api.chat.sendMessage) await api.chat.sendMessage({ characterId: charId, role: "assistant", content: tk.giftMsg });
+    } catch (e) { console.warn("发到聊天", e); }
+    renderAll(); return tk;
+  }
+  /** 打开 app 时偶尔：他自己给她订票（开关在订票页） */
+  async function maybeSurprise() {
+    if (S.meta.surprise === false || !S.meta.home) return;
+    const last = ts(S.meta.lastSurprise || 0); if (Date.now() - last < 10 * 864e5) return;
+    if (Math.random() > .12) return;
+    const pool = [...new Set(S.trips.flatMap(t => t.companions))].filter(charById); if (!pool.length) return;
+    S.meta.lastSurprise = nowIso(); saveMeta();
+    const tk = await charBooksForMe(pick(pool), "", true); if (tk) showGift(tk);
+  }
+  function showGift(tk) {
+    const el = document.createElement("div"); el.className = "sheet-wrap";
+    el.innerHTML = `<div class="dim"></div><div class="giftbox"><div class="g-top">${ava(tk.giftBy)}<b>${esc(nameOf(tk.giftBy))}给你订了票</b></div>${ticketCard(tk, "me")}${tk.giftMsg ? `<div class="g-msg">「${esc(tk.giftMsg)}」</div>` : ""}<button class="btn-b wide" data-g="open">看看</button></div>`;
+    document.body.appendChild(el); el.onclick = e => { if (e.target.closest("[data-g]")) { el.remove(); push("ticket", { id: tk.id }); } else if (e.target.classList.contains("dim")) el.remove(); };
+  }
+  /** 发到聊天：她把票 / 攻略 / 打卡发给他 */
+  async function shareTo(kind, obj) {
+    if (!api.chat || !api.chat.sendCard) { toast("这个小手机不支持发到聊天"); return; }
+    const trip = kind === "spot" ? S.trips.find(x => x.id === obj.tripId) : S.trips.find(x => x.id === obj.tripId);
+    const pref = (trip ? trip.companions : obj.people ? obj.people.filter(x => x !== "me") : []).filter(charById);
+    const people = [...pref, ...S.chars.map(c => c.id).filter(x => !pref.includes(x))];
+    const r = await form("发到聊天", [{ k: "who", label: "发给谁", type: "choice", options: people.map(id => ({ v: id, n: nameOf(id), ava: id })), value: people[0] }, { k: "note", label: "附一句话（选填）", type: "textarea" }], "发送");
+    if (!r || !r.who) return;
+    let card, summary, history;
+    if (kind === "ticket") {
+      const t = obj; const title = t.kind === "hotel" ? t.hotel : `${t.from} → ${t.to}`;
+      const seatTxt = t.kind === "hotel" ? `${t.nights} 晚` : t.people.map(w => `${realName(w)} ${t.seats[w]}`).join("、");
+      card = { appLabel: "旅行", title, subtitle: t.kind === "hotel" ? `${mdw(t.date)} 入住` : `${mdw(t.dep)} ${hm(t.dep)} · ${t.no}`, body: t.kind === "hotel" ? `${t.nights} 晚 · ${t.rooms} 间` : `座位：${seatTxt}`, accentColor: t.kind === "hotel" ? "#c58b5b" : "#2b5bd7" };
+      summary = `[旅行] ${title}`; history = `[旅行] ${herName()}把一张${t.kind === "flight" ? "机票" : t.kind === "train" ? "火车票" : "酒店订单"}发给了你：${title}，${card.subtitle}，${card.body}。${t.toMe ? "（这是你来找她的票）" : ""}`;
+    } else if (kind === "plan") {
+      const p = obj; card = { appLabel: "旅行 · 攻略", title: p.title, subtitle: `${p.city} · ${p.days.length} 天`, body: p.days.map((d, i) => `D${i + 1} ${d.items.map(x => x.name).join(" → ")}`).join("\n").slice(0, 300), accentColor: "#2b5bd7" };
+      summary = `[攻略] ${p.title}`; history = `[旅行攻略] ${herName()}把攻略「${p.title}」（${p.city}）发给了你：\n${planText(p)}`;
+    } else {
+      const s = obj; card = { appLabel: "旅行 · 打卡", title: s.name, subtitle: `${trip ? trip.title + " · " : ""}${mdw(s.at)}`, body: (s.notes[0] || {}).text || `${s.photos.length} 张照片`, accentColor: "#3b7cff" };
+      summary = `[打卡] ${s.name}`; history = `[旅行打卡] ${herName()}发来她在「${s.name}」的打卡（${mdw(s.at)}）${s.photos.length ? `，${s.photos.length} 张照片${s.photos.filter(x => x.desc).length ? "：" + s.photos.map(x => x.desc).filter(Boolean).join("；") : ""}` : ""}。${s.notes.map(n => `${realName(n.who)}写：${n.text}`).join(" ")}`;
+    }
+    try {
+      await api.chat.sendCard({ characterId: r.who, role: "user", historyRole: "user", summary, historyText: history, sceneId: obj.id, sceneTag: `travel_${kind}`, card });
+      if (r.note.trim() && api.chat.sendMessage) await api.chat.sendMessage({ characterId: r.who, role: "user", content: r.note.trim() });
+      toast(`发给${nameOf(r.who)}了，去聊天里看看`);
+    } catch (e) { toast(`没发出去：${(e && e.message) || e}`.slice(0, 50)); }
+  }
+  // 航班动态页
+  PAGES.flight = p => {
+    const t = S.tickets.find(x => x.id === p.data.id); if (!t) return topbar("") + `<div class="empty">这班不见了</div>`;
+    const who = t.people[0]; const st = flightState(t); const isF = t.kind === "flight";
+    const r = seeded(`${t.no}${t.dep}gate`); const exitG = `${pick(["A", "B", "C"])}`, belt = 10 + Math.floor(r() * 30), ontime = 70 + Math.floor(r() * 25);
+    const left = st.k === "fly" ? `还有 ${leftText(st.arr - Date.now())}落地` : st.k === "land" ? `${hm(st.arr)} 已经落地` : `${md(st.dep)} ${hm(st.dep)} 起飞${st.k === "plan" ? `，还有 ${leftText(st.dep - Date.now())}` : ""}`;
+    return `<div class="lmap full" id="flmap"></div>${topbar("")}
+      <div class="trip-chip"><div><b>${esc(t.from)} → ${esc(t.to)}</b><small>${esc(isF ? `${t.carrier} ${t.no}` : t.no)}</small></div></div>
+      <div class="fcard"><div class="fh">${ava(who)}<div><b>${esc(nameOf(who))}${isF ? " 的航班" : " 的车次"}</b><small>${esc(mdw(t.dep))} · 来找你</small></div><span class="fst ${st.k}">${t.delay && st.k !== "land" ? `延误 · ` : ""}${st.n}</span></div>
+        <div class="prog"><div class="e"><b>${hm(st.dep)}</b><small>${esc(isF ? t.fromAp : t.fromSt)}${t.delay ? `<s>${hm(t.dep)}</s>` : ""}</small></div><div class="pbar"><i style="width:${Math.round(st.p * 100)}%"></i><span style="left:${Math.round(st.p * 100)}%">${isF ? I.plane : I.train}</span></div><div class="e r"><b>${hm(st.arr)}</b><small>${esc(isF ? t.toAp : t.toSt)}</small></div></div>
+        <div class="left">${t.delay ? `延误 ${t.delay} 分钟 · ` : ""}${esc(left)}</div>
+        ${isF ? `<div class="fgrid"><div>到达口<b>${exitG}</b></div><div>行李转盘<b>${belt}</b></div><div>准点率<b>${ontime}%</b></div></div>` : `<div class="fgrid"><div>车厢<b>${esc(t.car)}</b></div><div>座位<b>${esc(t.seats[who])}</b></div><div>出站口<b>${exitG}</b></div></div>`}
+        ${(t.msgs || []).length ? `<div class="fmsgs">${t.msgs.map(m => `<div class="${m.who === "me" ? "me" : "him"}">${m.pending ? `<em>${esc(nameOf(who))}${st.k === "land" ? "正在看" : "在路上，到了会看到"}</em>` : ""}${esc(m.text)}</div>`).join("")}</div>` : ""}
+        <div class="fbtns"><div data-act="fl-msg" data-id="${t.id}">给他留言</div><div class="p ${t.pickup ? "done" : ""}" data-act="fl-pick" data-id="${t.id}">${t.met ? "接到了" : t.pickup ? (st.k === "land" ? "接到他了" : "会去接他") : "我去接机"}</div></div></div>`;
+  };
+  PAGES.flight.after = p => {
+    const t = S.tickets.find(x => x.id === p.data.id); if (!t || !t.fromLL || !t.toLL) return;
+    const mp = makeMap($("#flmap", p.el)); if (!mp) return; const st = flightState(t);
+    const A = t.fromLL, B = t.toLL; const pts = []; const bend = Math.min(6, km(A, B) / 600);
+    for (let i = 0; i <= 40; i++) { const k = i / 40; pts.push([A[0] + (B[0] - A[0]) * k + Math.sin(k * Math.PI) * bend * .4, A[1] + (B[1] - A[1]) * k + Math.sin(k * Math.PI) * bend * .6]); }
+    mp.decide(B[0], B[1]);
+    mp.line(pts, { color: "#2b5bd7", weight: 3, dashArray: "6 8" }); const cut = Math.round(st.p * 40); if (cut > 0) mp.line(pts.slice(0, cut + 1), { color: "#2b5bd7", weight: 4 });
+    for (const q of [A, B]) mp.marker(q[0], q[1], `<div class="fdot"></div>`, [16, 16]);
+    const at = pts[Math.min(40, cut)]; mp.marker(at[0], at[1], `<div class="fplane">${t.kind === "flight" ? I.plane : I.train}</div>`, [34, 34]);
+    mp.fit([A, B], [130, 400]);
+    // 他落地了，看留言回一句
+    const pend = (t.msgs || []).find(m => m.pending);
+    if (pend && st.k === "land" && !p.data.replying) { p.data.replying = true; flightReply(t).then(() => { p.data.replying = false; }); }
+  };
+  async function flightReply(t) {
+    const who = t.people[0]; const st = flightState(t); const pend = t.msgs.filter(m => m.pending);
+    const ins = [nowLine(), CHAR_RULE, `【这次要做的】你坐${t.no}从${t.from}去${t.to}找${herName()}，${st.k === "land" ? "刚落地" : st.k === "fly" ? "人在飞机上" : st.k === "board" ? "正在登机" : "还没出发"}${t.delay ? `，延误了 ${t.delay} 分钟` : ""}。${t.pickup ? "她说会来接你。" : ""}她在航班动态里给你留言：\n${pend.map(m => m.text).join("\n")}`, `回她一两句，只输出你要说的话。`].join("\n\n");
+    const raw = await aiGen(who, "flightmsg", ins, `${nameOf(who)}回留言`); if (!raw) return;
+    for (const m of pend) delete m.pending;
+    t.msgs.push({ who, text: String(raw).trim().slice(0, 300), at: nowIso() }); save(COL.tickets, t);
+    remember([who], `${herName()}在我的航班${t.no}动态里留言：${pend.map(m => m.text).join(" / ")}。我回她：${String(raw).trim()}`, `flmsg_${t.id}_${Date.now()}`);
+    renderAll();
+  }
 
   // ───────────────────────── 弹层 ─────────────────────────
   function sheet(title, options) {
@@ -899,8 +1068,9 @@
       case "plan-edit": top.data.edit = !top.data.edit; renderPage(top); return;
       case "plan-more": {
         const pl = S.plans.find(x => x.id === top.data.id);
-        const v = await sheet(pl.title, [{ label: "改标题", value: "title", icon: "pen" }, { label: "放到旅行里", value: "link", icon: "map" }, { label: "删除这份攻略", value: "del", icon: "trash", red: true }]);
-        if (v === "title") { const r = await form("改标题", [{ k: "t", label: "", value: pl.title }]); if (r && r.t.trim()) { pl.title = r.t.trim(); save(COL.plans, pl); renderAll(); } }
+        const v = await sheet(pl.title, [{ label: "发到聊天", value: "share", icon: "doc" }, { label: "改标题", value: "title", icon: "pen" }, { label: "放到旅行里", value: "link", icon: "map" }, { label: "删除这份攻略", value: "del", icon: "trash", red: true }]);
+        if (v === "share") shareTo("plan", pl);
+        else if (v === "title") { const r = await form("改标题", [{ k: "t", label: "", value: pl.title }]); if (r && r.t.trim()) { pl.title = r.t.trim(); save(COL.plans, pl); renderAll(); } }
         else if (v === "link") linkPlan(pl);
         else if (v === "del") { const ok = await sheet("删除这份攻略？", [{ label: "删除", value: "y", red: true, icon: "trash" }]); if (ok) { delRow(COL.plans, "plans", pl); pop(); renderAll(); } }
         return;
@@ -968,6 +1138,32 @@
         toast("订好了！"); while (S.stack.length) pop(); S.tab = "tickets"; renderBase(); push("ticket", { id: tk.id }); return;
       }
       case "ticket": push("ticket", { id }); return;
+      case "flight": push("flight", { id }); return;
+      case "come": charComes(); return;
+      case "gift-ask": {
+        if (!S.chars.length) { toast("还没有角色"); return; } const home = await needHome(); if (!home) return;
+        const r = await form("让TA给我订", [{ k: "who", label: "让谁订", type: "choice", options: charOptions(), value: S.chars[0].id }, { k: "his", label: "他住在哪（选填，他可能让你去找他）", value: homeOf(S.chars[0].id) }, { k: "hint", label: "想说点什么（选填）", type: "textarea", ph: "想去海边 / 想出去玩两天 / 你定" }], "让他订");
+        if (!r || !r.who) return; if (r.his.trim()) { S.meta.charHome = { ...(S.meta.charHome || {}), [r.who]: r.his.trim() }; saveMeta(); }
+        toast(`${nameOf(r.who)}在想去哪……`); const tk = await charBooksForMe(r.who, r.hint.trim(), false); if (tk) showGift(tk); return;
+      }
+      case "fl-msg": {
+        const tk = S.tickets.find(x => x.id === id); const r = await form("给他留言", [{ k: "t", label: "", type: "textarea", ph: "落地了告诉我" }], "留言"); if (!r || !r.t.trim()) return;
+        tk.msgs = tk.msgs || []; const st = flightState(tk); tk.msgs.push({ who: "me", text: r.t.trim(), at: nowIso(), pending: true }); save(COL.tickets, tk); renderPage(top);
+        if (st.k === "fly") toast("他在飞机上，落地以后会看到"); else if (st.k !== "land") flightReply(tk); /* 已落地的由航班页自己回 */
+        return;
+      }
+      case "fl-pick": {
+        const tk = S.tickets.find(x => x.id === id); const st = flightState(tk); const w = tk.people[0];
+        if (tk.met) return;
+        if (st.k === "land" && tk.pickup) { tk.met = true; save(COL.tickets, tk); remember([w], `${herName()}来${tk.kind === "flight" ? "机场" : "车站"}接到我了（${tk.to}，${mdw(tk.arr)}）。`, `met_${tk.id}`); toast(`接到${nameOf(w)}了！`); renderPage(top); return; }
+        tk.pickup = !tk.pickup; save(COL.tickets, tk);
+        if (tk.pickup) remember([w], `${herName()}说${md(tk.arr)}会来${tk.kind === "flight" ? "机场" : "车站"}接我（${tk.no}）。`, `pick_${tk.id}`);
+        renderPage(top); return;
+      }
+      case "share-ticket": shareTo("ticket", S.tickets.find(x => x.id === id)); return;
+      case "share-spot": shareTo("spot", S.spots.find(x => x.id === id)); return;
+      case "set-home": { const r = await form("你在哪个城市？", [{ k: "c", label: "", value: S.meta.home || "", ph: "北京" }]); if (r) { S.meta.home = r.c.trim(); saveMeta(); renderBase(); } return; }
+      case "set-surprise": S.meta.surprise = S.meta.surprise === false; saveMeta(); renderBase(); return;
       case "tk-more": {
         const tk = S.tickets.find(x => x.id === top.data.id);
         const v = await sheet("", [{ label: "删除这张票", sub: "不会退款", value: "del", icon: "trash", red: true }]);
@@ -997,6 +1193,8 @@
     root().innerHTML = `<div class="loading">打开旅行……</div>`;
     await loadAll(); root().innerHTML = "";
     renderBase();
+    setInterval(() => { const t = S.stack[S.stack.length - 1]; if (t && t.kind === "flight") renderPage(t); }, 60e3);
+    setTimeout(() => { maybeSurprise().catch(e => console.warn(e)); }, 2500);
   }
   boot().catch(e => { console.error(e); root().innerHTML = `<div class="loading">打开失败：${esc((e && e.message) || e)}</div>`; });
 })();

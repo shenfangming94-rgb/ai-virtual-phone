@@ -299,7 +299,9 @@ ${ask ? "邮箱：你的邮箱地址（按你的人设、年代和习惯起一�
 贺卡：寄贺卡就写「款式｜卡上的字」，款式只能从这些里选：${CARD_LIST()}；场合不合适或不想寄就写无
 正文：
 （邮件正文，可以多段）`;
-  const MAIL_RULE = `【写邮件的规矩】这是邮件，不是聊天消息：有主题，正文成段，有称呼有落款都按你的习惯来。写什么、什么语气全按你的人设和你们现在的关系。正文至少三四段、三百字以上，想说的多就写得更长；不许写成一两句话的聊天消息。只写你记得的、聊过的、你自己这边的事，不编她没做过的事，不编你记忆里没有的共同经历。附件可有可无，大部分邮件不带附件。`;
+  /** 这封信写多长：大多是长信，偶尔短一点（代码掷骰子，不让模型每次都一个长度） */
+  const lenLine = () => Math.random() < .7 ? "【这封的长度】长信：正文至少三四段、三百字以上，想说的多就写得更长。" : "【这封的长度】短一点的信：一两段、一两百字，但仍然是一封信，不是一两句话的聊天消息。";
+  const MAIL_RULE = `【写邮件的规矩】这是邮件，不是聊天消息：有主题，正文成段，有称呼有落款都按你的习惯来。写什么、什么语气全按你的人设和你们现在的关系。只写你记得的、聊过的、你自己这边的事，不编她没做过的事，不编你记忆里没有的共同经历。附件可有可无，大部分邮件不带附件。`;
 
   /** 一封信的往来历史（同一个 thread，最近几封） */
   function threadText(thread, uptoAt) {
@@ -368,7 +370,7 @@ ${ask ? "邮箱：你的邮箱地址（按你的人设、年代和习惯起一�
       const c = charById(to.charId); if (!c) return;
       const photo = (mine.att || []).find(a => a.kind === "photo" && a.ref);
       const vision = photo ? [{ role: "user", content: "（她邮件里附的照片）", image: await mediaUrl(photo.ref) }] : null;
-      const ins = [nowLine(), MAIL_RULE, `【这次要做的】${herName()}给你（${c.name}）发了一封邮件，你现在回她。下面是你们这一串邮件，最后一封是她刚寄来的。${myAddr() ? `她的邮箱是 ${myAddr()}。` : ""}`, hist, mine.att.some(a => a.kind === "card") ? "她寄了贺卡，回信里可以提到。" : "", FORMAT(!charAddr(to.charId))].filter(Boolean).join("\n\n");
+      const ins = [nowLine(), MAIL_RULE, lenLine(), `【这次要做的】${herName()}给你（${c.name}）发了一封邮件，你现在回她。下面是你们这一串邮件，最后一封是她刚寄来的。${myAddr() ? `她的邮箱是 ${myAddr()}。` : ""}`, hist, mine.att.some(a => a.kind === "card") ? "她寄了贺卡，回信里可以提到。" : "", FORMAT(!charAddr(to.charId))].filter(Boolean).join("\n\n");
       const raw = await aiGenerate(to.charId, "reply", ins, `${c.name}回信`, vision); if (raw == null) return;
       f = parseMail(raw);
       if (!storeIncoming(f, charParty(to.charId), at(), mine.thread, { replyOf: mine.id })) return;
@@ -396,7 +398,7 @@ ${ask ? "邮箱：你的邮箱地址（按你的人设、年代和习惯起一�
   }
   async function genProactive(c, manual) {
     const prev = S.mails.filter(m => visible(m) && (personKey(m.from) === `c:${c.id}` || personKey(m.to) === `c:${c.id}`)).sort((a, b) => ts(b.at) - ts(a.at)).slice(0, 3);
-    const ins = [nowLine(), MAIL_RULE, `【这次要做的】你（${c.name}）主动给${herName()}写一封邮件${myAddr() ? `，她的邮箱是 ${myAddr()}` : ""}。写什么从你最近的生活、你们聊过的事、想对她说但没在聊天里说的话里找。`,
+    const ins = [nowLine(), MAIL_RULE, lenLine(), `【这次要做的】你（${c.name}）主动给${herName()}写一封邮件${myAddr() ? `，她的邮箱是 ${myAddr()}` : ""}。写什么从你最近的生活、你们聊过的事、想对她说但没在聊天里说的话里找。`,
       prev.length ? `你们最近几封邮件（别重复写一样的事）：\n${prev.map(m => `· ${m.from.kind === "me" ? "她写给你" : "你写给她"}《${m.subject}》${fmtFull(m.at)}`).join("\n")}` : "", FORMAT(!charAddr(c.id))].filter(Boolean).join("\n\n");
     const raw = await aiGenerate(c.id, "letter", ins, `${c.name}来信`); if (raw == null) { if (manual) toast("没写成，稍后再试"); return null; }
     const f = parseMail(raw);

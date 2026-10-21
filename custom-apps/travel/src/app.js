@@ -61,8 +61,8 @@
   // plans 攻略 { id, scope, tripId, title, city, start, author:'me'|charId, days:[{title, items:[{id,time,name,desc,lat,lng,note,noteBy,edit}]}], comments:[{who,text,at}] }
   // guides 发现缓存 { id:'g:城市', scope, city, base, more, at, cover }
   // tickets 票 { id, scope, kind, tripId, ... }
-  const COL = { trips: "trips", spots: "spots", plans: "plans", guides: "guides", tickets: "tickets", meta: "meta" };
-  const S = { identity: null, chars: [], meta: null, trips: [], spots: [], plans: [], guides: [], tickets: [], debug: [], jobs: new Set(), stack: [], tab: "foot", media: new Map() };
+  const COL = { turns: "turns", trips: "trips", spots: "spots", plans: "plans", guides: "guides", tickets: "tickets", meta: "meta" };
+  const S = { identity: null, chars: [], meta: null, trips: [], spots: [], plans: [], guides: [], tickets: [], turns: [], debug: [], jobs: new Set(), stack: [], tab: "foot", media: new Map() };
   async function dbList(c) { try { return (await api.db.list(c, { limit: 500 })) || []; } catch (e) { console.warn(e); return []; } }
   async function dbUpsert(c, row) { try { const u = await api.db.update(c, row.id, row); if (u) return u; } catch (e) { /* 没有就 create */ } return api.db.create(c, row); }
   async function dbDelete(c, id) { try { await api.db.delete(c, id); } catch (e) { console.warn(e); } }
@@ -79,12 +79,12 @@
     const owners = await Promise.all(chars.map(c => api.user.getProfile({ characterId: c.id }).catch(() => null)));
     S.chars = chars.filter((c, i) => !owners[i] || !identity || owners[i].id === identity.id);
     const scope = S.identity.id;
-    const [trips, spots, plans, guides, tickets, metas] = await Promise.all(["trips", "spots", "plans", "guides", "tickets", "meta"].map(dbList));
+    const [trips, spots, plans, guides, tickets, metas, turns] = await Promise.all(["trips", "spots", "plans", "guides", "tickets", "meta", "turns"].map(dbList));
     const mine = xs => xs.filter(x => x.scope === scope);
     S.trips = mine(trips).map(t => ({ ...t, companions: t.companions || [] }));
     S.spots = mine(spots).map(s => ({ ...s, photos: s.photos || [], notes: s.notes || [] }));
     S.plans = mine(plans).map(p => ({ ...p, days: p.days || [], comments: p.comments || [] }));
-    S.guides = mine(guides); S.tickets = mine(tickets);
+    S.guides = mine(guides); S.tickets = mine(tickets); S.turns = mine(turns);
     S.debug = (metas.find(m => m.id === "debug_log") || {}).entries || [];
     S.meta = metas.find(m => m.id === `meta_${scope}`) || { id: `meta_${scope}` };
     const d = { home: "", geo: {}, recent: [], favs: [] };
@@ -489,6 +489,7 @@
       <div class="sheet-b tall"><div class="h"></div>
         <div class="days">${["全部", ...Array.from({ length: nDays }, (_, i) => `第 ${i + 1} 天`)].map((n, i) => `<span class="${day === i ? "on" : ""}" data-act="trip-day" data-d="${i}">${n}</span>`).join("")}</div>
         <div class="legend"><span><i class="lg solid"></i>打过卡的</span>${plan ? `<span><i class="lg dash"></i>攻略里还没去的</span>` : ""}</div>
+        ${t.companions.filter(charById).length ? `<div class="jentry" data-act="journey" data-id="${t.id}">${avaStack(t.companions)}<div><b>${t.story && tripTurns(t).length ? "继续旅途" : `和${esc(t.companions.map(nameOf).join("、"))}出发`}</b><small>${t.story && tripTurns(t).length ? `第 ${t.story.day} 天 · ${esc(t.story.place)}` : "一边走剧情，一边打卡"}</small></div><i class="arr">${I.back}</i></div>` : ""}
         <div class="tbtns"><button class="btn-b" data-act="spot-new" data-id="${t.id}">${I.pin}打卡</button><button class="btn-g" data-act="${plan ? "plan" : "plan-new-trip"}" data-id="${plan ? plan.id : t.id}">${I.doc}${plan ? "看攻略" : "做攻略"}</button><button class="btn-g" data-act="book-trip" data-id="${t.id}">${I.ticket}订票</button></div>
         <div class="slist">${shown.map(s => `<div class="srow" data-act="spot" data-id="${s.id}">${pic((s.photos.find(x => x.ref) || {}).ref, s.name, "s-pic")}<div><b>${esc(s.name)}</b><small>${esc(mdw(s.at))} ${hm(s.at)}${s.photos.length ? ` · ${s.photos.length} 张照片` : ""}</small><p>${esc((s.notes[0] || {}).text || "")}</p></div></div>`).join("") || `<div class="empty sm">${day ? "这一天还没打卡" : "还没打卡，到了一个地方就点「打卡」吧"}</div>`}</div>
       </div>`;
@@ -912,6 +913,210 @@
     renderAll();
   }
 
+  // ───────────────────────── 旅途：一边走剧情一边打卡 ─────────────────────────
+  // turns 旅途剧情 { id, scope, tripId, day, user, text, summary, place, lat, lng, time, dayEnd, newPlace, createdAt }
+  // trip.story { day, time, place, lat, lng, path:[{name,lat,lng,day,time,turn}], diaries:[{day,title,text,places,at}] }
+  const STYLE_BASE = [
+    { id: "natural", name: "自然文风", prompt: "自然、连贯地推进场景，动作与对白比例均衡，不替用户决定心理和行动。" },
+    { id: "delicate", name: "细腻慢热", prompt: "节奏舒缓，重视细小动作、感官变化和情绪递进，避免突然跳转关系。" },
+    { id: "cinema", name: "电影感叙事", prompt: "使用清晰镜头感与场面调度推进剧情，语言克制，画面明确。" },
+    { id: "travel", name: "游记感", prompt: "像一篇有温度的游记，景和人交织着写，写清楚走过的路、看到的景、吃到的东西和当地的细节，对话和小动作穿插在旅途里，不堆砌形容词。" },
+  ];
+  const POV = [["second", "你"], ["third", "她"], ["name", "我的名字"]];
+  const storySet = () => ({ min: 800, max: 1500, pov: "second", style: "travel", styles: [], ...(S.meta.story || {}) });
+  const allStyles = () => [...STYLE_BASE, ...storySet().styles];
+  const tripTurns = t => S.turns.filter(x => x.tripId === t.id).sort((a, b) => ts(a.createdAt) - ts(b.createdAt));
+  const tripDate = (t, day) => addDays(t.start || ymd(new Date()), day - 1);
+  function storyOf(t) {
+    if (t.story) return t.story;
+    const arr = S.tickets.find(k => k.tripId === t.id && k.kind !== "hotel" && k.to === t.city);
+    t.story = { day: 1, time: arr ? hm(new Date(ts(arr.arr) + 3600e3)) : "10:00", place: arr ? (arr.kind === "flight" ? `${t.city}${arr.toAp || "机场"}` : `${arr.toSt || t.city}站`) : t.city,
+      lat: arr && arr.toLL ? arr.toLL[0] : t.lat, lng: arr && arr.toLL ? arr.toLL[1] : t.lng, path: [], diaries: [] };
+    return t.story;
+  }
+  const hotelOf = t => S.tickets.find(k => k.kind === "hotel" && (k.tripId === t.id || k.to === t.city));
+  function planItems(t, day) { const pl = S.plans.find(x => x.tripId === t.id); return pl && pl.days[day - 1] ? pl.days[day - 1].items : []; }
+  function futureItems(t, st) { const been = new Set(st.path.map(x => x.name)); return planItems(t, st.day).filter(it => it.lat != null && !been.has(it.name)); }
+  function planItemNamed(t, name) { const pl = S.plans.find(x => x.tripId === t.id); if (!pl) return null; return pl.days.flatMap(d => d.items).find(it => it.lat != null && (it.name === name || name.includes(it.name) || it.name.includes(name))) || null; }
+  const spotNamed = (t, name) => S.spots.find(s => s.tripId === t.id && s.name === name);
+
+  function storyRules(t, chars) {
+    const st = storySet(); const sty = allStyles().find(x => x.id === st.style) || STYLE_BASE[3];
+    const her = herName(); const who = chars.map(c => c.name).join("、");
+    const pov = st.pov === "third" ? `用第三人称「她」称呼${her}` : st.pov === "name" ? `用名字「${her}」称呼她` : `用第二人称「你」称呼${her}`;
+    return [`【旅途模式】这是${her}和${who}一起出门旅行的剧情，像线下一样一段一段往下写。`,
+      `【以旅行为主】剧情围绕这趟旅行本身展开，别光顾着腻歪而忘了旅行，也别拖着不出门。回到酒店房间、只剩彼此独处时这一天就收尾，写到进房间为止，并把 dayEnd 标成 true。`,
+      `【酒店】酒店本身有特色时，在酒店里逛、看景、吃早餐也算旅行；进了房间就收尾。`,
+      `【不替她做主】不替${her}说话，不替她决定做什么、想什么、感受到什么。`,
+      `【不 OOC】${who}的言行以人设和你们现在的关系为准。`,
+      `【真实】地名、店名、路线、交通、营业时间、物价都用真实的；时间随剧情合理往前走。`,
+      `【写作】正文 ${st.min}—${st.max} 字，不为凑字数重复。${pov}。文风【${sty.name}】：${sty.prompt}`].join("\n");
+  }
+  function storyContext(t, st) {
+    const date = tripDate(t, st.day); const items = planItems(t, st.day); const been = new Set(st.path.map(x => x.name));
+    const today = st.path.filter(x => x.day === st.day);
+    const h = hotelOf(t); let hInfo = "";
+    if (h) { const g = guideOf(t.city); const hh = g && g.more && (g.more.hotels || []).find(x => x.name === h.hotel); hInfo = `${h.hotel}${hh ? `（${[hh.stars, hh.area, (hh.facilities || []).join("、")].filter(Boolean).join("，")}）` : ""}`; }
+    return [`【旅途】${t.city}${t.country && t.country !== "中国" ? `（${t.country}）` : ""}，第 ${st.day} 天${t.days ? ` / 共 ${t.days} 天` : ""}，${md(date)} 星期${WEEK[date.getDay()]}，现在 ${st.time}，在${st.place}。`,
+      today.length ? `【今天走过】${today.map(x => `${x.time} ${x.name}`).join(" → ")}` : "",
+      items.length ? `【攻略里今天的行程】${items.map(it => `${it.time || ""} ${it.name}${been.has(it.name) ? "（去过了）" : ""}`).join("；")}。攻略只是参考，按${herName()}的意思走。` : "",
+      hInfo ? `【住的酒店】${hInfo}` : "",
+      st.diaries.length ? `【前几天】${st.diaries.map(d => `第${d.day}天：${d.text.slice(0, 150)}`).join("\n")}` : ""].filter(Boolean).join("\n");
+  }
+  const STORY_OUT = `【输出】正文和小结按平时线下的格式写。最后另起一行输出 <trip>{"place":"这一段结束时你们所在的具体地点，真实名称","lat":纬度,"lng":经度,"time":"HH:MM","dayEnd":false}</trip>，经纬度用 WGS84。`;
+  async function storyGen(t, instruction, messages, label) {
+    const chars = t.companions.filter(charById); const job = uid("job"); S.jobs.add(job); renderBusy();
+    try {
+      const base = { instruction, messages, timeoutMs: 300000 };
+      const r = chars.length > 1 ? await api.ai.generate({ ...base, characterIds: chars, groupName: t.title, appTags: ["group_chat", "offline", "nox_travel", "travel_story"] })
+        : await api.ai.generate({ ...base, characterId: chars[0], appTags: ["chat", "offline", "nox_travel", "travel_story"] });
+      const text = (r && r.text) || ""; logAi({ label, ok: true, text }); return text;
+    } catch (e) { console.error(e); logAi({ label, ok: false, error: String((e && e.message) || e) }); toast(`${label}失败：${(e && e.message) || e}`.slice(0, 60)); return null; }
+    finally { S.jobs.delete(job); renderBusy(); }
+  }
+  function parseStory(raw) {
+    let s = String(raw || "").replace(/<(think|thinking)>[\s\S]*?<\/\1>/gi, "");
+    let trip = null; const tm = s.match(/<trip>([\s\S]*?)<\/trip>/i); if (tm) { trip = parseJSON(tm[1]); s = s.replace(tm[0], ""); }
+    const cm = s.match(/<content>([\s\S]*?)<\/content>/i);
+    const tags = [...s.matchAll(/<([a-zA-Z_]+)>([\s\S]*?)<\/\1>/g)].filter(m => m[1].toLowerCase() !== "content");
+    const summary = tags.length ? tags[tags.length - 1][2].trim() : "";
+    const text = (cm ? cm[1] : s.replace(/<([a-zA-Z_]+)>[\s\S]*?<\/\1>/g, "")).replace(/<\/?[a-zA-Z_]+>/g, "").trim();
+    return { text, summary, trip };
+  }
+  /** 写一段：userText 为空就是让他接着写 */
+  async function storySend(p, userText) {
+    const t = S.trips.find(x => x.id === p.data.id); if (!t || p.data.busy) return;
+    const chars = t.companions.filter(charById); if (!chars.length) { toast("这趟旅行还没有同行的人"); return; }
+    const st = storyOf(t); const turns = tripTurns(t); const her = herName();
+    const lead = !turns.length ? `【开场】旅途开始，从${st.time}的${st.place}写起。${userText ? `${her}：${userText}` : ""}` : userText ? `【${her}这一轮】${userText}` : `【${her}这一轮】她没有说话，你接着往下写。`;
+    const ins = [storyRules(t, chars.map(charById)), storyContext(t, st), lead, STORY_OUT].join("\n\n");
+    const msgs = turns.slice(-6).flatMap(x => [{ role: "user", content: x.user || "（继续）" }, { role: "assistant", content: `<content>\n${x.text}\n</content>` }]);
+    p.data.busy = true; p.data.pending = userText; p.data.draft = ""; p.data.stick = true; if (S.stack.includes(p)) renderPage(p);
+    const raw = await storyGen(t, ins, msgs, `旅途 第${st.day}天`);
+    p.data.busy = false; p.data.pending = ""; const r = raw == null ? null : parseStory(raw);
+    if (!r || !r.text) { p.data.draft = userText; if (r) toast("没写出来，再试一次"); if (S.stack.includes(p)) renderPage(p); return; }
+    const tr = r.trip || {}; const prev = { place: st.place, lat: st.lat, lng: st.lng, time: st.time };
+    const place = String(tr.place || "").trim().slice(0, 40) || st.place;
+    let lat = num(tr.lat, NaN), lng = num(tr.lng, NaN);
+    const near = t.lat == null || (Number.isFinite(lat) && km([lat, lng], [t.lat, t.lng]) < 300);
+    if (!Number.isFinite(lat) || !Number.isFinite(lng) || !near || place === prev.place) { const it = place === prev.place ? null : planItemNamed(t, place); if (it) { lat = it.lat; lng = it.lng; } else { lat = place === prev.place ? prev.lat : (Number.isFinite(lat) && near ? lat : prev.lat); lng = place === prev.place ? prev.lng : (Number.isFinite(lng) && near ? lng : prev.lng); } }
+    const time = /^\d{1,2}:\d{2}$/.test(String(tr.time || "").trim()) ? String(tr.time).trim().padStart(5, "0") : st.time;
+    const newPlace = place !== prev.place;
+    const turn = addRow(COL.turns, "turns", { id: uid("tn"), tripId: t.id, day: st.day, user: userText, text: r.text.slice(0, 20000), summary: r.summary.slice(0, 600), place, lat, lng, time, dayEnd: !!tr.dayEnd, newPlace, prev, createdAt: nowIso() });
+    if (newPlace) { if (!st.path.some(x => x.day === st.day)) st.path.push({ name: prev.place, lat: prev.lat, lng: prev.lng, day: st.day, time: prev.time, turn: turn.id, start: true }); st.path.push({ name: place, lat, lng, day: st.day, time, turn: turn.id }); }
+    Object.assign(st, { place, lat, lng, time }); save(COL.trips, t);
+    remember(t.companions, `【旅行·${t.city}第${st.day}天 ${time} ${place}】${r.summary || r.text.slice(0, 200)}`, `story_${turn.id}`);
+    p.data.stick = true; if (S.stack.includes(p)) renderPage(p);
+  }
+  /** 撤掉最后一段（重写 / 删除共用） */
+  function storyUndo(t) {
+    const turns = tripTurns(t); const last = turns[turns.length - 1]; if (!last) return null; const st = storyOf(t);
+    st.path = st.path.filter(x => x.turn !== last.id); Object.assign(st, last.prev || {}); if (last.day < st.day && !st.diaries.some(d => d.day === last.day)) st.day = last.day;
+    save(COL.trips, t); delRow(COL.turns, "turns", last);
+    if (api.memory && api.memory.deleteTimeline) for (const id of t.companions) api.memory.deleteTimeline({ characterId: id, appEventId: `story_${last.id}_${id}` }).catch(() => {});
+    return last;
+  }
+  async function storyDayEnd(p) {
+    const t = S.trips.find(x => x.id === p.data.id); if (!t || p.data.busy) return; const st = storyOf(t);
+    const turns = tripTurns(t).filter(x => x.day === st.day); if (!turns.length) { toast("今天还没出门呢"); return; }
+    const v = await sheet(`第 ${st.day} 天就到这儿？`, [{ label: "写一页游记，明天继续", sub: "会用 1 次 AI", value: "ok", icon: "pen" }]); if (v !== "ok") return;
+    const names = t.companions.filter(charById).map(nameOf).join("、"); const her = herName();
+    p.data.busy = true; p.data.diaryBusy = true; renderPage(p);
+    const raw = await aiChat(`你在给一趟旅行写手账。根据一天的旅途经过，写一页游记：一个有意思的标题（12 个字以内）和一段 150 到 250 字的回顾，第三人称，用名字称呼人，写去了哪、发生了什么小事，语气轻松，不抒情不升华。只输出 JSON：{"title":"","text":""}`,
+      `${her}和${names}在${t.city}的第 ${st.day} 天：\n${turns.map(x => `${x.time} ${x.place}：${x.summary || x.text.slice(0, 300)}`).join("\n")}`, "游记", 1500);
+    p.data.busy = false; p.data.diaryBusy = false;
+    const j = parseJSON(raw); if (!j || !j.text) { toast("游记没写出来，再试一次"); renderPage(p); return; }
+    const places = [...new Set(turns.flatMap(x => x.newPlace ? [x.place] : []))];
+    const d = { day: st.day, title: String(j.title || `第 ${st.day} 天`).slice(0, 30), text: String(j.text).slice(0, 1200), places, at: nowIso() };
+    st.diaries = [...st.diaries.filter(x => x.day !== d.day), d];
+    remember(t.companions, `【旅行游记·${t.city}第${d.day}天】${d.title}：${d.text}`, `diary_${t.id}_${d.day}`);
+    const h = hotelOf(t); st.day += 1; st.time = "09:00"; st.place = h ? h.hotel : `住的地方（${st.place}附近）`; if (t.days && st.day > t.days) t.days = st.day;
+    save(COL.trips, t); p.data.stick = true; renderAll(); push("jdiary", { id: t.id, day: d.day });
+  }
+  async function storyCheckin(tn) {
+    const t = S.trips.find(x => x.id === tn.tripId); if (!t) return;
+    const v = await sheet(`在「${tn.place}」打卡`, [{ label: "按剧情生一张照片", sub: "会用 1 次生图", value: "gen", icon: "spark" }, { label: "从相册选", value: "pick", icon: "img" }, { label: "先不放照片", value: "none", icon: "pin" }]); if (!v) return;
+    const at = tripDate(t, tn.day); const [h, m] = tn.time.split(":"); at.setHours(+h || 12, +m || 0, 0, 0);
+    const s = addRow(COL.spots, "spots", { id: uid("sp"), tripId: t.id, name: tn.place, lat: tn.lat, lng: tn.lng, at: at.toISOString(), photos: [], notes: [], fromTurn: tn.id, createdAt: nowIso() });
+    renderAll(); toast(`在「${tn.place}」打卡了`);
+    if (v === "pick") { try { const refs = await pickImages(9); if (refs.length) { s.photos.push(...refs.map(ref => ({ ref, desc: "" }))); save(COL.spots, s); renderAll(); } } catch (e) { toast("没选成"); } }
+    if (v === "gen") { toast("在生成了，稍等一下"); const one = t.companions.length === 1 ? t.companions[0] : null; const ref = await genImage(`${t.city}，${tn.place}，${tn.summary || tn.text.slice(0, 200)}。旅行时随手拍的照片，真实摄影风格`, one); if (ref) { s.photos.push({ ref, desc: tn.summary || "" }); save(COL.spots, s); renderAll(); } }
+  }
+  const quoteFmt = s => esc(s).replace(/「[^」]{0,200}」/g, m => `<q>${m}</q>`);
+  const jPeople = t => `<div class="jme ${t.companions.length > 1 ? "multi" : ""}">${t.companions.slice(0, 2).map(id => ava(id)).join("")}${t.companions.length > 2 ? `<b>+${t.companions.length - 2}</b>` : ""}</div>`;
+  const diaryCard = (t, d) => `<div class="jdcard" data-act="j-diary" data-id="${t.id}" data-d="${d.day}"><small>DAY ${d.day} · 游记</small><b>${esc(d.title)}</b><p>${esc(d.text.slice(0, 60))}……</p></div>`;
+  PAGES.journey = p => {
+    const t = S.trips.find(x => x.id === p.data.id); if (!t) return topbar("") + `<div class="empty">这趟旅行不见了</div>`;
+    const st = storyOf(t); const turns = tripTurns(t); const fut = futureItems(t, st); const next = fut[0];
+    const names = t.companions.filter(charById).map(nameOf).join("、") || "TA";
+    const head = `<div class="jtop"><button class="ib jb" data-act="${p.data.full ? "j-full" : "back"}">${p.data.full ? I.close : I.back}</button><div class="jpill">${esc(t.city)} · 第 ${st.day} 天 <i>${esc(st.time)}</i></div><button class="ib jb" data-act="j-more" data-id="${t.id}">${I.more}</button></div>`;
+    if (p.data.full) {
+      const today = st.path.filter(x => x.day === st.day);
+      const rows = [...today.map((x, i) => `<li class="${i === today.length - 1 ? "c" : "d"}"><span class="n">${i + 1}</span>${esc(x.name)}${i === today.length - 1 ? " · 你们在这儿" : ""}<small>${esc(x.time)}</small></li>`),
+        ...(today.length ? [] : [`<li class="c"><span class="n">1</span>${esc(st.place)} · 你们在这儿<small>${esc(st.time)}</small></li>`]),
+        ...fut.map((it, i) => `<li class="f"><span class="n">${Math.max(today.length, 1) + i + 1}</span>${esc(it.name)}<span class="goto" data-act="j-goto" data-v="${esc(it.name)}">去这儿 ›</span></li>`)].join("");
+      return `<div class="lmap full" id="jmap"></div>${head}<div class="jcard"><div class="hd"><b>今天的路线</b><small>${S.plans.some(x => x.tripId === t.id) ? "虚线是攻略里还没去的" : "走过的地方会连成线"}</small></div><ul class="jtl">${rows}</ul></div>`;
+    }
+    const parts = []; let lastDay = null, lastBegin = null;
+    turns.forEach((x, i) => {
+      if (x.day !== lastDay) { const d = lastDay != null && st.diaries.find(dd => dd.day === lastDay); if (d) parts.push(diaryCard(t, d)); parts.push(`<div class="jday">第 ${x.day} 天 · ${esc(md(tripDate(t, x.day)))}</div>`); lastDay = x.day; lastBegin = null; }
+      const begin = (x.prev && x.prev.place) || st.place;
+      if (begin !== lastBegin) { parts.push(`<div class="jscene">${esc(begin)} · ${esc((x.prev && x.prev.time) || "")}</div>`); lastBegin = begin; }
+      if (x.user) parts.push(`<div class="jmine">${esc(x.user)}</div>`);
+      parts.push(x.text.split(/\n+/).filter(s => s.trim()).map(s => `<p class="jp">${quoteFmt(s.trim())}</p>`).join(""));
+      if (x.newPlace) { const sp = spotNamed(t, x.place); parts.push(`<div class="jarrive">${I.pin}<div><b>到了 ${esc(x.place)}</b><small>${esc(x.time)}${sp ? " · 已经打过卡" : ""}</small></div>${sp ? `<span class="jgo2" data-act="spot" data-id="${sp.id}">看看 ›</span>` : `<span class="jgo" data-act="j-check" data-id="${x.id}">${I.img}在这里打卡</span>`}</div>`); lastBegin = x.place; }
+      if (i === turns.length - 1 && !p.data.busy) parts.push(`<div class="jtools"><span data-act="j-redo" data-id="${t.id}">重写这段</span><span data-act="j-del" data-id="${t.id}">删掉这段</span></div>`);
+      if (i === turns.length - 1 && x.dayEnd && !st.diaries.some(d => d.day === x.day) && !p.data.busy) parts.push(`<div class="jend"><b>回到住的地方了</b><small>今天就写到这儿吧，写一页游记，明天接着玩</small><button class="btn-b" data-act="j-dayend" data-id="${t.id}">今天就到这</button></div>`);
+    });
+    const ended = lastDay != null && st.diaries.find(d => d.day === lastDay); if (ended) parts.push(diaryCard(t, ended), `<div class="jday">第 ${st.day} 天 · ${esc(md(tripDate(t, st.day)))}</div>`);
+    if (!turns.length) parts.push(`<div class="jintro">${avaStack(t.companions)}<b>和${esc(names)}出发</b><p>从 ${esc(st.time)} 的${esc(st.place)}开始。写下你想做的事、想说的话，他会接着往下写；不知道写什么就点「出发吧」。</p><small>字数、人称、文风在右上角「···」里设置</small></div>`);
+    if (p.data.busy) { if (p.data.pending) parts.push(`<div class="jmine">${esc(p.data.pending)}</div>`); parts.push(`<div class="jwait"><i></i><i></i><i></i>${p.data.diaryBusy ? "在写今天的游记……" : `${esc(names)}在写……`}</div>`); }
+    const sugg = !turns.length ? [["send", "出发吧"]] : [...(next ? [["fill", `我们去${next.name}吧`, `去下一站：${next.name}`]] : []), ["fill", "找个地方吃饭吧"], ["send", "接着写"], ["dayend", "今天就到这"]];
+    return `<div class="lmap full" id="jmap"></div>${head}
+      ${next ? `<div class="jnext" data-act="j-goto" data-v="${esc(next.name)}">下一站 ${esc(next.name)}${st.lat != null ? `<small> · ${Math.max(1, Math.round(km([st.lat, st.lng], [next.lat, next.lng])))} 公里</small>` : ""}</div>` : ""}
+      <button class="jexp" data-act="j-full">${I.crosshair}</button>
+      <div class="jpanel"><div class="grab"></div><div class="jread">${parts.join("")}</div>
+        <div class="jsugg">${sugg.map(([k, v, label]) => `<span data-act="j-sug" data-k="${k}" data-v="${esc(v)}">${k === "fill" && label ? I.pin : ""}${esc(label || v)}</span>`).join("")}</div>
+        <div class="jinp"><textarea class="jin" rows="1" placeholder="你想做什么、说什么……" ${p.data.busy ? "disabled" : ""}>${esc(p.data.draft || "")}</textarea><button class="jsend" data-act="j-send" ${p.data.busy ? "disabled" : ""}>${I.back}</button></div></div>`;
+  };
+  PAGES.journey.after = p => {
+    const t = S.trips.find(x => x.id === p.data.id); if (!t) return; const st = storyOf(t);
+    const rd = $(".jread", p.el); if (rd) { if (p.data.stick || p.data.rt == null) rd.scrollTop = rd.scrollHeight; else rd.scrollTop = p.data.rt; p.data.stick = false; rd.onscroll = () => { p.data.rt = rd.scrollTop; }; }
+    const ta = $(".jin", p.el); if (ta) { const fit = () => { ta.style.height = "auto"; ta.style.height = Math.min(120, ta.scrollHeight) + "px"; }; fit(); ta.oninput = () => { p.data.draft = ta.value; fit(); }; }
+    const mp = makeMap($("#jmap", p.el)); if (!mp) return;
+    const today = st.path.filter(x => x.day === st.day && x.lat != null); const fut = futureItems(t, st).slice(0, p.data.full ? 9 : 2); const pts = [];
+    if (today.length > 1) mp.line(today.map(x => [x.lat, x.lng]), { color: "#2b5bd7", weight: 4, opacity: .9 });
+    if (fut.length && st.lat != null) mp.line([[st.lat, st.lng], ...fut.map(i => [i.lat, i.lng])], { color: "#555", weight: 3, dashArray: "6 7", opacity: .7 });
+    today.forEach((x, i) => { pts.push([x.lat, x.lng]); if (i < today.length - 1 || x.name !== st.place) mp.marker(x.lat, x.lng, `<div class="jstop done">${i + 1}</div>`, [22, 22], () => toast(`${x.time} ${x.name}`)); });
+    fut.forEach((it, i) => { pts.push([it.lat, it.lng]); mp.marker(it.lat, it.lng, `<div class="jstop future">${Math.max(today.length, 1) + i + 1}</div>${i === 0 || p.data.full ? `<div class="jlab">${esc(it.name)}</div>` : ""}`, [22, 22], () => { p.data.draft = `我们去${it.name}吧`; p.data.full = false; renderPage(p); }); });
+    if (st.lat != null) { pts.push([st.lat, st.lng]); mp.marker(st.lat, st.lng, jPeople(t), t.companions.length > 1 ? [62, 46] : [46, 46]); }
+    const c = pts[pts.length - 1] || (t.lat != null ? [t.lat, t.lng] : [33, 110]); mp.decide(c[0], c[1]);
+    const H = p.el.clientHeight || 800;
+    if (pts.length > 1) mp.fit(pts, p.data.full ? [120, Math.round(H * .5)] : [110, H - 290], 15); else mp.view(c[0], c[1], t.lat != null || st.lat != null ? 13 : 4);
+    if (!p.data.full && pts.length <= 1 && st.lat != null) mp.m.panBy([0, (H - 330) / 2 - 20], { animate: false });
+  };
+  // 游记
+  PAGES.jdiary = p => {
+    const t = S.trips.find(x => x.id === p.data.id); if (!t) return topbar("");
+    const st = storyOf(t); const ds = st.diaries.slice().sort((a, b) => a.day - b.day);
+    return `${topbar(`${t.title} · 游记`)}<div class="scroll jdiaries">${ds.map(d => {
+      const photos = S.spots.filter(s => s.tripId === t.id && dayDiff(t.start || ymd(new Date()), s.at) + 1 === d.day).flatMap(s => s.photos.filter(x => x.ref).map(x => x.ref)).slice(0, 3);
+      return `<div class="jdpage ${d.day === p.data.day ? "hl" : ""}" id="jd${d.day}"><small>DAY ${d.day} · ${esc(md(tripDate(t, d.day)))} · ${esc(t.city)}</small><h3>${esc(d.title)}</h3>
+        ${photos.length ? `<div class="jph n${photos.length}">${photos.map((r, i) => pic(r, d.title + i, "jphp")).join("")}</div>` : ""}
+        ${d.places.length ? `<div class="jroute">${d.places.map(x => `<b>${esc(x)}</b>`).join(" › ")}</div>` : ""}
+        ${d.text.split(/\n+/).map(s => `<p>${esc(s)}</p>`).join("")}</div>`; }).join("") || `<div class="empty">还没有游记<br><small>旅途里点「今天就到这」就会写一页</small></div>`}<div class="pad-b"></div></div>`;
+  };
+  PAGES.jdiary.after = p => { const el = p.data.day && $(`#jd${p.data.day}`, p.el); if (el && !p.data.scrolled) { p.data.scrolled = true; el.scrollIntoView({ block: "start" }); } };
+  // 旅途设置
+  PAGES.jset = () => {
+    const st = storySet();
+    return `${topbar("旅途设置")}<div class="scroll jsetp"><div class="hint">所有旅行共用这一套。他的人设、记忆、世界书和你线下的预设会自动带上。</div>
+      <div class="lb">字数</div><div class="setbox"><div class="srow2" data-act="js-len"><span>每段正文</span><b>${st.min}～${st.max} 字</b></div></div>
+      <div class="lb">怎么称呼你</div><div class="jseg">${POV.map(([k, n]) => `<span class="${st.pov === k ? "on" : ""}" data-act="js-pov" data-v="${k}">${k === "name" ? esc(herName()) : n}</span>`).join("")}</div>
+      <div class="lb">文风</div><div class="setbox">${allStyles().map(s => `<div class="jsty ${st.style === s.id ? "on" : ""}" data-act="js-style" data-v="${s.id}"><i></i><div><b>${esc(s.name)}</b><small>${esc(s.prompt)}</small></div>${STYLE_BASE.some(x => x.id === s.id) ? "" : `<em data-act="js-edit" data-v="${s.id}">${I.pen}</em>`}</div>`).join("")}
+        <div class="srow2" data-act="js-new"><span>${I.plus}新建文风</span><small>可以把剧情里调好的那段粘过来</small></div></div><div class="pad-b"></div></div>`;
+  };
+
   // ───────────────────────── 弹层 ─────────────────────────
   function sheet(title, options) {
     return new Promise(res => {
@@ -1029,6 +1234,29 @@
       case "foot-filter": S.meta.footFilter = t.dataset.f; saveMeta(); renderBase(); return;
       case "trip-new": { const tr = await newTrip(); if (tr) { renderAll(); push("trip", { id: tr.id }); } return; }
       case "trip": push("trip", { id }); return;
+      // 旅途
+      case "journey": push("journey", { id, stick: true }); return;
+      case "j-full": top.data.full = !top.data.full; top.data._view = null; renderPage(top); return;
+      case "j-goto": { top.data.draft = `我们去${t.dataset.v}吧`; top.data.full = false; top.data._view = null; renderPage(top); const ta = $(".jin", top.el); if (ta) ta.focus(); return; }
+      case "j-send": storySend(top, (top.data.draft || "").trim()); return;
+      case "j-sug": { const k = t.dataset.k; if (k === "fill") { top.data.draft = t.dataset.v; renderPage(top); const ta = $(".jin", top.el); if (ta) ta.focus(); } else if (k === "send") storySend(top, (top.data.draft || "").trim()); else storyDayEnd(top); return; }
+      case "j-dayend": storyDayEnd(top); return;
+      case "j-check": { const tn = S.turns.find(x => x.id === id); if (tn) storyCheckin(tn); return; }
+      case "j-redo": { const tr = S.trips.find(x => x.id === id); if (!tr || top.data.busy) return; const last = storyUndo(tr); if (last) { top.data._view = null; storySend(top, last.user || ""); } return; }
+      case "j-del": { const tr = S.trips.find(x => x.id === id); if (!tr || top.data.busy) return; const ok = await sheet("删掉最后这一段？", [{ label: "删掉", value: "y", icon: "trash", red: true }]); if (ok !== "y") return; const last = storyUndo(tr); if (last) { top.data.draft = last.user || ""; top.data._view = null; renderPage(top); } return; }
+      case "j-diary": push("jdiary", { id, day: +t.dataset.d }); return;
+      case "j-more": { const v = await sheet("旅途", [{ label: "旅途设置", sub: "字数、人称、文风", value: "set", icon: "gear" }, { label: "看游记", value: "diary", icon: "doc" }, { label: "这趟旅行的打卡", value: "trip", icon: "map" }]); if (v === "set") push("jset"); else if (v === "diary") push("jdiary", { id }); else if (v === "trip") push("trip", { id }); return; }
+      case "js-len": { const st = storySet(); const r = await form("每段正文字数", [{ k: "min", label: "最少", type: "number", value: String(st.min) }, { k: "max", label: "最多", type: "number", value: String(st.max) }]); if (!r) return; const mn = Math.max(50, Math.min(10000, num(r.min, st.min))); S.meta.story = { ...st, min: mn, max: Math.max(mn, Math.min(10000, num(r.max, st.max))) }; saveMeta(); renderPage(top); return; }
+      case "js-pov": S.meta.story = { ...storySet(), pov: t.dataset.v }; saveMeta(); renderPage(top); return;
+      case "js-style": S.meta.story = { ...storySet(), style: t.dataset.v }; saveMeta(); renderPage(top); return;
+      case "js-new": { const r = await form("新建文风", [{ k: "n", label: "名字", ph: "我的文风" }, { k: "p", label: "文风要求", type: "textarea", ph: "写给 AI 的文风要求" }], "保存"); if (!r || !r.p.trim()) return; const st = storySet(); const ns = { id: uid("sty"), name: r.n.trim() || `文风 ${st.styles.length + 1}`, prompt: r.p.trim().slice(0, 4000) }; S.meta.story = { ...st, styles: [...st.styles, ns], style: ns.id }; saveMeta(); renderPage(top); return; }
+      case "js-edit": {
+        const st = storySet(); const sy = st.styles.find(x => x.id === t.dataset.v); if (!sy) return;
+        const v = await sheet(sy.name, [{ label: "修改", value: "edit", icon: "pen" }, { label: "删除", value: "del", icon: "trash", red: true }]);
+        if (v === "edit") { const r = await form("修改文风", [{ k: "n", label: "名字", value: sy.name }, { k: "p", label: "文风要求", type: "textarea", value: sy.prompt }], "保存"); if (r && r.p.trim()) { Object.assign(sy, { name: r.n.trim() || sy.name, prompt: r.p.trim().slice(0, 4000) }); S.meta.story = st; saveMeta(); } }
+        else if (v === "del") { st.styles = st.styles.filter(x => x !== sy); if (st.style === sy.id) st.style = "travel"; S.meta.story = st; saveMeta(); }
+        renderPage(top); return;
+      }
       case "trip-day": top.data.day = +t.dataset.d; top.data._view = null; renderPage(top); return;
       case "trip-more": {
         const tr = S.trips.find(x => x.id === id);
@@ -1037,7 +1265,7 @@
           const r = await form("改一下", [{ k: "title", label: "名字", value: tr.title }, { k: "start", label: "出发日期", type: "date", value: tr.start }, { k: "days", label: "天数", type: "number", value: tr.days }, { k: "with", label: "和谁一起", type: "multi", options: charOptions(), value: tr.companions }]);
           if (r) { const added = r.with.filter(x => !tr.companions.includes(x)); Object.assign(tr, { title: r.title.trim() || tr.title, start: r.start || tr.start, days: Math.max(1, +r.days || tr.days), companions: r.with }); save(COL.trips, tr); if (added.length) remember(added, `${herName()}把我加进了她的旅行「${tr.title}」，我们要一起去${tr.city}。`, `trip_add_${tr.id}_${Date.now()}`); renderAll(); }
         } else if (v === "cover") { const ref = await changeImage(`${tr.city}的风景`, tr.companions); if (ref) { tr.coverRef = ref; save(COL.trips, tr); renderAll(); } }
-        else if (v === "del") { const ok = await sheet(`删除「${tr.title}」？打卡和照片都会删掉`, [{ label: "删除", value: "y", red: true, icon: "trash" }]); if (ok) { for (const s of tripSpots(tr)) delRow(COL.spots, "spots", s); for (const pl of S.plans.filter(x => x.tripId === tr.id)) { pl.tripId = null; save(COL.plans, pl); } delRow(COL.trips, "trips", tr); pop(); renderAll(); } }
+        else if (v === "del") { const ok = await sheet(`删除「${tr.title}」？打卡、照片和旅途剧情都会删掉`, [{ label: "删除", value: "y", red: true, icon: "trash" }]); if (ok) { for (const s of tripSpots(tr)) delRow(COL.spots, "spots", s); for (const x of tripTurns(tr)) delRow(COL.turns, "turns", x); for (const pl of S.plans.filter(x => x.tripId === tr.id)) { pl.tripId = null; save(COL.plans, pl); } delRow(COL.trips, "trips", tr); pop(); renderAll(); } }
         return;
       }
       case "spot-new": { const tr = S.trips.find(x => x.id === id); if (tr) await newSpot(tr); return; }

@@ -35,8 +35,10 @@
     characters: { async list() { return chars; } },
     network: { async fetch(p) { const u = new URL(p.url); for (const [k, v] of Object.entries(p.query || {})) u.searchParams.set(k, String(v)); const r = await fetch(u); const text = await r.text(); let json; try { json = JSON.parse(text); } catch {} return { ok: r.ok, text, json }; } },
     ai: {
-      async chat(p) { calls.push(p); await sleep(300); return { text: /美食和酒店/.test(p.prompt) ? JSON.stringify(more) : "好的，这是指南：\n```json\n" + JSON.stringify(base) + "\n```" }; },
+      async chat(p) { calls.push(p); await sleep(300); if (/手账/.test(p.system)) return { text: '{"title":"风大，水是他的","text":"上午从古城出发，沿着洱海骑车。沈砚一路骑在前面半个车身，到观景台停下来看苍山的云。中午在才村吃了烤乳扇，下午到了喜洲，破酥粑粑排了二十分钟的队。"}' }; return { text: /美食和酒店/.test(p.prompt) ? JSON.stringify(more) : "好的，这是指南：\n```json\n" + JSON.stringify(base) + "\n```" }; },
       async generate(p) { calls.push(p); await sleep(300); const s = p.appTags[1];
+        if (p.appTags.includes("travel_story")) { const k = window.__STORY_N = (window.__STORY_N || 0) + 1; const P = [["大理古城南门", 25.6869, 100.1636, "10:40"], ["洱海生态廊道", 25.74, 100.21, "13:50"], ["才村码头", 25.6697, 100.2032, "15:20"], ["喜洲古镇", 25.8547, 100.129, "17:30"], ["喜洲古镇", 25.8547, 100.129, "21:10"]][Math.min(k - 1, 4)];
+          const end = k >= 5; return { text: `<content>\n风从湖面上直接扑过来。到了一处观景台，沈砚捏了刹车，单脚撑地，抬下巴示意她看左边——远处苍山的云正压着山脊往下走，像有人慢慢拉上一道灰白的帘子。\n「再骑二十分钟就是才村，」他说，「那儿有家卖烤乳扇的，攻略上写排队，我看未必。」\n他看了眼时间，把自己那瓶没开的水塞进她车筐。「走吧，吃完你骑前面。」${end ? "\n回到院子里，他把房卡塞进她手里。" : ""}\n</content>\n<summary>他们骑车到了${P[0]}，他把水给了她。</summary>\n<trip>{"place":"${P[0]}","lat":${P[1]},"lng":${P[2]},"time":"${P[3]}","dayEnd":${end}}</trip>` }; }
         if (s === "plan") return { text: JSON.stringify(plan) };
         if (s === "review") { const ids = [...p.instruction.matchAll(/\[(i_[^\]]+)\]/g)].map(m => m[1]); return { text: JSON.stringify({ comment: "排得挺好，就是第一天下午别走太多，你会喊脚疼。", notes: [{ id: ids[0], text: "这家我想去" }], edits: ids[1] ? [{ id: ids[1], time: "16:00", name: "", desc: "", why: "睡个午觉再出门" }] : [] }) }; }
         if (s === "spotnote") return { text: "那天你冻得直跺脚还非要拍玄武岩。下次夏天来，我还拽你。" };

@@ -1,0 +1,181 @@
+<!doctype html><html><head><meta charset="utf-8">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css">
+<script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js"></script>
+<link rel="stylesheet" href="https://fonts.loli.net/css2?family=Noto+Serif+SC:wght@400;600;700&display=swap">
+<style>
+*{box-sizing:border-box}
+body{margin:0;padding:24px 20px;background:#d9dadd;display:grid;grid-template-columns:repeat(3,375px);gap:22px;font-family:-apple-system,"PingFang SC",sans-serif;color:#1f1f1f}
+.lab{font-size:19px;font-weight:800;color:#333;text-align:center}.lab small{display:block;font-size:12.5px;color:#777;font-weight:600;margin-top:3px}
+.ph{width:375px;height:812px;border-radius:38px;overflow:hidden;position:relative;background:#f6f3ee;box-shadow:0 8px 30px rgba(0,0,0,.18)}
+.status{position:absolute;left:0;right:0;top:0;height:44px;display:flex;align-items:center;justify-content:space-between;padding:0 28px;font-size:15px;font-weight:700;z-index:900}
+.cap{position:absolute;right:8px;top:50px;width:84px;height:30px;border-radius:15px;background:rgba(255,255,255,.85);box-shadow:0 1px 4px rgba(0,0,0,.15);z-index:900;display:flex;align-items:center;justify-content:space-around;font-size:13px;color:#333}
+.map{position:absolute;left:0;right:0;top:0;height:330px}
+.map.full{height:100%}
+.leaflet-control-attribution,.leaflet-control-zoom{display:none}
+.top{position:absolute;left:12px;right:104px;top:50px;z-index:800;display:flex;gap:8px;align-items:center}
+.bk{width:34px;height:34px;border-radius:50%;background:rgba(255,255,255,.92);display:grid;place-items:center;box-shadow:0 1px 6px rgba(0,0,0,.15)}
+.bk svg{width:20px;height:20px}
+.daypill{height:34px;border-radius:17px;background:rgba(255,255,255,.92);box-shadow:0 1px 6px rgba(0,0,0,.15);display:flex;align-items:center;gap:8px;padding:0 13px;font-size:13.5px;font-weight:700;white-space:nowrap}
+.daypill i{font-style:normal;color:#888;font-weight:600;font-size:12.5px}
+.nextchip{position:absolute;left:12px;top:282px;z-index:800;background:#111;color:#fff;border-radius:16px;height:32px;padding:0 13px;font-size:12.5px;font-weight:700;display:flex;align-items:center;gap:6px;box-shadow:0 2px 8px rgba(0,0,0,.25)}
+.nextchip small{color:#aaa;font-weight:600}
+.expand{position:absolute;right:12px;top:282px;z-index:800;width:32px;height:32px;border-radius:50%;background:rgba(255,255,255,.95);display:grid;place-items:center;box-shadow:0 1px 6px rgba(0,0,0,.15)}
+.expand svg{width:17px;height:17px}
+/* 地图上的人 */
+.me{position:relative;width:46px;height:46px}
+.me img,.me .av{width:40px;height:40px;border-radius:50%;border:3px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,.3);position:absolute;left:3px;top:3px}
+.me:before{content:"";position:absolute;inset:-10px;border-radius:50%;background:rgba(43,91,215,.22);animation:pulse 2s infinite}
+@keyframes pulse{0%{transform:scale(.6);opacity:1}100%{transform:scale(1.3);opacity:0}}
+.av{background-size:cover}
+.duo2{position:relative;width:62px;height:46px}.duo2 .av{position:absolute;top:3px;width:40px;height:40px;border-radius:50%;border:3px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,.3)}
+.duo2 .av:nth-child(1){left:0}.duo2 .av:nth-child(2){left:20px}.duo2 .av:nth-child(3){left:40px;width:22px;height:22px;top:24px;border-width:2px;font-size:10px;font-weight:800;color:#fff;background:#111;display:grid;place-items:center}
+.stop{width:22px;height:22px;border-radius:50%;background:#fff;border:2.5px solid #2b5bd7;color:#2b5bd7;font-size:11px;font-weight:800;display:grid;place-items:center;box-shadow:0 1px 4px rgba(0,0,0,.2)}
+.stop.done{background:#2b5bd7;color:#fff}
+.stop.future{border-color:#999;color:#777;border-style:dashed}
+/* 剧情面板 */
+.story{position:absolute;left:0;right:0;top:314px;bottom:0;background:#fbf8f3;border-radius:22px 22px 0 0;box-shadow:0 -4px 20px rgba(0,0,0,.12);z-index:850;display:flex;flex-direction:column}
+.grab{width:38px;height:4px;border-radius:2px;background:#d8d2c8;margin:8px auto 0}
+.read{flex:1;overflow:hidden;padding:6px 22px 0;font-family:"Noto Serif SC","Songti SC",serif;position:relative}
+.read:after{content:"";position:absolute;left:0;right:0;bottom:0;height:28px;background:linear-gradient(transparent,#fbf8f3)}
+.scene{display:flex;align-items:center;gap:10px;margin:10px 0 12px;font-family:-apple-system,"PingFang SC",sans-serif;font-size:11.5px;color:#a49a8a;font-weight:600;letter-spacing:.5px}
+.scene:before,.scene:after{content:"";flex:1;height:1px;background:#e7e0d4}
+.p{font-size:15px;line-height:1.95;color:#2c2925;margin:0 0 12px;text-align:justify}
+.p q{quotes:"「" "」";color:#1a1714;font-weight:600}
+.mine{margin:4px 0 14px auto;max-width:82%;background:#efe9df;border-radius:14px 14px 4px 14px;padding:9px 13px;font-family:-apple-system,"PingFang SC",sans-serif;font-size:13.5px;line-height:1.65;color:#5a5248}
+.who{font-family:-apple-system,"PingFang SC",sans-serif;font-size:12px;font-weight:700;color:#8a7f70;margin:2px 0 3px;display:flex;align-items:center;gap:6px}
+.who .av{width:18px;height:18px;border-radius:50%}
+.arrive{display:flex;align-items:center;gap:10px;background:#fff;border:1px solid #ece5d8;border-radius:14px;padding:10px 12px;margin:2px 0 14px;font-family:-apple-system,"PingFang SC",sans-serif}
+.arrive .ic{width:34px;height:34px;border-radius:10px;background:#eef3ff;color:#2b5bd7;display:grid;place-items:center}.arrive .ic svg{width:19px;height:19px}
+.arrive b{font-size:13.5px;display:block}.arrive small{font-size:11.5px;color:#999}
+.arrive .go{margin-left:auto;background:#111;color:#fff;font-size:12px;font-weight:700;border-radius:14px;height:28px;padding:0 12px;display:flex;align-items:center;gap:5px}
+.arrive .go svg{width:14px;height:14px}
+/* 底部 */
+.sugg{display:flex;gap:7px;padding:8px 14px 0;overflow:hidden;font-size:12.5px}
+.sugg span{flex:none;height:30px;border-radius:15px;background:#fff;border:1px solid #e7e0d4;display:flex;align-items:center;gap:5px;padding:0 11px;color:#5a5248;font-weight:600}
+.sugg span svg{width:14px;height:14px;color:#2b5bd7}
+.inp{display:flex;align-items:flex-end;gap:8px;padding:8px 14px 26px}
+.inp .box{flex:1;min-height:42px;border-radius:21px;background:#fff;border:1px solid #e7e0d4;padding:11px 15px;font-size:14px;color:#aaa}
+.inp .send{width:42px;height:42px;border-radius:50%;background:#111;color:#fff;display:grid;place-items:center}.inp .send svg{width:19px;height:19px}
+/* 全屏地图的底卡 */
+.mcard{position:absolute;left:12px;right:12px;bottom:28px;z-index:850;background:#fff;border-radius:20px;padding:14px;box-shadow:0 4px 18px rgba(0,0,0,.18)}
+.mcard .hd{display:flex;align-items:baseline;gap:8px}.mcard .hd b{font-size:17px}.mcard .hd small{color:#888;font-size:12.5px}
+.tl{margin:10px 0 0;padding:0;list-style:none}
+.tl li{display:flex;gap:10px;align-items:center;padding:7px 0;font-size:13.5px;border-bottom:1px solid #f2f2f2}
+.tl li:last-child{border:0}
+.tl .n{width:20px;height:20px;border-radius:50%;font-size:10.5px;font-weight:800;display:grid;place-items:center;flex:none}
+.tl .d .n{background:#2b5bd7;color:#fff}.tl .c .n{background:#111;color:#fff}.tl .f .n{border:1.5px dashed #aaa;color:#888}
+.tl small{color:#999;font-size:12px;margin-left:auto}
+.tl .c{font-weight:700}.tl .f{color:#888}
+.tl .goto{margin-left:auto;font-size:12px;font-weight:700;color:#2b5bd7}
+.pop{background:#fff;border-radius:14px;padding:9px 12px;box-shadow:0 3px 12px rgba(0,0,0,.2);font-size:13px;white-space:nowrap}
+.pop b{display:block;font-size:14px}.pop span{display:inline-block;margin-top:6px;background:#111;color:#fff;font-weight:700;font-size:12px;border-radius:12px;padding:4px 10px}
+/* 游记卡 */
+.diary{position:absolute;left:14px;right:14px;top:330px;bottom:24px;z-index:860;background:#fffdf8;border-radius:22px;box-shadow:0 10px 40px rgba(0,0,0,.25);padding:18px 18px 16px;font-family:"Noto Serif SC","Songti SC",serif;overflow:hidden}
+.diary .dh{font-family:-apple-system,"PingFang SC",sans-serif;font-size:11.5px;letter-spacing:1px;color:#b19a74;font-weight:700}
+.diary h3{margin:4px 0 10px;font-size:20px;font-weight:700}
+.diary .photos{display:grid;grid-template-columns:1.3fr 1fr;grid-template-rows:62px 62px;gap:5px;margin-bottom:12px}
+.diary .photos div{border-radius:10px;background-size:cover;background-position:center}
+.diary .photos div:first-child{grid-row:span 2}
+.diary p{font-size:13.5px;line-height:1.9;color:#3a352f;margin:0 0 8px}
+.diary .route{font-family:-apple-system,"PingFang SC",sans-serif;font-size:11.5px;color:#999;display:flex;gap:4px;align-items:center;flex-wrap:wrap;margin-bottom:10px}
+.diary .route b{color:#555;font-weight:600}
+.dim{position:absolute;inset:0;background:rgba(0,0,0,.35);z-index:855}
+</style></head><body>
+<div><div class="lab">一对一 · 走剧情<small>上面是地图，下面像线下一样写；到了新地方能打卡</small></div></div>
+<div><div class="lab">展开地图<small>今天的行程一站一站，点下一站填进输入框</small></div></div>
+<div><div class="lab">多人出游 · 一天结束<small>大家都在剧情里；「今天就到这」写一页游记</small></div></div>
+
+<!-- 1 -->
+<div class="ph" id="p1">
+  <div class="status"><span>14:20</span><span>􀙇 􀛨</span></div><div class="cap">··· ◎</div>
+  <div class="map" id="m1"></div>
+  <div class="top"><div class="bk"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 5l-7 7 7 7"/></svg></div><div class="daypill">大理 · 第 2 天 <i>14:20 · 晴 22°</i></div></div>
+  <div class="nextchip">下一站 喜洲古镇 <small>· 12 公里</small></div>
+  <div class="expand"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg></div>
+  <div class="story"><div class="grab"></div>
+    <div class="read">
+      <div class="scene">洱海生态廊道 · 13:50</div>
+            <p class="p">风从湖面上直接扑过来。到了一处观景台，沈砚捏了刹车，单脚撑地，抬下巴示意她看左边——远处苍山的云正压着山脊往下走，像有人慢慢拉上一道灰白的帘子。<q>再骑二十分钟就是才村，</q>他说，<q>那儿有家卖烤乳扇的，攻略上写排队，我看未必。</q></p>
+      <div class="mine">那我们先去吃，吃完再去喜洲？</div>
+      <p class="p">他看了眼时间，把自己那瓶没开的水塞进她车筐。<q>走吧，吃完你骑前面。</q></p>
+      <div class="arrive"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 21s-6-5.3-6-10a6 6 0 0 1 12 0c0 4.7-6 10-6 10Z"/><circle cx="12" cy="11" r="2.2"/></svg></div><div><b>到了 才村码头</b><small>剧情里你们在这儿停下了</small></div><span class="go"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="7" width="18" height="13" rx="3"/><circle cx="12" cy="13.5" r="3.5"/><path d="M8 7l1.5-3h5L16 7"/></svg>在这里打卡</span></div>
+    </div>
+    <div class="sugg"><span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M13 6l6 6-6 6"/></svg>去下一站：喜洲古镇</span><span>找地方吃饭</span><span>今天就到这</span></div>
+    <div class="inp"><div class="box">你想做什么、说什么……</div><div class="send"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M5 12h14M13 6l6 6-6 6"/></svg></div></div>
+  </div>
+</div>
+
+<!-- 2 -->
+<div class="ph" id="p2">
+  <div class="status"><span>14:20</span><span>􀙇 􀛨</span></div><div class="cap">··· ◎</div>
+  <div class="map full" id="m2"></div>
+  <div class="top"><div class="bk"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 6l12 12M18 6 6 18"/></svg></div><div class="daypill">第 2 天 · 洱海西岸</div></div>
+  <div class="mcard"><div class="hd"><b>今天的路线</b><small>按「大理慢慢走 3 天」· 已走 18 公里</small></div>
+    <ul class="tl">
+      <li class="d"><span class="n">1</span>大理古城 · 早饭<small>09:10</small></li>
+      <li class="d"><span class="n">2</span>洱海生态廊道<small>10:40</small></li>
+      <li class="c"><span class="n">3</span>才村码头 · 你们在这儿<small>14:20</small></li>
+      <li class="f"><span class="n">4</span>喜洲古镇<span class="goto">去这儿 ›</span></li>
+      <li class="f"><span class="n">5</span>双廊 · 看日落<small>攻略里的</small></li>
+    </ul>
+  </div>
+</div>
+
+<!-- 3 -->
+<div class="ph" id="p3">
+  <div class="status"><span>21:40</span><span>􀙇 􀛨</span></div><div class="cap">··· ◎</div>
+  <div class="map" id="m3"></div>
+  <div class="top"><div class="bk"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 5l-7 7 7 7"/></svg></div><div class="daypill">成都 · 第 1 天 <i>四个人</i></div></div>
+  <div class="story"><div class="grab"></div>
+    <div class="read">
+      <div class="scene">玉林路 · 20:30</div>
+      <div class="who"><span class="av" style="background:#d99a6c"></span>李想</div>
+      <p class="p">李想把菜单翻到最后一页，又翻回来，最后干脆合上推给服务员：<q>微辣，都微辣，她们俩说的特辣不算数。</q></p>
+      <div class="who"><span class="av" style="background:#7a8fb8"></span>沈砚</div>
+      <p class="p">沈砚没参与这场争论，低头把明天的高铁票又核对了一遍，顺手把她的那张截图发进了群里。</p>
+    </div>
+  </div>
+  <div class="dim"></div>
+  <div class="diary">
+    <div class="dh">DAY 1 · 10月30日 · 成都</div>
+    <h3>辣是他们说的微辣</h3>
+    <div class="photos"><div style="background-image:linear-gradient(135deg,#e8a87c,#c0584a)"></div><div style="background-image:linear-gradient(135deg,#9fb8d6,#5f7fa8)"></div><div style="background-image:linear-gradient(135deg,#c9d6a3,#7f9a5e)"></div></div>
+    <div class="route"><b>宽窄巷子</b>›<b>人民公园</b>›<b>玉林路</b>· 4 个地方 · 9 张照片</div>
+    <p>下午在人民公园喝了盖碗茶，沈砚被掏耳朵的师傅追了半条路。晚上去玉林路吃火锅，李想坚持点微辣，结果第一个被辣哭的是他自己。</p>
+    <p>明天一早的高铁去乐山，票都在沈砚手里。</p>
+  </div>
+</div>
+
+<script>
+const wgs2gcj=(lat,lng)=>{const a=6378245,ee=.00669342162296594323,tl=(x,y)=>{let r=-100+2*x+3*y+.2*y*y+.1*x*y+.2*Math.sqrt(Math.abs(x));r+=(20*Math.sin(6*x*Math.PI)+20*Math.sin(2*x*Math.PI))*2/3;r+=(20*Math.sin(y*Math.PI)+40*Math.sin(y/3*Math.PI))*2/3;r+=(160*Math.sin(y/12*Math.PI)+320*Math.sin(y*Math.PI/30))*2/3;return r},tn=(x,y)=>{let r=300+x+2*y+.1*x*x+.1*x*y+.1*Math.sqrt(Math.abs(x));r+=(20*Math.sin(6*x*Math.PI)+20*Math.sin(2*x*Math.PI))*2/3;r+=(20*Math.sin(x*Math.PI)+40*Math.sin(x/3*Math.PI))*2/3;r+=(150*Math.sin(x/12*Math.PI)+300*Math.sin(x/30*Math.PI))*2/3;return r};let dl=tl(lng-105,lat-35),dn=tn(lng-105,lat-35);const rl=lat/180*Math.PI;let m=Math.sin(rl);m=1-ee*m*m;const s=Math.sqrt(m);dl=dl*180/(a*(1-ee)/(m*s)*Math.PI);dn=dn*180/(a/s*Math.cos(rl)*Math.PI);return[lat+dl,lng+dn]};
+function mk(id,center,z){const m=L.map(id,{zoomControl:false,attributionControl:false}).setView(wgs2gcj(...center),z);L.tileLayer("https://webrd0{s}.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=1&style=8&x={x}&y={y}&z={z}",{subdomains:"1234",maxZoom:18}).addTo(m);return m}
+const ic=(html,s)=>L.divIcon({html,className:"",iconSize:s,iconAnchor:[s[0]/2,s[1]/2]});
+const P=[[25.6935,100.1636],[25.745,100.172],[25.6697,100.2032],[25.8547,100.129],[25.9167,100.1989]];
+const done=[[25.6935,100.1636],[25.72,100.168],[25.745,100.172],[25.71,100.19],[25.6697,100.2032]];
+const futr=[[25.6697,100.2032],[25.745,100.172],[25.8,100.15],[25.8547,100.129]];
+const face=c=>`<div class="av" style="background:${c}"></div>`;
+// 1
+let m=mk("m1",[25.77,100.16],10);
+L.polyline(done.map(p=>wgs2gcj(...p)),{color:"#2b5bd7",weight:4,opacity:.9}).addTo(m);
+L.polyline(futr.map(p=>wgs2gcj(...p)),{color:"#555",weight:3,dashArray:"6 7",opacity:.7}).addTo(m);
+[0,1].forEach(i=>L.marker(wgs2gcj(...P[i]),{icon:ic(`<div class="stop done">${i+1}</div>`,[22,22])}).addTo(m));
+L.marker(wgs2gcj(...P[3]),{icon:ic(`<div class="stop future">4</div>`,[22,22])}).addTo(m);
+L.marker(wgs2gcj(...P[2]),{icon:ic(`<div class="me">${face("#7a8fb8")}</div>`,[46,46])}).addTo(m);
+m.panBy([0,40],{animate:false});document.querySelectorAll(".read").forEach(r=>r.scrollTop=r.scrollHeight);
+// 2
+m=mk("m2",[25.79,100.17],11);
+L.polyline(done.map(p=>wgs2gcj(...p)),{color:"#2b5bd7",weight:5,opacity:.9}).addTo(m);
+L.polyline([...futr,[25.9167,100.1989]].map(p=>wgs2gcj(...p)),{color:"#555",weight:3,dashArray:"6 7",opacity:.7}).addTo(m);
+P.forEach((p,i)=>{if(i===2)return;L.marker(wgs2gcj(...p),{icon:ic(`<div class="stop ${i<2?"done":"future"}">${i+1}</div>`,[22,22])}).addTo(m)});
+L.marker(wgs2gcj(...P[2]),{icon:ic(`<div class="me">${face("#7a8fb8")}</div>`,[46,46])}).addTo(m);
+L.marker(wgs2gcj(...P[3]),{icon:L.divIcon({html:`<div class="pop"><b>喜洲古镇</b>白族民居 · 破酥粑粑<br><span>我们去这儿</span></div>`,className:"",iconSize:[150,70],iconAnchor:[75,96]})}).addTo(m);
+m.panBy([0,120],{animate:false});
+// 3
+const C=[[30.6637,104.0566],[30.6574,104.0566],[30.6305,104.0614]];
+m=mk("m3",[30.645,104.06],13);
+L.polyline(C.map(p=>wgs2gcj(...p)),{color:"#2b5bd7",weight:4}).addTo(m);
+C.slice(0,2).forEach((p,i)=>L.marker(wgs2gcj(...p),{icon:ic(`<div class="stop done">${i+1}</div>`,[22,22])}).addTo(m));
+L.marker(wgs2gcj(...C[2]),{icon:ic(`<div class="duo2">${face("#7a8fb8")}${face("#d99a6c")}<div class="av">+2</div></div>`,[62,46])}).addTo(m);
+m.panBy([0,40],{animate:false});document.querySelectorAll(".read").forEach(r=>r.scrollTop=r.scrollHeight);
+</script>
+</body></html>

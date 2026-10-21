@@ -41,6 +41,8 @@
         if (s === "review") { const ids = [...p.instruction.matchAll(/\[(i_[^\]]+)\]/g)].map(m => m[1]); return { text: JSON.stringify({ comment: "排得挺好，就是第一天下午别走太多，你会喊脚疼。", notes: [{ id: ids[0], text: "这家我想去" }], edits: ids[1] ? [{ id: ids[1], time: "16:00", name: "", desc: "", why: "睡个午觉再出门" }] : [] }) }; }
         if (s === "spotnote") return { text: "那天你冻得直跺脚还非要拍玄武岩。下次夏天来，我还拽你。" };
         if (s === "seat") return { text: "靠窗给你，你睡着了别靠我肩膀上流口水。" };
+        if (s === "gift" && /come 是/.test(p.instruction)) return { text: '{"mode":"come","date":"' + new Date(Date.now() + 4 * 864e5).toISOString().slice(0, 10) + '","days":3,"reason":"想她了","message":"周五晚上到，来接我。"}' };
+        if (s === "gift" && window.__MODE_VISIT) return { text: '{"mode":"visit","together":false,"city":"成都","date":"' + new Date(Date.now() + 9 * 864e5).toISOString().slice(0, 10) + '","days":3,"reason":"x","message":"来找我。"}' };
         if (s === "gift") return { text: '{"city":"成都","date":"' + new Date(Date.now() + 9 * 864e5).toISOString().slice(0, 10) + '","days":3,"together":true,"reason":"你说想吃火锅","message":"下周五的票，别加班了。火锅我已经看好了一家。"}' };
         if (s === "flightmsg") return { text: "落地了，在等行李。你站在哪个口？" };
         return { text: "" }; },

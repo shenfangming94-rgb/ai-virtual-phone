@@ -743,6 +743,19 @@
       gate: `${pick(["A", "B", "C", "D", "E"])}${rand(1, 32)}`, car: pad(rand(1, 16)), serial: `${pick(["E", "F", "G", "H"])}0${rand(10000, 99999)}`, km: ri ? Math.round(ri.km) : 0,
       fromLL: ri ? [ri.a.lat, ri.a.lng] : null, toLL: ri ? [ri.b.lat, ri.b.lng] : null, createdAt: nowIso(), ...(extra || {}) });
   }
+  /** 他订一班从他城市到我城市的票（他来找我 / 惊喜共用） */
+  async function bookCome(who, from, date, msg) {
+    const home = S.meta.home; const ri = await routeInfo(from, home); if (!ri) { toast("没找到这两个城市"); return null; }
+    const useTrain = ri.domestic && ri.km < 700;
+    const list = useTrain ? genTrains(from, home, date, ri) : genFlights(from, home, date, ri); if (!list.length) { toast("那天没有班次"); return null; }
+    const f = pickFlight(list); const kind = useTrain ? "train" : "flight";
+    const dr = seeded(`${f.no}${f.dep}delay`); const delay = kind === "flight" && dr() < .22 ? 20 + Math.floor(dr() * 100) : 0;
+    const tk = await makeTicket(kind, from, home, f, [who], adjacentSeats(f.no, f.dep, 1, kind === "flight"), { toMe: true, delay, msgs: [], ...(msg ? { giftBy: who, giftMsg: msg, surprise: true } : {}) });
+    const trip = addRow(COL.trips, "trips", { id: uid("trip"), title: `${nameOf(who)}来${home}`, city: home, country: "", lat: ri.b.lat, lng: ri.b.lng, start: ymd(f.arr), days: 2, companions: [who], createdAt: nowIso() });
+    tk.tripId = trip.id; save(COL.tickets, tk);
+    remember([who], `我订了${mdw(f.dep)}从${from}去${home}找${herName()}的${kind === "flight" ? "航班" : "高铁"} ${f.no}，${hm(f.dep)}出发，${hm(f.arr)}到。${msg ? `是瞒着她订的惊喜，我对她说：${msg}` : ""}`, `come_${tk.id}`);
+    return tk;
+  }
   /** 他来找我：他订一班飞到我城市的航班 */
   async function charComes() {
     if (!S.chars.length) { toast("还没有角色"); return; }
@@ -751,32 +764,28 @@
     if (!r || !r.who || !r.from.trim()) return;
     const from = r.from.trim(); S.meta.charHome = { ...(S.meta.charHome || {}), [r.who]: from }; saveMeta();
     if (from === home) { toast("你们在同一个城市呀"); return; }
-    const ri = await routeInfo(from, home); if (!ri) { toast("没找到这两个城市"); return; }
-    const useTrain = ri.domestic && ri.km < 700;
-    const list = useTrain ? genTrains(from, home, r.date, ri) : genFlights(from, home, r.date, ri); if (!list.length) { toast("那天没有班次"); return; }
-    const f = pickFlight(list); const kind = useTrain ? "train" : "flight";
-    const dr = seeded(`${f.no}${f.dep}delay`); const delay = kind === "flight" && dr() < .22 ? 20 + Math.floor(dr() * 100) : 0;
-    const tk = await makeTicket(kind, from, home, f, [r.who], adjacentSeats(f.no, f.dep, 1, kind === "flight"), { toMe: true, delay, msgs: [] });
-    const trip = addRow(COL.trips, "trips", { id: uid("trip"), title: `${nameOf(r.who)}来${home}`, city: home, country: "", lat: ri.b.lat, lng: ri.b.lng, start: ymd(f.arr), days: 2, companions: [r.who], createdAt: nowIso() });
-    tk.tripId = trip.id; save(COL.tickets, tk);
-    remember([r.who], `我订了${mdw(f.dep)}从${from}去${home}找${herName()}的${kind === "flight" ? "航班" : "高铁"} ${f.no}，${hm(f.dep)}出发，${hm(f.arr)}到。`, `come_${tk.id}`);
+    const tk = await bookCome(r.who, from, r.date, ""); if (!tk) return;
     toast(`${nameOf(r.who)}订好了 ${f.no}`); renderAll(); push("flight", { id: tk.id });
   }
   /** 他给我订票（surprise=true 是他自己突然订的） */
   async function charBooksForMe(charId, hint, surprise) {
     const c = charById(charId); if (!c) return null; const home = S.meta.home; if (!home) return null;
-    const his = homeOf(charId);
+    const his = homeOf(charId); const apart = !!his && his !== home;
     const ins = [nowLine(), CHAR_RULE, `【这次要做的】${surprise ? `你想给${herName()}一个惊喜：瞒着她订好票，然后告诉她。` : `${herName()}让你给她订一次出行。${hint ? `她说：${hint}` : "她没说去哪，你来定。"}`}她住在${home}。${his ? `你住在${his}。` : ""}`,
-      `按你的性格和你们最近聊的事决定：去哪（真实城市）、哪天出发（今天以后一个月内）、玩几天、你去不去（together=true 是你们一起去；false 是让她来${his || "你那里"}找你）、为什么这么安排、订完对她说的话。`,
-      `【输出】只输出 JSON：{"city":"目的地城市","date":"YYYY-MM-DD","days":3,"together":true,"reason":"一句话","message":"订完对她说的话"}`].join("\n\n");
+      apart ? `按你的性格和你们最近聊的事决定怎么安排（mode）：together 是你们一起去别的城市玩；visit 是让她来${his}找你；${surprise ? `come 是你自己买票去${home}找她；` : ""}再决定去哪（真实城市，come 和 visit 时可不填）、哪天出发（今天以后一个月内）、待几天、为什么这么安排、订完对她说的话。`
+        : `你们住在一起，这次是你们一起出去玩。按你的性格和你们最近聊的事决定：去哪（真实城市，不能是${home}）、哪天出发（今天以后一个月内）、玩几天、为什么这么安排、订完对她说的话。`,
+      `【输出】只输出 JSON：{"mode":"${apart ? (surprise ? "together|visit|come" : "together|visit") : "together"}","city":"目的地城市","date":"YYYY-MM-DD","days":3,"reason":"一句话","message":"订完对她说的话"}`].join("\n\n");
     const raw = await aiGen(charId, "gift", ins, `${c.name}订票`); if (raw == null) return null;
-    const j = parseJSON(raw); if (!j || !j.city) { toast("他没订成"); return null; }
-    let to = String(j.together === false && his ? his : j.city).trim(); if (to === home) to = String(j.city).trim(); if (to === home) { toast("他想来你这儿，用「他来找我」吧"); return null; }
+    const j = parseJSON(raw); if (!j) { toast("他没订成"); return null; }
+    let mode = apart ? (j.mode === "come" && surprise ? "come" : j.mode === "visit" || j.together === false ? "visit" : "together") : "together";
     let date = /^\d{4}-\d{2}-\d{2}$/.test(String(j.date)) ? j.date : ymd(addDays(new Date(), 7)); if (dayDiff(new Date(), date) < 1) date = ymd(addDays(new Date(), 3));
+    if (mode === "come") return comeSurprise(c, his, date, String(j.message || "").slice(0, 400));
+    if (mode === "together" && (!j.city || String(j.city).trim() === home)) { toast("他没订成"); return null; }
+    const to = mode === "visit" ? his : String(j.city).trim();
     const ri = await routeInfo(home, to); if (!ri) { toast(`没找到「${to}」`); return null; }
     const useTrain = ri.domestic && ri.km < 900; const list = useTrain ? genTrains(home, to, date, ri) : genFlights(home, to, date, ri); if (!list.length) { toast("那天没有班次"); return null; }
     const f = pickFlight(list.slice().sort((a, b) => new Date(a.dep).getHours() >= 8 ? -1 : 1)); const kind = useTrain ? "train" : "flight";
-    const together = j.together !== false; const people = together ? ["me", charId] : ["me"];
+    const together = mode === "together"; const people = together ? ["me", charId] : ["me"];
     const seats = adjacentSeats(f.no, f.dep, people.length, kind === "flight");
     const tk = await makeTicket(kind, home, to, f, people, seats, { giftBy: charId, giftMsg: String(j.message || "").slice(0, 400), giftReason: String(j.reason || "").slice(0, 120), surprise: !!surprise });
     tk.total = 0; save(COL.tickets, tk);
@@ -793,19 +802,30 @@
     } catch (e) { console.warn("发到聊天", e); }
     renderAll(); return tk;
   }
+  /** 惊喜：他自己买票来找她，票发到聊天 */
+  async function comeSurprise(c, his, date, msg) {
+    const tk = await bookCome(c.id, his, date, msg); if (!tk) return null; const home = S.meta.home; const k = tk.kind === "flight" ? "航班" : "高铁";
+    try {
+      if (api.chat && api.chat.sendCard) await api.chat.sendCard({ characterId: c.id, role: "assistant", historyRole: "assistant", sceneId: tk.id, sceneTag: "travel_come",
+        summary: `[旅行] ${c.name}买了票来找你：${his} → ${home}`, historyText: `[旅行] 我瞒着${herName()}买了${mdw(tk.dep)}来${home}找她的${k} ${tk.no}，${hm(tk.dep)}出发，${hm(tk.arr)}到。`,
+        card: { appLabel: "旅行", title: `${his} → ${home}`, subtitle: `${mdw(tk.dep)} ${hm(tk.dep)} · ${tk.no}`, body: `${c.name}要来找你，${hm(tk.arr)} 到`, accentColor: "#2b5bd7" } });
+      if (msg && api.chat && api.chat.sendMessage) await api.chat.sendMessage({ characterId: c.id, role: "assistant", content: msg });
+    } catch (e) { console.warn("发到聊天", e); }
+    renderAll(); return tk;
+  }
   /** 打开 app 时偶尔：他自己给她订票（开关在订票页） */
   async function maybeSurprise() {
     if (S.meta.surprise === false || !S.meta.home) return;
     const last = ts(S.meta.lastSurprise || 0); if (Date.now() - last < 10 * 864e5) return;
     if (Math.random() > .12) return;
-    const pool = [...new Set(S.trips.flatMap(t => t.companions))].filter(charById); if (!pool.length) return;
+    const pool = [...new Set([...S.trips.flatMap(t => t.companions), ...Object.keys(S.meta.charHome || {})])].filter(charById); if (!pool.length) return;
     S.meta.lastSurprise = nowIso(); saveMeta();
     const tk = await charBooksForMe(pick(pool), "", true); if (tk) showGift(tk);
   }
   function showGift(tk) {
     const el = document.createElement("div"); el.className = "sheet-wrap";
-    el.innerHTML = `<div class="dim"></div><div class="giftbox"><div class="g-top">${ava(tk.giftBy)}<b>${esc(nameOf(tk.giftBy))}给你订了票</b></div>${ticketCard(tk, "me")}${tk.giftMsg ? `<div class="g-msg">「${esc(tk.giftMsg)}」</div>` : ""}<button class="btn-b wide" data-g="open">看看</button></div>`;
-    document.body.appendChild(el); el.onclick = e => { if (e.target.closest("[data-g]")) { el.remove(); push("ticket", { id: tk.id }); } else if (e.target.classList.contains("dim")) el.remove(); };
+    el.innerHTML = `<div class="dim"></div><div class="giftbox"><div class="g-top">${ava(tk.giftBy)}<b>${esc(nameOf(tk.giftBy))}${tk.toMe ? "要来找你了" : "给你订了票"}</b></div>${ticketCard(tk, tk.toMe ? tk.giftBy : "me")}${tk.giftMsg ? `<div class="g-msg">「${esc(tk.giftMsg)}」</div>` : ""}<button class="btn-b wide" data-g="open">看看</button></div>`;
+    document.body.appendChild(el); el.onclick = e => { if (e.target.closest("[data-g]")) { el.remove(); push(tk.toMe ? "flight" : "ticket", { id: tk.id }); } else if (e.target.classList.contains("dim")) el.remove(); };
   }
   /** 发到聊天：她把票 / 攻略 / 打卡发给他 */
   async function shareTo(kind, obj) {

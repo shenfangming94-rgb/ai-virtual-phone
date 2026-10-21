@@ -2,7 +2,7 @@
   "sdkVersion": "1.0",
   "id": "nox.travel",
   "name": "旅行",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "author": "Nox for Flora",
   "description": "和 char 一起旅行：足迹地图、发现（城市攻略、景点、美食、酒店）、攻略（他写/你写/给他看）、订票选座、票根夹、关注他的航班去接机、他给你订票、票和攻略发到聊天。",
   "icon": "icon.png",

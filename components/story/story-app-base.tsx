@@ -1901,6 +1901,9 @@ export function StoryApp({ onClose }: StoryAppProps) {
     return (
       <div className={`story-app-shell story-session-${currentSession.id}`} data-story-theme={uiPrefs.theme || "paper"} style={storyShellStyle}>
         {customFontFace ? <style>{customFontFace}</style> : null}
+        {currentSession.customCSS ? (
+          <SessionCustomCSS css={currentSession.customCSS} scope={sessionScope} />
+        ) : null}
         <StorySettingsPage
           characters={characters}
           activeCharacterId={activeCharacterId}

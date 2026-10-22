@@ -245,7 +245,7 @@ export default {
     id: "xhs-note-reader",
     name: "小红书链接",
     apiVersion: 1,
-    version: "1.0.0",
+    version: "1.0.1",
     author: "Nox",
     description: "粘贴小红书分享链接，变成笔记卡片；他能读正文和评论，还能看到配图",
     permissions: ["chat.read", "network"],
@@ -342,6 +342,12 @@ export default {
       pending.delete(message.sessionId);
       ctx.data.messages.push({ sessionId: message.sessionId, role: "user", ...job.card });
       setTimeout(() => refreshChat(message.sessionId), 0);
+    });
+
+    // 有的模型看了附图会在回复里标 [cite: 1, 2]，去掉
+    ctx.hooks.transform("llm.response", (p) => {
+      if (typeof p.text === "string") p.text = p.text.replace(/\s*\[cite:\s*[\d,\s]*\]/gi, "");
+      return p;
     });
 
     // 请求发出前，把配图塞进带笔记标记的那条消息

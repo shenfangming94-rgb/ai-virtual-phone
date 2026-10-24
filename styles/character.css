@@ -1575,3 +1575,122 @@
 
 /* 关系标签在编辑模式下可点（剪断关系） */
 .wt-line-label-editable { cursor: pointer; }
+
+/* 档案库批量导出 */
+.char-export-tabs {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.char-export-tabs button {
+  padding: 3px 8px;
+  border: 1px solid #cfc3a6;
+  border-radius: 2px;
+  background: transparent;
+  color: #6b5d47;
+  font-size: calc(11px*var(--app-text-scale,1));
+  font-family: inherit;
+}
+
+.char-export-tabs button.is-on {
+  background: #4a3f2f;
+  border-color: #4a3f2f;
+  color: #f5f0e6;
+}
+
+.char-export-tabs .char-export-all {
+  margin-left: auto;
+  border: none;
+  text-decoration: underline;
+}
+
+.char-export-list {
+  max-height: 260px;
+  overflow-y: auto;
+  border-top: 1px dashed #cfc3a6;
+  border-bottom: 1px dashed #cfc3a6;
+  padding: 4px 0;
+}
+
+.char-export-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 6px 2px;
+  background: none;
+  border: none;
+  text-align: left;
+  font-family: inherit;
+  color: #4a3f2f;
+}
+
+.char-export-check {
+  flex-shrink: 0;
+  width: 16px;
+  height: 16px;
+  border: 1.5px solid #8c7a5a;
+  border-radius: 2px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  line-height: 1;
+  color: #f5f0e6;
+}
+
+.char-export-check.is-on {
+  background: #4a3f2f;
+  border-color: #4a3f2f;
+}
+
+.char-export-avatar {
+  flex-shrink: 0;
+  width: 26px;
+  height: 26px;
+  object-fit: cover;
+  background: #ddd;
+  border: 2px solid #fff;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.15);
+}
+
+.char-export-name {
+  flex: 1;
+  min-width: 0;
+  font-size: calc(12px*var(--app-text-scale,1));
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.char-export-empty {
+  padding: 16px 0;
+  text-align: center;
+  font-size: calc(11px*var(--app-text-scale,1));
+  color: #8c7a5a;
+}
+
+.char-export-mem {
+  margin-top: 4px;
+}
+
+.char-export-go {
+  display: block;
+  width: 100%;
+  margin-top: 8px;
+  padding: 9px;
+  border: none;
+  border-radius: 2px;
+  background: #4a3f2f;
+  color: #f5f0e6;
+  font-family: inherit;
+  font-size: calc(12px*var(--app-text-scale,1));
+  font-weight: 700;
+  letter-spacing: 1px;
+}
+
+.char-export-go:disabled {
+  opacity: 0.45;
+}

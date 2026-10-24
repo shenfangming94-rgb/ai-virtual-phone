@@ -6,6 +6,8 @@ import {
   createCharacter,
   exportCharacterAsJson,
   exportCharacterAsPng,
+  exportCharacterBundle,
+  parseCharacterBundle,
   loadCharacters,
   parseCharacterFromJson,
   parseCharacterFromPng,
@@ -38,6 +40,7 @@ import { loadMomentsConfig, saveMomentsConfig } from "@/lib/moments-storage";
 import type { CanvasBgItem } from "@/lib/character-types";
 import { PageShell } from "@/components/ui/page-shell";
 import { ConfirmDialog } from "@/components/ui/modal";
+import { importMemoryPack, sanitizeMemoryPack } from "@/lib/memory-backup";
 import { AlertCircle, History } from "lucide-react";
 import {
   backupCharacterVersion,
@@ -669,6 +672,8 @@ function CharListView({
   const pinchRef = useRef<PinchState | null>(null);
   const canvasElRef = useRef<HTMLDivElement>(null);
   const [isPropsMenuOpen, setIsPropsMenuOpen] = useState(false);
+  // 批量导出：选人 + 带不带记忆
+  const [exportSheet, setExportSheet] = useState<{ scope: "world" | "all"; picked: Set<string>; withMemories: boolean; busy: boolean } | null>(null);
   const [isEditing, setIsEditing] = useState(false);
 
   function toggleEditing() {
@@ -923,11 +928,72 @@ function CharListView({
     onNotice("点击画布放置道具");
   }
 
+  /** 角色包：一次全进当前卷宗，排在当前视野左上角；本机已有的人（同 id）不重复建卡，只补记忆 */
+  async function importCharacterBundle(bundle: { card: Character; memories?: unknown }[]) {
+    if (!bundle.length) return onNotice("包里没有角色");
+    const have = new Set(characters.map(c => c.id));
+    const now = new Date().toISOString();
+    const originX = -pan.x / pan.zoom + 24;
+    const originY = -pan.y / pan.zoom + 24;
+    const added: Character[] = [];
+    let existed = 0;
+    let memories = 0;
+    for (const item of bundle) {
+      const card = item.card;
+      const isNew = !have.has(card.id);
+      if (isNew) {
+        const i = added.length;
+        added.push({
+          ...card,
+          wechatID: card.wechatID || createCharacter({ name: card.name, persona: card.persona || "", avatar: null }).wechatID,
+          tags: card.tags || [],
+          updatedAt: now,
+          canvasX: originX + (i % 2) * 180,
+          canvasY: originY + Math.floor(i / 2) * 250,
+          canvasRot: (Math.random() * 20) - 10,
+          canvasZIndex: 100 + characters.length + i,
+        });
+        have.add(card.id);
+      } else {
+        existed++;
+      }
+      const pack = sanitizeMemoryPack(item.memories);
+      if (pack) memories += (await importMemoryPack(pack, card.id)).added;
+    }
+    if (added.length) {
+      onUpdateChars([...characters, ...added]);
+      for (const c of added) onPlacementDone(c);
+    }
+    const parts = [`导入了 ${added.length} 个角色`];
+    if (memories) parts.push(`${memories} 条记忆`);
+    if (existed) parts.push(`${existed} 个本来就有，只补了记忆`);
+    onNotice(parts.join("，"));
+  }
+
+  async function runBundleExport() {
+    if (!exportSheet || exportSheet.busy) return;
+    const list = characters.filter(c => exportSheet.picked.has(c.id));
+    if (!list.length) return onNotice("先选要导出的角色");
+    setExportSheet(prev => prev ? { ...prev, busy: true } : prev);
+    try {
+      const day = new Date().toISOString().slice(0, 10);
+      const name = list.length === 1 ? `${list[0].name || "角色"}-${day}.json` : `档案库-${list.length}人-${day}.json`;
+      const { memories } = await exportCharacterBundle(list, exportSheet.withMemories, name);
+      setExportSheet(null);
+      onNotice(exportSheet.withMemories ? `已导出 ${list.length} 个角色、${memories} 条记忆` : `已导出 ${list.length} 个角色`);
+    } catch (e) {
+      setExportSheet(prev => prev ? { ...prev, busy: false } : prev);
+      onNotice("导出失败: " + String(e));
+    }
+  }
+
   async function handleImportFile(file: File) {
     const styleIdx = pendingStyleRef.current;
     try {
       if (file.type === "application/json" || file.name.endsWith(".json")) {
         const text = await file.text();
+        const bundle = parseCharacterBundle(text);
+        if (bundle) return await importCharacterBundle(bundle);
         const data = parseCharacterFromJson(text);
         if (!data) return onNotice("解析失败，请检查文件格式");
         const c = createCharacter(data);
@@ -1107,6 +1173,13 @@ function CharListView({
               <button className="wt-bottom-pill-btn" onClick={() => { pendingActionRef.current = 'create'; setShowStylePicker(true); }}>
                 <IconPlus />
                 <span>CREATE</span>
+              </button>
+              <button
+                className="wt-bottom-pill-btn"
+                onClick={() => setExportSheet({ scope: "world", picked: new Set(worldCharacters.map(c => c.id)), withMemories: true, busy: false })}
+              >
+                <IconExport />
+                <span>EXPORT</span>
               </button>
               {isEditing && (
                 <button className="wt-bottom-pill-btn" onClick={() => setIsPropsMenuOpen(true)}>
@@ -1486,6 +1559,86 @@ function CharListView({
           onClose={() => setPairSheet(null)}
         />
       )}
+
+      {/* 批量导出 */}
+      {exportSheet && (() => {
+        const list = exportSheet.scope === "world" ? worldCharacters : characters;
+        const allPicked = list.length > 0 && list.every(c => exportSheet.picked.has(c.id));
+        const toggle = (id: string) => setExportSheet(prev => {
+          if (!prev) return prev;
+          const picked = new Set(prev.picked);
+          if (picked.has(id)) picked.delete(id); else picked.add(id);
+          return { ...prev, picked };
+        });
+        return (
+          <div
+            className="absolute inset-0 bg-black/50 flex flex-col items-center justify-end pb-[120px] px-4"
+            style={{ zIndex: 9999999 }}
+            onClick={() => exportSheet.busy ? undefined : setExportSheet(null)}
+          >
+            <div className="relative w-full max-w-[320px]" onClick={e => e.stopPropagation()}>
+              <div className="absolute rounded-[2px]" style={{
+                top: 6, left: 4, right: -6, bottom: -4,
+                background: '#ede7d9', border: '1px solid #cfc3a6',
+                transform: 'rotate(1.5deg)',
+                boxShadow: '3px 4px 10px rgba(0,0,0,0.18)'
+              }} />
+              <div
+                className="relative w-full rounded-[2px] char-export-paper"
+                style={{
+                  background: '#f5f0e6',
+                  padding: '18px 14px 14px',
+                  boxShadow: '2px 3px 12px rgba(0,0,0,0.25), inset 0 0 30px rgba(139,119,80,0.08)',
+                  border: '1px solid #d4c9a8',
+                  fontFamily: '"Courier New", monospace',
+                  transform: 'rotate(-0.8deg)'
+                }}
+              >
+                <div className="absolute rounded-[1px]" style={{ top: -6, left: '50%', marginLeft: -18, width: 36, height: 12, background: 'rgba(255,255,255,0.55)', transform: 'rotate(1deg)' }} />
+                <div className="text-center ts-12 font-bold text-[#4a3f2f] mb-3 tracking-[1px] uppercase">Export Files</div>
+                <div className="char-export-tabs">
+                  {([["world", "这个卷宗"], ["all", "全部"]] as const).map(([key, label]) => (
+                    <button
+                      key={key}
+                      className={exportSheet.scope === key ? "is-on" : ""}
+                      onClick={() => setExportSheet(prev => prev ? {
+                        ...prev,
+                        scope: key,
+                        picked: new Set((key === "world" ? worldCharacters : characters).map(c => c.id)),
+                      } : prev)}
+                    >{label}</button>
+                  ))}
+                  <button
+                    className="char-export-all"
+                    onClick={() => setExportSheet(prev => prev ? { ...prev, picked: allPicked ? new Set() : new Set(list.map(c => c.id)) } : prev)}
+                  >{allPicked ? "全不选" : "全选"}</button>
+                </div>
+                <div className="char-export-list">
+                  {list.length === 0 ? (
+                    <div className="char-export-empty">这个卷宗还没有角色</div>
+                  ) : list.map(c => (
+                    <button key={c.id} className="char-export-row" onClick={() => toggle(c.id)}>
+                      <span className={`char-export-check${exportSheet.picked.has(c.id) ? " is-on" : ""}`}>{exportSheet.picked.has(c.id) ? "✓" : ""}</span>
+                      {c.avatar ? <img src={c.avatar} alt="" className="char-export-avatar" /> : <span className="char-export-avatar" />}
+                      <span className="char-export-name">{c.name || "未命名"}</span>
+                    </button>
+                  ))}
+                </div>
+                <button
+                  className="char-export-row char-export-mem"
+                  onClick={() => setExportSheet(prev => prev ? { ...prev, withMemories: !prev.withMemories } : prev)}
+                >
+                  <span className={`char-export-check${exportSheet.withMemories ? " is-on" : ""}`}>{exportSheet.withMemories ? "✓" : ""}</span>
+                  <span className="char-export-name">带上他们的记忆（长期 + 核心）</span>
+                </button>
+                <button className="char-export-go" disabled={exportSheet.busy || exportSheet.picked.size === 0} onClick={runBundleExport}>
+                  {exportSheet.busy ? "导出中..." : `导出 ${exportSheet.picked.size} 个角色`}
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Style picker popup */}
       {showStylePicker && (
@@ -3029,6 +3182,16 @@ function IconImport() {
       <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
       <polyline points="7 10 12 15 17 10" />
       <line x1="12" y1="15" x2="12" y2="3" />
+    </svg>
+  );
+}
+
+function IconExport() {
+  return (
+    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+      <polyline points="17 8 12 3 7 8" />
+      <line x1="12" y1="3" x2="12" y2="15" />
     </svg>
   );
 }

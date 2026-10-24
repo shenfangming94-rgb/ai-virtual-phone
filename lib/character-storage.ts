@@ -162,6 +162,42 @@ export function exportCharacterAsJson(char: Character): void {
   triggerDownload(blob, `${sanitizeFilename(char.name)}.json`);
 }
 
+// ── 多个角色打一个包（档案库批量导出），可带上记忆 ──
+
+export const CHARACTER_BUNDLE_SCHEMA = "nox_character_bundle";
+
+export async function exportCharacterBundle(chars: Character[], withMemories: boolean, filename: string): Promise<{ memories: number }> {
+  const { buildMemoryPack } = await import("./memory-backup");
+  let memories = 0;
+  const items = [];
+  for (const c of chars) {
+    const pack = withMemories ? await buildMemoryPack(c.id, c.name) : undefined;
+    memories += pack?.entries.length ?? 0;
+    items.push({ card: c, ...(pack ? { memories: pack } : {}) });
+  }
+  const payload = {
+    schema: CHARACTER_BUNDLE_SCHEMA,
+    version: 1,
+    exportedAt: new Date().toISOString(),
+    characters: items,
+  };
+  await triggerDownload(new Blob([JSON.stringify(payload)], { type: "application/json" }), filename);
+  return { memories };
+}
+
+export type CharacterBundleItem = { card: Character; memories?: unknown };
+
+/** 不是角色包返回 null（再按单张角色卡解析） */
+export function parseCharacterBundle(text: string): CharacterBundleItem[] | null {
+  try {
+    const obj = JSON.parse(text) as Record<string, unknown>;
+    if (obj.schema !== CHARACTER_BUNDLE_SCHEMA || !Array.isArray(obj.characters)) return null;
+    return (obj.characters as CharacterBundleItem[]).filter(item => isValidCharacter(item?.card));
+  } catch {
+    return null;
+  }
+}
+
 export type CharacterImportData = Omit<
   Character,
   "id" | "createdAt" | "updatedAt"

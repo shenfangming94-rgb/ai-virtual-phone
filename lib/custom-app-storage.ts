@@ -272,6 +272,7 @@ function normalizePermission(value: unknown): CustomAppPermission | null {
     "ui.call",
     "wallet.read",
     "wallet.pay",
+    "wallet.receive",
     "bridge.send",
     "bridge.read",
     "online.play",
@@ -1154,6 +1155,7 @@ export async function loadSingleHtmlCustomApp(file: File): Promise<InstalledCust
     "tasks.schedule",
     "wallet.read",
     "wallet.pay",
+    "wallet.receive",
   ];
   return {
     id,

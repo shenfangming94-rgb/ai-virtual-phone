@@ -48,6 +48,7 @@ import {
   loadCustomAppTasks,
   markCustomAppNotificationsRead,
   payCustomAppWallet,
+  receiveCustomAppWallet,
   readCustomAppBridgeState,
   readCustomAppCalendar,
   readCustomAppChatHistory,
@@ -485,7 +486,8 @@ html, body { min-height: 100%; }
     },
     wallet: {
       get: function(){ return request('wallet.get'); },
-      pay: function(payload){ return request('wallet.pay', payload || {}); }
+      pay: function(payload){ return request('wallet.pay', payload || {}); },
+      receive: function(payload){ return request('wallet.receive', payload || {}); }
     },
     bridge: {
       send: function(payload){ return request('bridge.send', payload || {}); },
@@ -1091,7 +1093,7 @@ export function CustomAppRunner({
           memory: ["readCore", "readLongTerm", "readShortTerm", "search", "add", "addTimeline", "deleteTimeline", "removeTimeline", "suggest"],
           notifications: ["create", "list", "markRead", "markAllRead", "getBadge", "setBadge", "incrementBadge", "clearBadge"],
           tasks: ["schedule", "list", "cancel"],
-          wallet: ["get", "pay"],
+          wallet: ["get", "pay", "receive"],
           bridge: ["send", "readState"],
           geo: ["get", "watch", "clearWatch"],
         },
@@ -1846,6 +1848,10 @@ export function CustomAppRunner({
     if (action === "wallet.pay") {
       requirePermission("wallet.pay");
       return payCustomAppWallet(app, record);
+    }
+    if (action === "wallet.receive") {
+      requirePermission("wallet.receive");
+      return receiveCustomAppWallet(app, record);
     }
 
     throw new Error(`未知 AiPhone 动作：${action}`);

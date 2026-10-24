@@ -56,6 +56,7 @@ export type CustomAppPermission =
   | "ui.call"
   | "wallet.read"
   | "wallet.pay"
+  | "wallet.receive"
   | "bridge.send"
   | "bridge.read"
   | "online.play";

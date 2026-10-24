@@ -1919,16 +1919,19 @@
     if (post.visibility === "friends") return { line: "这次没有人私信用户，不要输出 ===私信===。" };
     const hot = topicsIn(post.text).some(hotItem);
     const stranger = Math.random() < (alt ? 0.2 : hot || S.meta.publicFigure ? 0.5 : 0.3);
-    const kinds = [
+    const pub = !alt && !!S.meta.publicFigure;
+    const kinds = pub ? [
+      ["粉丝：表白、问近况、求翻牌、心疼她", 6], ["黑粉：阴阳怪气", 1], ["商务合作、品牌方、营销号来谈推广", 1],
+      [sup ? "同一个超话的同好来搭话，同时也知道她是谁" : "认出她的路人：好奇、求合影签名、吃瓜", 1],
+    ] : [
       [sup ? "同一个超话的同好来搭话、找用户聊这个话题" : "看了这条博来搭话的同好（「姐妹你也去了吗」「求链接」「同款！」这种）", 4],
       ["之前在用户微博评论区杠过、吵过的路人：继续吵或者来道歉（没有吵过的人就换成来搭话的同好）", alt ? 0 : 1],
       ["求互粉、求回关的", 1], ["约稿、代购、小广告、刷粉这类营销号", 1],
-      ["粉丝：表白、求回关、问近况", !alt && S.meta.publicFigure ? 3 : 0], ["黑粉：阴阳怪气", !alt && S.meta.publicFigure ? 0.5 : 0],
     ].filter(k => k[1] > 0);
     let r = Math.random() * kinds.reduce((a, k) => a + k[1], 0); const kind = kinds.find(k => (r -= k[1]) < 0) || kinds[0];
     const pick = rollCharDm(cast.filter(c => !alt || knowsAlt(c.id)), sup ? 0.1 : null);
     const lines = [
-      stranger ? `这次要有 1 个陌生路人私信用户：${kind[0]}。1～3 条，一句一个块，短、口语，像真人。` : "",
+      stranger ? `这次要有 1 个陌生路人私信用户：${kind[0]}。${pub ? "用户是公众人物，私信的人知道她是谁，不把她当普通网友。" : ""}1～3 条，一句一个块，短、口语，像真人。` : "",
       pick ? `这次 ${pick.name} 想私信用户（他不在评论区评论这条，改成私信，内容比较私人、公开说不方便，语气按人设）。1～4 条，一句一个块。${charDmRecent(pick)}` : "",
       !stranger && !pick ? "这次没有人私信用户，不要输出 ===私信===。" : !pick ? "角色这次都不私信。" : !stranger ? "路人这次都不私信。" : "",
     ];
@@ -1994,10 +1997,11 @@
     const mutualFans = myFans.filter(isFollowingNpc), oneWayFans = myFans.filter(n => !isFollowingNpc(n));
     const fanPick = [...(mutualFans.length && Math.random() < 0.5 ? [shuffle(mutualFans)[0]] : []), ...(oneWayFans.length && Math.random() < 0.25 ? [shuffle(oneWayFans)[0]] : [])];
     const picPlan = cmtPicPlan(6);
+    const pubPost = !alt && !sup && !!S.meta.publicFigure && post.visibility !== "friends";
     const instruction = [
       `当前时间：${nowText()}`,
       superLine, altPostLine,
-      `用户的微博昵称：${prof.nickname}，粉丝 ${prof.followers} 人。用户性别：${S.identity.gender || "未知（评论里用「博主」「ta」）"}，评论称呼一定要用对性别。`,
+      `用户的微博昵称：${prof.nickname}，粉丝 ${prof.followers} 人。${pubPost ? "用户是公众人物：评论区以她的粉丝为主（控评、表白、心疼、催营业），夹着路人和少量黑粉，大家都知道她是谁，不把她当普通网友。" : ""}用户性别：${S.identity.gender || "未知（评论里用「博主」「ta」）"}，评论称呼一定要用对性别。`,
       post.repost ? `用户转发了 @${post.repost.author} 的微博：「${post.repost.text}」，转发语：` : `用户的微博正文：`,
       post.text || "（无文字）",
       post.images.length ? `配图：${post.images.map(i => i.desc || "一张用户自己上传的照片").join(" | ")}（看不到图片时不要臆测细节）` : "",
@@ -2038,6 +2042,14 @@
     fresh.counts.reposts += reposts.length;
     for (const r of reposts) charRepostPost(fresh, r);
     prof.followers = (prof.followers || 0) + Math.min(clampInt(sum["新增粉丝"], 0), alt ? 3 : 1e9);
+    if (pubPost) {
+      // 公众人物：评论只生成几条，数字按粉丝量级由代码补
+      const f = prof.followers || 0; const extra = Math.round(f * (0.003 + Math.random() * 0.02));
+      fresh.counts.likes += extra; fresh.likeAt = nowIso();
+      fresh.counts.comments += Math.round(extra * (0.03 + Math.random() * 0.05));
+      fresh.counts.reposts += Math.round(extra * (0.01 + Math.random() * 0.04));
+      prof.followers = f + Math.round(f * (0.0003 + Math.random() * 0.002));
+    }
     const fanNames = none(sum["新粉丝"]) ? [] : sum["新粉丝"].split(/[、,，\s]+/).map(x => x.replace(/^@/, "").trim()).filter(x => x && !isUserName(x) && !charByName(x, true));
     if (fanNames.length) prof.fans = [...fanNames.slice(0, alt ? 3 : 8).map((name, i) => ({ name, at: new Date(Date.now() - i * 1000).toISOString() })), ...(prof.fans || [])].slice(0, 200);
     if (!alt) altLurk(fresh, fanNames.length);
@@ -2340,7 +2352,7 @@
         <button class="more-btn" data-act="post-menu" data-post="${esc(p.id)}">${I.more}</button>
       </div>
       <div class="text ${long ? "clamp" : ""}">${pinned ? '<span class="pin-tag">置顶</span>' : ""}${p.superName ? `<span class="link super-tag" data-act="open-super" data-name="${esc(p.superName)}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M7 4h10l4 5-9 11L3 9z"/><path d="M3 9h18M10 4 8 9l4 11 4-11-2-5"/></svg>${esc(p.superName)}超话</span> ` : ""}${richText(p.text)}${p.repost ? p._chainHtml : ""}</div>
-      ${long ? '<div class="expand">全文</div>' : ""}
+      ${long ? '<div class="expand" data-act="expand-text">全文</div>' : ""}
       ${picsHtml(p.images, p.id)}
       ${p.location ? `<div class="meta" style="margin-top:8px;color:var(--wb-link)">📍 ${esc(p.location)}</div>` : ""}
       ${quote}
@@ -4568,18 +4580,19 @@
     openPage("edit-me", pg => {
       // 重绘时保留还没保存的输入
       const keep = {};
-      for (const id of ["f-nick", "f-bio", "f-ip", "f-dev", "f-city", "f-cityname"]) { const el = $("#" + id, pg.el); if (el) keep[id] = el.value; }
+      for (const id of ["f-nick", "f-bio", "f-ip", "f-dev", "f-city", "f-cityname", "f-fans"]) { const el = $("#" + id, pg.el); if (el) keep[id] = el.value; }
       const vipEl = $("#f-vip", pg.el); const pubEl = $("#f-pub", pg.el);
       $(".page-body", pg.el).innerHTML = `<div class="form">
         ${isAlt() ? `<div class="form-note" style="margin:0">这是你的小号${S.alt.nickname ? "" : "：先给它起个名字吧"}。除了你在设置里打开的人，谁都不知道是你</div>` : ""}
         <div class="form-row"><label>昵称</label><input id="f-nick" maxlength="30" placeholder="${isAlt() ? "比如 今天也在嗑、不想起床的猫" : ""}" value="${esc(S.me.nickname || "")}"></div>
         <div class="form-row"><label>简介</label><textarea id="f-bio" maxlength="140" placeholder="介绍一下自己">${esc(S.me.bio)}</textarea></div>
         <div class="form-row"><label>IP属地</label><input id="f-ip" maxlength="20" placeholder="如 上海" value="${esc(S.me.ip)}"></div>
+        <div class="form-row"><label>粉丝数</label><input id="f-fans" maxlength="9" inputmode="numeric" value="${esc(S.me.followers || 0)}"></div>
         <div class="form-row"><label>所在城市</label><input id="f-city" maxlength="20" placeholder="真实城市，用来查天气，如 杭州" value="${esc((S.meta.city || {}).q || "")}"></div>
         <div class="form-row"><label>微博里叫</label><input id="f-cityname" maxlength="20" placeholder="不填就用真名，如 临江市" value="${esc((S.meta.city || {}).name || "")}"></div>
         <div class="form-row"><label>发布设备</label><input id="f-dev" maxlength="30" placeholder="如 iPhone 16 Pro" value="${esc(S.me.device || "")}"></div>
         <div class="form-row"><label>会员</label><input type="checkbox" id="f-vip" ${S.me.vip ? "checked" : ""} style="flex:none;width:20px;height:20px"></div>
-        ${isAlt() ? "" : `<div class="form-row"><label>公众人物</label><input type="checkbox" id="f-pub" ${S.meta.publicFigure ? "checked" : ""} style="flex:none;width:20px;height:20px"><span class="cell-sub" style="margin-left:8px">打开后会上热搜、有粉丝</span></div>`}
+        ${isAlt() ? "" : `<div class="form-row"><label>公众人物</label><input type="checkbox" id="f-pub" ${S.meta.publicFigure ? "checked" : ""} style="flex:none;width:20px;height:20px"><span class="cell-sub" style="margin-left:8px">打开后会上热搜、有粉丝，粉丝少于一万会自动涨上去</span></div>`}
         <div class="form-row"><label>头像</label>${avatarHtml(authorOf({ authorType: "user", ...acctTag() }), 44)}<button class="btn-ghost" data-act="upload-avatar">上传图片</button>${S.me.avatarRef ? `<button class="btn-ghost" data-act="reset-avatar">${isAlt() ? "删除头像" : "用身份头像"}</button>` : ""}</div>
         <div class="form-row" style="display:block;padding-top:12px"><label>封面</label>
           <div class="profile-cover" style="height:90px;border-radius:8px;margin-top:8px;background:${COVERS[S.me.cover || 0]}" ${S.me.coverRef ? `data-bg-ref="${esc(S.me.coverRef)}"` : ""}></div>
@@ -4659,6 +4672,7 @@
         closePage(); return;
       }
       case "open-detail": if (post) openDetail(post.id); return;
+      case "expand-text": { const t = el.previousElementSibling; if (t) t.classList.remove("clamp"); el.remove(); return; }
       case "open-me": case "open-my-home": openMyHome(); return;
       case "open-following": openFollowing(); return;
       case "open-fans": openFans(); return;
@@ -5022,7 +5036,15 @@
         const isNew = isAlt() && !S.alt.nickname;
         S.me.nickname = nick || S.me.nickname; if (isNew) S.meta.acct = "alt";
         S.me.bio = $("#f-bio", pg.el).value.trim(); S.me.ip = $("#f-ip", pg.el).value.trim();
-        S.me.device = $("#f-dev", pg.el).value.trim(); S.me.vip = $("#f-vip", pg.el).checked; if (!isAlt()) S.meta.publicFigure = $("#f-pub", pg.el).checked;
+        S.me.device = $("#f-dev", pg.el).value.trim(); S.me.vip = $("#f-vip", pg.el).checked;
+        const fansIn = clampInt($("#f-fans", pg.el).value, S.me.followers || 0); const fansEdited = fansIn !== (S.me.followers || 0);
+        S.me.followers = fansIn;
+        if (!isAlt()) {
+          const pubOn = $("#f-pub", pg.el).checked;
+          // 刚变成公众人物、粉丝还没自己改过：直接涨到公众人物的量级
+          if (pubOn && !S.meta.publicFigure && !fansEdited && S.meta.followers < 10000) S.meta.followers = rand(10, 300) * 10000;
+          S.meta.publicFigure = pubOn;
+        }
         S.meta.city = { q: $("#f-city", pg.el).value.trim(), name: $("#f-cityname", pg.el).value.trim() };
         saveMeta(); toast(isNew ? "小号注册好啦，现在登录的是小号" : "已保存"); closePage(); return;
       }

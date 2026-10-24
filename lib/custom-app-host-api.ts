@@ -73,6 +73,7 @@ import {
   getWalletTotalBalance,
   loadWalletState,
   payWithWalletAccount,
+  walletTransact,
   WALLET_BALANCE_ACCOUNT_ID,
 } from "./wallet-storage";
 import { kvGet, kvSet, registerKvMigration } from "./kv-db";
@@ -172,6 +173,7 @@ const HOST_ACTION_PERMISSIONS: Record<string, CustomAppPermission[]> = {
   "memory.removeTimeline": ["memory.write"],
   "memory.suggest": ["memory.suggest"],
   "wallet.pay": ["wallet.pay"],
+  "wallet.receive": ["wallet.receive"],
   "chat.contact": ["chat.contacts.write"],
   "calendar.write": ["calendar.write"],
   "world.write": ["world.write"],
@@ -2290,6 +2292,27 @@ export function payCustomAppWallet(app: InstalledCustomApp, record: Record<strin
   };
 }
 
+/** 往钱包里收钱（稿费提现、卖东西收入之类），默认进余额，也可以指定银行卡 */
+export function receiveCustomAppWallet(app: InstalledCustomApp, record: Record<string, unknown>): Record<string, unknown> {
+  const amount = numberAmount(record.amount);
+  if (amount <= 0) return { ok: false, error: "收款金额无效。", wallet: getWalletSnapshot() };
+  if (amount > 1000000) return { ok: false, error: "单笔收款不能超过 100 万。", wallet: getWalletSnapshot() };
+  const result = walletTransact({
+    accountId: cleanText(record.accountId ?? record.cardId, 120) || WALLET_BALANCE_ACCOUNT_ID,
+    amount,
+    title: cleanText(record.title, 120) || app.name,
+    detail: cleanText(record.detail ?? record.description, 400) || `来自「${app.name}」的收入`,
+    category: cleanText(record.category, 80) || app.name,
+    kind: "transfer_in",
+  });
+  if (!result.ok) return { ok: false, error: result.error, wallet: getWalletSnapshot() };
+  return {
+    ok: true,
+    transaction: result.transaction,
+    wallet: getWalletSnapshot(),
+  };
+}
+
 export function updateCustomAppDataRecord(app: InstalledCustomApp, record: Record<string, unknown>): Record<string, unknown> | null {
   const collection = collectionName(record.collection);
   const id = recordId(record.id);
@@ -2386,6 +2409,8 @@ export async function executeCustomAppHostAction(
       return suggestCustomAppMemory(app, payload);
     case "wallet.pay":
       return payCustomAppWallet(app, payload);
+    case "wallet.receive":
+      return receiveCustomAppWallet(app, payload);
     case "chat.contact":
       return setCustomAppChatContactState(payload);
     case "calendar.write":

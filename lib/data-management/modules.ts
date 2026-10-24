@@ -183,7 +183,7 @@ const PRIMARY_DATA_MODULES: DataModuleDefinition[] = [
       {
         type: "kv",
         label: "记忆配置与计数",
-        keys: ["ai_phone_memory_config_v1"],
+        keys: ["ai_phone_memory_config_v1", "nox_short_term_edits_v1"],
         prefixes: [
           "ai_phone_mem_evt_count_",
           "ai_phone_mem_last_sum_",

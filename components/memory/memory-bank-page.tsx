@@ -1,7 +1,7 @@
 "use client";
 
-import { Component, useState, useEffect, useCallback, useMemo, type CSSProperties, type ReactNode } from "react";
-import { Trash2, Zap, Clock, Users, Archive, AlertCircle, Search, Brain, FileText, MoreHorizontal, Plus, Edit3, X, Check, ChevronRight, Filter, type LucideIcon } from "lucide-react";
+import { Component, useState, useEffect, useCallback, useMemo, useRef, type CSSProperties, type ReactNode } from "react";
+import { Trash2, Zap, Clock, Users, Archive, AlertCircle, Search, Brain, FileText, MoreHorizontal, Plus, Edit3, X, Check, ChevronRight, Filter, Download, Upload, type LucideIcon } from "lucide-react";
 import { ConfirmDialog } from "@/components/ui/modal";
 import { getMemoryEventSourceTag, MEMORY_SOURCE_TAG_ORDER, MemoryTimeline } from "./memory-timeline";
 import { Toggle } from "@/components/ui/form";
@@ -23,6 +23,8 @@ import {
 } from "@/lib/memory-storage";
 import { hydrateChatStorage } from "@/lib/chat-storage";
 import { loadNativeTimeline, type NativeTimelineEntry } from "@/lib/short-term-assembler";
+import { exportMemoryBackup, importMemoryPack, parseMemoryBackup, type CharacterMemoryPack } from "@/lib/memory-backup";
+import { deleteShortTermEntry, editShortTermEntry, restoreShortTermEntry, splitShortTermLine } from "@/lib/short-term-edits";
 import { runSummarizationPipeline } from "@/lib/memory-summarizer";
 import { runCoreMemoryPipeline } from "@/lib/core-memory-builder";
 import { resolveAuxiliaryApiConfig, resolveUserIdentity } from "@/lib/settings-storage";
@@ -217,6 +219,14 @@ export function MemoryBankPage({
     const [summarizeRangeOpen, setSummarizeRangeOpen] = useState(false);
     const [sourcePickerOpen, setSourcePickerOpen] = useState(false);
     const [activeTimelineTags, setActiveTimelineTags] = useState<Set<string>>(new Set());
+    // 短期记忆：点一条 → 编辑/删除（只改他记得的版本，聊天记录不动）
+    const [stActionId, setStActionId] = useState<string | null>(null);
+    const [stEditor, setStEditor] = useState<{ id: string; prefix: string; body: string } | null>(null);
+    const [stConfirmDeleteId, setStConfirmDeleteId] = useState<string | null>(null);
+    // 记忆备份
+    const [backupBusy, setBackupBusy] = useState(false);
+    const [importPlan, setImportPlan] = useState<{ pack: CharacterMemoryPack; target: string }[] | null>(null);
+    const memoryFileRef = useRef<HTMLInputElement>(null);
 
     const disabledSourceCount = MEMORY_SOURCE_OPTIONS
         .filter(source => (config.shortTermAllowedSources ?? {})[source.key] === false).length;
@@ -370,6 +380,109 @@ export function MemoryBankPage({
 
     const showNotice = (msg: string) => {
         onNotice?.(msg);
+    };
+
+    const handleExportMemories = async (all: boolean) => {
+        if (backupBusy) return;
+        const chars = loadCharacters();
+        const list = all ? chars : chars.filter(c => c.id === selectedCharId);
+        if (!list.length) return;
+        setBackupBusy(true);
+        try {
+            const day = new Date().toISOString().slice(0, 10);
+            const name = all ? `全部角色记忆-${day}.json` : `${list[0].name || "角色"}的记忆-${day}.json`;
+            const count = await exportMemoryBackup(list.map(c => ({ id: c.id, name: c.name })), name);
+            showNotice(`已导出 ${list.length} 个角色、${count} 条记忆`);
+        } catch (err) {
+            showNotice("导出失败: " + String(err));
+        } finally {
+            setBackupBusy(false);
+        }
+    };
+
+    const handlePickMemoryFile = async (file: File) => {
+        const packs = parseMemoryBackup(await file.text());
+        if (!packs || !packs.length) {
+            showNotice("没认出来，请选记忆库或档案库导出的文件");
+            return;
+        }
+        const chars = loadCharacters();
+        // 先按 id 找，再按名字找；只有一份时默认导给正在看的角色
+        setImportPlan(packs.map(pack => {
+            const byId = chars.find(c => c.id === pack.characterId);
+            const byName = chars.find(c => c.name === pack.characterName);
+            const fallback = packs.length === 1 && selectedCharId ? selectedCharId : "";
+            return { pack, target: byId?.id ?? byName?.id ?? fallback };
+        }));
+    };
+
+    const handleRunImport = async () => {
+        if (!importPlan || backupBusy) return;
+        setBackupBusy(true);
+        let added = 0;
+        let skipped = 0;
+        try {
+            for (const item of importPlan) {
+                if (!item.target) continue;
+                const r = await importMemoryPack(item.pack, item.target);
+                added += r.added;
+                skipped += r.skipped;
+            }
+            setImportPlan(null);
+            showNotice(skipped ? `导入了 ${added} 条，${skipped} 条已经有了跳过` : `导入了 ${added} 条记忆`);
+            loadCharacterList();
+            if (selectedCharId) loadDetailData(selectedCharId);
+        } catch (err) {
+            showNotice("导入失败: " + String(err));
+        } finally {
+            setBackupBusy(false);
+        }
+    };
+
+    const findTimelineEntry = (id: string) =>
+        shortTermEvents.find(e => e.id === id) ?? sharedEvents.find(e => e.id === id) ?? null;
+
+    const updateTimelineEntry = (id: string, next: NativeTimelineEntry | null) => {
+        const apply = (list: NativeTimelineEntry[]) => next
+            ? list.map(e => e.id === id ? next : e)
+            : list.filter(e => e.id !== id);
+        setShortTermEvents(apply);
+        setSharedEvents(apply);
+    };
+
+    const openShortTermEditor = (id: string) => {
+        const entry = findTimelineEntry(id);
+        setStActionId(null);
+        if (!entry) return;
+        setStEditor({ id, ...splitShortTermLine(entry.content) });
+    };
+
+    const handleSaveShortTermEdit = () => {
+        if (!stEditor) return;
+        const body = stEditor.body.trim();
+        if (!body) {
+            showNotice("内容不能为空，不想要可以直接删除");
+            return;
+        }
+        const entry = findTimelineEntry(stEditor.id);
+        editShortTermEntry(stEditor.id, stEditor.prefix, body);
+        if (entry) updateTimelineEntry(stEditor.id, { ...entry, content: stEditor.prefix + body, edited: true });
+        setStEditor(null);
+        showNotice("改好了，他会记成这个版本");
+    };
+
+    const handleDeleteShortTerm = (id: string) => {
+        deleteShortTermEntry(id);
+        updateTimelineEntry(id, null);
+        setStConfirmDeleteId(null);
+        showNotice("他已经忘掉这条了");
+    };
+
+    const handleRestoreShortTerm = (id: string) => {
+        restoreShortTermEntry(id);
+        setStActionId(null);
+        if (selectedCharId) loadDetailData(selectedCharId);
+        showNotice("已恢复原样");
     };
 
     const handleManualSummarize = async (range: SummarizeRange = "auto") => {
@@ -718,6 +831,8 @@ export function MemoryBankPage({
                                 events={shortTermEvents}
                                 userName={resolveUserIdentity(selectedCharId!)?.name || "用户"}
                                 activeTags={activeTimelineTags}
+                                onEntryTap={setStActionId}
+                                resetKey={`${selectedCharId}:short`}
                             />
                         </>
                     ) : activeTab === "shared" ? (
@@ -731,6 +846,8 @@ export function MemoryBankPage({
                                 events={sharedEvents}
                                 userName={resolveUserIdentity(selectedCharId!)?.name || "用户"}
                                 activeTags={activeTimelineTags}
+                                onEntryTap={setStActionId}
+                                resetKey={`${selectedCharId}:shared`}
                             />
                         )
                     ) : activeTab === "core" ? (
@@ -875,6 +992,90 @@ export function MemoryBankPage({
                         </div>
                     );
                 })()}
+
+                {/* 短期记忆：点一条后的菜单 */}
+                {stActionId && (() => {
+                    const entry = findTimelineEntry(stActionId);
+                    if (!entry) return null;
+                    const canEdit = entry.sourceApp !== "moments";
+                    return (
+                        <div className="modal-overlay modal-overlay-bottom" data-ui="modal" onClick={() => setStActionId(null)}>
+                            <div className="modal-sheet mem-st-action-sheet" data-ui="modal-sheet" onClick={event => event.stopPropagation()}>
+                                <p className="mem-st-action-preview">{splitShortTermLine(entry.content).body}</p>
+                                <p className="mem-st-action-hint">只改他记得的版本，聊天记录里原样不动</p>
+                                {canEdit && (
+                                    <button className="mem-st-action-btn" onClick={() => openShortTermEditor(entry.id)}>
+                                        <Edit3 size={15} /><span>编辑</span>
+                                    </button>
+                                )}
+                                {entry.edited && (
+                                    <button className="mem-st-action-btn" onClick={() => handleRestoreShortTerm(entry.id)}>
+                                        <Clock size={15} /><span>恢复原样</span>
+                                    </button>
+                                )}
+                                <button
+                                    className="mem-st-action-btn is-danger"
+                                    onClick={() => { setStActionId(null); setStConfirmDeleteId(entry.id); }}
+                                >
+                                    <Trash2 size={15} /><span>删除（让他忘掉）</span>
+                                </button>
+                                <button className="mem-st-action-btn is-cancel" onClick={() => setStActionId(null)}>取消</button>
+                            </div>
+                        </div>
+                    );
+                })()}
+
+                {/* 短期记忆编辑 */}
+                {stEditor && (
+                    <div className="modal-overlay modal-overlay-bottom" data-ui="modal" onClick={() => setStEditor(null)}>
+                        <div className="modal-sheet mem-edit-sheet" data-ui="modal-sheet" onClick={event => event.stopPropagation()}>
+                            <div className="modal-header" data-ui="modal-header">
+                                <button className="modal-header-btn modal-header-btn-muted" onClick={() => setStEditor(null)}>
+                                    <X size={18} />
+                                </button>
+                                <h3 className="modal-title">编辑短期记忆</h3>
+                                <button
+                                    className="modal-header-btn modal-header-btn-action"
+                                    onClick={handleSaveShortTermEdit}
+                                    disabled={!stEditor.body.trim()}
+                                >
+                                    <Check size={18} />
+                                </button>
+                            </div>
+                            <div className="modal-body mem-edit-body" data-ui="modal-body">
+                                {stEditor.prefix && <p className="mem-st-edit-prefix">{stEditor.prefix.replace(/[:：]\s*$/, "")}</p>}
+                                <textarea
+                                    className="ui-textarea mem-edit-textarea"
+                                    value={stEditor.body}
+                                    onChange={event => setStEditor(prev => prev ? { ...prev, body: event.target.value } : prev)}
+                                />
+                                <div className="mem-edit-footer">
+                                    <span>SHORT TERM</span>
+                                    <span>聊天记录不会变</span>
+                                </div>
+                                <button
+                                    className="ui-btn ui-btn-primary mem-edit-save-btn"
+                                    onClick={handleSaveShortTermEdit}
+                                    disabled={!stEditor.body.trim()}
+                                >
+                                    保存
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {stConfirmDeleteId && (
+                    <ConfirmDialog
+                        title="让他忘掉这条？"
+                        message="删掉后他不会再记得这条，聊天记录里还在。"
+                        icon={AlertCircle}
+                        variant="danger"
+                        confirmLabel="删除"
+                        onConfirm={() => handleDeleteShortTerm(stConfirmDeleteId)}
+                        onCancel={() => setStConfirmDeleteId(null)}
+                    />
+                )}
 
                 {/* Confirm delete single entry */}
                 {confirmDeleteEntryId && (
@@ -1048,6 +1249,95 @@ export function MemoryBankPage({
                         </div>
                     </div>
                 ) : null}
+
+                {/* 记忆备份 */}
+                <p className="menu-group-desc mx-2">备份</p>
+                <div className="menu-group">
+                    {selectedCharId && (
+                        <div className="menu-item">
+                            <MemorySettingsIcon icon={Download} color={BINDING_ACCENTS.memory} />
+                            <div className="menu-label-group">
+                                <span className="menu-label">导出{selectedChar?.name ? `「${selectedChar.name}」` : "这个角色"}的记忆</span>
+                                <span className="menu-desc">长期记忆和核心记忆</span>
+                            </div>
+                            <div className="menu-right">
+                                <button className="ui-btn ui-btn-outline py-1 px-3 ts-12" onClick={() => handleExportMemories(false)} disabled={backupBusy}>导出</button>
+                            </div>
+                        </div>
+                    )}
+                    <div className="menu-item">
+                        <MemorySettingsIcon icon={Download} color={BINDING_ACCENTS.worldBook} />
+                        <div className="menu-label-group">
+                            <span className="menu-label">导出全部角色的记忆</span>
+                            <span className="menu-desc">所有角色打成一个文件</span>
+                        </div>
+                        <div className="menu-right">
+                            <button className="ui-btn ui-btn-outline py-1 px-3 ts-12" onClick={() => handleExportMemories(true)} disabled={backupBusy}>导出</button>
+                        </div>
+                    </div>
+                    <div className="menu-item">
+                        <MemorySettingsIcon icon={Upload} color={BINDING_ACCENTS.embedding} />
+                        <div className="menu-label-group">
+                            <span className="menu-label">导入记忆</span>
+                            <span className="menu-desc">可以选导给谁，已经有的不会重复</span>
+                        </div>
+                        <div className="menu-right">
+                            <button className="ui-btn ui-btn-outline py-1 px-3 ts-12" onClick={() => memoryFileRef.current?.click()} disabled={backupBusy}>导入</button>
+                        </div>
+                    </div>
+                    <input
+                        ref={memoryFileRef}
+                        type="file"
+                        accept=".json,application/json"
+                        className="hidden"
+                        onChange={async event => {
+                            const file = event.target.files?.[0];
+                            event.target.value = "";
+                            if (file) await handlePickMemoryFile(file);
+                        }}
+                    />
+                </div>
+
+                {importPlan && (() => {
+                    const chars = loadCharacters();
+                    const ready = importPlan.filter(item => item.target).length;
+                    return (
+                        <div className="modal-overlay modal-overlay-bottom" data-ui="modal" onClick={() => backupBusy ? undefined : setImportPlan(null)}>
+                            <div className="modal-sheet mem-edit-sheet" data-ui="modal-sheet" onClick={event => event.stopPropagation()}>
+                                <div className="modal-header" data-ui="modal-header">
+                                    <button className="modal-header-btn modal-header-btn-muted" onClick={() => setImportPlan(null)} disabled={backupBusy}><X size={18} /></button>
+                                    <h3 className="modal-title">导入记忆</h3>
+                                    <span style={{ width: 32 }} />
+                                </div>
+                                <div className="modal-body mem-edit-body" data-ui="modal-body">
+                                    {importPlan.map((item, idx) => (
+                                        <div key={idx} className="mem-import-row">
+                                            <div className="mem-import-src">
+                                                <span className="mem-import-name">{item.pack.characterName || "未命名"}</span>
+                                                <span className="mem-import-count">{item.pack.entries.length} 条</span>
+                                            </div>
+                                            <span className="mem-import-arrow">导给</span>
+                                            <select
+                                                className="ui-input mem-import-select"
+                                                value={item.target}
+                                                onChange={event => {
+                                                    const target = event.target.value;
+                                                    setImportPlan(prev => prev ? prev.map((p, i) => i === idx ? { ...p, target } : p) : prev);
+                                                }}
+                                            >
+                                                <option value="">不导入</option>
+                                                {chars.map(c => <option key={c.id} value={c.id}>{c.name || "未命名"}</option>)}
+                                            </select>
+                                        </div>
+                                    ))}
+                                    <button className="ui-btn ui-btn-primary mem-edit-save-btn" onClick={handleRunImport} disabled={backupBusy || !ready}>
+                                        {backupBusy ? "导入中..." : `导入（${ready} 个角色）`}
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    );
+                })()}
 
                 {/* Feature toggles */}
                 <p className="menu-group-desc mx-2">自动化</p>

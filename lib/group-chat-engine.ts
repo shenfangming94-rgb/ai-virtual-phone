@@ -69,6 +69,7 @@ import { retrieveCoreMemoriesForPrompt, retrieveMemoriesForPrompt } from "./memo
 import { formatCoreMemories, formatLongTermMemories } from "./memory-injector";
 import { maybeRunSummarization } from "./memory-summarizer";
 import { prepareShortTermContext, prepareGroupShortTermContext } from "./short-term-assembler";
+import { applyShortTermEditsToHistory } from "./short-term-edits";
 import { parseActionTags, dispatchActions } from "./action-parser";
 import { getCustomStickerExample, loadCustomStickers } from "./custom-sticker-storage";
 import { formatCustomAppChatDirectivesForPrompt } from "./custom-app-chat-directives";
@@ -386,7 +387,8 @@ async function buildGroupChatPromptMessages(
 
     const enabledTools = options?.disableTools ? [] : getEnabledTools("group_chat");
     const usesNativeActions = Boolean(nativeToolProtocolForConfig(config) && enabledTools.length > 0);
-    const annotatedHistory = annotateGroupHistory(history, participantIds, userName);
+    // 记忆库里删过/改过的消息先套上，再加「[名字]: 」前缀
+    const annotatedHistory = annotateGroupHistory(applyShortTermEditsToHistory(history), participantIds, userName);
     const {
         truncatedHistory: truncatedAnnotatedHistory,
         wbActivationContext,

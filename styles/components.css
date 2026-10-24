@@ -5581,6 +5581,119 @@
   pointer-events: none;
 }
 
+/* 短期记忆：点一条编辑/删除 */
+.mem-tl-card-detail [data-tappable] {
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: opacity 0.15s;
+}
+
+.mem-tl-card-detail [data-tappable]:active {
+  opacity: 0.55;
+}
+
+.mem-tl-edited {
+  margin-left: 6px;
+  padding: 0 5px;
+  border-radius: 6px;
+  font-size: calc(9px*var(--app-text-scale,1));
+  line-height: 1.6;
+  color: var(--c-icon-active);
+  border: 1px solid color-mix(in srgb, var(--c-icon-active) 35%, transparent);
+  vertical-align: middle;
+}
+
+.mem-st-action-sheet {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 18px 16px calc(18px + env(safe-area-inset-bottom, 0px));
+}
+
+.mem-st-action-preview {
+  margin: 0;
+  font-size: calc(13px*var(--app-text-scale,1));
+  line-height: 1.6;
+  color: var(--c-text);
+  display: -webkit-box;
+  -webkit-line-clamp: 4;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.mem-st-action-hint {
+  margin: 0 0 6px;
+  font-size: calc(11px*var(--app-text-scale,1));
+  color: var(--c-text);
+  opacity: 0.55;
+}
+
+.mem-st-action-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  padding: 12px;
+  border-radius: 12px;
+  border: 1px solid var(--c-panel-border);
+  background: transparent;
+  color: var(--c-text);
+  font-size: calc(14px*var(--app-text-scale,1));
+}
+
+.mem-st-action-btn.is-danger {
+  color: var(--c-danger);
+}
+
+.mem-st-action-btn.is-cancel {
+  border: none;
+  color: var(--c-text);
+  opacity: 0.6;
+}
+
+.mem-st-edit-prefix {
+  margin: 0;
+  font-size: calc(11px*var(--app-text-scale,1));
+  color: var(--c-text);
+  opacity: 0.55;
+  letter-spacing: 0.04em;
+}
+
+.mem-import-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.mem-import-src {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.mem-import-name {
+  font-size: calc(14px*var(--app-text-scale,1));
+  color: var(--c-text-title);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mem-import-count,
+.mem-import-arrow {
+  font-size: calc(11px*var(--app-text-scale,1));
+  color: var(--c-text);
+  opacity: 0.55;
+}
+
+.mem-import-select {
+  flex: 1;
+  min-width: 0;
+  padding: 8px 10px;
+}
+
 .mem-tl-card-head {
   display: flex;
   align-items: center;

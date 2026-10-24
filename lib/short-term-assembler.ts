@@ -31,6 +31,7 @@ import { loadChatOfflineProjectionEntries } from "./chat-offline-storage";
 import { loadCheckPhoneProjectionEntries } from "./checkphone-storage";
 import { formatShoppingPaymentRequestHistory } from "./shopping-payment-request";
 import { loadCustomAppTimelineEntries } from "./custom-app-storage";
+import { applyShortTermEdits, applyShortTermEditsToHistory } from "./short-term-edits";
 import {
     canCharacterSeeMomentPost,
     getVisibleMomentCommentsForCharacter,
@@ -56,6 +57,7 @@ export type NativeTimelineEntry = {
     sourceDetail?: "direct" | "group" | "system" | "story" | "chat_offline" | "game" | "diary_entry" | "notewall" | "xiaohongshu" | "black_market_theater" | "interview_issue" | "interview_shared_issue" | "cocreate_project" | "checkphone" | "custom_app_event"; // chat sub-type: 1:1 vs group chat vs system note
     authorType?: "user" | "character" | "npc"; // who authored this entry
     postAuthorType?: "user" | "character"; // for moments: who owns the parent post
+    edited?: boolean; // 记忆库里改过
     sessionId?: string;
     groupSessionId?: string; // for group chat: which group session
     groupName?: string;      // for group chat: display name of the group
@@ -827,7 +829,8 @@ export function loadNativeTimeline(
 
     // Sort by timestamp ascending
     entries.sort((a, b) => a.timestamp.localeCompare(b.timestamp));
-    return entries;
+    // 记忆库里删过/改过的短期记忆
+    return applyShortTermEdits(entries);
 }
 
 // Fixed order — lower = further from LLM output (appears higher in prompt)
@@ -995,7 +998,7 @@ export function prepareShortTermContext(
     const wbActivationContext = timeline.slice(-10).map(e => e.content).join("\n");
     const budget = memConfig.shortTermTokenBudget;
     const currentTag = getFeatureTag(appId);
-    const history = options?.history ?? [];
+    const history = applyShortTermEditsToHistory(options?.history ?? []);
     const characterName = loadCharacters().find(c => c.id === characterId)?.name ?? "角色";
     const wrapsCurrentHistory = appId === "chat" || appId === "group_chat" || appId === "story" || appId === "vn" || appId === "adventure";
     const skipDirectChatEntries = appId === "chat" && !options?.includeDirectChatEntries;

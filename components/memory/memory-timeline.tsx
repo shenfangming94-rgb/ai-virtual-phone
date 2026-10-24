@@ -442,7 +442,13 @@ function formatClusterDate(cluster: TimelineCluster): string {
    Inline detail — renders the former modal content inside cards
    ================================================================ */
 
-function ClusterDetail({ cluster }: { cluster: TimelineCluster }) {
+function ClusterDetail({ cluster, onEntryTap, editedIds }: { cluster: TimelineCluster; onEntryTap?: (id: string) => void; editedIds?: ReadonlySet<string> }) {
+    // 点一条 → 编辑/删除（只改他记得的版本）
+    const tap = (id: string) => onEntryTap ? {
+        onClick: () => onEntryTap(id),
+        "data-tappable": "",
+    } : {};
+    const editedMark = (id: string) => editedIds?.has(id) ? <span className="mem-tl-edited">已改</span> : null;
     return (
         <div className="mem-tl-card-detail" onClick={(event) => event.stopPropagation()}>
             {(() => {
@@ -470,8 +476,8 @@ function ClusterDetail({ cluster }: { cluster: TimelineCluster }) {
                                 {group.entries.map(entry => {
                                     if (entry.type === "system") {
                                         return (
-                                            <div key={entry.id} className="mem-tl-system">
-                                                <span>{entry.message}</span>
+                                            <div key={entry.id} className="mem-tl-system" {...tap(entry.id)}>
+                                                <span>{entry.message}</span>{editedMark(entry.id)}
                                             </div>
                                         );
                                     }
@@ -482,11 +488,12 @@ function ClusterDetail({ cluster }: { cluster: TimelineCluster }) {
                                     const musicMatch = e.message.match(/^\[音乐分享[:：]([^\]]+)\]$/);
                                     if (musicMatch) {
                                         return (
-                                            <div key={e.id} className={`mem-tl-bubble ${e.isUser ? "mem-tl-bubble-r" : "mem-tl-bubble-l"}`}>
+                                            <div key={e.id} className={`mem-tl-bubble ${e.isUser ? "mem-tl-bubble-r" : "mem-tl-bubble-l"}`} {...tap(e.id)}>
                                                 <span className="mem-tl-bubble-name">
                                                     {e.sender}
                                                     {e.type === "group" && <span className="mem-tl-bubble-group">{e.groupName}</span>}
                                                     <span className="mem-tl-bubble-ts">{fmtTime(e.timestamp)}</span>
+                                                    {editedMark(e.id)}
                                                 </span>
                                                 <div className="chat-music-share-card">
                                                     <div className="chat-music-share-body">
@@ -509,11 +516,12 @@ function ClusterDetail({ cluster }: { cluster: TimelineCluster }) {
                                         );
                                     }
                                     return (
-                                        <div key={e.id} className={`mem-tl-bubble ${e.isUser ? "mem-tl-bubble-r" : "mem-tl-bubble-l"}`}>
+                                        <div key={e.id} className={`mem-tl-bubble ${e.isUser ? "mem-tl-bubble-r" : "mem-tl-bubble-l"}`} {...tap(e.id)}>
                                             <span className="mem-tl-bubble-name">
                                                 {e.sender}
                                                 {e.type === "group" && <span className="mem-tl-bubble-group">{e.groupName}</span>}
                                                 <span className="mem-tl-bubble-ts">{fmtTime(e.timestamp)}</span>
+                                                {editedMark(e.id)}
                                             </span>
                                             <div className="mem-tl-bubble-body">
                                                 <p className="mem-tl-bubble-text">{renderWithStickers(e.message)}</p>
@@ -529,10 +537,11 @@ function ClusterDetail({ cluster }: { cluster: TimelineCluster }) {
                             (() => {
                                 const entry = group.entries[0] as ParsedProjection;
                                 return (
-                                    <div className="mem-tl-system" style={{ padding: "8px 12px", background: "color-mix(in srgb, var(--c-icon-active) 6%, transparent)", borderRadius: 8, border: "1px solid color-mix(in srgb, var(--c-icon-active) 12%, transparent)" }}>
+                                    <div className="mem-tl-system" {...tap(entry.id)} style={{ padding: "8px 12px", background: "color-mix(in srgb, var(--c-icon-active) 6%, transparent)", borderRadius: 8, border: "1px solid color-mix(in srgb, var(--c-icon-active) 12%, transparent)" }}>
                                         <span className="ui-status-tag" data-variant="action" style={{ marginRight: 6, fontSize: "calc(10px*var(--app-text-scale,1))" }}>{entry.label}</span>
                                         <span className="mem-tl-projection-text">{entry.message}</span>
                                         <span className="mem-tl-bubble-ts" style={{ marginLeft: 6 }}>{fmtTime(entry.timestamp)}</span>
+                                        {editedMark(entry.id)}
                                     </div>
                                 );
                             })()
@@ -542,7 +551,7 @@ function ClusterDetail({ cluster }: { cluster: TimelineCluster }) {
                                 const commentThreads = buildTwoLevelMomentThreads(entry.comments);
                                 return (
                                     <div className="mem-tl-moment">
-                                        <div className="mem-tl-moment-head">
+                                        <div className="mem-tl-moment-head" {...tap(entry.id)}>
                                             <span className="mem-tl-moment-author">{entry.author}</span>
                                             <span className="mem-tl-bubble-ts">{fmtTime(entry.timestamp)}</span>
                                         </div>
@@ -616,6 +625,10 @@ type Props = {
     events: NativeTimelineEntry[];
     userName: string;
     activeTags?: ReadonlySet<string>;
+    /** 点某一条（编辑/删除） */
+    onEntryTap?: (id: string) => void;
+    /** 换了它才回到首屏；不给就是 events 一变就回 */
+    resetKey?: string;
 };
 
 const EMPTY_ACTIVE_TAGS: ReadonlySet<string> = new Set<string>();
@@ -623,7 +636,7 @@ const EMPTY_ACTIVE_TAGS: ReadonlySet<string> = new Set<string>();
 // 每批渲染的簇数：全部一次性渲染会在重数据账号上把 DOM 撑爆
 const CLUSTER_PAGE_SIZE = 30;
 
-export function MemoryTimeline({ events, userName, activeTags = EMPTY_ACTIVE_TAGS }: Props) {
+export function MemoryTimeline({ events, userName, activeTags = EMPTY_ACTIVE_TAGS, onEntryTap, resetKey }: Props) {
     const [expandedClusterId, setExpandedClusterId] = useState<string | null>(null);
     const [visibleCount, setVisibleCount] = useState(CLUSTER_PAGE_SIZE);
 
@@ -637,11 +650,13 @@ export function MemoryTimeline({ events, userName, activeTags = EMPTY_ACTIVE_TAG
         return clusterByTimeGap(parsed);
     }, [filteredEvents, userName]);
 
-    // 切换角色/标签页/筛选标签时回到首屏
+    const editedIds = useMemo(() => new Set(events.filter(e => e.edited).map(e => e.id)), [events]);
+
+    // 切换角色/标签页/筛选标签时回到首屏（改/删一条不回，免得展开的那段收起来）
     useEffect(() => {
         setVisibleCount(CLUSTER_PAGE_SIZE);
         setExpandedClusterId(null);
-    }, [events]);
+    }, [resetKey ?? events]);
 
     useEffect(() => {
         setVisibleCount(CLUSTER_PAGE_SIZE);
@@ -687,7 +702,7 @@ export function MemoryTimeline({ events, userName, activeTags = EMPTY_ACTIVE_TAG
                                 <span className="mem-tl-card-count">{cluster.entryCount} 条记录</span>
                             </div>
                             {expanded ? (
-                                <ClusterDetail cluster={cluster} />
+                                <ClusterDetail cluster={cluster} onEntryTap={onEntryTap} editedIds={editedIds} />
                             ) : (
                                 <div className="mem-tl-card-excerpts">
                                     {cluster.excerpts.length > 0 ? cluster.excerpts.map((ex, i) => (

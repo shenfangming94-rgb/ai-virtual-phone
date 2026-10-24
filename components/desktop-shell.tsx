@@ -56,6 +56,8 @@ import { AppMarketApp } from "@/components/app-market/app-market-app";
 import { CustomAppRunner } from "@/components/app-market/custom-app-runner";
 import { CustomAppForegroundBoundary } from "@/components/app-market/custom-app-failure";
 import { hydrateKvDb, kvGet, kvSet, kvRemove, kvKeysWithPrefix } from "@/lib/kv-db";
+
+const LAST_APP_STORAGE_KEY = "nox_last_open_app_v1";
 import { deleteDatabase } from "@/lib/data-management/idb";
 import { hydrateStoryStorage } from "@/lib/story-storage";
 import { hydrateMomentsStorage } from "@/lib/moments-storage";
@@ -2401,6 +2403,59 @@ html,body{margin:0;padding:0;width:100%;height:100%;background:#121110;color:rgb
     if (builtinIconId === "chat") setChatInitSessionId(null);
     setActiveApp(builtinIconId);
   }
+
+  // ── 闪退回到刚才的 app ──
+  // 开着的 app 记在 localStorage（每 30 秒、切后台时刷新时间）；正常关回桌面就清掉。
+  // 页面被系统杀掉重开时还留着 → 10 分钟内自动再打开它。
+  // 刚恢复完 90 秒内又崩了就不再恢复，免得一打开就崩、一崩又打开。
+  const openAppRef = useRef(openApp);
+  openAppRef.current = openApp;
+  const lastAppRestoredRef = useRef(false);
+  useEffect(() => {
+    if (!desktopReady || lastAppRestoredRef.current) return;
+    let rec: { id?: string; at?: number; restored?: boolean } | null = null;
+    try { rec = JSON.parse(localStorage.getItem(LAST_APP_STORAGE_KEY) || "null"); } catch { rec = null; }
+    if (!rec?.id || !rec.at) return;
+    const age = Date.now() - rec.at;
+    if (age > 10 * 60_000 || (rec.restored && age < 90_000)) {
+      try { localStorage.removeItem(LAST_APP_STORAGE_KEY); } catch { }
+      return;
+    }
+    // 通知/来电等带参数冷启动的，让它们自己决定打开什么
+    if (window.location.search || window.location.hash) return;
+    const id = rec.id as DesktopIconId;
+    const timer = window.setTimeout(() => {
+      lastAppRestoredRef.current = true;
+      if (activeAppRef.current) return;
+      try { localStorage.setItem(LAST_APP_STORAGE_KEY, JSON.stringify({ id, at: Date.now(), restored: true })); } catch { }
+      openAppRef.current(id);
+    }, 300);
+    return () => window.clearTimeout(timer);
+  }, [desktopReady]);
+
+  useEffect(() => {
+    if (!desktopReady) return;
+    if (!activeApp || isFolderIconId(activeApp) || activeApp === ("worldbuilder" as DesktopIconId)) {
+      try { localStorage.removeItem(LAST_APP_STORAGE_KEY); } catch { }
+      return;
+    }
+    let restored = false;
+    try { restored = JSON.parse(localStorage.getItem(LAST_APP_STORAGE_KEY) || "null")?.restored === true; } catch { }
+    const write = () => {
+      try { localStorage.setItem(LAST_APP_STORAGE_KEY, JSON.stringify({ id: activeApp, at: Date.now(), ...(restored ? { restored: true } : {}) })); } catch { }
+    };
+    write();
+    // 恢复后撑过 90 秒就算稳了，之后再崩还能恢复
+    const settle = restored ? window.setTimeout(() => { restored = false; write(); }, 90_000) : 0;
+    const beat = window.setInterval(write, 30_000);
+    const onHide = () => { if (document.visibilityState === "hidden") write(); };
+    document.addEventListener("visibilitychange", onHide);
+    return () => {
+      window.clearTimeout(settle);
+      window.clearInterval(beat);
+      document.removeEventListener("visibilitychange", onHide);
+    };
+  }, [activeApp, desktopReady]);
 
   const handleInstallCustomAppToDesktop = useCallback((app: InstalledCustomApp) => {
     const iconId = toCustomAppIconId(app.id);

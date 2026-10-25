@@ -413,14 +413,13 @@ export function ListenTogetherEntry({ besideAddButton = false }: { besideAddButt
                 type="button"
                 className="lt-entry"
                 data-active={active ? "" : undefined}
+                aria-label={active ? `和${activeName || "TA"}一起听中` : "一起听"}
                 data-beside={besideAddButton || undefined}
                 onClick={() => active ? window.dispatchEvent(new CustomEvent(LISTEN_TOGETHER_OPEN_EVENT, { detail: {} })) : setPicking(true)}
             >
                 {active ? (
                     <>
                         <span className="lt-faces lt-entry-faces"><Face src={activeMe?.avatarUrl} me /><Face src={activeChar?.avatar} /></span>
-                        <span className="lt-entry-text">一起听中<small>{activeName || "TA"}</small></span>
-                        <span className="lt-queue-bars"><i /><i /><i /></span>
                     </>
                 ) : (
                     <>

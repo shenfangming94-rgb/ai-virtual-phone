@@ -6500,7 +6500,7 @@ export function ChatRoom({ session, onBack, onDeleted }: ChatRoomProps) {
                                     className="ui-textarea chat-retry-input"
                                     value={retryHint}
                                     onChange={e => setRetryHint(e.target.value)}
-                                    placeholder="想让他往哪个方向改？只用在这一次，不会进聊天记录。不写就直接重 roll"
+                                    placeholder="想让他往哪个方向改？（只用这一次）"
                                     maxLength={300}
                                     autoFocus
                                 />
@@ -6518,7 +6518,7 @@ export function ChatRoom({ session, onBack, onDeleted }: ChatRoomProps) {
                             </div>
                             <div className="modal-footer" data-ui="modal-footer">
                                 <button className="ui-btn ui-btn-ghost" onClick={() => setRetryTarget(null)}>取消</button>
-                                <button className="ui-btn ui-btn-outline" onClick={() => { const id = retryTarget; setRetryTarget(null); void handleRetry(id); }}>直接重 roll</button>
+                                <button className="ui-btn ui-btn-outline" onClick={() => { const id = retryTarget; setRetryTarget(null); void handleRetry(id); }}>直接重roll</button>
                                 <button className="ui-btn ui-btn-action" disabled={!retryHint.trim()} onClick={() => { const id = retryTarget; const h = retryHint; setRetryTarget(null); void handleRetry(id, h); }}>按这个改</button>
                             </div>
                         </div>

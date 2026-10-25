@@ -5,7 +5,9 @@ import { loadCharacters } from "./character-storage";
 import {
     type ChatMessage,
     type ChatSession,
+    CHAT_REQUEST_REPLY_EVENT,
     createOrGetSession,
+    loadChatMessages,
     loadChatSessions,
     pushChatMessage,
 } from "./chat-storage";
@@ -431,15 +433,35 @@ async function maybeInvite() {
     }
 }
 
+/** 离上次聊天多久 + 最近几句，邀请时让他视情况开口 */
+function chatContext(charId: string): { gap: string; lines: string[] } {
+    const session = createOrGetSession(charId);
+    const user = userName(charId);
+    const msgs = loadChatMessages(session.id, 40).filter(m => m.role !== "system" && (m.content || "").trim());
+    const last = msgs[msgs.length - 1];
+    if (!last) return { gap: "你们还没怎么聊过天", lines: [] };
+    const min = Math.max(0, Math.round((Date.now() - new Date(last.createdAt).getTime()) / 60_000));
+    const gap = min < 3 ? "你们正在聊天" : min < 60 ? `距离你们上次说话过了 ${min} 分钟` : min < 48 * 60 ? `距离你们上次说话过了大约 ${Math.round(min / 60)} 小时` : `你们已经 ${Math.round(min / 1440)} 天没说话了`;
+    const lines = msgs.slice(-10).map(m => `${m.role === "user" ? user : "你"}：${(m.content || "").replace(/\s+/g, " ").slice(0, 120)}`);
+    return { gap, lines };
+}
+
 export async function sendInvite(charId: string) {
     const user = userName(charId);
+    const ctx = chatContext(charId);
     const raw = await charGenerate(charId, [
-        `你想邀请${user}用音乐 App 的「一起听」和你一起听一首歌。按你的心情和你们最近聊的事，挑一首真实存在的歌，再写一句邀请她的话（口吻按你平时跟她说话的样子）。`,
-        "只输出：",
+        `你想邀请${user}用音乐 App 的「一起听」和你一起听一首歌。`,
+        `现在是 ${new Date().toLocaleString("zh-CN", { hour12: false })}，${ctx.gap}。`,
+        ctx.lines.length ? `你们最近的聊天：\n${ctx.lines.join("\n")}` : "",
+        "按离上次聊天的时间和刚才聊的情况，像真人一样判断现在适不适合邀请、怎么开口：正在聊就顺着当下的气氛，隔得久就当作重新找她说话；话题和情绪不对就不邀请。",
+        "挑一首真实存在的歌，可以和聊的内容有关，也可以只是你此刻的心情。",
+        "不邀请就只输出：不邀请",
+        "邀请就只输出：",
         "===邀请===",
         "歌：歌名｜歌手",
-        "话：",
-    ].join("\n"));
+        "话：卡片上写给她的一句话（口吻按你平时跟她说话的样子）",
+    ].filter(Boolean).join("\n"));
+    if (/^\s*不邀请/.test(raw)) return;
     const songLine = raw.match(/歌[：:]\s*(.+)/)?.[1] || "";
     const [title, artist] = songLine.split(/[｜|]/).map(x => x.trim().replace(/[《》]/g, ""));
     if (!title) return;
@@ -466,7 +488,16 @@ export async function sendInvite(charId: string) {
             noxCharId: charId,
         } as ChatMessage["mediaData"],
     });
+    // 发完卡片让他在聊天里接话
+    pushChatMessage({
+        sessionId: chat.id,
+        role: "system",
+        mediaType: "system_instruction",
+        mediaData: { compactSystemInstruction: true, shortTermMemoryEvent: true },
+        content: `<hidden-system>音乐一起听：你刚给${user}发了一起听邀请卡片，想和她一起听《${title}》${artist ? `- ${artist}` : ""}${words ? `，卡片上写着：${words}` : ""}。${ctx.gap}。接着在聊天里自然地说一两句，按离上次聊天的时间和刚才聊的情况决定怎么开口，不要重复卡片上的话。</hidden-system>`,
+    });
     window.dispatchEvent(new CustomEvent("chat-messages-updated", { detail: { sessionId: chat.id } }));
+    window.setTimeout(() => window.dispatchEvent(new CustomEvent(CHAT_REQUEST_REPLY_EVENT, { detail: { sessionId: chat.id } })), 0);
     updateLT(st => { mutChar(st, charId).lastInviteAt = new Date().toISOString(); });
 }
 

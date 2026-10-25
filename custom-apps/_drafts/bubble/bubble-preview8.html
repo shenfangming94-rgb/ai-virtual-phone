@@ -1,0 +1,152 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<link href="https://fonts.googleapis.com/css2?family=Dancing+Script:wght@500&display=swap" rel="stylesheet">
+<style>
+:root{--ink:#1d1d22;--sub:#A0A6AE;--line:#EDEFF2;--mist:#F5F6F8;--pk:#F4A7B9;--pk2:#FFD3DE;--org:#FF8A1F}
+*{box-sizing:border-box}
+body{margin:0;padding:28px 24px;background:#DDDFE3;font-family:-apple-system,"PingFang SC",sans-serif;color:var(--ink);display:flex;gap:26px;align-items:flex-start}
+.col{display:flex;flex-direction:column;align-items:center;gap:12px}
+.lab{font-size:18px;font-weight:800;color:#3a3d44}
+.lab small{display:block;font-size:13px;font-weight:600;color:#6b7078;text-align:center;margin-top:4px}
+.phone{width:375px;height:812px;background:#fff;border-radius:36px;overflow:hidden;display:flex;flex-direction:column;box-shadow:0 10px 30px rgba(0,0,0,.12);position:relative}
+.status{height:50px;display:flex;align-items:center;padding:0 28px;font-size:15px;font-weight:700;position:relative;z-index:2;background:rgba(255,255,255,.85)}
+.capsule{position:absolute;top:58px;right:12px;width:66px;height:30px;border-radius:15px;background:#fff;box-shadow:0 1px 6px rgba(0,0,0,.1);display:flex;align-items:center;justify-content:space-around;font-size:12px;color:#333;z-index:3}
+.top{height:92px;padding-top:40px;position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:2;background:rgba(255,255,255,.85);backdrop-filter:blur(6px)}
+.top .back{position:absolute;left:16px;top:52px;width:12px;height:12px;border-left:2.2px solid #222;border-bottom:2.2px solid #222;transform:rotate(45deg)}
+.top b{font-size:14px;display:flex;align-items:center;gap:5px}
+.top b i{width:6px;height:6px;border-right:1.6px solid var(--sub);border-bottom:1.6px solid var(--sub);transform:rotate(45deg);margin-top:-4px}
+.top span{font-size:9.5px;color:var(--sub);margin-top:2px}
+
+/* 手账背景 */
+.journal{flex:1;position:relative;overflow:hidden;background:#FCFAFB}
+.journal::before{content:"";position:absolute;inset:0;background:
+  radial-gradient(circle at 12% 18%,rgba(244,167,185,.10),transparent 30%),
+  radial-gradient(circle at 85% 70%,rgba(244,167,185,.12),transparent 32%);}
+.plaid{position:absolute;opacity:.55;background:
+  repeating-linear-gradient(0deg,rgba(244,167,185,.35) 0 6px,transparent 6px 14px),
+  repeating-linear-gradient(90deg,rgba(244,167,185,.35) 0 6px,transparent 6px 14px),#fff;border-radius:3px}
+.tape{position:absolute;height:16px;background:repeating-linear-gradient(45deg,rgba(244,167,185,.55) 0 4px,rgba(255,255,255,.6) 4px 8px);opacity:.8}
+.dots{position:absolute;width:60px;height:40px;background-image:radial-gradient(#cfcfd6 1px,transparent 1.3px);background-size:6px 6px;opacity:.7}
+.script{position:absolute;font-family:"Dancing Script",cursive;color:#b7b2b8;font-size:15px;line-height:1.05;transform:rotate(-12deg)}
+.deco{position:absolute;color:#E9E3E7}
+.deco svg{display:block}
+.msgs{position:relative;z-index:1;height:100%;padding:10px 12px;overflow:hidden}
+.chip{display:flex;justify-content:center;margin:2px 0 10px}.chip span{background:rgba(255,255,255,.8);color:#7b7f88;font-size:9.5px;font-weight:600;padding:4px 11px;border-radius:999px}
+
+/* 粉丝（左） */
+.fan{display:flex;gap:8px;margin-bottom:10px;align-items:flex-start}
+.fa{width:26px;height:26px;border-radius:50%;flex:none;border:2px solid #fff;box-shadow:0 0 0 1px #eee}
+.fn{font-size:9.5px;color:#9a9ca3;font-weight:600;margin:0 0 3px 2px}
+.card{background:rgba(255,255,255,.88);border-radius:6px;padding:8px 11px;font-size:12px;line-height:1.55;max-width:240px;box-shadow:0 1px 2px rgba(0,0,0,.02)}
+.card .tr{color:#F08AA4;border-top:1px dashed #F3D6DE;margin-top:6px;padding-top:6px}
+.stamp{font-size:8.5px;color:#B3B8BF;align-self:flex-end;padding-bottom:2px}
+.him .fa{width:30px;height:30px;border:2px solid var(--org);box-shadow:none;background:linear-gradient(135deg,#8a7a6a,#4b4038)}
+.him .fn{color:#3a3d44;font-weight:700;display:flex;align-items:center;gap:5px;font-size:10px}
+.him .fn small{font-size:7.5px;font-weight:600;color:#C4A3AD;background:rgba(255,241,245,.9);border-radius:4px;padding:1px 5px}
+
+/* 我（右） */
+.mine{display:flex;justify-content:flex-end;align-items:flex-start;gap:6px;margin:4px 0 10px}
+.mine .stack{display:flex;flex-direction:column;align-items:flex-end;gap:4px;max-width:72%}
+.mine .stamp{align-self:flex-end}
+.mwho{display:flex;align-items:center;gap:5px;font-size:10px;font-weight:700;margin:2px 2px 1px 0}
+.art{font-style:normal;font-size:7.5px;font-weight:800;color:#fff;background:var(--org);padding:2px 5px;border-radius:3px;letter-spacing:.3px}
+.mine .bub{background:#F7AFC0;color:#fff;border-radius:16px;padding:7px 12px;font-size:12px;line-height:1.5;box-shadow:0 2px 6px rgba(244,167,185,.35)}
+.mine .me{width:30px;height:30px;border-radius:50%;flex:none;border:2px solid #fff;box-shadow:0 0 0 1.5px var(--pk);background:linear-gradient(135deg,#f6d3dc,#c98a9c)}
+.mine .quote{background:rgba(255,255,255,.28);border-left:2px solid #fff;border-radius:4px;padding:3px 7px;margin:0 -2px 5px;font-size:10.5px;color:#fff8fa}
+.hearts{position:absolute;right:12px;top:6px;z-index:2;background:#fff;border-radius:999px;padding:4px 10px;font-size:11px;font-weight:700;box-shadow:0 1px 5px rgba(0,0,0,.08)}
+
+.tray{display:flex;gap:7px;padding:9px 10px 8px;background:#fff;position:relative;z-index:2}
+.tchip{flex:none;display:flex;align-items:center;gap:4px;background:var(--mist);border-radius:999px;padding:6px 10px;font-size:11px;font-weight:700}
+.tchip svg{width:12px;height:12px;stroke:#222;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.composer{display:flex;gap:7px;align-items:center;padding:9px 11px 24px;border-top:1px solid var(--line);background:#fff;position:relative;z-index:2}
+.x{width:32px;height:32px;border-radius:50%;background:var(--mist);display:grid;place-items:center;font-size:15px;color:#444}
+.ta{flex:1;background:var(--mist);border-radius:19px;padding:8px 12px;font-size:12px;color:var(--sub)}
+.send{width:34px;height:34px;border-radius:50%;background:#F7C4D2;display:grid;place-items:center}
+
+/* 装扮面板 */
+.mask{position:absolute;inset:0;background:rgba(10,11,14,.3);z-index:4}
+.sheet{position:absolute;left:0;right:0;bottom:0;background:#fff;border-radius:22px 22px 0 0;padding:10px 16px 26px;z-index:5}
+.grab{width:38px;height:4px;border-radius:3px;background:#DDE0E5;margin:0 auto 12px}
+.sh-h{font-size:13px;font-weight:800;margin-bottom:10px}
+.themes{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.th{border-radius:12px;overflow:hidden;border:2px solid transparent}
+.th.on{border-color:var(--pk)}
+.th .pv{height:118px;position:relative;overflow:hidden}
+.th .nm{font-size:10.5px;font-weight:700;text-align:center;padding:6px 0 2px}
+.th .nm small{display:block;font-size:9px;color:var(--sub);font-weight:500}
+.pv .b1,.pv .b2,.pv .b3{position:absolute;height:13px;border-radius:7px}
+.row{display:flex;align-items:center;justify-content:space-between;padding:12px 2px;border-top:1px solid var(--line);margin-top:12px;font-size:12px;font-weight:600}
+.row span{color:var(--sub);font-weight:500;font-size:11px}
+.slider{height:4px;border-radius:2px;background:#eee;position:relative;width:130px}.slider i{position:absolute;left:0;top:0;bottom:0;width:62%;background:var(--pk);border-radius:2px}.slider b{position:absolute;left:62%;top:50%;width:14px;height:14px;border-radius:50%;background:#fff;box-shadow:0 1px 4px rgba(0,0,0,.2);transform:translate(-50%,-50%)}
+</style></head><body>
+
+<template id="journalBg">
+ <div class="plaid" style="left:-20px;top:120px;width:90px;height:70px;transform:rotate(-6deg)"></div>
+ <div class="plaid" style="right:-30px;top:330px;width:110px;height:80px;transform:rotate(8deg)"></div>
+ <div class="plaid" style="left:-10px;bottom:40px;width:80px;height:90px;transform:rotate(4deg)"></div>
+ <div class="tape" style="left:20px;top:300px;width:70px;transform:rotate(-14deg)"></div>
+ <div class="tape" style="right:30px;top:80px;width:60px;transform:rotate(18deg)"></div>
+ <div class="dots" style="left:120px;top:30px"></div><div class="dots" style="right:40px;bottom:120px"></div>
+ <div class="script" style="left:14px;top:60px">a little<br>bright<br>today</div>
+ <div class="script" style="right:20px;top:220px;transform:rotate(-18deg)">stars in my<br>heart ♡</div>
+ <div class="script" style="right:16px;top:470px;transform:rotate(-10deg)">keep<br>going ♡</div>
+ <div class="script" style="left:30px;bottom:10px;transform:rotate(-14deg)">good things<br>await ♡</div>
+ <div class="deco" style="right:40px;top:130px"><svg width="34" height="34" viewBox="0 0 24 24" fill="#ECE6EA"><circle cx="9" cy="9" r="4"/><circle cx="15" cy="9" r="4"/><circle cx="9" cy="15" r="4"/><circle cx="15" cy="15" r="4"/></svg></div>
+ <div class="deco" style="left:18px;top:250px"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#E6D3DA" stroke-width="1.4"><path d="M12 3l2.6 5.6 6 .7-4.5 4.1 1.2 6L12 16.5 6.7 19.4l1.2-6L3.4 9.3l6-.7z"/></svg></div>
+ <div class="deco" style="right:22px;top:400px"><svg width="54" height="40" viewBox="0 0 60 40" fill="none" stroke="#EBC9D3" stroke-width="1.6"><path d="M30 20c-8-12-24-12-22 0s16 2 22 0zM30 20c8-12 24-12 22 0s-16 2-22 0zM30 20l-8 18M30 20l8 18"/></svg></div>
+ <div class="deco" style="right:120px;top:560px"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#E6D3DA" stroke-width="1.4"><path d="M12 3l2.6 5.6 6 .7-4.5 4.1 1.2 6L12 16.5 6.7 19.4l1.2-6L3.4 9.3l6-.7z"/></svg></div>
+ <div class="deco" style="left:150px;top:470px"><svg width="26" height="26" viewBox="0 0 24 24" fill="#EEE8EC"><circle cx="9" cy="9" r="4"/><circle cx="15" cy="9" r="4"/><circle cx="9" cy="15" r="4"/><circle cx="15" cy="15" r="4"/></svg></div>
+</template>
+
+<div class="col"><div class="lab">我的泡泡房 · 粉色手账<small>照你那张的感觉：格纹、胶带、四叶草、手写英文</small></div>
+<div class="phone">
+ <div class="status">22:22</div><div class="capsule">··· ｜ ◯</div>
+ <div class="top"><div class="back"></div><b>QINGYI<i></i></b><span>我的泡泡房 · 订阅 12.8 万</span></div>
+ <div class="journal bgA">
+  <div class="msgs">
+   <div class="chip"><span>2026年10月25日 星期日</span></div>
+   <div class="mine"><div class="stamp">23:10</div><div class="stack"><div class="mwho"><em class="art">ARTIST</em>QINGYI</div><div class="bub">今天录音录到现在 嗓子哑了</div><div class="bub">你们在干嘛</div></div><div class="me"></div></div>
+   <div class="fan"><div class="fa" style="background:#FFD6E0"></div><div><div class="fn">清仪的小狗</div><div class="card">在等你！！！</div></div></div>
+   <div class="fan"><div class="fa" style="background:#D6E9FF"></div><div><div class="fn">sunny_0412</div><div class="card">언니 꿀물 마셔요ㅠㅠ<div class="tr">姐姐快喝蜂蜜水呜呜</div></div></div></div>
+   <div class="fan him"><div class="fa"></div><div><div class="fn">权时焕<small>粉丝看不到是他</small></div><div class="card">少说话 早点睡</div></div><div class="stamp">23:12</div></div>
+   <div class="mine"><div class="stamp">23:14</div><div class="stack"><div class="mwho"><em class="art">ARTIST</em>QINGYI</div><div class="bub"><div class="quote">少说话 早点睡</div>知道啦 这位粉丝管得好多</div></div><div class="me"></div></div>
+   <div class="fan"><div class="fa" style="background:#FFE9C7"></div><div><div class="fn">一只小土豆</div><div class="card">？？？谁啊 被翻牌了</div></div></div>
+   <div class="fan"><div class="fa" style="background:#E7DDFB"></div><div><div class="fn">晚风</div><div class="card">这语气怎么像家属</div></div></div>
+  </div>
+ </div>
+ <div class="tray">
+  <div class="tchip"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="3"/><circle cx="9" cy="10" r="1.6"/><path d="M21 16l-5-5-8 8"/></svg>照片</div>
+  <div class="tchip"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M8.5 14.5a4.5 4.5 0 0 0 7 0M9 9.5h.01M15 9.5h.01"/></svg>表情</div>
+  <div class="tchip"><svg viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>语音</div>
+  <div class="tchip"><svg viewBox="0 0 24 24"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z"/></svg>让粉丝回一波</div>
+ </div>
+ <div class="composer"><div class="x">✕</div><div class="ta">发个泡泡…</div><div class="send"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></div></div>
+</div></div>
+
+<div class="col"><div class="lab">装扮<small>右上角 ··· → 装扮：选一套，或者上传自己的背景图</small></div>
+<div class="phone">
+ <div class="status">22:22</div><div class="capsule">··· ｜ ◯</div>
+ <div class="top"><div class="back"></div><b>QINGYI<i></i></b><span>我的泡泡房 · 订阅 12.8 万</span></div>
+ <div class="journal bgB"><div class="msgs">
+   <div class="chip"><span>2026年10月25日 星期日</span></div>
+   <div class="mine"><div class="stamp">23:10</div><div class="stack"><div class="mwho"><em class="art">ARTIST</em>QINGYI</div><div class="bub">今天录音录到现在 嗓子哑了</div></div><div class="me"></div></div>
+ </div></div>
+ <div class="mask"></div>
+ <div class="sheet"><div class="grab"></div>
+  <div class="sh-h">泡泡房装扮</div>
+  <div class="themes">
+   <div class="th"><div class="pv" style="background:#FAF8FD"><i class="b1" style="left:10px;top:20px;width:60px;background:#EDEDF2"></i><i class="b2" style="right:10px;top:46px;width:50px;background:#FFE1E8"></i><i class="b3" style="left:10px;top:72px;width:70px;background:#EDEDF2"></i></div><div class="nm">简洁<small>默认</small></div></div>
+   <div class="th on"><div class="pv bgC" style="background:#FCFAFB"><i class="b1" style="left:10px;top:20px;width:60px;background:#fff;border-radius:3px"></i><i class="b2" style="right:10px;top:46px;width:50px;background:#F7AFC0"></i><i class="b3" style="left:10px;top:72px;width:70px;background:#fff;border-radius:3px"></i></div><div class="nm">粉色手账<small>使用中</small></div></div>
+   <div class="th"><div class="pv" style="background:#F2F2F4;display:grid;place-items:center;color:#9a9ca3;font-size:22px">＋</div><div class="nm">上传背景图<small>相册里选一张</small></div></div>
+  </div>
+  <div class="row">背景图透明度<div class="slider"><i></i><b></b></div></div>
+  <div class="row" style="margin-top:0">我的气泡颜色<span><i style="display:inline-block;width:14px;height:14px;border-radius:50%;background:#F7AFC0;vertical-align:-3px;margin-right:6px;box-shadow:0 0 0 2px #fff,0 0 0 3px #F7AFC0"></i><i style="display:inline-block;width:14px;height:14px;border-radius:50%;background:#FFE1E8;vertical-align:-3px;margin-right:6px"></i><i style="display:inline-block;width:14px;height:14px;border-radius:50%;background:#B9A8F0;vertical-align:-3px;margin-right:6px"></i><i style="display:inline-block;width:14px;height:14px;border-radius:50%;background:#9FD3C7;vertical-align:-3px"></i></span></div>
+ </div>
+</div></div>
+
+<script>
+const t=document.getElementById("journalBg");
+document.querySelectorAll(".bgA,.bgB").forEach(el=>el.insertBefore(t.content.cloneNode(true),el.firstChild));
+const c=document.querySelector(".bgC");const mini=t.content.cloneNode(true);const w=document.createElement("div");w.style.cssText="position:absolute;inset:0;transform:scale(.32);transform-origin:0 0;width:375px;height:370px";w.appendChild(mini);c.insertBefore(w,c.firstChild);
+</script>
+</body></html>

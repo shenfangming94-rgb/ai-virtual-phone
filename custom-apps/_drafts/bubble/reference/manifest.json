@@ -1,0 +1,74 @@
+{
+  "id": "bubble.fanmsg",
+  "name": "bubble",
+  "version": "1.0.0",
+  "sdkVersion": "1.0",
+  "author": "凌林",
+  "description": "仿韩娱私信 app bubble：角色像艺人一样，在只有你们两个人的房间里发短消息、照片和语音。角色列表直接读取小手机里的角色，可随时切换；支持关系状态、身份识别与私密邀请。",
+  "icon": "icon.png",
+  "entry": "index 8.html",
+  "permissions": [
+    "app.data.read",
+    "app.data.write",
+    "characters.read",
+    "user.profile.read",
+    "ai.generate",
+    "media.pick",
+    "notifications.write",
+    "chat.sendCard",
+    "chat.write",
+    "media.save",
+    "voice.tts",
+    "ai.generateImage",
+    "chat.requestReply",
+    "chat.read"
+  ],
+  "resources": {
+    "presets": [
+      "presets.json"
+    ],
+    "regexes": [],
+    "worldBooks": [],
+    "bindings": [],
+    "tools": [],
+    "voices": [],
+    "assets": []
+  },
+  "primaryTags": [],
+  "extensions": {
+    "chat": {
+      "plusActions": [
+        {
+          "id": "open-bubble",
+          "label": "打开 bubble",
+          "description": "从聊天室直接打开 bubble，并停在当前聊天对象的泡泡房。",
+          "entry": "open-bubble",
+          "presentation": "fullscreen",
+          "tags": []
+        }
+      ]
+    }
+  },
+  "chatPlusActions": [
+    {
+      "id": "open-bubble",
+      "label": "打开 bubble",
+      "description": "从聊天室直接打开 bubble，并停在当前聊天对象的泡泡房。",
+      "entry": "open-bubble",
+      "presentation": "fullscreen",
+      "tags": []
+    }
+  ],
+  "chatExtensions": {
+    "plusActions": [
+      {
+        "id": "open-bubble",
+        "label": "打开 bubble",
+        "description": "从聊天室直接打开 bubble，并停在当前聊天对象的泡泡房。",
+        "entry": "open-bubble",
+        "presentation": "fullscreen",
+        "tags": []
+      }
+    ]
+  }
+}

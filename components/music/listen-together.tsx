@@ -387,7 +387,9 @@ export function ListenTogetherEntry({ besideAddButton = false }: { besideAddButt
     const store = useLT();
     const [picking, setPicking] = useState(false);
     const active = store.active;
-    const activeName = active ? loadCharacters().find(ch => ch.id === active.charId)?.name : "";
+    const activeChar = active ? loadCharacters().find(ch => ch.id === active.charId) : undefined;
+    const activeName = activeChar?.name || "";
+    const activeMe = active ? resolveUserIdentity(active.charId, "chat") : null;
     const chars = useMemo(() => {
         if (!picking) return [];
         const matches = createIdentityMatcher();
@@ -414,8 +416,18 @@ export function ListenTogetherEntry({ besideAddButton = false }: { besideAddButt
                 data-beside={besideAddButton || undefined}
                 onClick={() => active ? window.dispatchEvent(new CustomEvent(LISTEN_TOGETHER_OPEN_EVENT, { detail: {} })) : setPicking(true)}
             >
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round"><path d="M3 14v-2a9 9 0 0 1 18 0v2" /><path d="M21 15a2 2 0 0 1-2 2h-1v-6h1a2 2 0 0 1 2 2zM3 15a2 2 0 0 0 2 2h1v-6H5a2 2 0 0 0-2 2z" /></svg>
-                {active ? `和${activeName || "TA"}一起听中` : "一起听"}
+                {active ? (
+                    <>
+                        <span className="lt-faces lt-entry-faces"><Face src={activeMe?.avatarUrl} me /><Face src={activeChar?.avatar} /></span>
+                        <span className="lt-entry-text">一起听中<small>{activeName || "TA"}</small></span>
+                        <span className="lt-queue-bars"><i /><i /><i /></span>
+                    </>
+                ) : (
+                    <>
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round"><path d="M3 14v-2a9 9 0 0 1 18 0v2" /><path d="M21 15a2 2 0 0 1-2 2h-1v-6h1a2 2 0 0 1 2 2zM3 15a2 2 0 0 0 2 2h1v-6H5a2 2 0 0 0-2 2z" /></svg>
+                        一起听
+                    </>
+                )}
             </button>
             {picking ? (
                 <div className="lt-pick-mask" onClick={() => setPicking(false)}>

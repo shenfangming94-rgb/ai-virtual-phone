@@ -101,3 +101,49 @@ export function switchReplyVersion(sessionId: string, target: number): boolean {
     saveAll();
     return true;
 }
+
+// ── 重 roll 的修正指令：只这一次发给 AI，不进聊天记录；最近用过的记几条方便再点 ──
+
+const RETRY_HINTS_KEY = "nox_retry_hints_v1";
+
+export function loadRetryHints(): string[] {
+    try {
+        const raw = JSON.parse(localStorage.getItem(RETRY_HINTS_KEY) || "[]");
+        return Array.isArray(raw) ? raw.filter((x): x is string => typeof x === "string").slice(0, 8) : [];
+    } catch {
+        return [];
+    }
+}
+
+export function rememberRetryHint(hint: string): void {
+    const text = hint.trim();
+    if (!text) return;
+    try {
+        localStorage.setItem(RETRY_HINTS_KEY, JSON.stringify([text, ...loadRetryHints().filter(x => x !== text)].slice(0, 8)));
+    } catch {
+        // ignore
+    }
+}
+
+export function forgetRetryHint(hint: string): void {
+    try {
+        localStorage.setItem(RETRY_HINTS_KEY, JSON.stringify(loadRetryHints().filter(x => x !== hint)));
+    } catch {
+        // ignore
+    }
+}
+
+/** 拼在这次重 roll 的历史末尾的隐藏指令 */
+export function buildRetryHintMessage(sessionId: string, hint: string, after?: string): import("./chat-storage").ChatMessage {
+    const base = after ? new Date(after).getTime() + 1 : Date.now();
+    return {
+        id: `retry_hint_${Date.now().toString(36)}`,
+        sessionId,
+        role: "system",
+        content: `<hidden-system>重新回复：用户对你刚才那版回复不满意，这次回复按她的修正要求来：${hint.trim()}。直接按要求重新回复，不要在回复里提到这条要求，也不要提「重新回复」。</hidden-system>`,
+        status: "sent",
+        createdAt: new Date(Math.min(base, Date.now())).toISOString(),
+        mediaType: "system_instruction",
+        mediaData: { compactSystemInstruction: true },
+    } as import("./chat-storage").ChatMessage;
+}

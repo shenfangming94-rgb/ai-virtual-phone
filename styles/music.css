@@ -5236,3 +5236,10 @@
 @keyframes lt-bars { 0%, 100% { height: 4px; } 50% { height: 12px; } }
 /* 本地音乐页右下角有「添加本地音乐」加号，一起听入口让到它左边 */
 .lt-entry[data-beside] { right: 80px; }
+/* 一起听中：两个人的头像，和一起听界面顶上一样 */
+.lt-entry[data-active] { padding: 5px 14px 5px 6px; gap: 8px; }
+.lt-entry-faces .lt-face { width: 30px; height: 30px; border-width: 1.5px; }
+.lt-entry-faces .lt-face + .lt-face { margin-left: -9px; }
+.lt-entry-text { display: flex; flex-direction: column; align-items: flex-start; line-height: 1.2; font-size: 12.5px; }
+.lt-entry-text small { font-size: 10.5px; font-weight: 500; color: rgba(244, 238, 241, 0.65); max-width: 7em; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.lt-entry .lt-queue-bars { color: rgb(var(--lt-rgb, 226, 115, 143)); }

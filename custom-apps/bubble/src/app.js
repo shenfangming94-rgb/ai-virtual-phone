@@ -89,8 +89,10 @@
   const roomAvatar = r => (r && r.avatar) || (charById(r && r.charId) || {}).avatar || "";
   const subDays = r => Math.max(1, Math.floor((Date.now() - new Date(r.createdAt || Date.now()).getTime()) / 86400e3) + 1);
   function remember(charId, summary) {
-    if (!charId || !api.memory || !api.memory.addTimeline) return;
-    api.memory.addTimeline({ characterId: charId, appLabel: "bubble", detail: "bubble", summary, appEventId: uid("ev") }).catch(e => console.warn(e));
+    if (!charId || !api.memory || !api.memory.addTimeline) return "";
+    const ev = uid("ev");
+    api.memory.addTimeline({ characterId: charId, appLabel: "bubble", detail: "bubble", summary, appEventId: ev }).catch(e => console.warn(e));
+    return ev;
   }
 
   // ───────────────────────── 提示 ─────────────────────────
@@ -195,6 +197,7 @@
       mixed.length ? `粉丝刚发来的回复（随便挑了几条）：\n${mixed.map(t => `- ${t}`).join("\n")}` : "",
       `【恋爱】${LOVE_RULE(room.charId, herName())}`,
       `【粉丝】${FAN_MOOD}`, NO_HER(),
+      opts.hint ? `【这次重写】上一版不满意，这次照这个要求写：${opts.hint}` : "",
       (() => { const pb = S.plaza.find(x => x.board === room.charId); const hotP = pb ? pb.posts.filter(p => p.by !== "him").slice(0, 3) : []; return hotP.length && Math.random() < 0.3 ? `【粉丝广场】你偶尔会看一眼自己的粉丝广场，最近在聊：${hotP.map(p => `「${p.text.slice(0, 40)}」`).join("")}。一般明星不太当回事，泡泡里不用提；除非事情闹得很大，才可能顺口回应一下。` : ""; })(),
       opts.direction ? `【这次的情况】${opts.direction}` : "",
       "【这次】发 1~4 条新泡泡。像真爱豆发泡泡：短、口语、分享此刻在干嘛和心情，偶尔引用某条粉丝回复再回它。不要每条都引用，不要写成公告。偶尔可以配一张照片，大多数时候不配。",
@@ -215,8 +218,11 @@
     bubbles.forEach((b, i) => {
       room.items.push({ id: uid("b"), by: "char", text: b.text.slice(0, 300), ...(b.photo ? { photo: b.photo } : {}), quote: none(b.quote) ? "" : b.quote.slice(0, 120), at: new Date(base + i * 1000).toISOString(), ...(i === bubbles.length - 1 ? { fans: fans.map(f => ({ t: f.t, tr: f.tr })), fanN: rand(120, 980) } : {}) });
     });
+    const evSum = `你在 bubble（粉丝通讯 app）上以爱豆「${name}」的身份给粉丝发了泡泡：${bubbles.map(b => `「${b.text}${b.photo ? `［照片：${b.photo.desc}］` : ""}」`).join("")}。${hers.length ? `${herName()}用粉丝账号回过你：${hers.map(t => `「${t}」`).join("")}${room.known ? "（你知道是她）" : "（你不知道是她）"}。` : ""}`;
+    const ev = remember(room.charId, evSum);
+    const batch = uid("bt");
+    room.items.slice(-bubbles.length).forEach(it => { it.ev = ev; it.evChar = room.charId; it.evSum = evSum; it.batch = batch; it.ropt = { sent: hers, wantPhoto: !!opts.wantPhoto }; });
     room.lastAt = nowIso(); saveRoom(room);
-    remember(room.charId, `你在 bubble（粉丝通讯 app）上以爱豆「${name}」的身份给粉丝发了泡泡：${bubbles.map(b => `「${b.text}${b.photo ? `［照片：${b.photo.desc}］` : ""}」`).join("")}。${hers.length ? `${herName()}用粉丝账号回过你：${hers.map(t => `「${t}」`).join("")}${room.known ? "（你知道是她）" : "（你不知道是她）"}。` : ""}`);
   }
 
   // 我的泡泡房：粉丝回一波，偷偷订阅的他可能混进来
@@ -245,7 +251,12 @@
       const mineReply = field(blockOf(raw, "你的回复"), "内容") || blockOf(raw, "你的回复");
       const fans = parseFans(blockOf(raw, "粉丝回复"));
       pushFans(room, fans, none(mineReply) ? null : { charId: him, text: mineReply.slice(0, 200) });
-      if (!none(mineReply)) remember(him, `你用粉丝小号偷偷回了${herName()}的泡泡（bubble，她是爱豆「${myStage()}」）：她发的是${mine.slice(-2).map(i => `「${i.text}」`).join("")}，你回「${mineReply}」。别的粉丝不知道是你。`);
+      if (!none(mineReply)) {
+        const evSum = `你用粉丝小号偷偷回了${herName()}的泡泡（bubble，她是爱豆「${myStage()}」）：她发的是${mine.slice(-2).map(i => `「${i.text}」`).join("")}，你回「${mineReply.slice(0, 200)}」。别的粉丝不知道是你。`;
+        const ev = remember(him, evSum);
+        const hi = [...room.items].reverse().find(i => i.by === "him" && i.charId === him);
+        if (hi) { hi.ev = ev; hi.evChar = him; hi.evSum = evSum; saveRoom(room); }
+      }
       else remember(him, `你刷到了${herName()}在 bubble 发的泡泡${mine.slice(-2).map(i => `「${i.text}」`).join("")}，看了没回。`);
       if (hc) S.lastHimName = hc.name;
     } else {
@@ -506,9 +517,9 @@
   /** 一条泡泡：照片单独一个，说的话另起一个气泡；时间跟着这一组第一条 */
   function lineHtml(it, stamp) {
     const st = stamp ? `<span class="stamp">${hm(it.at)}</span>` : "";
-    if (it.sticker) return `<div class="line"><div class="bub ph-only">${stickerHtml(it.sticker)}</div>${st}</div>`;
-    const photo = it.photo ? `<div class="line"><div class="bub ph-only">${bubInner({ photo: it.photo, id: it.id })}</div>${st}</div>` : "";
-    const words = it.text || (it.quote && !it.photo) ? `<div class="line"><div class="bub">${bubInner({ text: it.text, quote: it.quote })}</div>${it.photo ? "" : st}</div>` : "";
+    if (it.sticker) return `<div class="line"><div class="bub ph-only" data-item="${it.id}">${stickerHtml(it.sticker)}</div>${st}</div>`;
+    const photo = it.photo ? `<div class="line"><div class="bub ph-only" data-item="${it.id}">${bubInner({ photo: it.photo, id: it.id })}</div>${st}</div>` : "";
+    const words = it.text || (it.quote && !it.photo) ? `<div class="line"><div class="bub" data-item="${it.id}">${bubInner({ text: it.text, quote: it.quote })}</div>${it.photo ? "" : st}</div>` : "";
     return photo + words;
   }
   function stickerHtml(st) {
@@ -549,6 +560,55 @@
       it.photo.ref = await storeDataUrl(r.dataUrl);
     } catch (e) { toast(`生图失败：${(e && e.message) || e}`.slice(0, 60)); }
     finally { delete it.photo.busy; saveRoom(room); render(); }
+  }
+  /** 记忆跟着改：同一批共用一个事件，先删旧的，有剩下的话按新内容重记 */
+  function refreshMemory(room, it, oldPiece, newPiece) {
+    if (!it.ev) return false;
+    const same = room.items.filter(i => i.ev === it.ev);
+    if (api.memory && api.memory.deleteTimeline) api.memory.deleteTimeline({ characterId: it.evChar, appEventId: it.ev }).catch(e => console.warn(e));
+    let sum = it.evSum || "";
+    if (oldPiece) sum = sum.replace(oldPiece, newPiece);
+    const keep = same.filter(i => room.items.includes(i));
+    if (!keep.length || !sum || /泡泡：。/.test(sum)) { keep.forEach(i => { delete i.ev; delete i.evSum; }); return true; }
+    const ev = remember(it.evChar, sum);
+    keep.forEach(i => { i.ev = ev; i.evSum = sum; });
+    return true;
+  }
+  const pieceOf = it => it.by === "char" ? `「${it.text}${it.photo ? `［照片：${it.photo.desc}］` : ""}」` : it.by === "him" ? `你回「${it.text}」` : "";
+  async function itemMenu(room, itemId) {
+    const it = room.items.find(i => i.id === itemId); if (!it) return;
+    const canEdit = !it.sticker && (it.text || !it.photo);
+    const lastBatch = it.by === "char" && it.batch && ![...room.items].reverse().find(i => i.by === "char" && i.batch !== it.batch && room.items.indexOf(i) > room.items.indexOf(it));
+    const v = await sheet("", [...(canEdit ? [{ label: "编辑", value: "edit" }] : []), ...(lastBatch ? [{ label: "重 roll（他这一批重新发）", value: "reroll" }] : []), { label: it.ev ? "删除（他也不记得了）" : "删除", danger: true, value: "del" }]);
+    if (!v) return;
+    if (v === "reroll") {
+      const same = room.items.filter(i => i.batch === it.batch);
+      if (it.ev && api.memory && api.memory.deleteTimeline) api.memory.deleteTimeline({ characterId: it.evChar, appEventId: it.ev }).catch(e => console.warn(e));
+      const hint = await inputSheet("重 roll", "", { long: true, max: 300, ph: "想让他这次怎么改，可以不填", hint: "他这一批泡泡和记忆会删掉，按你写的重新发" });
+      if (hint == null) return;
+      room.items = room.items.filter(i => !same.includes(i)); saveRoom(room); render();
+      await charBubbles(room, { ...(it.ropt || {}), hint });
+      S.forceBottom = true; render();
+      return;
+    }
+    const oldPiece = pieceOf(it);
+    if (v === "edit") {
+      const t = await inputSheet("编辑", it.text, { long: true, max: 300 });
+      if (t == null || t === it.text) return;
+      if (!t) return toast("不能是空的，不要就删掉");
+      it.text = t;
+      const changed = refreshMemory(room, it, oldPiece, pieceOf(it));
+      saveRoom(room); render();
+      toast(changed ? "改好了，他记得的也改了" : it.by === "char" || it.by === "him" ? "改好了（这条是之前发的，他记得的那句没法跟着改）" : "改好了");
+    } else {
+      const ok = await sheet(it.ev ? "删掉这条，他也会忘掉" : "删掉这条？", [{ label: "删除", danger: true, value: 1 }]); if (!ok) return;
+      const idx = room.items.indexOf(it);
+      if (it.fans) { const prev = [...room.items.slice(0, idx)].reverse().find(i => i.by === it.by && i.ev && i.ev === it.ev); if (prev) { prev.fans = it.fans; prev.fanN = it.fanN; } }
+      room.items.splice(idx, 1);
+      const changed = refreshMemory(room, it, oldPiece, "");
+      saveRoom(room); render();
+      toast(changed ? "删掉了，他也不记得了" : it.by === "char" || it.by === "him" ? "删掉了（这条是之前发的，他记得的那句没法跟着删）" : "删掉了");
+    }
   }
   /** 点照片：看完整描述 / 大图，改描述，生成或重新生成 */
   function photoSheet(room, itemId) {
@@ -653,9 +713,9 @@
       }
       if (f.by === "him") {
         const c = charById(f.charId) || {}; const r = S.rooms.find(x => x.kind === "char" && x.charId === f.charId);
-        return `<div class="grp fan him">${avatarEl(r && r.avatar || c.avatar, f.charId, "him-ava")}<div class="stack"><div class="fn">${esc(c.name || "他")}<small>粉丝看不到是他</small></div>${g.items.map(it => `<div class="line"><div class="card" data-quote="${it.id}">${esc(it.text)}</div><span class="stamp">${hm(it.at)}</span></div>`).join("")}</div></div>`;
+        return `<div class="grp fan him">${avatarEl(r && r.avatar || c.avatar, f.charId, "him-ava")}<div class="stack"><div class="fn">${esc(c.name || "他")}<small>粉丝看不到是他</small></div>${g.items.map(it => `<div class="line"><div class="card" data-quote="${it.id}" data-item="${it.id}">${esc(it.text)}</div><span class="stamp">${hm(it.at)}</span></div>`).join("")}</div></div>`;
       }
-      return `<div class="grp fan"><div class="ava fan-ava" style="background:${pastelFor(f.name)}"></div><div class="stack"><div class="fn">${esc(f.name || "粉丝")}</div>${g.items.map(it => `<div class="line"><div class="card" data-quote="${it.id}">${esc(it.text)}${trHtml(it.tr)}</div></div>`).join("")}</div></div>`;
+      return `<div class="grp fan"><div class="ava fan-ava" style="background:${pastelFor(f.name)}"></div><div class="stack"><div class="fn">${esc(f.name || "粉丝")}</div>${g.items.map(it => `<div class="line"><div class="card" data-quote="${it.id}" data-item="${it.id}">${esc(it.text)}${trHtml(it.tr)}</div></div>`).join("")}</div></div>`;
     });
   }
 
@@ -841,6 +901,18 @@
     document.body.appendChild(mask);
   }
 
+  // 长按一条泡泡 / 回复：编辑、删除
+  let press = null, pressFired = false;
+  document.addEventListener("pointerdown", e => {
+    const el = e.target.closest("[data-item]"); if (!el || e.target.closest(".mask") || e.target.closest("[data-gen]")) return;
+    pressFired = false;
+    const x = e.clientX, y = e.clientY;
+    press = { x, y, t: setTimeout(() => { press = null; pressFired = true; const room = roomById(S.view.roomId); if (room) itemMenu(room, el.dataset.item); }, 550) };
+  });
+  document.addEventListener("pointermove", e => { if (press && Math.hypot(e.clientX - press.x, e.clientY - press.y) > 8) { clearTimeout(press.t); press = null; } });
+  ["pointerup", "pointercancel"].forEach(t => document.addEventListener(t, () => { if (press) { clearTimeout(press.t); press = null; } }));
+  document.addEventListener("contextmenu", e => { if (e.target.closest("[data-item]")) e.preventDefault(); });
+  document.addEventListener("click", e => { if (pressFired) { pressFired = false; e.stopPropagation(); e.preventDefault(); } }, true);
   document.addEventListener("click", e => {
     const a = e.target.closest("[data-act]"); if (a && !a.disabled) { e.preventDefault(); onAct(a.dataset.act, a); return; }
     const tb = e.target.closest("[data-tab]"); if (tb) { S.view = { page: tb.dataset.tab, board: S.view.board }; render(); return; }

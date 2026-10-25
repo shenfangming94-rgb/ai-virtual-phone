@@ -253,3 +253,5 @@ svg { display: block; }
 .ph-text, .ph-img { cursor: pointer; }
 .ph-view { padding: 4px 18px 12px; text-align: center; }
 .ph-view img { max-width: 100%; max-height: 46vh; border-radius: 12px; }
+
+[data-item] { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }

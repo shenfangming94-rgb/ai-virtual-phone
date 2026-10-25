@@ -31,7 +31,7 @@
       },
     },
     media: { store: {}, async put(p) { const ref = "media-store://" + Math.random().toString(36).slice(2); this.store[ref] = p.dataUrl; return { ref }; }, async get(p) { return { ref: p.ref, dataUrl: this.store[p.ref] }; } },
-    memory: { async addTimeline(p) { calls.push({ memory: p }); return {}; } },
+    memory: { async addTimeline(p) { calls.push({ memory: p }); return {}; }, async deleteTimeline(p) { calls.push({ memDel: p }); return {}; } },
     ui: { async toast() {} },
   };
 })();

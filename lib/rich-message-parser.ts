@@ -754,7 +754,10 @@ export function parseAIResponse(rawText: string, previousState: StateValue[]): P
         .replace(/(\[表情包[：:][^\]]+\])\n\n+/g, "$1\n");
 
     // 3. Split by double newlines (placeholders still in place)
-    const segments = stickerMerged.split(/\n\n+/).map(s => s.trim()).filter(Boolean);
+    // 旁白只认段首；前面挨着表情包（空行被上一步吃掉）或只隔一个换行时，从 [旁白] 那行切开
+    const segments = stickerMerged.split(/\n\n+/)
+        .flatMap(s => s.split(/\n(?=[ \t]*[\[【]\s*旁白\s*[\]】])/))
+        .map(s => s.trim()).filter(Boolean);
 
     // 4. Parse each segment
     const parts: ParsedMessagePart[] = [];

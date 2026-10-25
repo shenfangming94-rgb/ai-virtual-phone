@@ -555,9 +555,9 @@
     it.photo.busy = true; render();
     try {
       const isHim = it.by === "char";
-      // 跟微博配图同一种写法：照片里有他本人才带他和参考图，别的只发描述
-      const withFace = isHim && !!it.photo.self;
-      const r = await api.ai.generateImage({ prompt: it.photo.desc, ...(withFace ? { characterId: room.charId, useReferenceImage: true } : {}), timeoutMs: 120000 });
+      // 跟微博配图一模一样的写法：只发描述；是他发的就带上他，本人出镜才用参考图
+      const who = isHim ? room.charId : undefined;
+      const r = await api.ai.generateImage({ prompt: it.photo.desc, characterId: who, useReferenceImage: !!who && !!it.photo.self, timeoutMs: 120000 });
       if (!r || !r.dataUrl) throw new Error("没有生成出图片");
       it.photo.ref = await storeDataUrl(r.dataUrl);
     } catch (e) { toast(`生图失败：${(e && e.message) || e}`.slice(0, 60)); }

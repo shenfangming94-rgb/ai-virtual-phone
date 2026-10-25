@@ -2024,6 +2024,10 @@ export async function buildChatPromptMessages(
     if (!session.isGroup) {
         const narrationPrompt = buildOnlineNarrationPrompt(getNarrationConfig(session), character.name, userIdentity?.name || "用户");
         if (narrationPrompt) llmMessages.push({ role: "system", content: narrationPrompt });
+        // 关了开关但前面记录里有旁白：他会照着接着写，明说一句
+        else if (historyForPrompt.some(m => m.mediaType === "narration")) {
+            llmMessages.push({ role: "system", content: "本聊天的动作描写已关闭：不再写 [旁白]，只发聊天消息；前面记录里的旁白是开着时写的。" });
+        }
     }
     return { llmMessages, character, config, preset, regexes, userIdentity, toolsEnabled };
 }

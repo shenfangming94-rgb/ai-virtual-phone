@@ -349,3 +349,5 @@
 .ms-reply-in { display: flex; gap: 8px; align-items: center; margin-top: 6px; }
 .ms-reply-in .mt-input { flex: 1; margin: 0; }
 .ms-close { display: block; margin: 8px auto 24px !important; color: var(--mt-sub) !important; }
+
+.mt-ck-link { display: block; width: 100%; text-align: left; background: none; border: 0; padding: 0; color: inherit; font: inherit; }

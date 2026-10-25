@@ -541,7 +541,9 @@ export function MeituanApp({ onClose, onNotice }: { onClose: () => void; onNotic
                     </div>
                 </section>
                 <section className="mt-card">
-                    <div className="mt-ck-h">{o.shopName} ›</div>
+                    {o.shopId && st.shops.some(x => x.id === o.shopId)
+                        ? <button type="button" className="mt-ck-h mt-ck-link" onClick={() => go({ id: "shop", shopId: o.shopId! })}>{o.shopName} ›</button>
+                        : <div className="mt-ck-h">{o.shopName}</div>}
                     {o.items.map((i, k) => <div className="mt-it" key={k}><i>{i.emoji}</i><div>{i.name}<small>x{i.qty}</small></div><span>{mtYuan(i.price * i.qty)}</span></div>)}
                     <div className="mt-kv">打包费<b>{mtYuan(o.packFee)}</b></div>
                     <div className="mt-kv">配送费<b>{mtYuan(o.deliveryFee)}</b></div>

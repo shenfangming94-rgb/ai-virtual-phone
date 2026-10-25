@@ -240,3 +240,12 @@ svg { display: block; }
 .ph-text p { margin: 0; font-size: 10px; line-height: 1.5; font-style: italic; display: -webkit-box; -webkit-line-clamp: 5; -webkit-box-orient: vertical; overflow: hidden; }
 .ph-gen { font-size: 10px; font-weight: 700; color: var(--brand); background: rgba(255,255,255,.75); border-radius: 999px; padding: 4px 10px; }
 .is-me .ph-gen { color: #D9788F; }
+
+/* 表情包 */
+.stk { display: block; width: 92px; height: 92px; object-fit: contain; border-radius: 8px; }
+.stk-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; padding: 0 16px 8px; }
+.stk-cell { display: flex; flex-direction: column; align-items: center; gap: 3px; font-size: 9.5px; color: var(--ink2); }
+.stk-cell .stk { width: 64px; height: 64px; background: var(--mist); }
+.stk-cell small { max-width: 70px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.stk-cell.add { justify-content: center; width: 64px; height: 64px; margin: 0 auto; border-radius: 8px; border: 1.5px dashed #D5D8DE; color: var(--sub); font-size: 18px; }
+.stk-cell.add small { font-size: 9px; }

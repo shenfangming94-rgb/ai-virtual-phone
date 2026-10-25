@@ -69,7 +69,7 @@
     S.rooms = rooms.filter(r => r.scope === scope).map(r => ({ ...r, items: r.items || [], pending: r.pending || [] }));
     S.debug = (metas.find(m => m.id === "debug_log") || {}).entries || [];
     S.meta = metas.find(m => m.id === `meta_${scope}`) || { id: `meta_${scope}` };
-    S.meta = { me: {}, theme: "journal", bg: "", bgOpacity: 0.6, myColor: "#F7AFC0", subN: (rand(30, 180) / 10).toFixed(1), secret: [], publicWith: [], alt: "", ...S.meta };
+    S.meta = { me: {}, theme: "journal", bg: "", bgOpacity: 0.6, myColor: "#F7AFC0", subN: (rand(30, 180) / 10).toFixed(1), secret: [], publicWith: [], alt: "", stickers: [], ...S.meta };
     if (!S.meta.alt) S.meta.alt = pick(["柠檬不酸", "今天也在冲浪", "小熊软糖", "momo_1029", "云朵不在家"]);
     if (!S.rooms.some(r => r.kind === "me")) {
       const me = { id: `room_${scope}_me`, scope, kind: "me", items: [], pending: [], createdAt: nowIso() };
@@ -224,7 +224,7 @@
     const room = myRoom();
     const mine = room.items.filter(i => i.by === "me").slice(-6);
     if (!mine.length) return toast("先发个泡泡吧");
-    const mineText = mine.map(i => `- ${i.quote ? `（引用了「${i.quote}」）` : ""}${i.text}${i.photo ? `［照片：${i.photo.desc || "一张照片"}］` : ""}`).join("\n");
+    const mineText = mine.map(i => `- ${i.quote ? `（引用了「${i.quote}」）` : ""}${i.text}${i.photo ? `［照片：${i.photo.desc || "一张照片"}］` : ""}${i.sticker ? `［表情包：${i.sticker.name}］` : ""}`).join("\n");
     const secret = S.meta.secret.filter(id => charById(id));
     const lastHim = {}; room.items.forEach(i => { if (i.by === "him") lastHim[i.charId] = i.at; });
     const him = secret.find(id => Math.random() < 0.45 && (!lastHim[id] || Date.now() - new Date(lastHim[id]).getTime() > 20 * 60e3)) || null;
@@ -479,7 +479,7 @@
       <div class="bottom">
         ${S.quote && S.quote.roomId === room.id ? `<div class="qbar"><span>引用：${esc(S.quote.text)}</span><button data-act="unquote">${I.x}</button></div>` : ""}
         <div class="tray">${isMe
-          ? `<button class="tchip" data-act="wave" ${busy ? "disabled" : ""}>${I.bubble}让粉丝回一波</button><button class="tchip" data-act="myPhoto">${I.photo}照片</button><button class="tchip" data-act="dress">${I.palette}装扮</button>`
+          ? `<button class="tchip" data-act="wave" ${busy ? "disabled" : ""}>${I.bubble}让粉丝回一波</button><button class="tchip" data-act="myPhoto">${I.photo}照片</button><button class="tchip" data-act="myStk">${I.smile}表情</button><button class="tchip" data-act="dress">${I.palette}装扮</button>`
           : `<button class="tchip" data-act="urge" ${busy ? "disabled" : ""}>${I.bubble}催TA发泡泡</button><button class="tchip" data-act="urgePhoto" ${busy ? "disabled" : ""}>${I.photo}催TA发照片</button><button class="tchip" data-act="switch">${I.swap}换个人</button><button class="tchip" data-act="direct">${I.spark}场外指示</button><button class="tchip" data-act="handwrite">${I.pen}手写TA的话</button>`}</div>
         ${!isMe && room.pending.length ? `<div class="sendbar"><span>${room.pending.length} 条还没发出去</span><button data-act="flush" ${busy ? "disabled" : ""}>发出去</button></div>` : ""}
         <form class="composer"><button type="button" class="x" data-act="clear">${I.x}</button><input class="ta" maxlength="200" placeholder="${isMe ? "发个泡泡…" : "给TA留言…"}"><button class="send" type="submit">${I.send}</button></form>
@@ -506,9 +506,14 @@
   /** 一条泡泡：照片单独一个，说的话另起一个气泡；时间跟着这一组第一条 */
   function lineHtml(it, stamp) {
     const st = stamp ? `<span class="stamp">${hm(it.at)}</span>` : "";
+    if (it.sticker) return `<div class="line"><div class="bub ph-only">${stickerHtml(it.sticker)}</div>${st}</div>`;
     const photo = it.photo ? `<div class="line"><div class="bub ph-only">${bubInner({ photo: it.photo, id: it.id })}</div>${st}</div>` : "";
     const words = it.text || (it.quote && !it.photo) ? `<div class="line"><div class="bub">${bubInner({ text: it.text, quote: it.quote })}</div>${it.photo ? "" : st}</div>` : "";
     return photo + words;
+  }
+  function stickerHtml(st) {
+    const src = st.url || IMG[st.ref] || "";
+    return `<img class="stk" ${st.ref && !st.url ? `data-ref="${esc(st.ref)}"` : ""} ${src ? `src="${esc(src)}"` : ""} alt="${esc(st.name)}">`;
   }
   function bubInner(it) {
     const ph = it.photo;
@@ -544,6 +549,41 @@
       it.photo.ref = await storeDataUrl(r.dataUrl);
     } catch (e) { toast(`生图失败：${(e && e.message) || e}`.slice(0, 60)); }
     finally { delete it.photo.busy; saveRoom(room); render(); }
+  }
+  async function myStickers(room) {
+    const list = S.meta.stickers;
+    const mask = document.createElement("div"); mask.className = "mask";
+    const draw = () => {
+      mask.innerHTML = `<div class="sheet"><div class="grab"></div><div class="sheet-t2">我的表情包</div>
+        <div class="stk-grid">${list.map((st, i) => `<button class="stk-cell" data-send="${i}">${stickerHtml(st)}<small>${esc(st.name)}</small></button>`).join("")}
+          <button class="stk-cell add" data-add="album">＋<small>相册</small></button><button class="stk-cell add" data-add="paste">＋<small>粘贴链接</small></button></div>
+        ${list.length ? `<div class="sheet-hint">点一下发出去；长按删掉</div>` : `<div class="sheet-hint">还没有表情包。可以从相册加，也可以一次粘贴多行「名字：图片链接」</div>`}</div>`;
+      hydrateImages();
+    };
+    draw();
+    let pressT = null;
+    mask.addEventListener("pointerdown", e => { const c = e.target.closest("[data-send]"); if (!c) return; pressT = setTimeout(() => { pressT = "del"; const i = +c.dataset.send; list.splice(i, 1); saveMeta(); draw(); toast("删掉了"); }, 600); });
+    mask.addEventListener("pointerup", () => { if (pressT && pressT !== "del") clearTimeout(pressT); });
+    mask.onclick = async e => {
+      if (e.target === mask) { mask.remove(); return; }
+      if (pressT === "del") { pressT = null; return; }
+      const send = e.target.closest("[data-send]"); const add = e.target.closest("[data-add]");
+      if (send) {
+        const st = list[+send.dataset.send]; mask.remove();
+        room.items.push({ id: uid("m"), by: "me", text: "", sticker: { ...st }, at: nowIso() }); room.lastAt = nowIso(); saveRoom(room); S.forceBottom = true; render();
+      } else if (add && add.dataset.add === "album") {
+        const d = await pickImage(360); if (!d) return;
+        const name = await inputSheet("给这个表情包起个名", "", { ph: "粉丝靠名字知道是什么表情" }); if (!name) return;
+        const ref = await storeDataUrl(d).catch(() => ""); if (!ref) return toast("没存上");
+        list.push({ name, ref }); saveMeta(); draw();
+      } else if (add && add.dataset.add === "paste") {
+        const t = await inputSheet("粘贴表情包", "", { long: true, max: 4000, ph: "一行一个：名字：图片链接" }); if (!t) return;
+        let n = 0;
+        for (const line of t.split("\n")) { const m = line.trim().match(/^(.+?)[：:]\s*(https?:\/\/\S+)$/); if (m) { list.push({ name: m[1].trim().slice(0, 20), url: m[2] }); n++; } }
+        saveMeta(); draw(); toast(n ? `加了 ${n} 个` : "没认出来，格式是 名字：链接");
+      }
+    };
+    document.body.appendChild(mask);
   }
   async function myPhoto(room) {
     const v = await sheet("发照片", [{ label: "从相册选", value: "album" }, { label: "写一句描述（文字照片）", value: "text" }, { label: "写描述，让 AI 画", value: "ai" }]);
@@ -694,6 +734,7 @@
       case "sub": return subscribe();
       case "debug": return showDebug();
       case "myPhoto": return myPhoto(room);
+      case "myStk": return myStickers(room);
       case "urgePhoto": await charBubbles(room, { wantPhoto: true }); S.forceBottom = true; return render();
       case "dress": return dressPanel();
       case "wave": await fanWave(); S.forceBottom = true; return render();

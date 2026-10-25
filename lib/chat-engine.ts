@@ -2020,8 +2020,8 @@ export async function buildChatPromptMessages(
     }
     appendEmptyGenerateGuardMessage(llmMessages, config, historyForPrompt);
 
-    // 线上动作描写：附在最后，不管用哪个预设都生效；只管聊天本身，微博/bubble 这些 app 借角色说话时不带
-    if (!session.isGroup && resolvedAppId === "chat" && !isOfflineMode) {
+    // 线上动作描写：附在最后，不管用哪个预设都生效
+    if (!session.isGroup) {
         const narrationPrompt = buildOnlineNarrationPrompt(getNarrationConfig(session), character.name, userIdentity?.name || "用户");
         if (narrationPrompt) llmMessages.push({ role: "system", content: narrationPrompt });
         // 关了开关但前面记录里有旁白：他会照着接着写，明说一句

@@ -2,7 +2,7 @@
   "sdkVersion": "1.0",
   "id": "nox.bubble",
   "name": "bubble",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "author": "Nox for Flora",
   "description": "爱豆泡泡：订阅 char 的泡泡房，回他的泡泡、看粉丝回复；你也是爱豆，有自己的泡泡房，他会偷偷订阅混在粉丝里回你。",
   "icon": "icon.png",

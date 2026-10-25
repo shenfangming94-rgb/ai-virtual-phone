@@ -37,6 +37,7 @@
     palette: sv('<path d="M12 3a9 9 0 1 0 0 18c1 0 1.5-.7 1.5-1.5 0-.4-.2-.8-.4-1.1-.3-.3-.4-.6-.4-1 0-.8.7-1.5 1.5-1.5H16a5 5 0 0 0 5-5c0-4.4-4-7.9-9-7.9z"/><circle cx="7.5" cy="11.5" r="1"/><circle cx="10.5" cy="7.5" r="1"/><circle cx="15" cy="8" r="1"/>', 1.8),
     plus: sv('<path d="M12 5v14M5 12h14"/>', 2), quote: sv('<path d="M7 7h4v4H8c0 2 1 3 3 3v2c-3 0-5-2-5-5zM14 7h4v4h-3c0 2 1 3 3 3v2c-3 0-5-2-5-5z"/>', 1.6),
     check: sv('<path d="m5 12.5 4.5 4.5L19 7.5"/>', 2.2),
+    heart: sv('<path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10z"/>', 1.8), cmt: sv('<path d="M20 12a7.5 7.5 0 0 1-10.9 6.7L4.5 20l1.2-4.1A7.5 7.5 0 1 1 20 12z"/>', 1.8),
   };
 
   // ───────────────────────── 数据 ─────────────────────────
@@ -44,8 +45,8 @@
   //   char 房 items: { id, by: "char" | "me", text, at, quote, fans: [{ t, tr, me }], fanN }
   //   我的房 items: { id, by: "me" | "fan" | "him", name, charId, text, tr, at, quote }
   // meta：{ me: { name, avatar }, theme, bg, bgOpacity, myColor, subN, secret: [charId] }
-  const COL = { rooms: "rooms", meta: "meta" };
-  const S = { identity: null, chars: [], meta: null, rooms: [], debug: [], busy: new Set(), view: { page: "home", roomId: null }, quote: null, fanSheet: null };
+  const COL = { rooms: "rooms", meta: "meta", plaza: "plaza" };
+  const S = { identity: null, chars: [], meta: null, rooms: [], plaza: [], debug: [], busy: new Set(), view: { page: "home", roomId: null }, quote: null, fanSheet: null };
   async function dbList(c) { try { return (await api.db.list(c, { limit: 500 })) || []; } catch (e) { console.warn(e); return []; } }
   async function dbUpsert(c, row) {
     try { const u = await api.db.update(c, row.id, row); if (u) return u; } catch (e) { /* 没有就 create */ }
@@ -62,12 +63,14 @@
     const chars = await api.characters.list().catch(() => []);
     const owners = await Promise.all(chars.map(c => api.user.getProfile({ characterId: c.id }).catch(() => null)));
     S.chars = chars.filter((c, i) => !owners[i] || !identity || owners[i].id === identity.id);
-    const [rooms, metas] = await Promise.all([dbList(COL.rooms), dbList(COL.meta)]);
+    const [rooms, metas, plaza] = await Promise.all([dbList(COL.rooms), dbList(COL.meta), dbList(COL.plaza)]);
     const scope = S.identity.id;
+    S.plaza = plaza.filter(b => b.scope === scope).map(b => ({ ...b, posts: b.posts || [] }));
     S.rooms = rooms.filter(r => r.scope === scope).map(r => ({ ...r, items: r.items || [], pending: r.pending || [] }));
     S.debug = (metas.find(m => m.id === "debug_log") || {}).entries || [];
     S.meta = metas.find(m => m.id === `meta_${scope}`) || { id: `meta_${scope}` };
-    S.meta = { me: {}, theme: "journal", bg: "", bgOpacity: 0.6, myColor: "#F7AFC0", subN: (rand(30, 180) / 10).toFixed(1), secret: [], publicWith: [], ...S.meta };
+    S.meta = { me: {}, theme: "journal", bg: "", bgOpacity: 0.6, myColor: "#F7AFC0", subN: (rand(30, 180) / 10).toFixed(1), secret: [], publicWith: [], alt: "", ...S.meta };
+    if (!S.meta.alt) S.meta.alt = pick(["柠檬不酸", "今天也在冲浪", "小熊软糖", "momo_1029", "云朵不在家"]);
     if (!S.rooms.some(r => r.kind === "me")) {
       const me = { id: `room_${scope}_me`, scope, kind: "me", items: [], pending: [], createdAt: nowIso() };
       S.rooms.push(me); saveRoom(me);
@@ -155,7 +158,7 @@
     });
   }
   function parseFans(block) {
-    return String(block || "").split("\n").map(l => l.trim().replace(/^[-*•·\d.、]+\s*/, "")).filter(Boolean).map(l => {
+    return String(block || "").split("\n").map(l => l.trim()).filter(l => l && !/^=+/.test(l)).map(l => l.replace(/^[-*•·\d.、]+\s*/, "")).filter(Boolean).map(l => {
       const m = l.match(/^([^：:]{1,16})[：:]\s*(.+)$/);
       const name = m ? m[1].trim() : pick(["momo", "晚风", "小土豆", "sunny", "北北北"]);
       const body = (m ? m[2] : l).trim();
@@ -182,6 +185,7 @@
       mixed.length ? `粉丝刚发来的回复（随便挑了几条）：\n${mixed.map(t => `- ${t}`).join("\n")}` : "",
       `【恋爱】${LOVE_RULE(room.charId, herName())}`,
       `【粉丝】${FAN_MOOD}`,
+      (() => { const pb = S.plaza.find(x => x.board === room.charId); const hotP = pb ? pb.posts.filter(p => p.by !== "him").slice(0, 3) : []; return hotP.length && Math.random() < 0.3 ? `【粉丝广场】你偶尔会看一眼自己的粉丝广场，最近在聊：${hotP.map(p => `「${p.text.slice(0, 40)}」`).join("")}。一般明星不太当回事，泡泡里不用提；除非事情闹得很大，才可能顺口回应一下。` : ""; })(),
       opts.direction ? `【这次的情况】${opts.direction}` : "",
       "【这次】发 1~4 条新泡泡。像真爱豆发泡泡：短、口语、分享此刻在干嘛和心情，偶尔引用某条粉丝回复再回它。不要每条都引用，不要写成公告。",
       "【输出】每条泡泡一个块：\n===泡泡===\n引用：被引用的那条粉丝回复原话（不引用写 无）\n内容：泡泡内容\n所有泡泡写完后：\n===粉丝回复===\n" + FAN_FORMAT + "写 8~12 条，是粉丝对你这几条泡泡的反应。",
@@ -241,6 +245,108 @@
     room.lastAt = nowIso(); saveRoom(room);
   }
 
+  // ───────────────────────── 粉丝广场 ─────────────────────────
+  // plaza：每个广场一条 { id, scope, board: charId | "me", posts: [{ id, by, name, charId, text, shot, likes, cmtN, hot, at, comments, loaded }], at }
+  //   by: fan | me（大号）| meAlt（小号）| him（他大号）| himAlt（他小号）
+  const boardKey = b => b || "me";
+  function boardOf(key) {
+    let b = S.plaza.find(x => x.board === key);
+    if (!b) { b = { id: `plaza_${S.identity.id}_${key}`, scope: S.identity.id, board: key, posts: [] }; S.plaza.push(b); }
+    return b;
+  }
+  const savePlaza = b => dbUpsert(COL.plaza, b).catch(e => console.warn(e));
+  const boardName = key => key === "me" ? myStage() : stageName(S.rooms.find(r => r.kind === "char" && r.charId === key));
+  /** 这个广场能看到的东西：爱豆发的泡泡，和被引用的那几句（不带 ID 名字） */
+  function visibleBubbles(key) {
+    const room = key === "me" ? myRoom() : S.rooms.find(r => r.kind === "char" && r.charId === key);
+    if (!room) return [];
+    return room.items.filter(i => (key === "me" ? i.by === "me" : i.by === "char")).slice(-10);
+  }
+  const bubbleLine = i => `${hm(i.at)} ${i.quote ? `（引用了一条粉丝回复「${i.quote}」）` : ""}${i.text}`;
+  /** 他是不是爱豆：在 bubble 里有自己的泡泡房 */
+  const isIdol = charId => S.rooms.some(r => r.kind === "char" && r.charId === charId);
+  const PLAZA_RULE = "【广场是什么】bubble 的粉丝广场：粉丝自己发帖讨论爱豆。粉丝只看得到爱豆发的泡泡；粉丝回复别人看不到，只有被爱豆引用的那句会出现在泡泡里，而且不显示是谁发的。说到爱豆时只能根据泡泡、被引用的句子和帖子里的内容，不能编出别人看不到的东西。";
+  function parsePosts(raw) {
+    return String(raw || "").split(/===\s*帖子\s*===/).slice(1).map(b => ({
+      name: field(b, "昵称") || pick(["momo", "晚风", "北北北"]),
+      text: field(b, "内容"),
+      shot: field(b, "截图"),
+      likes: parseInt(field(b, "点赞").replace(/[^\d]/g, ""), 10) || rand(20, 900),
+      cmtN: parseInt(field(b, "评论数").replace(/[^\d]/g, ""), 10) || rand(3, 200),
+    })).filter(p => p.text).slice(0, 8);
+  }
+  function matchShot(key, text) {
+    if (none(text)) return null;
+    const t = String(text).replace(/[「」“”"]/g, "").trim();
+    const hit = visibleBubbles(key).find(i => i.text.includes(t.slice(0, 8)) || t.includes(i.text.slice(0, 8)));
+    return hit ? { text: hit.text, quote: hit.quote || "", at: hit.at } : null;
+  }
+  async function refreshPlaza(key) {
+    const b = boardOf(key);
+    const bubbles = visibleBubbles(key);
+    if (!bubbles.length) return toast(key === "me" ? "你还没发过泡泡，广场没什么可聊" : "他还没发过泡泡，广场没什么可聊");
+    const idolName = boardName(key);
+    const recentPosts = b.posts.slice(0, 8).map(p => `- ${p.name}：${p.text.slice(0, 40)}`).join("\n");
+    const herMain = b.posts.filter(p => p.by === "me").slice(0, 2).map(p => p.text).join("；");
+    const raw = await plainGen([
+      PLAZA_RULE,
+      `【这是谁的广场】爱豆「${idolName}」的粉丝广场。`,
+      `【${idolName} 最近的泡泡】\n${bubbles.map(bubbleLine).join("\n")}`,
+      herMain ? `【大事】爱豆「${myStage()}」本人用大号在这里发过帖：${herMain}。这件事大家一定会议论。` : "",
+      recentPosts ? `【广场上已经有的帖】（不要重复）\n${recentPosts}` : "",
+      `【粉丝】${FAN_MOOD}`,
+      "【这次】写 5~7 条新帖：有讨论泡泡的、扒被引用那句是谁的（只有泡泡里真引用了才会扒）、心疼、玩梗、吐槽公司，也要有粉丝发自己的日常，但日常一定和这个爱豆沾边。大部分中文，也有韩语日语英文，外语写成「原文｜中文翻译」。",
+      "【输出】每条：\n===帖子===\n昵称：\n内容：\n截图：帖子里截图的那条泡泡原文（没截图写 无）\n点赞：数字\n评论数：数字",
+    ].filter(Boolean).join("\n\n"), "刷新广场");
+    if (!raw) return;
+    const posts = parsePosts(raw).map(p => ({ id: uid("p"), by: "fan", name: p.name, ...splitTr(p.text), shot: matchShot(key, p.shot), likes: p.likes, cmtN: p.cmtN, comments: [], at: nowIso() }));
+    // 他偶尔来逛：自己的广场用大号；别人的广场是爱豆只能小号
+    const him = key !== "me" ? (Math.random() < 0.2 ? key : null) : S.meta.secret.concat(S.rooms.filter(r => r.kind === "char").map(r => r.charId)).find(id => charById(id) && Math.random() < 0.15);
+    if (him) {
+      const own = key === him;
+      const alt = own ? false : (isIdol(him) ? true : Math.random() < 0.5);
+      const hc = charById(him);
+      const r2 = await charGen(him, "plaza", [
+        PLAZA_RULE,
+        `【你】你刷到了「${idolName}」的粉丝广场。${own ? "这是你自己的粉丝广场，你用的是大号（爱豆本人），大家都知道是你。" : alt ? `你用的是一个小号，没人知道是你；${herName()}看得出来。` : "你用的是大号，大家都知道是你。"}一般明星只是看看、不太当回事。`,
+        `【${idolName} 最近的泡泡】\n${bubbles.slice(-5).map(bubbleLine).join("\n")}`,
+        `【广场上的帖】\n${posts.map(p => `- ${p.name}：${p.text}`).join("\n")}`,
+        `【恋爱】${LOVE_RULE(him, herName())}`,
+        "【这次】按你的人设决定要不要发一条帖子。大多数时候不发，写 无。",
+        "【输出】\n===你的帖子===\n内容：（不发写 无）",
+      ].join("\n\n"), "他逛广场");
+      const t = field(blockOf(r2, "你的帖子"), "内容") || "";
+      if (r2 && !none(t)) {
+        posts.splice(rand(0, 2), 0, { id: uid("p"), by: alt ? "himAlt" : "him", charId: him, name: alt ? `${(hc.name || "x").slice(0, 1).toLowerCase()}_${rand(1000, 9999)}` : (own ? stageName(S.rooms.find(r => r.charId === him)) : hc.name), text: t.slice(0, 300), likes: rand(50, 9000), cmtN: rand(10, 900), comments: [], at: nowIso() });
+        remember(him, `你${alt ? "用小号" : "用大号"}在「${idolName}」的 bubble 粉丝广场发了帖：「${t}」。`);
+      }
+    }
+    b.posts = [...posts, ...b.posts].slice(0, 60);
+    b.at = nowIso(); savePlaza(b);
+    if (key !== "me" && Math.random() < 0.3) remember(key, `你刷了一眼自己在 bubble 的粉丝广场，大家在聊：${posts.slice(0, 3).map(p => `「${p.text.slice(0, 30)}」`).join("")}。一般不当回事。`);
+  }
+  function splitTr(text) { const [t, tr] = String(text).split(/[｜|]/).map(x => x.trim()); return { text: t, tr: tr || "" }; }
+  async function loadComments(key, post) {
+    const b = boardOf(key);
+    const mine = post.comments.filter(c => c.by === "me" || c.by === "meAlt").slice(-2).map(c => `${c.by === "me" ? `爱豆「${myStage()}」本人（大号）` : "某个粉丝"}说：${c.text}`).join("\n");
+    const raw = await plainGen([
+      PLAZA_RULE,
+      `【帖子】（在爱豆「${boardName(key)}」的粉丝广场）${post.by === "me" ? `这帖是爱豆「${myStage()}」本人用大号发的！` : ""}\n${post.name}：${post.text}${post.shot ? `\n（截图了泡泡：${post.shot.quote ? `引用「${post.shot.quote}」` : ""}${post.shot.text}）` : ""}`,
+      post.comments.length ? `【已有评论】\n${post.comments.slice(-10).map(c => `- ${c.name}：${c.text}`).join("\n")}` : "",
+      mine ? `【要接住的】\n${mine}` : "",
+      `【粉丝】${FAN_MOOD}`,
+      "【这次】写 6~10 条新评论，可以互相吵、互相回。" + "每行一条，开头写「- 昵称：」。大部分中文，也有韩语日语英文，外语写成「原文｜中文翻译」。",
+    ].filter(Boolean).join("\n\n"), "看评论");
+    if (!raw) return;
+    const list = parseFans(raw).map(f => ({ id: uid("c"), by: "fan", name: f.name, text: f.t, tr: f.tr, at: nowIso() }));
+    post.comments = [...post.comments, ...list].slice(-80); post.loaded = true; post.cmtN = Math.max(post.cmtN || 0, post.comments.length);
+    savePlaza(b);
+  }
+  function herPostSaid(key, by, text, where) {
+    // 她用大号在他的广场说话是大事：他会知道
+    if (by === "me" && key !== "me") remember(key, `${herName()}（爱豆「${myStage()}」）用大号在你的 bubble 粉丝广场${where}：「${text}」。所有粉丝都看到了。`);
+  }
+
   // ───────────────────────── 渲染 ─────────────────────────
   const app = () => $("#app");
   function avatarEl(src, seed, cls) { return src ? `<img class="ava ${cls || ""}" src="${esc(src)}" alt="">` : `<div class="ava ${cls || ""}" style="background:${seed === "me" ? "linear-gradient(135deg,#f6d3dc,#c98a9c)" : `linear-gradient(135deg,hsl(${hashHue(seed)},50%,72%),hsl(${(hashHue(seed) + 40) % 360},50%,58%))`}"></div>`; }
@@ -250,7 +356,67 @@
   function render() {
     const v = S.view;
     if (v.page === "room") return renderRoom(roomById(v.roomId));
+    if (v.page === "plaza") return renderPlaza();
+    if (v.page === "post") return renderPost();
+    if (v.page === "mine") return renderMine();
     renderHome();
+  }
+  const tabbar = on => `<nav class="tabbar">${[["home", "泡泡"], ["plaza", "广场"], ["mine", "我的"]].map(([k, l]) => `<button data-tab="${k}" class="${on === k ? "on" : ""}">${l}</button>`).join("")}</nav>`;
+  function postAuthor(p) {
+    if (p.by === "me") return `${avatarEl(myAvatar(), "me", "pa")}<div class="pn"><b>${esc(myStage())}<em class="art">ARTIST</em></b>`;
+    if (p.by === "meAlt") return `<div class="ava pa" style="background:#C9CDD3"></div><div class="pn"><b>${esc(p.name)}<em class="alt">我的小号</em></b>`;
+    if (p.by === "him") { const r = S.rooms.find(x => x.charId === p.charId); return `${avatarEl((r && r.avatar) || (charById(p.charId) || {}).avatar, p.charId, "pa")}<div class="pn"><b>${esc(p.name)}${isIdol(p.charId) ? `<em class="art">ARTIST</em>` : ""}</b>`; }
+    if (p.by === "himAlt") return `<div class="ava pa him-ava" style="background:linear-gradient(135deg,#8a7a6a,#4b4038)"></div><div class="pn"><b>${esc(p.name)}<span class="himtag">是${esc((charById(p.charId) || {}).name || "他")}的小号</span></b>`;
+    return `<div class="ava pa" style="background:${pastelFor(p.name)}"></div><div class="pn"><b>${esc(p.name)}</b>`;
+  }
+  const ago = iso => { const m = Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 60000)); return m < 1 ? "刚刚" : m < 60 ? `${m} 分钟前` : m < 1440 ? `${Math.round(m / 60)} 小时前` : listTime(iso); };
+  const fmtN = n => n >= 10000 ? `${(n / 10000).toFixed(1)}w` : n >= 1000 ? `${(n / 1000).toFixed(1)}k` : String(n || 0);
+  function shotHtml(key, shot) {
+    if (!shot) return "";
+    return `<div class="shot"><div class="sw"><em>ARTIST</em>${esc(boardName(key))} · ${hm(shot.at)}</div>${shot.quote ? `<div class="sq">${esc(shot.quote)}<small>被引用的粉丝回复</small></div>` : ""}<span class="sb">${esc(shot.text)}</span></div>`;
+  }
+  function postCard(key, p, full) {
+    return `<div class="post ${p.by === "himAlt" || p.by === "him" ? "is-him" : ""} ${p.by === "me" || p.by === "meAlt" ? "is-mine" : ""}" ${full ? "" : `data-post="${p.id}"`}><div class="ph">${postAuthor(p)}<small>${ago(p.at)}</small></div></div>
+      <div class="pt">${p.likes > 1500 && !full ? `<i class="hot">热</i>` : ""}${esc(p.text)}${p.tr ? `<div class="tr">${esc(p.tr)}</div>` : ""}</div>${shotHtml(key, p.shot)}
+      <div class="pf"><span>${I.heart}${fmtN(p.likes)}</span><span>${I.cmt}${fmtN(p.cmtN)}</span></div></div>`;
+  }
+  function boardsBar(key) {
+    const rooms = S.rooms.filter(r => r.kind === "char" && charById(r.charId));
+    return `<div class="boards">${rooms.map(r => `<button data-board="${r.charId}" class="${key === r.charId ? "on" : ""}">${avatarEl(roomAvatar(r), r.charId)}${esc(stageName(r))}</button>`).join("")}<button data-board="me" class="${key === "me" ? "on" : ""}">${avatarEl(myAvatar(), "me")}${esc(myStage())}</button></div>`;
+  }
+  function renderPlaza() {
+    const key = S.view.board || (S.rooms.find(r => r.kind === "char" && charById(r.charId)) || {}).charId || "me";
+    S.view.board = key;
+    const b = boardOf(key);
+    const busy = S.busy.size > 0;
+    app().innerHTML = `${header("广场", "bubble")}<div class="plaza">${boardsBar(key)}
+      <div class="pbar"><span>${b.at ? `${listTime(b.at)} 刷新过` : "还没刷新过"}</span><button data-act="refreshPlaza" ${busy ? "disabled" : ""}>${busy ? "刷新中…" : "↻ 刷新广场"}</button></div>
+      <div class="feed">${b.posts.map(p => postCard(key, p)).join("") || `<div class="empty">点「刷新广场」，看看大家在聊什么</div>`}</div>
+      <button class="fab" data-act="newPost">${I.plus}</button></div>${tabbar("plaza")}`;
+  }
+  function renderPost() {
+    const key = S.view.board; const b = boardOf(key); const p = b.posts.find(x => x.id === S.view.postId);
+    if (!p) { S.view = { page: "plaza", board: key }; return renderPlaza(); }
+    const busy = S.busy.size > 0;
+    const canAlt = key !== "me";
+    const acct = canAlt && S.view.acct === "alt" ? "alt" : "main";
+    app().innerHTML = `${header("帖子", `${esc(boardName(key))}的广场`, { back: true })}<div class="postpage">
+      ${postCard(key, p, true)}
+      <div class="cms">${p.comments.map(c => `<div class="cm ${c.by === "himAlt" ? "is-him" : ""} ${c.by === "me" || c.by === "meAlt" ? "is-mine" : ""}">${c.by === "me" ? avatarEl(myAvatar(), "me", "ca") : `<div class="ava ca" style="background:${c.by === "meAlt" ? "#C9CDD3" : pastelFor(c.name)}"></div>`}<div><b>${esc(c.by === "me" ? myStage() : c.name)}${c.by === "me" ? `<em class="art">ARTIST</em>` : c.by === "meAlt" ? `<em class="alt">我的小号</em>` : ""}</b><p>${esc(c.text)}</p>${c.tr ? `<div class="tr">${esc(c.tr)}</div>` : ""}</div></div>`).join("")}
+        <button class="more-cm" data-act="loadCm" ${busy ? "disabled" : ""}>${busy ? "加载中…" : p.loaded ? "看看新评论" : `看看大家怎么说（${fmtN(p.cmtN)}）`}</button></div>
+    </div>
+    <form class="composer pc">${canAlt ? `<button type="button" class="acct" data-act="acct">${acct === "alt" ? `<i style="background:#C9CDD3"></i>小号` : `${avatarEl(myAvatar(), "me")}大号`} ⌄</button>` : ""}<input class="ta" maxlength="200" placeholder="说点什么…"><button class="send" type="submit">${I.send}</button></form>`;
+  }
+  function renderMine() {
+    app().innerHTML = `${header("我的", "")}<div class="home">
+      <div class="me-card">${avatarEl(myAvatar(), "me")}<div><b><em class="art">ARTIST</em>${esc(myStage())}</b><small>我的泡泡房 · 订阅 ${esc(S.meta.subN)} 万</small></div></div>
+      <button class="opt" data-act="myAva"><div class="cell-main">我的泡泡头像<small>只在 bubble 里用</small></div></button>
+      <button class="opt" data-act="myName"><div class="cell-main">我的艺名<small>${esc(myStage())}</small></div></button>
+      <button class="opt" data-act="altName"><div class="cell-main">广场小号昵称<small>${esc(S.meta.alt)}</small></div></button>
+      <button class="opt" data-act="secret"><div class="cell-main">谁偷偷订阅了我<small>${esc(S.meta.secret.map(id => (charById(id) || {}).name).filter(Boolean).join("、") || "还没有人")}</small></div></button>
+      <button class="opt" data-act="dress"><div class="cell-main">我的泡泡房装扮</div></button>
+      <div class="ver">bubble ${esc(VERSION)} · <button data-act="debug">调试记录</button></div>
+    </div>${tabbar("mine")}`;
   }
   function renderHome() {
     const me = myRoom();
@@ -262,8 +428,7 @@
       <button class="row" data-room="${me.id}">${avatarEl(myAvatar(), "me")}<div class="cell-main"><b><em class="art">ARTIST</em>${esc(myStage())}</b><small>${esc(lastMine ? lastMine.text : "还没发过泡泡")}</small></div><span class="tm">${lastMine ? listTime(lastMine.at) : ""}</span></button>
       <div class="sec">订阅中<button class="sec-btn" data-act="sub">${I.plus}订阅</button></div>
       ${charRooms.map(r => { const last = [...r.items].reverse().find(i => i.by === "char"); return `<button class="row" data-room="${r.id}">${avatarEl(roomAvatar(r), r.charId)}<div class="cell-main"><b>${esc(stageName(r))}<span class="days">💜 +${subDays(r)}</span></b><small>${esc(last ? last.text : "还没有泡泡，进去催一催")}</small></div><span class="tm">${last ? listTime(last.at) : ""}</span></button>`; }).join("") || `<div class="empty">还没订阅谁。点右边「订阅」，选一个你的 char 当爱豆</div>`}
-      <div class="ver">bubble ${esc(VERSION)} · <button data-act="debug">调试记录</button></div>
-    </div>`;
+    </div>${tabbar("home")}`;
   }
 
   function journalDeco() {
@@ -439,7 +604,7 @@
   async function onAct(act, el) {
     const room = roomById(S.view.roomId);
     switch (act) {
-      case "back": S.view = { page: "home" }; S.quote = null; return render();
+      case "back": S.view = S.view.page === "post" ? { page: "plaza", board: S.view.board } : { page: "home" }; S.quote = null; return render();
       case "more": return room && roomMenu(room);
       case "sub": return subscribe();
       case "debug": return showDebug();
@@ -475,6 +640,25 @@
       }
       case "clear": { const inp = $(".composer .ta", app()); if (inp) inp.value = ""; if (room && room.kind === "char" && room.pending.length) { room.pending = []; saveRoom(room); render(); } return; }
       case "unquote": S.quote = null; return render();
+      case "refreshPlaza": await refreshPlaza(S.view.board); return render();
+      case "loadCm": { const b = boardOf(S.view.board); const p = b.posts.find(x => x.id === S.view.postId); if (p) await loadComments(S.view.board, p); return render(); }
+      case "acct": { const v = await sheet("", [{ label: `${myStage()}（大号）`, sub: "所有人都知道是你，会炸", value: "main", on: S.view.acct !== "alt" }, { label: `${S.meta.alt}（小号）`, sub: "没人知道是你", value: "alt", on: S.view.acct === "alt" }]); if (v) { S.view.acct = v; render(); } return; }
+      case "newPost": {
+        const key = S.view.board;
+        let by = "me";
+        if (key !== "me") { const v = await sheet("用哪个号发", [{ label: `${myStage()}（大号）`, sub: "所有人都知道是你，会炸", value: "me" }, { label: `${S.meta.alt}（小号）`, sub: "没人知道是你", value: "meAlt" }]); if (!v) return; by = v; }
+        const t = await inputSheet(`发帖 · ${boardName(key)}的广场`, "", { long: true, max: 300 });
+        if (!t) return;
+        const b = boardOf(key);
+        const post = { id: uid("p"), by, name: by === "meAlt" ? S.meta.alt : myStage(), text: t, likes: by === "me" ? rand(20000, 90000) : rand(0, 30), cmtN: 0, comments: [], at: nowIso() };
+        b.posts.unshift(post); savePlaza(b); herPostSaid(key, by, t, "发帖");
+        S.view = { page: "post", board: key, postId: post.id, acct: by === "meAlt" ? "alt" : "main" }; render();
+        await loadComments(key, post); return render();
+      }
+      case "myAva": { const d = await pickImage(320); if (d) { S.meta.me.avatar = d; saveMeta(); render(); } return; }
+      case "myName": { const n = await inputSheet("我的艺名", myStage()); if (n) { S.meta.me.name = n; saveMeta(); render(); } return; }
+      case "altName": { const n = await inputSheet("广场小号昵称", S.meta.alt); if (n) { S.meta.alt = n; saveMeta(); render(); } return; }
+      case "secret": await pickSecret(); return render();
     }
   }
 
@@ -488,6 +672,15 @@
     S.quote = null; S.forceBottom = true; render();
   }
 
+  async function onComment(text) {
+    if (!text) return;
+    const key = S.view.board; const b = boardOf(key); const p = b.posts.find(x => x.id === S.view.postId); if (!p) return;
+    const by = key !== "me" && S.view.acct === "alt" ? "meAlt" : "me";
+    p.comments.push({ id: uid("c"), by, name: by === "meAlt" ? S.meta.alt : myStage(), text, at: nowIso() });
+    p.cmtN = (p.cmtN || 0) + 1; savePlaza(b); herPostSaid(key, by, text, "评论"); render();
+    await loadComments(key, p); render();
+  }
+
   async function showDebug() {
     const mask = document.createElement("div"); mask.className = "mask";
     mask.innerHTML = `<div class="sheet"><div class="grab"></div><div class="sheet-h">调试记录（最近 10 次）</div><div class="dbg">${S.debug.map(d => `<div><b>${esc(d.label)} ${d.ok ? "✓" : "✗"}</b> <small>${esc(d.at.slice(5, 16).replace("T", " "))}</small><pre>${esc(d.ok ? d.text : d.error)}</pre></div>`).join("") || "还没有"}</div></div>`;
@@ -497,6 +690,9 @@
 
   document.addEventListener("click", e => {
     const a = e.target.closest("[data-act]"); if (a && !a.disabled) { e.preventDefault(); onAct(a.dataset.act, a); return; }
+    const tb = e.target.closest("[data-tab]"); if (tb) { S.view = { page: tb.dataset.tab, board: S.view.board }; render(); return; }
+    const bd = e.target.closest("[data-board]"); if (bd) { S.view = { page: "plaza", board: bd.dataset.board }; render(); return; }
+    const po = e.target.closest("[data-post]"); if (po) { S.view = { page: "post", board: S.view.board, postId: po.dataset.post }; render(); return; }
     const r = e.target.closest("[data-room]"); if (r) { S.view = { page: "room", roomId: r.dataset.room }; S.forceBottom = true; render(); return; }
     const f = e.target.closest("[data-fans]"); if (f) { openFans(roomById(S.view.roomId), f.dataset.fans); return; }
     const q = e.target.closest("[data-quote]");
@@ -507,7 +703,9 @@
   });
   document.addEventListener("submit", e => {
     if (!e.target.matches(".composer")) return; e.preventDefault();
-    const inp = $(".ta", e.target); const t = inp.value.trim(); inp.value = ""; onSend(t);
+    const inp = $(".ta", e.target); const t = inp.value.trim(); inp.value = "";
+    if (S.view.page === "post") return onComment(t);
+    onSend(t);
   });
 
   (async function boot() {

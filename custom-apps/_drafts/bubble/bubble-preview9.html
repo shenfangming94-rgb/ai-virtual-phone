@@ -1,0 +1,112 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<style>
+:root{--brand:#A970EA;--ink:#0F1115;--ink2:#565C66;--sub:#A0A6AE;--line:#EDEFF2;--mist:#F5F6F8;--theme:#B07CE8;--org:#FF8A1F;--pk:#F7AFC0}
+*{box-sizing:border-box}
+body{margin:0;padding:28px 24px;background:#DDDFE3;font-family:-apple-system,"PingFang SC",sans-serif;color:var(--ink);display:flex;gap:26px;align-items:flex-start}
+.col{display:flex;flex-direction:column;align-items:center;gap:12px}
+.lab{font-size:18px;font-weight:800;color:#3a3d44}
+.lab small{display:block;font-size:13px;font-weight:600;color:#6b7078;text-align:center;margin-top:4px}
+.phone{width:375px;height:812px;background:#fff;border-radius:36px;overflow:hidden;display:flex;flex-direction:column;box-shadow:0 10px 30px rgba(0,0,0,.12);position:relative}
+.status{height:50px;display:flex;align-items:center;padding:0 28px;font-size:15px;font-weight:700}
+.capsule{position:absolute;top:58px;right:12px;width:66px;height:30px;border-radius:15px;background:#fff;box-shadow:0 1px 6px rgba(0,0,0,.1)}
+.top{height:92px;padding-top:40px;position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;border-bottom:1px solid var(--line)}
+.top .back{position:absolute;left:16px;top:52px;width:11px;height:11px;border-left:2px solid #222;border-bottom:2px solid #222;transform:rotate(45deg)}
+.top b{font-size:14px}.top span{font-size:9.5px;color:var(--sub);margin-top:2px}
+.boards{display:flex;gap:6px;padding:10px 14px 8px;border-bottom:1px solid var(--line)}
+.boards span{display:flex;align-items:center;gap:5px;font-size:11.5px;font-weight:700;padding:5px 10px 5px 5px;border-radius:999px;background:var(--mist);color:var(--ink2)}
+.boards span.on{background:#F1E8FD;color:var(--brand)}
+.boards i{width:20px;height:20px;border-radius:50%;display:block}
+.bar{display:flex;align-items:center;justify-content:space-between;padding:8px 14px;font-size:10.5px;color:var(--sub)}
+.bar b{color:var(--brand);font-size:11px;display:flex;align-items:center;gap:4px}
+.feed{flex:1;overflow:hidden;background:#F7F7F9;padding:0 0 10px}
+.post{background:#fff;margin:0 0 8px;padding:11px 14px}
+.ph{display:flex;align-items:center;gap:8px}
+.ph .a{width:28px;height:28px;border-radius:50%;flex:none}
+.ph b{font-size:11.5px}.ph small{display:block;font-size:9px;color:var(--sub);font-weight:500}
+.tag{font-style:normal;font-size:7.5px;font-weight:800;color:#fff;padding:2px 5px;border-radius:3px;margin-left:4px;vertical-align:1px}
+.tag.org{background:var(--org)}.tag.alt{background:#C9CDD3}
+.him{box-shadow:inset 3px 0 0 var(--org)}
+.himtag{font-size:8px;font-weight:600;color:#C4A3AD;background:#FFF1F5;border-radius:4px;padding:1px 5px;margin-left:5px}
+.pt{font-size:12px;line-height:1.6;margin:7px 0 6px;color:#25272c}
+.shot{border:1px solid var(--line);border-radius:10px;padding:8px 10px;background:#FAF8FD;font-size:11px}
+.shot .who{font-size:9px;font-weight:700;color:#7b7f88;margin-bottom:4px;display:flex;align-items:center;gap:4px}
+.shot .who em{font-style:normal;font-size:7px;font-weight:800;color:#fff;background:var(--theme);padding:1px 4px;border-radius:3px}
+.shot .bb{display:inline-block;background:#EFEFF3;border-radius:12px;padding:5px 9px;margin:2px 0;font-size:11px}
+.shot .q{border-left:2px solid var(--theme);background:rgba(0,0,0,.04);border-radius:3px;padding:3px 6px;margin-bottom:4px;font-size:10px;color:#6b7078}
+.shot .qn{font-size:8px;color:var(--sub)}
+.pf{display:flex;gap:16px;font-size:10px;color:var(--sub);margin-top:8px}
+.hot{font-style:normal;font-size:8px;font-weight:800;color:#fff;background:#F0626E;padding:1px 5px;border-radius:3px;margin-right:4px}
+.cm{padding:9px 14px;border-bottom:1px solid #F3F4F6;display:flex;gap:8px}
+.cm .a{width:22px;height:22px;border-radius:50%;flex:none}
+.cm b{font-size:10.5px;color:var(--ink2)}.cm p{margin:2px 0 0;font-size:11.5px;line-height:1.55}
+.cm.mine{background:#FFF7FA}
+.composer{display:flex;gap:7px;align-items:center;padding:8px 11px 24px;border-top:1px solid var(--line)}
+.acct{display:flex;align-items:center;gap:4px;font-size:10px;font-weight:700;background:var(--mist);border-radius:999px;padding:5px 8px 5px 5px;flex:none}
+.acct i{width:18px;height:18px;border-radius:50%;display:block}
+.ta{flex:1;background:var(--mist);border-radius:19px;padding:8px 12px;font-size:12px;color:var(--sub)}
+.send{width:32px;height:32px;border-radius:50%;background:var(--brand);flex:none}
+.fab{position:absolute;right:18px;bottom:84px;width:46px;height:46px;border-radius:50%;background:var(--brand);color:#fff;display:grid;place-items:center;font-size:26px;box-shadow:0 6px 16px rgba(169,112,234,.4)}
+.tabbar{display:flex;justify-content:space-around;border-top:1px solid var(--line);padding:8px 0 22px;font-size:10px;color:var(--sub);font-weight:600}
+.tabbar span.on{color:var(--brand)}
+.mask{position:absolute;inset:0;background:rgba(10,11,14,.3)}
+.sheet{position:absolute;left:0;right:0;bottom:0;background:#fff;border-radius:20px 20px 0 0;padding:10px 0 24px}
+.grab{width:36px;height:4px;border-radius:3px;background:#DDE0E5;margin:0 auto 10px}
+.opt{display:flex;align-items:center;gap:10px;padding:11px 18px;border-top:1px solid #F3F4F6;font-size:12.5px}
+.opt i{width:26px;height:26px;border-radius:50%;display:block}
+.opt small{display:block;font-size:10px;color:var(--sub)}
+.opt.on{background:#FAF5FF}
+</style></head><body>
+
+<div class="col"><div class="lab">粉丝广场<small>底部多一个「广场」；上面切换谁的广场；刷新一次出一批帖</small></div>
+<div class="phone">
+ <div class="status">22:22</div><div class="capsule"></div>
+ <div class="top"><b>广场</b><span>bubble</span></div>
+ <div class="boards"><span class="on"><i style="background:linear-gradient(135deg,#c8a6f3,#8f5fe0)"></i>权时焕</span><span><i style="background:linear-gradient(135deg,#f6d3dc,#c98a9c)"></i>沈清仪</span></div>
+ <div class="bar"><span>今天 23:50 刷新过</span><b>↻ 刷新广场</b></div>
+ <div class="feed">
+  <div class="post"><div class="ph"><i class="a" style="background:#FFD6E0"></i><div><b>冰箱里有饭团</b><small>12 分钟前</small></div></div>
+   <div class="pt"><i class="hot">热</i>？？？今天被引用的那条到底谁发的 “冰箱里有饭团 热一下再吃” 哥还回“你怎么知道”</div>
+   <div class="shot"><div class="who"><em>ARTIST</em>权时焕 · 23:44</div><div class="q">冰箱里有饭团 热一下再吃<div class="qn">被引用的粉丝回复</div></div><span class="bb">你怎么知道我冰箱里有饭团</span></div>
+   <div class="pf"><span>♡ 2.3k</span><span>💬 486</span></div></div>
+  <div class="post"><div class="ph"><i class="a" style="background:#D6E9FF"></i><div><b>sunny_0412</b><small>半小时前</small></div></div>
+   <div class="pt">猜的吧……粉丝猜中冰箱有饭团很奇怪吗 别乱扒了 散了散了</div>
+   <div class="pf"><span>♡ 860</span><span>💬 211</span></div></div>
+  <div class="post"><div class="ph"><i class="a" style="background:#DDF5E4"></i><div><b>北北北</b><small>1 小时前</small></div></div>
+   <div class="pt">练到 23 点还在练 公司能不能做个人啊 腿都不是自己的了</div>
+   <div class="pf"><span>♡ 1.1k</span><span>💬 93</span></div></div>
+ </div>
+ <div class="fab">＋</div>
+ <div class="tabbar"><span>泡泡</span><span class="on">广场</span><span>我的</span></div>
+</div></div>
+
+<div class="col"><div class="lab">帖子里<small>评论楼；你可以用大号或小号评论；他来了你看得出</small></div>
+<div class="phone">
+ <div class="status">22:22</div><div class="capsule"></div>
+ <div class="top"><div class="back"></div><b>帖子</b><span>权时焕的广场</span></div>
+ <div class="post" style="border-bottom:8px solid #F7F7F9"><div class="ph"><i class="a" style="background:#FFD6E0"></i><div><b>冰箱里有饭团</b><small>12 分钟前</small></div></div>
+  <div class="pt">？？？今天被引用的那条到底谁发的 “冰箱里有饭团 热一下再吃” 哥还回“你怎么知道”</div>
+  <div class="pf"><span>♡ 2.3k</span><span>💬 486</span></div></div>
+ <div style="flex:1;overflow:hidden">
+  <div class="cm"><i class="a" style="background:#E7DDFB"></i><div><b>晚风</b><p>这语气 熟人吧 不会是同公司的吧</p></div></div>
+  <div class="cm"><i class="a" style="background:#FFE9C7"></i><div><b>一只小土豆</b><p>别别别 我不听我不听</p></div></div>
+  <div class="cm him"><i class="a" style="background:linear-gradient(135deg,#8a7a6a,#4b4038);box-shadow:0 0 0 1.5px var(--org)"></i><div><b>jhk_0519</b><span class="himtag">是权时焕的小号</span><p>想多了 就是粉丝</p></div></div>
+  <div class="cm mine"><i class="a" style="background:#C9CDD3"></i><div><b>柠檬不酸<em class="tag alt">我的小号</em></b><p>猜的吧 冰箱有饭团很正常</p></div></div>
+  <div class="cm"><i class="a" style="background:#D9F1F6"></i><div><b>yuki</b><p>彼女いないよね…？｜<span style="color:#F08AA4">没有女朋友吧……？</span></p></div></div>
+ </div>
+ <div class="composer"><span class="acct"><i style="background:#C9CDD3"></i>小号 ⌄</span><span class="ta">说点什么…</span><span class="send"></span></div>
+</div></div>
+
+<div class="col"><div class="lab">发帖 / 评论选身份<small>他的广场：大号或小号；你自己的广场：只有大号</small></div>
+<div class="phone">
+ <div class="status">22:22</div><div class="capsule"></div>
+ <div class="top"><div class="back"></div><b>帖子</b><span>权时焕的广场</span></div>
+ <div style="flex:1;background:#F7F7F9"></div>
+ <div class="mask"></div>
+ <div class="sheet"><div class="grab"></div>
+  <div class="opt"><i style="background:linear-gradient(135deg,#f6d3dc,#c98a9c)"></i><div>沈清仪 <em class="tag org">ARTIST</em><small>大号：所有人都知道是你，会炸</small></div></div>
+  <div class="opt on"><i style="background:#C9CDD3"></i><div>柠檬不酸<small>小号：没人知道是你（昵称可以改）</small></div></div>
+ </div>
+</div></div>
+
+</body></html>

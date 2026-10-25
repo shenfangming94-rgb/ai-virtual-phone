@@ -516,6 +516,10 @@
       if (IMG[ref]) { el.src = IMG[ref]; return; }
       api.media.get({ ref }).then(r => { if (r && r.dataUrl) { IMG[ref] = r.dataUrl; document.querySelectorAll(`img[data-ref="${CSS.escape(ref)}"]`).forEach(x => { x.src = r.dataUrl; }); } }).catch(e => console.warn(e));
     });
+    document.querySelectorAll("img.ph-img").forEach(el => {
+      const mark = () => { if (el.naturalWidth > el.naturalHeight) el.classList.add("wide"); };
+      if (el.complete) mark(); else el.addEventListener("load", mark, { once: true });
+    });
   }
   async function storeDataUrl(dataUrl) {
     const r = await api.media.put({ dataUrl });
@@ -559,10 +563,10 @@
     return dayChips(gs, g => {
       const last = g.items[g.items.length - 1];
       if (g.key === "me") {
-        return `<div class="grp me"><div class="stack">${g.items.map((it, i) => `<div class="line"><div class="bub ${it.photo ? "has-ph" : ""}">${bubInner(it)}</div>${i === 0 ? `<span class="stamp">${hm(it.at)}</span>` : ""}</div>`).join("")}</div>${avatarEl(myAvatar(), "me", "me-ava")}</div>`;
+        return `<div class="grp me"><div class="stack">${g.items.map((it, i) => `<div class="line"><div class="bub ${it.photo ? (it.text || it.quote ? "has-ph" : "ph-only") : ""}">${bubInner(it)}</div>${i === 0 ? `<span class="stamp">${hm(it.at)}</span>` : ""}</div>`).join("")}</div>${avatarEl(myAvatar(), "me", "me-ava")}</div>`;
       }
       const fold = last.fans && last.fans.length ? `<button class="fold" data-fans="${last.id}"><span class="heads"><i style="background:#FFD6E0"></i><i style="background:#D6E9FF"></i><i style="background:#DDF5E4"></i></span><span class="n">粉丝回复 ${last.fanN || last.fans.length} ›</span></button>` : "";
-      return `<div class="grp">${avatarEl(roomAvatar(room), room.charId, "artist-ava")}<div class="stack"><div class="who"><em class="art">ARTIST</em>${esc(stageName(room))}</div>${g.items.map((it, i) => `<div class="line" data-item="${it.id}"><div class="bub ${it.photo ? "has-ph" : ""}">${bubInner(it)}</div>${i === 0 ? `<span class="stamp">${hm(it.at)}</span>` : ""}</div>`).join("")}</div></div>${fold}`;
+      return `<div class="grp">${avatarEl(roomAvatar(room), room.charId, "artist-ava")}<div class="stack"><div class="who"><em class="art">ARTIST</em>${esc(stageName(room))}</div>${g.items.map((it, i) => `<div class="line" data-item="${it.id}"><div class="bub ${it.photo ? (it.text || it.quote ? "has-ph" : "ph-only") : ""}">${bubInner(it)}</div>${i === 0 ? `<span class="stamp">${hm(it.at)}</span>` : ""}</div>`).join("")}</div></div>${fold}`;
     });
   }
 
@@ -572,7 +576,7 @@
     return dayChips(gs, g => {
       const f = g.items[0];
       if (g.key === "me") {
-        return `<div class="grp me"><div class="stack"><div class="who"><em class="art">ARTIST</em>${esc(myStage())}</div>${g.items.map((it, i) => `<div class="line"><div class="bub ${it.photo ? "has-ph" : ""}">${bubInner(it)}</div>${i === 0 ? `<span class="stamp">${hm(it.at)}</span>` : ""}</div>`).join("")}</div>${avatarEl(myAvatar(), "me", "me-ava")}</div>`;
+        return `<div class="grp me"><div class="stack"><div class="who"><em class="art">ARTIST</em>${esc(myStage())}</div>${g.items.map((it, i) => `<div class="line"><div class="bub ${it.photo ? (it.text || it.quote ? "has-ph" : "ph-only") : ""}">${bubInner(it)}</div>${i === 0 ? `<span class="stamp">${hm(it.at)}</span>` : ""}</div>`).join("")}</div>${avatarEl(myAvatar(), "me", "me-ava")}</div>`;
       }
       if (f.by === "him") {
         const c = charById(f.charId) || {}; const r = S.rooms.find(x => x.kind === "char" && x.charId === f.charId);

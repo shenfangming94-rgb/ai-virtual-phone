@@ -135,6 +135,62 @@ export type MtVoucher = {
     charReview?: MtReview;
 };
 
+// ── 我的店：她当老板 ──
+
+export type MyShopOrder = {
+    id: string;
+    /** 当天第几单（#1、#2…） */
+    no: number;
+    customer: string;
+    /** char 来光顾时是他的 id */
+    charId?: string;
+    items: MtItem[];
+    total: number;
+    /** 扣掉平台服务费后她实收 */
+    income: number;
+    note: string;
+    /** 他下单时给老板的留言 */
+    message?: string;
+    address: string;
+    createdAt: string;
+    acceptAt?: string;
+    readyAt?: string;
+    pickAt?: string;
+    deliverAt?: string;
+    cancelled?: string;
+    settled?: boolean;
+    reviewAt?: string;
+    reviewed?: boolean;
+    rider?: string;
+};
+
+export type MyShopReview = MtReview & { reply?: string; orderId?: string };
+
+export type MyShop = {
+    name: string;
+    cat: string;
+    emoji: string;
+    logo?: string;
+    img?: string;
+    desc: string;
+    notice: string;
+    address: string;
+    minOrder: number;
+    deliveryFee: number;
+    open: boolean;
+    autoAccept: boolean;
+    dishes: MtDish[];
+    reviews: MyShopReview[];
+    orders: MyShopOrder[];
+    /** 店里还没提现的钱 */
+    balance: number;
+    withdrawn: number;
+    createdAt: string;
+    lastSimAt: string;
+    /** charId → 他上次来光顾 */
+    visits: Record<string, string>;
+};
+
 export type MtSettings = {
     /** 真实配送时长（25~45 分钟）；关掉就是 3~6 分钟送到 */
     realTime: boolean;
@@ -151,6 +207,7 @@ export type MeituanState = {
     rolls: Record<string, string>;
     /** charId → 他上次给她点外卖的时间 */
     lastCharOrder: Record<string, string>;
+    myShop?: MyShop;
 };
 
 const STORE_KEY = "nox_meituan_v1";
@@ -198,6 +255,7 @@ export function loadMeituan(identityId?: string): MeituanState {
             settings: { ...base.settings, ...(raw.settings || {}) },
             rolls: raw.rolls && typeof raw.rolls === "object" ? raw.rolls : {},
             lastCharOrder: raw.lastCharOrder && typeof raw.lastCharOrder === "object" ? raw.lastCharOrder : {},
+            myShop: raw.myShop && typeof raw.myShop === "object" ? raw.myShop : undefined,
         };
     } catch {
         return base;
@@ -215,6 +273,10 @@ export function updateMeituan(mut: (state: MeituanState) => void, identityId?: s
         state.shops = [...keep, ...rest];
     }
     state.orders = state.orders.slice(0, 200);
+    if (state.myShop) {
+        state.myShop.orders = state.myShop.orders.slice(0, 300);
+        state.myShop.reviews = state.myShop.reviews.slice(0, 300);
+    }
     kvSet(scopeKey(identityId), JSON.stringify(state));
     if (typeof window !== "undefined") window.dispatchEvent(new CustomEvent(MEITUAN_UPDATED_EVENT));
     return state;

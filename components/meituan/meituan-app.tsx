@@ -49,6 +49,9 @@ import {
     redeemVoucher,
 } from "@/lib/meituan-engine";
 import { orderHeadline, orderWhoLabel, useMtNow } from "./meituan-chat-card";
+import { MyShopView } from "./meituan-myshop";
+import { myShopRating } from "@/lib/meituan-myshop";
+import { resolveUserIdentity } from "@/lib/settings-storage";
 import { seedDeals, seedShops } from "@/lib/meituan-seed";
 
 type Page =
@@ -63,11 +66,15 @@ type Page =
     | { id: "rider"; orderId: string }
     | { id: "deals" }
     | { id: "voucher"; voucherId: string }
-    | { id: "mine" };
+    | { id: "mine" }
+    | { id: "store" }
+    | { id: "addresses" }
+    | { id: "myReviews" }
+    | { id: "settings" };
 
-type Person = { id: string; name: string; avatar?: string | null };
+export type Person = { id: string; name: string; avatar?: string | null };
 
-function friends(): Person[] {
+export function friends(): Person[] {
     const matches = createIdentityMatcher();
     const chars = loadCharacters();
     return loadChatContacts()
@@ -93,21 +100,21 @@ function useMediaUrl(ref?: string): string | null {
     return url;
 }
 
-const PIN = (
+export const PIN = (
     <svg className="mt-pin" viewBox="0 0 24 24" aria-hidden><path d="M12 2a7 7 0 0 0-7 7c0 5 7 13 7 13s7-8 7-13a7 7 0 0 0-7-7zm0 9.5A2.5 2.5 0 1 1 12 6.5a2.5 2.5 0 0 1 0 5z" /></svg>
 );
 
-function Stars({ n, small }: { n: number; small?: boolean }) {
+export function Stars({ n, small }: { n: number; small?: boolean }) {
     const full = Math.round(n);
     return <span className={`mt-stars ${small ? "is-s" : ""}`}>{"★".repeat(full)}{"☆".repeat(Math.max(0, 5 - full))}</span>;
 }
 
-function Pic({ src, emoji, className }: { src?: string; emoji: string; className: string }) {
+export function Pic({ src, emoji, className }: { src?: string; emoji: string; className: string }) {
     const url = useMediaUrl(src);
     return <div className={className} style={url ? { backgroundImage: `url(${url})` } : undefined}>{url ? null : emoji}</div>;
 }
 
-function Sheet({ title, onClose, children }: { title?: string; onClose: () => void; children: React.ReactNode }) {
+export function Sheet({ title, onClose, children }: { title?: string; onClose: () => void; children: React.ReactNode }) {
     return (
         <div className="mt-sheet-bg" onClick={onClose}>
             <section className="mt-sheet" onClick={e => e.stopPropagation()}>
@@ -118,7 +125,7 @@ function Sheet({ title, onClose, children }: { title?: string; onClose: () => vo
     );
 }
 
-function Nav({ title, onBack, right }: { title: React.ReactNode; onBack: () => void; right?: React.ReactNode }) {
+export function Nav({ title, onBack, right }: { title: React.ReactNode; onBack: () => void; right?: React.ReactNode }) {
     return (
         <header className="mt-nav">
             <button type="button" className="mt-back" onClick={onBack} aria-label="返回"><ChevronLeft size={22} /></button>
@@ -128,12 +135,12 @@ function Nav({ title, onBack, right }: { title: React.ReactNode; onBack: () => v
     );
 }
 
-function hm(iso: string): string {
+export function hm(iso: string): string {
     const d = new Date(iso);
     return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
 }
 
-function full(iso: string): string {
+export function full(iso: string): string {
     const d = new Date(iso);
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")} ${hm(iso)}`;
 }
@@ -216,7 +223,6 @@ export function MeituanApp({ onClose, onNotice }: { onClose: () => void; onNotic
         <nav className="mt-tab">
             {([["首页", "home"], ["订单", "orders"], ["我的店", "store"], ["我的", "mine"]] as const).map(([label, id]) => (
                 <button type="button" key={id} className={page.id === id ? "on" : ""} onClick={() => {
-                    if (id === "store") { notice("「我的店」下一版开张～"); return; }
                     tabTo({ id } as Page);
                 }}>{label}</button>
             ))}
@@ -630,12 +636,81 @@ export function MeituanApp({ onClose, onNotice }: { onClose: () => void; onNotic
         );
     };
 
-    // ── 我的 ──
+    // ── 我的（照真美团「我的」页） ──
+    const me = useMemo(() => { try { return resolveUserIdentity(undefined, "chat"); } catch { return null; } }, []);
+    const myReviews = useMemo(() => {
+        const list: { r: MtReview; where: string }[] = [];
+        for (const o of st.orders) if (o.review) list.push({ r: o.review, where: o.shopName });
+        for (const v of st.vouchers) if (v.review) list.push({ r: v.review, where: v.deal.shopName });
+        return list.sort((a, b) => b.r.at.localeCompare(a.r.at));
+    }, [st.orders, st.vouchers]);
+    const going = st.orders.filter(o => { const g = orderStage(o, now); return g !== "delivered" && g !== "cancelled"; }).length;
+    const toReview = st.orders.filter(o => orderStage(o, now) === "delivered" && !o.review && o.to === MT_SELF).length + st.vouchers.filter(v => v.usedAt && !v.review).length;
+    const unusedVouchers = st.vouchers.filter(v => !v.usedAt).length;
+    const fromHim = st.orders.filter(o => o.from !== MT_SELF).length;
+    const myShop = st.myShop;
+    const ICON = (d: string) => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d={d} /></svg>;
     const mine = (
         <div className="mt-page has-tab is-gray">
-            <div className="mt-plain-top"><b>我的</b></div>
+            <div className="mm-head">
+                <div className="mm-user">
+                    <Pic src={me?.avatarUrl || undefined} emoji="🙂" className="mm-ava" />
+                    <div>
+                        <b>{me?.name || addr.name || "美团用户"}</b>
+                        <span className="mm-vip">美团会员 · 黄金</span>
+                    </div>
+                </div>
+                <div className="mm-assets">
+                    <button type="button" onClick={() => notice("红包都用在下单满减里啦")}><b>3</b><small>红包</small></button>
+                    <button type="button" onClick={() => { tabTo({ id: "orders" }); setOrderTab("deal"); }}><b>{unusedVouchers}</b><small>团购券</small></button>
+                    <button type="button" onClick={() => notice("余额在支付宝 / 钱包里")}><b>{formatWalletAmount(wallet.balance).replace(/^¥/, "")}</b><small>余额</small></button>
+                    <button type="button" onClick={() => go({ id: "myReviews" })}><b>{myReviews.length}</b><small>我的评价</small></button>
+                </div>
+            </div>
+            <section className="mt-card mm-card">
+                <div className="mm-title"><b>我的订单</b><button type="button" className="mt-dim" onClick={() => tabTo({ id: "orders" })}>全部订单 ›</button></div>
+                <div className="mm-grid is-4">
+                    <button type="button" onClick={() => { tabTo({ id: "orders" }); setOrderTab("waimai"); }}>{ICON("M5 7h14l-1 13H6zM9 7a3 3 0 0 1 6 0")}{going ? <sup>{going}</sup> : null}<span>待收货</span></button>
+                    <button type="button" onClick={() => go({ id: "myReviews" })}>{ICON("M12 3l2.6 5.6 6 .7-4.5 4.1 1.2 6L12 16.5 6.7 19.4l1.2-6L3.4 9.3l6-.7z")}{toReview ? <sup>{toReview}</sup> : null}<span>待评价</span></button>
+                    <button type="button" onClick={() => { tabTo({ id: "orders" }); setOrderTab("deal"); }}>{ICON("M3 8h18v3a2 2 0 0 0 0 4v3H3v-3a2 2 0 0 0 0-4zM14 8v10")}{unusedVouchers ? <sup>{unusedVouchers}</sup> : null}<span>团购券</span></button>
+                    <button type="button" onClick={() => tabTo({ id: "orders" })}>{ICON("M20 12a8 8 0 1 1-3-6.2M20 4v5h-5")}<span>退款/售后</span></button>
+                </div>
+            </section>
+            {fromHim ? (
+                <button type="button" className="mt-card mm-him" onClick={() => tabTo({ id: "orders" })}>
+                    <span>💌</span><div><b>他给我点过 {fromHim} 次外卖</b><small>最近一次：{st.orders.find(o => o.from !== MT_SELF)?.shopName}</small></div><ChevronRight size={16} />
+                </button>
+            ) : null}
+            <button type="button" className="mt-card mm-shop" onClick={() => tabTo({ id: "store" })}>
+                <Pic src={myShop?.logo} emoji={myShop?.emoji || "🏪"} className="mm-shop-ic" />
+                <div>
+                    <b>{myShop ? myShop.name : "我的店"}</b>
+                    <small>{myShop ? `${myShop.open ? "营业中" : "休息中"} · ${myShopRating(myShop).toFixed(1)} 分 · 可提现 ${mtYuan(myShop.balance)}` : "开一家自己的小店，当老板"}</small>
+                </div>
+                <em>{myShop ? "去后台" : "去开店"}</em>
+            </button>
+            <section className="mt-card mm-card">
+                <div className="mm-title"><b>常用功能</b></div>
+                <div className="mm-grid">
+                    <button type="button" onClick={() => go({ id: "addresses" })}>{ICON("M12 21s-7-7.5-7-12a7 7 0 0 1 14 0c0 4.5-7 12-7 12zM12 11.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5z")}<span>收货地址</span></button>
+                    <button type="button" onClick={() => go({ id: "myReviews" })}>{ICON("M4 5h16v11H8l-4 4zM8 9h8M8 12h5")}<span>我的评价</span></button>
+                    <button type="button" onClick={() => tabTo({ id: "store" })}>{ICON("M4 10h16l-1-5H5zM5 10v10h14V10M9 20v-5h6v5")}<span>我的店</span></button>
+                    <button type="button" onClick={() => go({ id: "deals" })}>{ICON("M4 7h16v13H4zM4 11h16M9 3v4M15 3v4")}<span>团购</span></button>
+                    <button type="button" onClick={() => go({ id: "settings" })}>{ICON("M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM19.4 15a1.6 1.6 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.6 1.6 0 0 0-2.7 1.1V21a2 2 0 1 1-4 0v-.1a1.6 1.6 0 0 0-2.7-1.1l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1A1.6 1.6 0 0 0 3.6 15H3a2 2 0 1 1 0-4h.1a1.6 1.6 0 0 0 1.1-2.7l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1A1.6 1.6 0 0 0 9.7 4.3V3a2 2 0 1 1 4 0v.1a1.6 1.6 0 0 0 2.7 1.1l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.6 1.6 0 0 0 1.1 2.7H21a2 2 0 1 1 0 4h-.1a1.6 1.6 0 0 0-1.5 1.3z")}<span>外卖设置</span></button>
+                    <button type="button" onClick={() => notice("客服小美：亲，有什么可以帮您～")}>{ICON("M4 13v-1a8 8 0 0 1 16 0v1M4 13h3v6H5a1 1 0 0 1-1-1zM20 13h-3v6h2a1 1 0 0 0 1-1z")}<span>联系客服</span></button>
+                </div>
+            </section>
+            <section className="mt-card mm-addr" onClick={() => go({ id: "addresses" })}>
+                {PIN}<div><b>{addr.address || "还没填收货地址"}</b><small>{addr.address ? `${addr.name} ${addr.phone}` : "点一下去填"}</small></div><ChevronRight size={16} />
+            </section>
+        </div>
+    );
+
+    const addressesPage = (
+        <div className="mt-page is-gray">
+            <Nav title="收货地址" onBack={back} />
             <section className="mt-card">
-                <div className="mt-ck-h">我的收货地址</div>
+                <div className="mt-ck-h">我的地址</div>
                 <button type="button" className="mt-ck-addr" onClick={() => setSheet("editMe")}>{PIN}<div><b>{addr.address || "还没填"}</b><small>{addr.name} {addr.phone}</small></div><ChevronRight size={16} /></button>
             </section>
             <section className="mt-card">
@@ -644,13 +719,32 @@ export function MeituanApp({ onClose, onNotice }: { onClose: () => void; onNotic
                     const a = loadGiftStore().addresses[p.id];
                     return <button type="button" key={p.id} className="mt-ck-addr" onClick={() => setSheet(`charAddr:${p.id}`)}>{PIN}<div><b>{p.name} · {a?.address || "还没填"}</b><small>{a ? `${a.name} ${a.phone}` : "点一下填写，或者让他按人设编"}</small></div><ChevronRight size={16} /></button>;
                 })}
+                {!people.length ? <p className="mt-hint">还没有好友</p> : null}
             </section>
+        </div>
+    );
+
+    const myReviewsPage = (
+        <div className="mt-page is-gray">
+            <Nav title="我的评价" onBack={back} />
+            {myReviews.map(({ r, where }) => (
+                <section className="mt-card" key={r.id}>
+                    <div className="mt-ck-h">{where}</div>
+                    <ReviewRow r={r} />
+                </section>
+            ))}
+            {!myReviews.length ? <p className="mt-hint" style={{ textAlign: "center", marginTop: 60 }}>还没写过评价{toReview ? `，有 ${toReview} 单等你评价` : ""}</p> : null}
+        </div>
+    );
+
+    const settingsPage = (
+        <div className="mt-page is-gray">
+            <Nav title="外卖设置" onBack={back} />
             <section className="mt-card">
-                <div className="mt-ck-h">设置</div>
                 <div className="mt-kv">真实配送时长<button type="button" className={`mt-sw ${st.settings.realTime ? "on" : ""}`} onClick={() => updateMeituan(s => { s.settings.realTime = !s.settings.realTime; })} /></div>
-                <p className="mt-hint">开着是 25~45 分钟送到；关了 3~6 分钟就到</p>
+                <p className="mt-hint">开着是 25~45 分钟送到；关了 3~6 分钟就到（我的店出餐配送也跟着变快）</p>
                 <div className="mt-kv">允许他主动给我点外卖<button type="button" className={`mt-sw ${st.settings.allowCharOrders ? "on" : ""}`} onClick={() => updateMeituan(s => { s.settings.allowCharOrders = !s.settings.allowCharOrders; })} /></div>
-                <p className="mt-hint">关了他只在聊天里你要的时候才点</p>
+                <p className="mt-hint">关了他只在聊天里你要的时候才点，也不会自己跑来你店里光顾</p>
             </section>
         </div>
     );
@@ -667,8 +761,12 @@ export function MeituanApp({ onClose, onNotice }: { onClose: () => void; onNotic
     else if (page.id === "deals") body = deals;
     else if (page.id === "voucher") body = voucherPage(page.voucherId);
     else if (page.id === "mine") body = mine;
+    else if (page.id === "store") body = <MyShopView st={st} people={people} busy={busy} run={run} notice={notice} refresh={refresh} />;
+    else if (page.id === "addresses") body = addressesPage;
+    else if (page.id === "myReviews") body = myReviewsPage;
+    else if (page.id === "settings") body = settingsPage;
 
-    const showTab = page.id === "home" || page.id === "orders" || page.id === "mine";
+    const showTab = page.id === "home" || page.id === "orders" || page.id === "mine" || page.id === "store";
 
     return (
         <div className="mt-app">

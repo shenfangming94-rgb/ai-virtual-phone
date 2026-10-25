@@ -18,17 +18,19 @@
     ai: {
       async generate(p) {
         calls.push(p); await sleep(300);
-        if (p.appTags[1] === "room") return { text: "===泡泡===\n引用：无\n内容：大家吃饭了吗\n===泡泡===\n引用：无\n内容：练到现在才结束 腿已经不是我的了\n===泡泡===\n引用：腿借我我替你扛\n内容：不用了 自己的腿自己扛\n" + FANS };
+        if (p.appTags[1] === "room") return { text: "===泡泡===\n引用：无\n内容：大家吃饭了吗\n===泡泡===\n引用：无\n内容：练到现在才结束 腿已经不是我的了\n照片：练习室镜子前的自拍，满头汗\n出镜：是\n===泡泡===\n引用：腿借我我替你扛\n内容：不用了 自己的腿自己扛\n" + FANS };
         if (p.appTags[1] === "plaza") return { text: "===你的帖子===\n内容：别扒了 都早点睡" };
         if (p.appTags[1] === "secret") return { text: FANS + "\n===你的回复===\n内容：少说话 早点睡" };
         return { text: "" };
       },
+      async generateImage(p) { calls.push({ img: p }); await sleep(300); const c = document.createElement("canvas"); c.width = 300; c.height = 380; const g = c.getContext("2d"); const gr = g.createLinearGradient(0, 0, 300, 380); gr.addColorStop(0, "#c9b7e8"); gr.addColorStop(1, "#5b4a7a"); g.fillStyle = gr; g.fillRect(0, 0, 300, 380); return { ok: true, dataUrl: c.toDataURL("image/jpeg") }; },
       async chat(p) {
         calls.push(p); await sleep(300);
         if (/===帖子===/.test(p.prompt)) return { text: "===帖子===\n昵称：冰箱里有饭团\n内容：？？？今天被引用的那条到底谁发的 哥还回你怎么知道\n截图：不用了 自己的腿自己扛\n点赞：2300\n评论数：486\n===帖子===\n昵称：sunny_0412\n内容：猜的吧 别乱扒了 散了散了\n截图：无\n点赞：860\n评论数：211\n===帖子===\n昵称：加班到十点\n内容：今天又加班 回家路上听哥的歌续命\n截图：无\n点赞：120\n评论数：14\n===帖子===\n昵称：yuki\n内容：今日も練習お疲れ様！｜今天也练习辛苦啦！\n截图：练到现在才结束 腿已经不是我的了\n点赞：640\n评论数：40" };
         return { text: FANS };
       },
     },
+    media: { store: {}, async put(p) { const ref = "media-store://" + Math.random().toString(36).slice(2); this.store[ref] = p.dataUrl; return { ref }; }, async get(p) { return { ref: p.ref, dataUrl: this.store[p.ref] }; } },
     memory: { async addTimeline(p) { calls.push({ memory: p }); return {}; } },
     ui: { async toast() {} },
   };

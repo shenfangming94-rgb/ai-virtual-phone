@@ -77,6 +77,9 @@
     }
   }
   const charById = id => S.chars.find(c => c.id === id);
+  // 认马甲：他不知道哪个号是她时，0 没察觉 / 1 有点眼熟 / 2 八成是她 / 3 确定是她
+  const SUS = ["没察觉", "有点眼熟", "八成是她", "确定是她"];
+  const SUS_LINE = ["你没察觉那个账号是谁。", "你觉得那个账号有点眼熟，说话像她，但不确定。", "你八成觉得那个账号是她。", "你确定那个账号就是她，只是没说破。"];
   const myRoom = () => S.rooms.find(r => r.kind === "me");
   const roomById = id => S.rooms.find(r => r.id === id);
   const herName = () => S.identity.name || "她";
@@ -181,29 +184,39 @@
     const lastChar = [...room.items].reverse().find(i => i.by === "char");
     const fanPool = lastChar && lastChar.fans ? lastChar.fans.filter(f => !f.me).slice(0, 6) : [];
     const hers = opts.sent || [];
-    const mixed = [...fanPool.map(f => f.t), ...hers.map(t => room.known ? `${t}（这条是${herName()}的账号发的）` : t)].sort(() => Math.random() - 0.5);
+    const sus = room.sus || 0;
+    const herAcct = room.known ? "（这条是她的账号发的）" : sus >= 1 ? "（这条是你在留意的那个账号发的）" : "";
+    const mixed = [...fanPool.map(f => f.t), ...hers.map(t => `${t}${herAcct}`)].sort(() => Math.random() - 0.5);
+    const judge = !room.known && !room.susLock && hers.length && sus < 3;
     const raw = await charGen(room.charId, "room", [
       `【bubble 是什么】你是爱豆「${name}」，在付费粉丝通讯 app bubble 上给订阅你的粉丝发消息（泡泡）。泡泡是群发的，所有订阅的人都看得到；粉丝的回复只有你看得到，粉丝之间互相看不到。`,
-      `【${herName()}】她也订阅了你的泡泡，用的是一个粉丝账号。${room.known ? "你知道哪个账号是她。可以装作不知道，也可以引用她的话暗戳戳回应，但不能在泡泡里点破她是谁。" : "你不知道哪个账号是她，她的回复对你来说和其他粉丝一样。"}你们现实里的关系按你的记忆来。`,
+      `【${herName()}】她也订阅了你的泡泡，用的是一个粉丝账号。${room.known ? "你知道哪个账号是她。可以装作不知道，也可以引用她的话暗戳戳回应，但不能在泡泡里点破她是谁。" : `你不知道哪个账号是她。${SUS_LINE[sus]}${sus >= 1 ? "可以暗戳戳试探或者引用那个账号的话，但不能在泡泡里点破。" : ""}`}你们现实里的关系按你的记忆来。`,
       recent ? `你最近发过的泡泡：\n${recent}` : "这是你第一次在这个泡泡房发泡泡。",
       mixed.length ? `粉丝刚发来的回复（随便挑了几条）：\n${mixed.map(t => `- ${t}`).join("\n")}` : "",
       `【恋爱】${LOVE_RULE(room.charId, herName())}`,
       `【粉丝】${FAN_MOOD}`, NO_HER(),
       (() => { const pb = S.plaza.find(x => x.board === room.charId); const hotP = pb ? pb.posts.filter(p => p.by !== "him").slice(0, 3) : []; return hotP.length && Math.random() < 0.3 ? `【粉丝广场】你偶尔会看一眼自己的粉丝广场，最近在聊：${hotP.map(p => `「${p.text.slice(0, 40)}」`).join("")}。一般明星不太当回事，泡泡里不用提；除非事情闹得很大，才可能顺口回应一下。` : ""; })(),
       opts.direction ? `【这次的情况】${opts.direction}` : "",
-      "【这次】发 1~4 条新泡泡。像真爱豆发泡泡：短、口语、分享此刻在干嘛和心情，偶尔引用某条粉丝回复再回它。不要每条都引用，不要写成公告。",
-      "【输出】每条泡泡一个块：\n===泡泡===\n引用：被引用的那条粉丝回复原话（不引用写 无）\n内容：泡泡内容\n所有泡泡写完后：\n===粉丝回复===\n" + FAN_FORMAT + "写 8~12 条，是粉丝对你这几条泡泡的反应。",
+      "【这次】发 1~4 条新泡泡。像真爱豆发泡泡：短、口语、分享此刻在干嘛和心情，偶尔引用某条粉丝回复再回它。不要每条都引用，不要写成公告。偶尔可以配一张照片，大多数时候不配。",
+      opts.wantPhoto ? "【这次】粉丝在催照片，这次至少有一条泡泡配照片。" : "",
+      "【输出】每条泡泡一个块：\n===泡泡===\n引用：被引用的那条粉丝回复原话（不引用写 无）\n内容：泡泡内容（只发照片可以写 无）\n照片：照片画面描述（不配照片写 无）\n出镜：照片里有没有你本人（是/否）\n所有泡泡写完后：\n===粉丝回复===\n" + FAN_FORMAT + "写 8~12 条，是粉丝对你这几条泡泡的反应（看得到照片）。",
+      judge ? `【顺便判断】刚才那几条粉丝回复里${sus ? "，你在留意的那个账号" : "，有没有哪条"}像不像${herName()}发的？按她平时说话的样子和你们的事来判断，只会越来越确定、不会变回去。最后单独写：\n===疑心===\n档位：${SUS.join(" / ")} 选一个` : "",
     ].filter(Boolean).join("\n\n"), "他发泡泡");
     if (!raw) return;
-    const bubbles = String(raw).split(/===\s*泡泡\s*===/).slice(1).map(b => ({ quote: field(b, "引用"), text: field(b, "内容") || b.split("===")[0].replace(/引用[：:][^\n]*\n?/, "").trim() })).filter(b => b.text).slice(0, 4);
+    const bubbles = String(raw).split(/===\s*泡泡\s*===/).slice(1).map(b => {
+      const photo = field(b, "照片");
+      const text = field(b, "内容");
+      return { quote: field(b, "引用"), text: none(text) ? "" : text, photo: none(photo) ? null : { desc: photo.slice(0, 200), self: /^是/.test(field(b, "出镜")) } };
+    }).filter(b => b.text || b.photo).slice(0, 4);
+    if (judge) { const lv = SUS.findIndex(x => field(blockOf(raw, "疑心"), "档位").includes(x)); if (lv > sus) { room.sus = lv; toast(`${name} 对你的账号：${SUS[lv]}`); } }
     if (!bubbles.length) return toast("他没发出来，再催一次");
     const fans = parseFans(blockOf(raw, "粉丝回复"));
     const base = Date.now();
     bubbles.forEach((b, i) => {
-      room.items.push({ id: uid("b"), by: "char", text: b.text.slice(0, 300), quote: none(b.quote) ? "" : b.quote.slice(0, 120), at: new Date(base + i * 1000).toISOString(), ...(i === bubbles.length - 1 ? { fans: fans.map(f => ({ t: f.t, tr: f.tr })), fanN: rand(120, 980) } : {}) });
+      room.items.push({ id: uid("b"), by: "char", text: b.text.slice(0, 300), ...(b.photo ? { photo: b.photo } : {}), quote: none(b.quote) ? "" : b.quote.slice(0, 120), at: new Date(base + i * 1000).toISOString(), ...(i === bubbles.length - 1 ? { fans: fans.map(f => ({ t: f.t, tr: f.tr })), fanN: rand(120, 980) } : {}) });
     });
     room.lastAt = nowIso(); saveRoom(room);
-    remember(room.charId, `你在 bubble（粉丝通讯 app）上以爱豆「${name}」的身份给粉丝发了泡泡：${bubbles.map(b => `「${b.text}」`).join("")}。${hers.length ? `${herName()}用粉丝账号回过你：${hers.map(t => `「${t}」`).join("")}${room.known ? "（你知道是她）" : "（你不知道是她）"}。` : ""}`);
+    remember(room.charId, `你在 bubble（粉丝通讯 app）上以爱豆「${name}」的身份给粉丝发了泡泡：${bubbles.map(b => `「${b.text}${b.photo ? `［照片：${b.photo.desc}］` : ""}」`).join("")}。${hers.length ? `${herName()}用粉丝账号回过你：${hers.map(t => `「${t}」`).join("")}${room.known ? "（你知道是她）" : "（你不知道是她）"}。` : ""}`);
   }
 
   // 我的泡泡房：粉丝回一波，偷偷订阅的他可能混进来
@@ -211,7 +224,7 @@
     const room = myRoom();
     const mine = room.items.filter(i => i.by === "me").slice(-6);
     if (!mine.length) return toast("先发个泡泡吧");
-    const mineText = mine.map(i => `- ${i.quote ? `（引用了「${i.quote}」）` : ""}${i.text}`).join("\n");
+    const mineText = mine.map(i => `- ${i.quote ? `（引用了「${i.quote}」）` : ""}${i.text}${i.photo ? `［照片：${i.photo.desc || "一张照片"}］` : ""}`).join("\n");
     const secret = S.meta.secret.filter(id => charById(id));
     const lastHim = {}; room.items.forEach(i => { if (i.by === "him") lastHim[i.charId] = i.at; });
     const him = secret.find(id => Math.random() < 0.45 && (!lastHim[id] || Date.now() - new Date(lastHim[id]).getTime() > 20 * 60e3)) || null;
@@ -266,7 +279,7 @@
     if (!room) return [];
     return room.items.filter(i => (key === "me" ? i.by === "me" : i.by === "char")).slice(-10);
   }
-  const bubbleLine = i => `${hm(i.at)} ${i.quote ? `（引用了一条粉丝回复「${i.quote}」）` : ""}${i.text}`;
+  const bubbleLine = i => `${hm(i.at)} ${i.quote ? `（引用了一条粉丝回复「${i.quote}」）` : ""}${i.text}${i.photo ? `［照片：${i.photo.desc || "一张照片"}］` : ""}`;
   /** 他是不是爱豆：在 bubble 里有自己的泡泡房 */
   const isIdol = charId => S.rooms.some(r => r.kind === "char" && r.charId === charId);
   const PLAZA_RULE = "【广场是什么】bubble 的粉丝广场：粉丝自己发帖讨论爱豆。粉丝只看得到爱豆发的泡泡；粉丝回复别人看不到，只有被爱豆引用的那句会出现在泡泡里，而且不显示是谁发的。说到爱豆时只能根据泡泡、被引用的句子和帖子里的内容，不能编出别人看不到的东西。";
@@ -466,13 +479,14 @@
       <div class="bottom">
         ${S.quote && S.quote.roomId === room.id ? `<div class="qbar"><span>引用：${esc(S.quote.text)}</span><button data-act="unquote">${I.x}</button></div>` : ""}
         <div class="tray">${isMe
-          ? `<button class="tchip" data-act="wave" ${busy ? "disabled" : ""}>${I.bubble}让粉丝回一波</button><button class="tchip" data-act="dress">${I.palette}装扮</button><button class="tchip" data-act="soon">${I.photo}照片</button><button class="tchip" data-act="soon">${I.smile}表情</button>`
-          : `<button class="tchip" data-act="urge" ${busy ? "disabled" : ""}>${I.bubble}催TA发泡泡</button><button class="tchip" data-act="soon">${I.photo}照片</button><button class="tchip" data-act="soon">${I.smile}表情</button><button class="tchip" data-act="switch">${I.swap}换个人</button><button class="tchip" data-act="direct">${I.spark}场外指示</button><button class="tchip" data-act="handwrite">${I.pen}手写TA的话</button>`}</div>
+          ? `<button class="tchip" data-act="wave" ${busy ? "disabled" : ""}>${I.bubble}让粉丝回一波</button><button class="tchip" data-act="myPhoto">${I.photo}照片</button><button class="tchip" data-act="dress">${I.palette}装扮</button>`
+          : `<button class="tchip" data-act="urge" ${busy ? "disabled" : ""}>${I.bubble}催TA发泡泡</button><button class="tchip" data-act="urgePhoto" ${busy ? "disabled" : ""}>${I.photo}催TA发照片</button><button class="tchip" data-act="switch">${I.swap}换个人</button><button class="tchip" data-act="direct">${I.spark}场外指示</button><button class="tchip" data-act="handwrite">${I.pen}手写TA的话</button>`}</div>
         ${!isMe && room.pending.length ? `<div class="sendbar"><span>${room.pending.length} 条还没发出去</span><button data-act="flush" ${busy ? "disabled" : ""}>发出去</button></div>` : ""}
         <form class="composer"><button type="button" class="x" data-act="clear">${I.x}</button><input class="ta" maxlength="200" placeholder="${isMe ? "发个泡泡…" : "给TA留言…"}"><button class="send" type="submit">${I.send}</button></form>
       </div>`;
     const sc = $(".scroll", app());
     if (keepBottom || S.forceBottom) { sc.scrollTop = sc.scrollHeight; S.forceBottom = false; }
+    hydrateImages();
   }
 
   /** 连着的同一个人归成一组：头像和名字跟着第一条 */
@@ -487,6 +501,56 @@
     return html;
   }
   const quoteHtml = q => q ? `<div class="quote">${esc(q)}</div>` : "";
+  const IMG = {};
+  /** 泡泡里面：引用 + 照片 + 文字 */
+  function bubInner(it) {
+    const ph = it.photo;
+    const photo = !ph ? "" : ph.ref
+      ? `<img class="ph-img" data-ref="${esc(ph.ref)}" ${IMG[ph.ref] ? `src="${IMG[ph.ref]}"` : ""} alt="">`
+      : `<div class="ph-text">${esc(ph.desc || "一张照片")}${ph.busy ? `<span class="ph-gen">生成中…</span>` : `<button class="ph-gen" data-gen="${it.id}">点一下生成</button>`}</div>`;
+    return `${quoteHtml(it.quote)}${photo}${it.text ? `<div class="bt">${esc(it.text)}</div>` : ""}`;
+  }
+  function hydrateImages() {
+    document.querySelectorAll("img[data-ref]:not([src])").forEach(el => {
+      const ref = el.dataset.ref;
+      if (IMG[ref]) { el.src = IMG[ref]; return; }
+      api.media.get({ ref }).then(r => { if (r && r.dataUrl) { IMG[ref] = r.dataUrl; document.querySelectorAll(`img[data-ref="${CSS.escape(ref)}"]`).forEach(x => { x.src = r.dataUrl; }); } }).catch(e => console.warn(e));
+    });
+  }
+  async function storeDataUrl(dataUrl) {
+    const r = await api.media.put({ dataUrl });
+    if (r && r.ref) IMG[r.ref] = dataUrl;
+    return r && r.ref;
+  }
+  async function genPhoto(room, itemId) {
+    const it = room.items.find(i => i.id === itemId); if (!it || !it.photo || it.photo.ref || it.photo.busy) return;
+    it.photo.busy = true; render();
+    try {
+      const isHim = it.by === "char";
+      const prompt = `${it.photo.desc}。手机随手拍的照片，真实自然，不要文字水印。`;
+      const r = await api.ai.generateImage({ prompt, ...(isHim ? { characterId: room.charId, useReferenceImage: !!it.photo.self } : {}), timeoutMs: 180000 });
+      if (!r || !r.dataUrl) throw new Error("没有生成出图片");
+      it.photo.ref = await storeDataUrl(r.dataUrl);
+    } catch (e) { toast(`生图失败：${(e && e.message) || e}`.slice(0, 60)); }
+    finally { delete it.photo.busy; saveRoom(room); render(); }
+  }
+  async function myPhoto(room) {
+    const v = await sheet("发照片", [{ label: "从相册选", value: "album" }, { label: "写一句描述（文字照片）", value: "text" }, { label: "写描述，让 AI 画", value: "ai" }]);
+    if (!v) return;
+    let ref = "", desc = "";
+    if (v === "album") {
+      const d = await pickImage(1280); if (!d) return;
+      ref = await storeDataUrl(d).catch(() => "");
+      if (!ref) return toast("照片没存上");
+      desc = (await inputSheet("这张照片拍的是什么", "", { long: true, ph: "粉丝和他靠这句话知道照片内容，可以不写" })) || "";
+    } else {
+      desc = await inputSheet("照片描述", "", { long: true, ph: "照片里是什么" });
+      if (!desc) return;
+    }
+    const it = { id: uid("m"), by: "me", text: "", photo: { desc, ...(ref ? { ref } : {}) }, at: nowIso() };
+    room.items.push(it); room.lastAt = nowIso(); saveRoom(room); S.forceBottom = true; render();
+    if (v === "ai") await genPhoto(room, it.id);
+  }
   const trHtml = tr => tr ? `<div class="tr">${esc(tr)}</div>` : "";
 
   function renderCharItems(room) {
@@ -495,10 +559,10 @@
     return dayChips(gs, g => {
       const last = g.items[g.items.length - 1];
       if (g.key === "me") {
-        return `<div class="grp me"><div class="stack">${g.items.map((it, i) => `<div class="line"><div class="bub">${quoteHtml(it.quote)}${esc(it.text)}</div>${i === 0 ? `<span class="stamp">${hm(it.at)}</span>` : ""}</div>`).join("")}</div>${avatarEl(myAvatar(), "me", "me-ava")}</div>`;
+        return `<div class="grp me"><div class="stack">${g.items.map((it, i) => `<div class="line"><div class="bub ${it.photo ? "has-ph" : ""}">${bubInner(it)}</div>${i === 0 ? `<span class="stamp">${hm(it.at)}</span>` : ""}</div>`).join("")}</div>${avatarEl(myAvatar(), "me", "me-ava")}</div>`;
       }
       const fold = last.fans && last.fans.length ? `<button class="fold" data-fans="${last.id}"><span class="heads"><i style="background:#FFD6E0"></i><i style="background:#D6E9FF"></i><i style="background:#DDF5E4"></i></span><span class="n">粉丝回复 ${last.fanN || last.fans.length} ›</span></button>` : "";
-      return `<div class="grp">${avatarEl(roomAvatar(room), room.charId, "artist-ava")}<div class="stack"><div class="who"><em class="art">ARTIST</em>${esc(stageName(room))}</div>${g.items.map((it, i) => `<div class="line" data-item="${it.id}"><div class="bub">${quoteHtml(it.quote)}${esc(it.text)}</div>${i === 0 ? `<span class="stamp">${hm(it.at)}</span>` : ""}</div>`).join("")}</div></div>${fold}`;
+      return `<div class="grp">${avatarEl(roomAvatar(room), room.charId, "artist-ava")}<div class="stack"><div class="who"><em class="art">ARTIST</em>${esc(stageName(room))}</div>${g.items.map((it, i) => `<div class="line" data-item="${it.id}"><div class="bub ${it.photo ? "has-ph" : ""}">${bubInner(it)}</div>${i === 0 ? `<span class="stamp">${hm(it.at)}</span>` : ""}</div>`).join("")}</div></div>${fold}`;
     });
   }
 
@@ -508,7 +572,7 @@
     return dayChips(gs, g => {
       const f = g.items[0];
       if (g.key === "me") {
-        return `<div class="grp me"><div class="stack"><div class="who"><em class="art">ARTIST</em>${esc(myStage())}</div>${g.items.map((it, i) => `<div class="line"><div class="bub">${quoteHtml(it.quote)}${esc(it.text)}</div>${i === 0 ? `<span class="stamp">${hm(it.at)}</span>` : ""}</div>`).join("")}</div>${avatarEl(myAvatar(), "me", "me-ava")}</div>`;
+        return `<div class="grp me"><div class="stack"><div class="who"><em class="art">ARTIST</em>${esc(myStage())}</div>${g.items.map((it, i) => `<div class="line"><div class="bub ${it.photo ? "has-ph" : ""}">${bubInner(it)}</div>${i === 0 ? `<span class="stamp">${hm(it.at)}</span>` : ""}</div>`).join("")}</div>${avatarEl(myAvatar(), "me", "me-ava")}</div>`;
       }
       if (f.by === "him") {
         const c = charById(f.charId) || {}; const r = S.rooms.find(x => x.kind === "char" && x.charId === f.charId);
@@ -558,7 +622,8 @@
     const v = await sheet("", [
       { label: "他的泡泡头像", sub: "只在 bubble 里用，不设就用原来的", value: "ava" },
       { label: "他的艺名", sub: stageName(room), value: "name" },
-      { label: room.known ? "他知道你在订阅" : "他不知道哪个是你", sub: "点一下切换", value: "known" },
+      { label: room.known ? "他知道哪个号是你" : "他不知道哪个号是你", sub: "点一下切换", value: "known" },
+      ...(room.known ? [] : [{ label: `他的疑心：${SUS[room.sus || 0]}${room.susLock ? "（锁定）" : ""}`, sub: "按你回的话慢慢起疑；点进去可以锁定", value: "sus" }]),
       { label: isPublic(room.charId) ? "你们已经公开了" : "你们没公开", sub: "点一下切换；没公开他只能暗戳戳", value: "public" },
       { label: "清空这个泡泡房", danger: true, value: "clear" },
       { label: "退订", danger: true, value: "unsub" },
@@ -566,6 +631,11 @@
     if (v === "ava") { const d = await pickImage(320); if (d) { room.avatar = d; saveRoom(room); render(); } }
     else if (v === "name") { const n = await inputSheet("他的艺名", stageName(room)); if (n) { room.stage = n; saveRoom(room); render(); } }
     else if (v === "public") { const on = !isPublic(room.charId); S.meta.publicWith = on ? [...(S.meta.publicWith || []), room.charId] : (S.meta.publicWith || []).filter(x => x !== room.charId); saveMeta(); toast(on ? "公开了" : "改回没公开"); }
+    else if (v === "sus") {
+      const lv = await sheet("他的疑心", [{ label: "自动（按你回的话慢慢起疑）", value: "auto", on: !room.susLock }, ...SUS.map((x, i) => ({ label: `锁定：${x}`, value: String(i), on: room.susLock && (room.sus || 0) === i }))]);
+      if (lv === "auto") { room.susLock = false; } else if (lv != null) { room.sus = +lv; room.susLock = true; }
+      if (lv != null) { saveRoom(room); toast(room.susLock ? `锁在「${SUS[room.sus]}」` : "改回自动"); }
+    }
     else if (v === "known") { room.known = !room.known; saveRoom(room); render(); toast(room.known ? "他知道哪个账号是你了" : "他不知道哪个是你"); }
     else if (v === "clear") { const ok = await sheet("清空后泡泡都没了", [{ label: "清空", danger: true, value: 1 }]); if (ok) { room.items = []; room.pending = []; saveRoom(room); render(); } }
     else if (v === "unsub") { const ok = await sheet(`退订 ${stageName(room)}？记录会一起删掉`, [{ label: "退订", danger: true, value: 1 }]); if (ok) { S.rooms = S.rooms.filter(r => r !== room); dbDelete(COL.rooms, room.id); S.view = { page: "home" }; render(); } }
@@ -612,7 +682,8 @@
       case "more": return room && roomMenu(room);
       case "sub": return subscribe();
       case "debug": return showDebug();
-      case "soon": return toast("照片和表情下一版就来");
+      case "myPhoto": return myPhoto(room);
+      case "urgePhoto": await charBubbles(room, { wantPhoto: true }); S.forceBottom = true; return render();
       case "dress": return dressPanel();
       case "wave": await fanWave(); S.forceBottom = true; return render();
       case "urge": await charBubbles(room); S.forceBottom = true; return render();
@@ -698,6 +769,7 @@
     const bd = e.target.closest("[data-board]"); if (bd) { S.view = { page: "plaza", board: bd.dataset.board }; render(); return; }
     const po = e.target.closest("[data-post]"); if (po) { S.view = { page: "post", board: S.view.board, postId: po.dataset.post }; render(); return; }
     const r = e.target.closest("[data-room]"); if (r) { S.view = { page: "room", roomId: r.dataset.room }; S.forceBottom = true; render(); return; }
+    const gp = e.target.closest("[data-gen]"); if (gp) { genPhoto(roomById(S.view.roomId), gp.dataset.gen); return; }
     const f = e.target.closest("[data-fans]"); if (f) { openFans(roomById(S.view.roomId), f.dataset.fans); return; }
     const q = e.target.closest("[data-quote]");
     if (q) {

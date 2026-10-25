@@ -272,7 +272,7 @@ svg { display: block; }
 (function () {
   "use strict";
   const api = window.AiPhone || window.AiPhoneApp;
-  const VERSION = "0.1.3";
+  const VERSION = "0.1.4";
 
   // ───────────────────────── 工具 ─────────────────────────
   const $ = (sel, root) => (root || document).querySelector(sel);
@@ -410,6 +410,10 @@ svg { display: block; }
   const LOVE_RULE = (charId, who) => isPublic(charId)
     ? `你们的恋情已经公开了，可以大方一点，但粉丝大多还是接受不了。`
     : `爱豆不许谈恋爱，你们的关系没公开：不能直接秀恩爱、不能说破你们的关系，想对${who}好只能暗戳戳、让别人看不出来。`;
+  /** 不许冒充她：她的艺名、名字、小号都不能当粉丝昵称 */
+  const herNames = () => [S.meta.alt, myStage(), herName()].filter(Boolean).map(n => String(n).trim().toLowerCase());
+  const isHerName = n => herNames().includes(String(n || "").trim().toLowerCase());
+  const NO_HER = () => `【不许冒充她】不许出现昵称「${S.meta.alt}」，也不许用「${myStage()}」「${herName()}」的名义说话；不许假装是她或她的小号发言。`;
   const FAN_FORMAT = "每行一条粉丝回复，开头写「- 昵称：」，昵称要像这个爱豆自己的粉丝会起的，不能带别的爱豆的名字。像真实追星粉丝：短、口语、情绪直接，有尖叫有心疼有玩梗有关心身体。大部分用中文，也要有几条韩语、日语、英文；外语那条写成「原文｜中文翻译」。";
   async function busyWrap(label, fn) {
     const job = uid("job"); S.busy.add(job); render();
@@ -433,7 +437,7 @@ svg { display: block; }
       const name = m ? m[1].trim() : pick(["momo", "晚风", "小土豆", "sunny", "北北北"]);
       const body = (m ? m[2] : l).trim();
       const [t, tr] = body.split(/[｜|]/).map(x => x.trim());
-      return t ? { name, t, tr: tr || "" } : null;
+      return t && !isHerName(name) ? { name, t, tr: tr || "" } : null;
     }).filter(Boolean).slice(0, 14);
   }
   const blockOf = (text, name) => { const m = String(text || "").match(new RegExp(`===\\s*${name}\\s*===([\\s\\S]*?)(?====|$)`)); return m ? m[1].trim() : ""; };
@@ -454,7 +458,7 @@ svg { display: block; }
       recent ? `你最近发过的泡泡：\n${recent}` : "这是你第一次在这个泡泡房发泡泡。",
       mixed.length ? `粉丝刚发来的回复（随便挑了几条）：\n${mixed.map(t => `- ${t}`).join("\n")}` : "",
       `【恋爱】${LOVE_RULE(room.charId, herName())}`,
-      `【粉丝】${FAN_MOOD}`,
+      `【粉丝】${FAN_MOOD}`, NO_HER(),
       (() => { const pb = S.plaza.find(x => x.board === room.charId); const hotP = pb ? pb.posts.filter(p => p.by !== "him").slice(0, 3) : []; return hotP.length && Math.random() < 0.3 ? `【粉丝广场】你偶尔会看一眼自己的粉丝广场，最近在聊：${hotP.map(p => `「${p.text.slice(0, 40)}」`).join("")}。一般明星不太当回事，泡泡里不用提；除非事情闹得很大，才可能顺口回应一下。` : ""; })(),
       opts.direction ? `【这次的情况】${opts.direction}` : "",
       "【这次】发 1~4 条新泡泡。像真爱豆发泡泡：短、口语、分享此刻在干嘛和心情，偶尔引用某条粉丝回复再回它。不要每条都引用，不要写成公告。",
@@ -490,7 +494,7 @@ svg { display: block; }
         `【你】${herName()}（艺名「${myStage()}」）也是爱豆。你偷偷订阅了她的泡泡，用的是一个普通粉丝账号，别的粉丝不知道是你；她看得到是你。你们现实里的关系按你的记忆来。`,
         head,
         `【恋爱】${LOVE_RULE(him, "她")}`,
-        `【粉丝】${FAN_MOOD}`,
+        `【粉丝】${FAN_MOOD}`, NO_HER(),
         "【这次】先写其他粉丝对这几条泡泡的回复，再决定你要不要也回一条。你回的话按你的人设和你们的关系，像你会对她说的话，一两句；不想回就写 无。",
         "【输出】\n===粉丝回复===\n" + FAN_FORMAT + "写 8~12 条。\n===你的回复===\n内容：你的回复（不回写 无）",
       ].join("\n\n"), "粉丝回一波");
@@ -502,7 +506,7 @@ svg { display: block; }
       else remember(him, `你刷到了${herName()}在 bubble 发的泡泡${mine.slice(-2).map(i => `「${i.text}」`).join("")}，看了没回。`);
       if (hc) S.lastHimName = hc.name;
     } else {
-      raw = await plainGen([head, `【粉丝】${FAN_MOOD}`, "【这次】写粉丝们对这几条泡泡的回复。", "【输出】\n===粉丝回复===\n" + FAN_FORMAT + "写 8~12 条。"].join("\n\n"), "粉丝回一波");
+      raw = await plainGen([head, `【粉丝】${FAN_MOOD}`, NO_HER(), "【这次】写粉丝们对这几条泡泡的回复。", "【输出】\n===粉丝回复===\n" + FAN_FORMAT + "写 8~12 条。"].join("\n\n"), "粉丝回一波");
       if (!raw) return;
       pushFans(room, parseFans(blockOf(raw, "粉丝回复") || raw), null);
     }
@@ -543,7 +547,7 @@ svg { display: block; }
       shot: field(b, "截图"),
       likes: parseInt(field(b, "点赞").replace(/[^\d]/g, ""), 10) || rand(20, 900),
       cmtN: parseInt(field(b, "评论数").replace(/[^\d]/g, ""), 10) || rand(3, 200),
-    })).filter(p => p.text).slice(0, 8);
+    })).filter(p => p.text && !isHerName(p.name)).slice(0, 8);
   }
   function matchShot(key, text) {
     if (none(text)) return null;
@@ -564,7 +568,7 @@ svg { display: block; }
       `【${idolName} 最近的泡泡】\n${bubbles.map(bubbleLine).join("\n")}`,
       herMain ? `【大事】爱豆「${myStage()}」本人用大号在这里发过帖：${herMain}。这件事大家一定会议论。` : "",
       recentPosts ? `【广场上已经有的帖】（不要重复）\n${recentPosts}` : "",
-      `【粉丝】${FAN_MOOD}`,
+      `【粉丝】${FAN_MOOD}`, NO_HER(),
       "【这次】写 5~7 条新帖：有讨论泡泡的、扒被引用那句是谁的（只有泡泡里真引用了才会扒）、心疼、玩梗、吐槽公司，也要有粉丝发自己的日常，但日常一定和这个爱豆沾边。大部分中文，也有韩语日语英文，外语写成「原文｜中文翻译」。",
       "【输出】每条（昵称要像这个爱豆自己的粉丝会起的，不能带别的爱豆的名字）：\n===帖子===\n昵称：\n内容：\n截图：帖子里截图的那条泡泡原文（没截图写 无）\n点赞：数字\n评论数：数字",
     ].filter(Boolean).join("\n\n"), "刷新广场");
@@ -604,7 +608,7 @@ svg { display: block; }
       `【帖子】（在爱豆「${boardName(key)}」的粉丝广场）${post.by === "me" ? `这帖是爱豆「${myStage()}」本人用大号发的！` : ""}\n${post.name}：${post.text}${post.shot ? `\n（截图了泡泡：${post.shot.quote ? `引用「${post.shot.quote}」` : ""}${post.shot.text}）` : ""}`,
       post.comments.length ? `【已有评论】\n${post.comments.slice(-10).map(c => `- ${c.name}：${c.text}`).join("\n")}` : "",
       mine ? `【要接住的】\n${mine}` : "",
-      `【粉丝】${FAN_MOOD}`,
+      `【粉丝】${FAN_MOOD}`, NO_HER(),
       "【这次】写 6~10 条新评论，可以互相吵、互相回。" + "每行一条，开头写「- 昵称：」，昵称要像这个爱豆自己的粉丝会起的，不能带别的爱豆的名字。大部分中文，也有韩语日语英文，外语写成「原文｜中文翻译」。",
     ].filter(Boolean).join("\n\n"), "看评论");
     if (!raw) return;

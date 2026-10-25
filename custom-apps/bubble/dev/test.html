@@ -246,6 +246,19 @@ svg { display: block; }
 .ph-text p { margin: 0; font-size: 10px; line-height: 1.5; font-style: italic; display: -webkit-box; -webkit-line-clamp: 5; -webkit-box-orient: vertical; overflow: hidden; }
 .ph-gen { font-size: 10px; font-weight: 700; color: var(--brand); background: rgba(255,255,255,.75); border-radius: 999px; padding: 4px 10px; }
 .is-me .ph-gen { color: #D9788F; }
+
+/* 表情包 */
+.stk { display: block; width: 92px; height: 92px; object-fit: contain; border-radius: 8px; }
+.stk-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; padding: 0 16px 8px; }
+.stk-cell { display: flex; flex-direction: column; align-items: center; gap: 3px; font-size: 9.5px; color: var(--ink2); }
+.stk-cell .stk { width: 64px; height: 64px; background: var(--mist); }
+.stk-cell small { max-width: 70px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.stk-cell.add { justify-content: center; width: 64px; height: 64px; margin: 0 auto; border-radius: 8px; border: 1.5px dashed #D5D8DE; color: var(--sub); font-size: 18px; }
+.stk-cell.add small { font-size: 9px; }
+
+.ph-text, .ph-img { cursor: pointer; }
+.ph-view { padding: 4px 18px 12px; text-align: center; }
+.ph-view img { max-width: 100%; max-height: 46vh; border-radius: 12px; }
 </style>
 </head>
 <body>
@@ -359,7 +372,7 @@ svg { display: block; }
     S.rooms = rooms.filter(r => r.scope === scope).map(r => ({ ...r, items: r.items || [], pending: r.pending || [] }));
     S.debug = (metas.find(m => m.id === "debug_log") || {}).entries || [];
     S.meta = metas.find(m => m.id === `meta_${scope}`) || { id: `meta_${scope}` };
-    S.meta = { me: {}, theme: "journal", bg: "", bgOpacity: 0.6, myColor: "#F7AFC0", subN: (rand(30, 180) / 10).toFixed(1), secret: [], publicWith: [], alt: "", ...S.meta };
+    S.meta = { me: {}, theme: "journal", bg: "", bgOpacity: 0.6, myColor: "#F7AFC0", subN: (rand(30, 180) / 10).toFixed(1), secret: [], publicWith: [], alt: "", stickers: [], ...S.meta };
     if (!S.meta.alt) S.meta.alt = pick(["柠檬不酸", "今天也在冲浪", "小熊软糖", "momo_1029", "云朵不在家"]);
     if (!S.rooms.some(r => r.kind === "me")) {
       const me = { id: `room_${scope}_me`, scope, kind: "me", items: [], pending: [], createdAt: nowIso() };
@@ -437,7 +450,7 @@ svg { display: block; }
   const herNames = () => [S.meta.alt, myStage(), herName()].filter(Boolean).map(n => String(n).trim().toLowerCase());
   const isHerName = n => herNames().includes(String(n || "").trim().toLowerCase());
   const NO_HER = () => `【不许冒充她】不许出现昵称「${S.meta.alt}」，也不许用「${myStage()}」「${herName()}」的名义说话；不许假装是她或她的小号发言。`;
-  const FAN_FORMAT = "每行一条粉丝回复，开头写「- 昵称：」，昵称要像这个爱豆自己的粉丝会起的，不能带别的爱豆的名字。像真实追星粉丝：短、口语、情绪直接，有尖叫有心疼有玩梗有关心身体。大部分用中文，也要有几条韩语、日语、英文；外语那条写成「原文｜中文翻译」。";
+  const FAN_FORMAT = "每行一条粉丝回复，开头写「- 昵称：」，昵称要像这个爱豆自己的粉丝会起的，不能带别的爱豆的名字。像真实追星粉丝：短、口语、情绪直接，有尖叫有心疼有玩梗有关心身体。句子要通顺，按正常说话断句，该用标点就用标点，不能一长串连着不断。大部分用中文，也要有几条韩语、日语、英文；外语那条写成「原文｜中文翻译」。";
   async function busyWrap(label, fn) {
     const job = uid("job"); S.busy.add(job); render();
     try { return await fn(); } catch (e) { console.error(e); logAi({ label, ok: false, error: String((e && e.message) || e) }); toast(`${label}失败：${(e && e.message) || e}`.slice(0, 60)); return null; } finally { S.busy.delete(job); render(); }
@@ -514,7 +527,7 @@ svg { display: block; }
     const room = myRoom();
     const mine = room.items.filter(i => i.by === "me").slice(-6);
     if (!mine.length) return toast("先发个泡泡吧");
-    const mineText = mine.map(i => `- ${i.quote ? `（引用了「${i.quote}」）` : ""}${i.text}${i.photo ? `［照片：${i.photo.desc || "一张照片"}］` : ""}`).join("\n");
+    const mineText = mine.map(i => `- ${i.quote ? `（引用了「${i.quote}」）` : ""}${i.text}${i.photo ? `［照片：${i.photo.desc || "一张照片"}］` : ""}${i.sticker ? `［表情包：${i.sticker.name}］` : ""}`).join("\n");
     const secret = S.meta.secret.filter(id => charById(id));
     const lastHim = {}; room.items.forEach(i => { if (i.by === "him") lastHim[i.charId] = i.at; });
     const him = secret.find(id => Math.random() < 0.45 && (!lastHim[id] || Date.now() - new Date(lastHim[id]).getTime() > 20 * 60e3)) || null;
@@ -769,7 +782,7 @@ svg { display: block; }
       <div class="bottom">
         ${S.quote && S.quote.roomId === room.id ? `<div class="qbar"><span>引用：${esc(S.quote.text)}</span><button data-act="unquote">${I.x}</button></div>` : ""}
         <div class="tray">${isMe
-          ? `<button class="tchip" data-act="wave" ${busy ? "disabled" : ""}>${I.bubble}让粉丝回一波</button><button class="tchip" data-act="myPhoto">${I.photo}照片</button><button class="tchip" data-act="dress">${I.palette}装扮</button>`
+          ? `<button class="tchip" data-act="wave" ${busy ? "disabled" : ""}>${I.bubble}让粉丝回一波</button><button class="tchip" data-act="myPhoto">${I.photo}照片</button><button class="tchip" data-act="myStk">${I.smile}表情</button><button class="tchip" data-act="dress">${I.palette}装扮</button>`
           : `<button class="tchip" data-act="urge" ${busy ? "disabled" : ""}>${I.bubble}催TA发泡泡</button><button class="tchip" data-act="urgePhoto" ${busy ? "disabled" : ""}>${I.photo}催TA发照片</button><button class="tchip" data-act="switch">${I.swap}换个人</button><button class="tchip" data-act="direct">${I.spark}场外指示</button><button class="tchip" data-act="handwrite">${I.pen}手写TA的话</button>`}</div>
         ${!isMe && room.pending.length ? `<div class="sendbar"><span>${room.pending.length} 条还没发出去</span><button data-act="flush" ${busy ? "disabled" : ""}>发出去</button></div>` : ""}
         <form class="composer"><button type="button" class="x" data-act="clear">${I.x}</button><input class="ta" maxlength="200" placeholder="${isMe ? "发个泡泡…" : "给TA留言…"}"><button class="send" type="submit">${I.send}</button></form>
@@ -796,15 +809,20 @@ svg { display: block; }
   /** 一条泡泡：照片单独一个，说的话另起一个气泡；时间跟着这一组第一条 */
   function lineHtml(it, stamp) {
     const st = stamp ? `<span class="stamp">${hm(it.at)}</span>` : "";
+    if (it.sticker) return `<div class="line"><div class="bub ph-only">${stickerHtml(it.sticker)}</div>${st}</div>`;
     const photo = it.photo ? `<div class="line"><div class="bub ph-only">${bubInner({ photo: it.photo, id: it.id })}</div>${st}</div>` : "";
     const words = it.text || (it.quote && !it.photo) ? `<div class="line"><div class="bub">${bubInner({ text: it.text, quote: it.quote })}</div>${it.photo ? "" : st}</div>` : "";
     return photo + words;
   }
+  function stickerHtml(st) {
+    const src = st.url || IMG[st.ref] || "";
+    return `<img class="stk" ${st.ref && !st.url ? `data-ref="${esc(st.ref)}"` : ""} ${src ? `src="${esc(src)}"` : ""} alt="${esc(st.name)}">`;
+  }
   function bubInner(it) {
     const ph = it.photo;
     const photo = !ph ? "" : ph.ref
-      ? `<img class="ph-img" data-ref="${esc(ph.ref)}" ${IMG[ph.ref] ? `src="${IMG[ph.ref]}"` : ""} alt="">`
-      : `<div class="ph-text"><i class="ph-cam">${I.photo}</i><p>${esc(ph.desc || "一张照片")}</p>${ph.busy ? `<span class="ph-gen">生成中…</span>` : `<button class="ph-gen" data-gen="${it.id}">点一下生成</button>`}</div>`;
+      ? `<img class="ph-img" data-ph="${it.id}" data-ref="${esc(ph.ref)}" ${IMG[ph.ref] ? `src="${IMG[ph.ref]}"` : ""} alt="">`
+      : `<div class="ph-text" data-ph="${it.id}"><i class="ph-cam">${I.photo}</i><p>${esc(ph.desc || "一张照片")}</p>${ph.busy ? `<span class="ph-gen">生成中…</span>` : `<button class="ph-gen" data-gen="${it.id}">点一下生成</button>`}</div>`;
     return `${quoteHtml(it.quote)}${photo}${it.text ? `<div class="bt">${esc(it.text)}</div>` : ""}`;
   }
   function hydrateImages() {
@@ -834,6 +852,67 @@ svg { display: block; }
       it.photo.ref = await storeDataUrl(r.dataUrl);
     } catch (e) { toast(`生图失败：${(e && e.message) || e}`.slice(0, 60)); }
     finally { delete it.photo.busy; saveRoom(room); render(); }
+  }
+  /** 点照片：看完整描述 / 大图，改描述，生成或重新生成 */
+  function photoSheet(room, itemId) {
+    const it = room.items.find(i => i.id === itemId); if (!it || !it.photo) return;
+    const ph = it.photo;
+    const mask = document.createElement("div"); mask.className = "mask";
+    mask.innerHTML = `<form class="sheet" action="#"><div class="grab"></div>
+      ${ph.ref ? `<div class="ph-view"><img data-ref="${esc(ph.ref)}" ${IMG[ph.ref] ? `src="${IMG[ph.ref]}"` : ""} alt=""></div>` : ""}
+      <div class="sheet-h">照片描述</div>
+      <div style="padding:0 18px 12px"><textarea class="field" rows="5" maxlength="600">${esc(ph.desc || "")}</textarea></div>
+      <button class="opt ok" type="submit" data-v="save"><div class="cell-main">保存描述</div></button>
+      ${ph.busy ? "" : `<button class="opt" type="submit" data-v="gen" style="justify-content:center;text-align:center"><div class="cell-main">${ph.ref ? "按这个描述重新生成" : "保存并生成"}</div></button>`}
+    </form>`;
+    hydrateImages();
+    const input = $(".field", mask);
+    let v = "save";
+    mask.querySelectorAll("[data-v]").forEach(b => b.addEventListener("click", () => { v = b.dataset.v; }));
+    $("form", mask).onsubmit = e => {
+      e.preventDefault(); mask.remove();
+      const desc = input.value.trim();
+      if (desc) ph.desc = desc;
+      if (v === "gen") { if (ph.ref) delete ph.ref; saveRoom(room); genPhoto(room, itemId); }
+      else { saveRoom(room); render(); toast("改好了"); }
+    };
+    mask.onclick = e => { if (e.target === mask) mask.remove(); };
+    document.body.appendChild(mask);
+  }
+  async function myStickers(room) {
+    const list = S.meta.stickers;
+    const mask = document.createElement("div"); mask.className = "mask";
+    const draw = () => {
+      mask.innerHTML = `<div class="sheet"><div class="grab"></div><div class="sheet-t2">我的表情包</div>
+        <div class="stk-grid">${list.map((st, i) => `<button class="stk-cell" data-send="${i}">${stickerHtml(st)}<small>${esc(st.name)}</small></button>`).join("")}
+          <button class="stk-cell add" data-add="album">＋<small>相册</small></button><button class="stk-cell add" data-add="paste">＋<small>粘贴链接</small></button></div>
+        ${list.length ? `<div class="sheet-hint">点一下发出去；长按删掉</div>` : `<div class="sheet-hint">还没有表情包。可以从相册加，也可以一次粘贴多行「名字：图片链接」</div>`}</div>`;
+      hydrateImages();
+    };
+    draw();
+    let pressT = null;
+    mask.addEventListener("pointerdown", e => { const c = e.target.closest("[data-send]"); if (!c) return; pressT = setTimeout(() => { pressT = "del"; const i = +c.dataset.send; list.splice(i, 1); saveMeta(); draw(); toast("删掉了"); }, 600); });
+    mask.addEventListener("pointerup", () => { if (pressT && pressT !== "del") clearTimeout(pressT); });
+    mask.onclick = async e => {
+      if (e.target === mask) { mask.remove(); return; }
+      if (pressT === "del") { pressT = null; return; }
+      const send = e.target.closest("[data-send]"); const add = e.target.closest("[data-add]");
+      if (send) {
+        const st = list[+send.dataset.send]; mask.remove();
+        room.items.push({ id: uid("m"), by: "me", text: "", sticker: { ...st }, at: nowIso() }); room.lastAt = nowIso(); saveRoom(room); S.forceBottom = true; render();
+      } else if (add && add.dataset.add === "album") {
+        const d = await pickImage(360); if (!d) return;
+        const name = await inputSheet("给这个表情包起个名", "", { ph: "粉丝靠名字知道是什么表情" }); if (!name) return;
+        const ref = await storeDataUrl(d).catch(() => ""); if (!ref) return toast("没存上");
+        list.push({ name, ref }); saveMeta(); draw();
+      } else if (add && add.dataset.add === "paste") {
+        const t = await inputSheet("粘贴表情包", "", { long: true, max: 4000, ph: "一行一个：名字：图片链接" }); if (!t) return;
+        let n = 0;
+        for (const line of t.split("\n")) { const m = line.trim().match(/^(.+?)[：:]\s*(https?:\/\/\S+)$/); if (m) { list.push({ name: m[1].trim().slice(0, 20), url: m[2] }); n++; } }
+        saveMeta(); draw(); toast(n ? `加了 ${n} 个` : "没认出来，格式是 名字：链接");
+      }
+    };
+    document.body.appendChild(mask);
   }
   async function myPhoto(room) {
     const v = await sheet("发照片", [{ label: "从相册选", value: "album" }, { label: "写一句描述（文字照片）", value: "text" }, { label: "写描述，让 AI 画", value: "ai" }]);
@@ -984,6 +1063,7 @@ svg { display: block; }
       case "sub": return subscribe();
       case "debug": return showDebug();
       case "myPhoto": return myPhoto(room);
+      case "myStk": return myStickers(room);
       case "urgePhoto": await charBubbles(room, { wantPhoto: true }); S.forceBottom = true; return render();
       case "dress": return dressPanel();
       case "wave": await fanWave(); S.forceBottom = true; return render();
@@ -1071,6 +1151,7 @@ svg { display: block; }
     const po = e.target.closest("[data-post]"); if (po) { S.view = { page: "post", board: S.view.board, postId: po.dataset.post }; render(); return; }
     const r = e.target.closest("[data-room]"); if (r) { S.view = { page: "room", roomId: r.dataset.room }; S.forceBottom = true; render(); return; }
     const gp = e.target.closest("[data-gen]"); if (gp) { genPhoto(roomById(S.view.roomId), gp.dataset.gen); return; }
+    const pv = e.target.closest("[data-ph]"); if (pv) { photoSheet(roomById(S.view.roomId), pv.dataset.ph); return; }
     const f = e.target.closest("[data-fans]"); if (f) { openFans(roomById(S.view.roomId), f.dataset.fans); return; }
     const q = e.target.closest("[data-quote]");
     if (q) {

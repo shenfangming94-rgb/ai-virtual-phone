@@ -249,3 +249,7 @@ svg { display: block; }
 .stk-cell small { max-width: 70px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .stk-cell.add { justify-content: center; width: 64px; height: 64px; margin: 0 auto; border-radius: 8px; border: 1.5px dashed #D5D8DE; color: var(--sub); font-size: 18px; }
 .stk-cell.add small { font-size: 9px; }
+
+.ph-text, .ph-img { cursor: pointer; }
+.ph-view { padding: 4px 18px 12px; text-align: center; }
+.ph-view img { max-width: 100%; max-height: 46vh; border-radius: 12px; }

@@ -147,7 +147,7 @@
   const herNames = () => [S.meta.alt, myStage(), herName()].filter(Boolean).map(n => String(n).trim().toLowerCase());
   const isHerName = n => herNames().includes(String(n || "").trim().toLowerCase());
   const NO_HER = () => `【不许冒充她】不许出现昵称「${S.meta.alt}」，也不许用「${myStage()}」「${herName()}」的名义说话；不许假装是她或她的小号发言。`;
-  const FAN_FORMAT = "每行一条粉丝回复，开头写「- 昵称：」，昵称要像这个爱豆自己的粉丝会起的，不能带别的爱豆的名字。像真实追星粉丝：短、口语、情绪直接，有尖叫有心疼有玩梗有关心身体。大部分用中文，也要有几条韩语、日语、英文；外语那条写成「原文｜中文翻译」。";
+  const FAN_FORMAT = "每行一条粉丝回复，开头写「- 昵称：」，昵称要像这个爱豆自己的粉丝会起的，不能带别的爱豆的名字。像真实追星粉丝：短、口语、情绪直接，有尖叫有心疼有玩梗有关心身体。句子要通顺，按正常说话断句，该用标点就用标点，不能一长串连着不断。大部分用中文，也要有几条韩语、日语、英文；外语那条写成「原文｜中文翻译」。";
   async function busyWrap(label, fn) {
     const job = uid("job"); S.busy.add(job); render();
     try { return await fn(); } catch (e) { console.error(e); logAi({ label, ok: false, error: String((e && e.message) || e) }); toast(`${label}失败：${(e && e.message) || e}`.slice(0, 60)); return null; } finally { S.busy.delete(job); render(); }
@@ -518,8 +518,8 @@
   function bubInner(it) {
     const ph = it.photo;
     const photo = !ph ? "" : ph.ref
-      ? `<img class="ph-img" data-ref="${esc(ph.ref)}" ${IMG[ph.ref] ? `src="${IMG[ph.ref]}"` : ""} alt="">`
-      : `<div class="ph-text"><i class="ph-cam">${I.photo}</i><p>${esc(ph.desc || "一张照片")}</p>${ph.busy ? `<span class="ph-gen">生成中…</span>` : `<button class="ph-gen" data-gen="${it.id}">点一下生成</button>`}</div>`;
+      ? `<img class="ph-img" data-ph="${it.id}" data-ref="${esc(ph.ref)}" ${IMG[ph.ref] ? `src="${IMG[ph.ref]}"` : ""} alt="">`
+      : `<div class="ph-text" data-ph="${it.id}"><i class="ph-cam">${I.photo}</i><p>${esc(ph.desc || "一张照片")}</p>${ph.busy ? `<span class="ph-gen">生成中…</span>` : `<button class="ph-gen" data-gen="${it.id}">点一下生成</button>`}</div>`;
     return `${quoteHtml(it.quote)}${photo}${it.text ? `<div class="bt">${esc(it.text)}</div>` : ""}`;
   }
   function hydrateImages() {
@@ -549,6 +549,32 @@
       it.photo.ref = await storeDataUrl(r.dataUrl);
     } catch (e) { toast(`生图失败：${(e && e.message) || e}`.slice(0, 60)); }
     finally { delete it.photo.busy; saveRoom(room); render(); }
+  }
+  /** 点照片：看完整描述 / 大图，改描述，生成或重新生成 */
+  function photoSheet(room, itemId) {
+    const it = room.items.find(i => i.id === itemId); if (!it || !it.photo) return;
+    const ph = it.photo;
+    const mask = document.createElement("div"); mask.className = "mask";
+    mask.innerHTML = `<form class="sheet" action="#"><div class="grab"></div>
+      ${ph.ref ? `<div class="ph-view"><img data-ref="${esc(ph.ref)}" ${IMG[ph.ref] ? `src="${IMG[ph.ref]}"` : ""} alt=""></div>` : ""}
+      <div class="sheet-h">照片描述</div>
+      <div style="padding:0 18px 12px"><textarea class="field" rows="5" maxlength="600">${esc(ph.desc || "")}</textarea></div>
+      <button class="opt ok" type="submit" data-v="save"><div class="cell-main">保存描述</div></button>
+      ${ph.busy ? "" : `<button class="opt" type="submit" data-v="gen" style="justify-content:center;text-align:center"><div class="cell-main">${ph.ref ? "按这个描述重新生成" : "保存并生成"}</div></button>`}
+    </form>`;
+    hydrateImages();
+    const input = $(".field", mask);
+    let v = "save";
+    mask.querySelectorAll("[data-v]").forEach(b => b.addEventListener("click", () => { v = b.dataset.v; }));
+    $("form", mask).onsubmit = e => {
+      e.preventDefault(); mask.remove();
+      const desc = input.value.trim();
+      if (desc) ph.desc = desc;
+      if (v === "gen") { if (ph.ref) delete ph.ref; saveRoom(room); genPhoto(room, itemId); }
+      else { saveRoom(room); render(); toast("改好了"); }
+    };
+    mask.onclick = e => { if (e.target === mask) mask.remove(); };
+    document.body.appendChild(mask);
   }
   async function myStickers(room) {
     const list = S.meta.stickers;
@@ -822,6 +848,7 @@
     const po = e.target.closest("[data-post]"); if (po) { S.view = { page: "post", board: S.view.board, postId: po.dataset.post }; render(); return; }
     const r = e.target.closest("[data-room]"); if (r) { S.view = { page: "room", roomId: r.dataset.room }; S.forceBottom = true; render(); return; }
     const gp = e.target.closest("[data-gen]"); if (gp) { genPhoto(roomById(S.view.roomId), gp.dataset.gen); return; }
+    const pv = e.target.closest("[data-ph]"); if (pv) { photoSheet(roomById(S.view.roomId), pv.dataset.ph); return; }
     const f = e.target.closest("[data-fans]"); if (f) { openFans(roomById(S.view.roomId), f.dataset.fans); return; }
     const q = e.target.closest("[data-quote]");
     if (q) {

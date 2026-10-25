@@ -5215,6 +5215,8 @@
 .lt-pick-item .lt-face { width: 40px; height: 40px; border-width: 1.5px; }
 /* 根节点给子元素统一加了 position: relative，弹层要盖回去 */
 .lt-root > .lt-pick-mask { position: absolute; z-index: 80; }
+/* 顶栏的「…」菜单要压在头像区上面，不然点不到 */
+.lt-root > .lt-top { z-index: 3; }
 .lt-queue { padding-top: 10px; }
 .lt-queue-head { display: flex; align-items: baseline; gap: 8px; padding: 6px 2px 10px; }
 .lt-queue-head .lt-pick-title { margin: 0; }

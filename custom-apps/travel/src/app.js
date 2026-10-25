@@ -347,7 +347,9 @@
   }
   function genFlights(from, to, date, ri) {
     const r = seeded(`${from}${to}${ymd(date)}f`); const n = 5 + Math.floor(r() * 3); const out = [];
-    const air = ri.domestic ? AIR_CN : [...AIR_CN.slice(0, 3), ...AIR_INTL];
+    // 近的国际线（日韩东南亚）只用近处的航司，远的才有欧美中东
+    const NEAR = [["国泰航空", "CX"], ["全日空", "NH"], ["日本航空", "JL"], ["大韩航空", "KE"], ["韩亚航空", "OZ"], ["新加坡航空", "SQ"]];
+    const air = ri.domestic ? AIR_CN : ri.km < 3500 ? [...AIR_CN.slice(0, 4), ...NEAR] : [...AIR_CN.slice(0, 3), ...AIR_INTL];
     for (let i = 0; i < n; i++) {
       const [an, ac] = air[Math.floor(r() * air.length)];
       const dep = new Date(date); dep.setHours(6 + Math.floor(r() * 16), [0, 5, 10, 20, 25, 35, 40, 50, 55][Math.floor(r() * 9)], 0, 0);
@@ -786,7 +788,7 @@
     const to = String(j.city).trim();
     return bookForHer(c, mode, to, date, +j.days || 3, String(j.message || "").slice(0, 400), String(j.reason || "").slice(0, 120), surprise);
   }
-  async function bookForHer(c, mode, to, date, days, msg, reason, surprise) {
+  async function bookForHer(c, mode, to, date, days, msg, reason, surprise, quiet) {
     const charId = c.id; const home = S.meta.home;
     const ri = await routeInfo(home, to); if (!ri) { toast(`没找到「${to}」`); return null; }
     const useTrain = ri.domestic && ri.km < 900; const list = useTrain ? genTrains(home, to, date, ri) : genFlights(home, to, date, ri); if (!list.length) { toast("那天没有班次"); return null; }
@@ -799,8 +801,8 @@
     const trip = addRow(COL.trips, "trips", { id: uid("trip"), title: together ? to : `去${to}找${c.name}`, city: to, country: geo ? geo.country : "", lat: geo ? geo.lat : null, lng: geo ? geo.lng : null, start: ymd(f.dep), days: Math.max(1, Math.min(15, days || 3)), companions: [charId], createdAt: nowIso() });
     tk.tripId = trip.id; save(COL.tickets, tk);
     remember([charId], `我给${herName()}订了${kind === "flight" ? "机票" : "火车票"}：${home} → ${to}，${mdw(f.dep)} ${hm(f.dep)} ${f.no}${together ? `，我和她一起去，座位 ${herName()} ${tk.seats.me}、我 ${tk.seats[charId]}` : `，她来${to}找我`}。我对她说：${tk.giftMsg}`, `gift_${tk.id}`);
-    // 他在聊天里把票发给她
-    try {
+    // 他在聊天里把票发给她（聊天里自己订的那种，卡片已经有了就不发）
+    if (!quiet) try {
       if (api.chat && api.chat.sendCard) await api.chat.sendCard({ characterId: charId, role: "assistant", historyRole: "assistant", sceneId: tk.id, sceneTag: "travel_gift",
         summary: `[旅行] ${c.name}给你订了${kind === "flight" ? "机票" : "火车票"}：${home} → ${to}`, historyText: `[旅行] 我给${herName()}订了${kind === "flight" ? "机票" : "火车票"}：${home} → ${to}，${mdw(f.dep)} ${hm(f.dep)} ${f.no}${together ? "，我们一起去" : ""}。`,
         card: { appLabel: "旅行", title: `${home} → ${to}`, subtitle: `${mdw(f.dep)} ${hm(f.dep)} · ${f.no}`, body: `${c.name}给你订了${kind === "flight" ? "机票" : "火车票"}${together ? `，座位挨着：${tk.seats.me} / ${tk.seats[charId]}` : ""}`, accentColor: "#2b5bd7" } });
@@ -833,6 +835,62 @@
     const msg = await aiGen(c.id, "go_him", [nowLine(), CHAR_RULE, `${herName()}想你了，对你说：「${said}」。你马上给她订好了从${home}来${his}的票。写一两句订完票对她说的话，只输出这句话本身。`].join("\n\n"), `${c.name}订票`);
     const tk = await bookForHer(c, "visit", his, r.date, days, String(msg || "").trim().slice(0, 400), "", false); if (tk) showGift(tk);
   }
+  // ───────────────────────── 聊天里他说「订好了」：真的出票 ─────────────────────────
+  /** 他在聊天里发的 [订票:目的地:出发日期:天数:谁去:留言] */
+  function bookFromMessage(ev) {
+    const msg = ev && ev.message; if (!msg || msg.role !== "assistant" || ev.isGroup) return null;
+    const d = msg.mediaData || {}; if (d.appDirectiveId !== "travel_book" || !Array.isArray(d.appDirectiveArgs)) return null;
+    return { msgId: msg.id, charId: ev.characterId, args: d.appDirectiveArgs.map(x => String(x || "").trim()) };
+  }
+  async function handleChatBook(job) {
+    S.meta.bookedMsgs = S.meta.bookedMsgs || [];
+    if (!job || S.meta.bookedMsgs.includes(job.msgId)) return;
+    const c = charById(job.charId); if (!c) return;
+    const [dest = "", dateRaw = "", daysRaw = "", whoRaw = "", note = ""] = job.args;
+    const home = S.meta.home;
+    const mode = /找我/.test(whoRaw) ? "visit" : /找她|找你/.test(whoRaw) ? "come" : "together";
+    const needHer = !home, needHis = mode === "come" && !homeOf(c.id);
+    if (needHer || needHis) {
+      // 不知道她（或他）住哪，先记着，等她打开旅行 app 补上再出票
+      S.meta.pendingBooks = [...(S.meta.pendingBooks || []).filter(x => x.msgId !== job.msgId), job]; saveMeta();
+      notify(`${c.name}给你订了票`, `打开旅行，告诉我${needHer ? "你" : "他"}住哪个城市，就能出票`);
+      return;
+    }
+    S.meta.bookedMsgs = [...S.meta.bookedMsgs, job.msgId].slice(-200);
+    S.meta.pendingBooks = (S.meta.pendingBooks || []).filter(x => x.msgId !== job.msgId); saveMeta();
+    let date = /^\d{4}-\d{2}-\d{2}$/.test(dateRaw) ? dateRaw : ymd(addDays(new Date(), 7));
+    if (dayDiff(new Date(), date) < 0) date = ymd(addDays(new Date(), 3));
+    const days = Math.max(1, Math.min(15, num(daysRaw, 3)));
+    let tk = null;
+    if (mode === "come") tk = await bookCome(c.id, homeOf(c.id), date, note);
+    else {
+      const to = mode === "visit" ? (dest || homeOf(c.id)) : dest;
+      if (!to || to === home) { notify(`${c.name}的票没订成`, "目的地不对"); return; }
+      if (mode === "visit") { S.meta.charHome = { ...(S.meta.charHome || {}), [c.id]: to }; saveMeta(); }
+      tk = await bookForHer(c, mode === "visit" ? "visit" : "together", to, date, days, note, "", false, true);
+    }
+    if (!tk) return;
+    S.meta.unseenGift = tk.id; saveMeta();
+    notify(mode === "come" ? `${c.name}要来找你了` : `${c.name}给你订的票出好了`, `${tk.from} → ${tk.to} · ${mdw(tk.dep)} ${hm(tk.dep)} ${tk.no}`);
+    renderAll();
+  }
+  function notify(title, body) {
+    try { if (api.notifications && api.notifications.create) api.notifications.create({ title, body, badgeDelta: 1 }); } catch (e) { console.warn(e); }
+  }
+  async function runPendingBooks() {
+    const list = S.meta.pendingBooks || []; if (!list.length) return;
+    for (const job of list) {
+      const c = charById(job.charId); if (!c) continue;
+      if (!S.meta.home) { toast(`${c.name}在聊天里给你订了票，先告诉我你住哪`); if (!(await needHome())) return; }
+      if (/找她|找你/.test(job.args[3] || "") && !homeOf(c.id)) {
+        const r = await form(`${c.name}要来找你`, [{ k: "from", label: "他从哪个城市来（会记住）", ph: "上海" }], "出票");
+        if (!r || !r.from.trim()) return;
+        S.meta.charHome = { ...(S.meta.charHome || {}), [c.id]: r.from.trim() }; saveMeta();
+      }
+      await handleChatBook(job);
+    }
+  }
+
   /** 打开 app 时偶尔：他自己给她订票（开关在订票页） */
   async function maybeSurprise() {
     if (S.meta.surprise === false || !S.meta.home) return;
@@ -1458,11 +1516,27 @@
 
   // ───────────────────────── 启动 ─────────────────────────
   async function boot() {
+    // 聊天里他发了订票标记：宿主在后台把旅行 app 拉起来交给这里
+    let ctx = null; try { ctx = api.app && api.app.getLaunchContext ? await api.app.getLaunchContext() : null; } catch (e) { /* 老宿主没有 */ }
+    const queued = [];
+    if (api.on) api.on("chat.message.created", ev => { const job = bookFromMessage(ev); if (!job) return; if (S.meta) handleChatBook(job).catch(e => console.warn(e)); else queued.push(job); });
+    if (ctx && ctx.background) {
+      await loadAll();
+      const job = bookFromMessage(ctx); if (job) await handleChatBook(job).catch(e => console.warn(e));
+      for (const j of queued) await handleChatBook(j).catch(e => console.warn(e));
+      return;
+    }
     root().innerHTML = `<div class="loading">打开旅行……</div>`;
     await loadAll(); root().innerHTML = "";
+    for (const j of queued) await handleChatBook(j).catch(e => console.warn(e));
     renderBase();
     setInterval(() => { const t = S.stack[S.stack.length - 1]; if (t && t.kind === "flight") renderPage(t); }, 60e3);
-    setTimeout(() => { maybeSurprise().catch(e => console.warn(e)); }, 2500);
+    setTimeout(async () => {
+      await runPendingBooks().catch(e => console.warn(e));
+      const gift = S.meta.unseenGift && S.tickets.find(t => t.id === S.meta.unseenGift);
+      if (gift) { S.meta.unseenGift = ""; saveMeta(); showGift(gift); return; }
+      maybeSurprise().catch(e => console.warn(e));
+    }, 1500);
   }
   boot().catch(e => { console.error(e); root().innerHTML = `<div class="loading">打开失败：${esc((e && e.message) || e)}</div>`; });
 })();

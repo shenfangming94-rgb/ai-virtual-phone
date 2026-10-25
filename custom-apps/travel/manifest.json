@@ -23,11 +23,42 @@
     "ui.toast",
     "chat.sendCard",
     "chat.sendMessage",
-    "chat.write"
+    "chat.write",
+    "chat.read",
+    "notifications.write"
   ],
   "network": {
     "allowedDomains": [
       "geocoding-api.open-meteo.com"
+    ]
+  },
+  "extensions": {
+    "chat": {
+      "directives": [
+        {
+          "id": "travel_book",
+          "label": "订票",
+          "title": "旅行 · 订票",
+          "appLabel": "旅行",
+          "syntax": "[订票:目的地:出发日期:天数:谁去:留言]",
+          "description": "你决定给对方订机票或火车票时用。先在聊天里和对方商量好再发，不要突然订。目的地写真实城市；出发日期写 YYYY-MM-DD，要在今天以后；天数写数字；谁去只能写「一起」「她来找我」「我去找她」之一；留言是你想对她说的一句话。航班号、座位、价格由旅行 app 自动出，你不要编。钱你出。",
+          "status": "已订票",
+          "accentColor": "#2b5bd7",
+          "card": {
+            "title": "{{目的地}}",
+            "subtitle": "{{出发日期}} 出发 · {{天数}} 天",
+            "body": "{{谁去}}｜{{留言}}"
+          }
+        }
+      ]
+    },
+    "events": [
+      {
+        "event": "chat.message.created",
+        "entry": "chat_book",
+        "background": true,
+        "description": "他在聊天里发订票标记时，在旅行 app 里真的出票"
+      }
     ]
   }
 }

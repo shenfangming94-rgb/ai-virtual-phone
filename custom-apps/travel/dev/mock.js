@@ -62,5 +62,8 @@
     chat: { async sendCard(p) { calls.push({ card: p }); return { messageId: "m1" }; }, async sendMessage(p) { calls.push({ msg: p }); return { messageId: "m2" }; } },
     memory: { async addTimeline(p) { calls.push({ memory: p }); return {}; } },
     ui: { async toast() {} },
+    app: { async getLaunchContext() { return window.__LAUNCH || null; } },
+    on(ev, fn) { (window.__HANDLERS = window.__HANDLERS || {})[ev] = fn; },
+    notifications: { async create(p) { calls.push({ notice: p }); return {}; } },
   };
 })();

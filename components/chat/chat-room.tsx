@@ -105,11 +105,11 @@ function isCallSysMsg(msg: ChatMessage): boolean {
     return CALL_SYS_RE.test(msg.content);
 }
 /** Returns the effective UI role: call messages render as "system" regardless of stored role */
-const ACTION_MEDIA_TYPES = new Set(["poke", "accept_red_packet", "decline_red_packet", "accept_transfer", "decline_transfer", "accept_payment_request", "decline_payment_request", "group_admin_notice"]);
+const ACTION_MEDIA_TYPES = new Set(["poke", "narration", "accept_red_packet", "decline_red_packet", "accept_transfer", "decline_transfer", "accept_payment_request", "decline_payment_request", "group_admin_notice"]);
 // 拍一拍/群管理通知/通话留痕渲染成灰色系统小字，没有 💭 面板入口——
 // 状态栏/内心独白/状态值挂上去会被显示层吞掉，挂载时必须跳过它们
 function canCarryFoldedPanel(part: { content?: string; mediaType?: ChatMessage["mediaType"] }): boolean {
-    if (part.mediaType === "poke" || part.mediaType === "group_admin_notice") return false;
+    if (part.mediaType === "poke" || part.mediaType === "group_admin_notice" || part.mediaType === "narration") return false;
     return !CALL_SYS_RE.test(part.content || "");
 }
 function uiRole(msg: ChatMessage): string {
@@ -6126,7 +6126,9 @@ export function ChatRoom({ session, onBack, onDeleted }: ChatRoomProps) {
                                             }
                                         }}
                                         onContextMenu={(e) => { e.preventDefault(); openMessageContextMenu(msg.id, { x: e.clientX, y: e.clientY }); }}
-                                        className={isCompactSystemInstruction
+                                        className={msg.mediaType === "narration"
+                                            ? "chat-narration relative cursor-pointer"
+                                            : isCompactSystemInstruction
                                             ? "chat-sys-msg break-all max-w-[90%] relative cursor-pointer"
                                             : isSystemInstruction
                                             ? "chat-system-instruction-card relative cursor-pointer"

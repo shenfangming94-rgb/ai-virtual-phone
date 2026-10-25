@@ -1198,6 +1198,8 @@ export function formatRichMediaForHistory(msg: ChatMessage, userName: string, ch
             return d?.adminAction
                 ? buildGroupAdminBracketText(d.adminAction, d.adminActorName || charName, d.adminTargetName || "", d.adminMuteMinutes, d.adminTitle)
                 : msg.content;
+        case "narration":
+            return `[旁白] ${msg.content}`;
         case "poke": {
             if (isGroup) {
                 return `[${d?.pokeSender || charName}拍了拍${d?.pokeTarget || userName}]`;

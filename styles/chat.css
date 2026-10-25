@@ -7559,3 +7559,40 @@ html body .chat-role-badge[data-tone="peach"] { background: linear-gradient(90de
 .feed-post-edit-hint { display: block; font-size: 11.5px; font-weight: 400; color: var(--c-icon); }
 .chat-retry-dialog .modal-footer { gap: 8px; }
 .chat-retry-dialog .modal-footer .ui-btn { flex: 1 1 0; min-width: 0; white-space: nowrap; padding-left: 6px; padding-right: 6px; font-size: 14px; }
+
+/* 线上动作描写：聊天里的旁白（居中斜体灰字） */
+.chat-narration {
+  width: 100%;
+  margin: 6px auto;
+  padding: 2px 18px;
+  text-align: center;
+  font-style: italic;
+  font-size: calc(14px*var(--app-text-scale,1));
+  line-height: 1.75;
+  letter-spacing: 0.3px;
+  color: color-mix(in srgb, var(--c-text) 55%, transparent);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* 聊天设置：动描写法面板（字号跟下面的设置项一致：12.6 / 说明 10.8） */
+.narr-sub-label { font-size: calc(12.6px*var(--app-text-scale,1)); color: var(--c-text-title); padding-left: 4px; }
+.narr-summary { max-width: 210px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.narr-caret { display: inline-block; margin-left: 4px; color: var(--c-icon); transition: transform .2s; }
+.narr-caret.is-open { transform: rotate(180deg); }
+.narr-panel { padding: 2px 16px 12px; display: flex; flex-direction: column; gap: 7px; }
+.narr-title { font-size: calc(12.6px*var(--app-text-scale,1)); font-weight: 600; color: var(--c-text-title); }
+.narr-seg { display: grid; grid-template-columns: repeat(4, 1fr); padding: 3px; border-radius: 10px; background: color-mix(in srgb, var(--c-text) 7%, transparent); }
+.narr-seg button { border: 0; background: none; padding: 6px 0; border-radius: 8px; font-size: calc(12px*var(--app-text-scale,1)); color: var(--c-text); }
+.narr-seg button.on { background: var(--c-card, #fff); font-weight: 600; box-shadow: 0 1px 4px rgba(0, 0, 0, .08); }
+.narr-hint { font-size: calc(10.8px*var(--app-text-scale,1)); color: var(--c-icon); line-height: 1.5; }
+.narr-row { display: flex; align-items: center; justify-content: space-between; margin-top: 4px; }
+.narr-chips { display: flex; gap: 5px; }
+.narr-chips button { border: 1px solid color-mix(in srgb, var(--c-text) 18%, transparent); background: none; border-radius: 999px; padding: 3px 10px; font-size: calc(11.5px*var(--app-text-scale,1)); color: var(--c-text); }
+.narr-chips button.on { border-color: var(--c-text-title); color: var(--c-text-title); font-weight: 600; }
+.narr-style { width: 100%; border: 0; border-radius: 10px; padding: 9px 11px; font-size: calc(12px*var(--app-text-scale,1)); line-height: 1.6; resize: vertical; background: color-mix(in srgb, var(--c-text) 6%, transparent); color: var(--c-text-title); }
+.narr-line { height: 1px; margin: 3px 0; background: color-mix(in srgb, var(--c-text) 10%, transparent); }
+.narr-toggle { display: flex; align-items: center; gap: 12px; }
+.narr-toggle > div { flex: 1; min-width: 0; }
+.narr-toggle b { display: block; font-size: calc(12.6px*var(--app-text-scale,1)); font-weight: 600; color: var(--c-text-title); }
+.narr-toggle span { display: block; margin-top: 2px; font-size: calc(10.8px*var(--app-text-scale,1)); line-height: 1.5; color: var(--c-icon); }

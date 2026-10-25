@@ -211,6 +211,7 @@ export function loadNativeTimeline(
             else if (msg.mediaType === "accept_payment_request") content = `[${msg.mediaData?.claimer || ""}接受了${msg.mediaData?.owner || ""}的代付]`;
             else if (msg.mediaType === "decline_payment_request") content = `[${msg.mediaData?.claimer || ""}拒绝了${msg.mediaData?.owner || ""}的代付]`;
             else if (msg.mediaType === "poke") content = `[${msg.mediaData?.pokeSender || ""}拍了拍${msg.mediaData?.pokeTarget || ""}]`;
+            else if (msg.mediaType === "narration") content = `[旁白] ${msg.content}`;
             else if (msg.mediaType === "group_admin_notice" && msg.mediaData?.adminAction) {
                 content = buildGroupAdminBracketText(
                     msg.mediaData.adminAction,
@@ -337,6 +338,7 @@ export function loadNativeTimeline(
             else if (msg.mediaType === "accept_payment_request") content = "[接受代付]";
             else if (msg.mediaType === "decline_payment_request") content = "[拒绝代付]";
             else if (msg.mediaType === "poke") content = `[我拍了拍${msg.mediaData?.pokeTarget || ""}]`;
+            else if (msg.mediaType === "narration") content = `[旁白] ${msg.content}`;
             // Represent rich media as text when content is empty
             else if (!content && msg.mediaType) {
                 if (msg.mediaType === "sticker") content = `[表情包:${msg.mediaData?.label || "贴纸"}]`;

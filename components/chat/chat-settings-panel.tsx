@@ -58,6 +58,7 @@ import { getSchemes, saveScheme, deleteScheme, type CSSScheme } from "@/lib/css-
 import { CustomStatusFrame } from "@/components/chat/custom-status-frame";
 import { KeyboardAutoSendDebounceItem } from "@/components/chat/keyboard-auto-send-debounce-item";
 import { SessionChatSoundsSection } from "@/components/chat/session-chat-sounds";
+import { OnlineNarrationSettings } from "@/components/chat/online-narration-settings";
 import { ChevronRight, Image as ImageIcon, Video, Mic, UserMinus, UserPlus, Users, Pin, Ban, MessageSquare, Search, AlertCircle, Code, Laptop, Trash2, Smile, Sparkles, X, Play, Upload, Download, Save, FolderOpen, Camera, RefreshCw, type LucideIcon } from "lucide-react";
 import { BINDING_ACCENTS, CONTENT_APP_ACCENTS } from "@/lib/ui-accent-colors";
 import CSSSchemeBar from "@/components/ui/css-scheme-picker";
@@ -1398,6 +1399,7 @@ export function ChatSettingsPanel({
                         </div>
                     </div>
                     <>
+                        {!session.isGroup ? <OnlineNarrationSettings session={session} updateSession={updateSession} Icon={ChatInfoIcon} /> : null}
                         <div className="menu-item">
                             <ChatInfoIcon icon={MessageSquare} color={CONTENT_APP_ACCENTS.chat} />
                             <div className="menu-label-group">

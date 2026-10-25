@@ -10,6 +10,7 @@
  */
 
 import type { ChatMessage } from "./chat-storage";
+import { matchNarrationSegment } from "./online-narration";
 import type { StateValue } from "./chat-storage";
 import { parseStateValues, mergeStateValues } from "./state-value-parser";
 import { stripActionShells } from "./action-parser";
@@ -758,6 +759,12 @@ export function parseAIResponse(rawText: string, previousState: StateValue[]): P
     // 4. Parse each segment
     const parts: ParsedMessagePart[] = [];
     for (const seg of segments) {
+        // 线上动作描写：[旁白] 开头的一段（见 lib/online-narration.ts）
+        const narration = matchNarrationSegment(restore(seg));
+        if (narration) {
+            parts.push({ content: narration, mediaType: "narration" });
+            continue;
+        }
         parseSegment(seg, parts);
     }
     if (meetingInvite.raw) {

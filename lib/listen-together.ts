@@ -12,7 +12,7 @@ import {
 import { generateGroupRawCompletion } from "./group-chat-engine";
 import { kvGet, kvSet, registerKvMigration } from "./kv-db";
 import { getMusicControlBridge } from "./music-control-bridge";
-import type { MusicTrack } from "./music-storage";
+import { toggleLike, type MusicTrack } from "./music-storage";
 import { resolveUserIdentity } from "./settings-storage";
 
 const STORE_KEY = "nox_listen_together_v1";
@@ -26,7 +26,7 @@ export type LTMessage = {
     role: "user" | "char" | "system";
     text: string;
     at: string;
-    kind?: "note" | "pick" | "song";
+    kind?: "note" | "pick" | "song" | "like";
 };
 
 export type LTNote = { by: "user" | "char"; text: string; at: string };
@@ -49,7 +49,7 @@ export type LTActive = {
     lastTrackId?: string;
 };
 
-type Store = { chars: Record<string, LTChar>; active: LTActive | null };
+type Store = { chars: Record<string, LTChar>; active: LTActive | null; liked?: string[] };
 
 function emptyChar(): LTChar {
     return { distance: "13.14", totalSec: 0, messages: [], notes: {} };
@@ -58,7 +58,7 @@ function emptyChar(): LTChar {
 export function loadLT(): Store {
     try {
         const raw = JSON.parse(kvGet(STORE_KEY) || "{}") as Partial<Store>;
-        return { chars: raw.chars && typeof raw.chars === "object" ? raw.chars : {}, active: raw.active ?? null };
+        return { chars: raw.chars && typeof raw.chars === "object" ? raw.chars : {}, active: raw.active ?? null, liked: Array.isArray(raw.liked) ? raw.liked : [] };
     } catch {
         return { chars: {}, active: null };
     }
@@ -147,11 +147,11 @@ export function syncMemory(charId: string, session?: LTActive | null) {
     const store = loadLT();
     const c = ltChar(store, charId);
     const since = c.memorySyncedAt ? new Date(c.memorySyncedAt).getTime() : 0;
-    const fresh = c.messages.filter(m => new Date(m.at).getTime() > since && m.role !== "system");
+    const fresh = c.messages.filter(m => new Date(m.at).getTime() > since && (m.role !== "system" || m.kind === "like"));
     if (fresh.length === 0) return;
     const user = userName(charId);
     const songs = (session?.songs || store.active?.songs || []).slice(-8);
-    const lines = fresh.slice(-16).map(m => `${m.role === "user" ? user : "你"}${m.kind === "note" ? "（写在歌笺上）" : ""}：${m.text}`);
+    const lines = fresh.slice(-16).map(m => m.kind === "like" ? `（${m.text.replace(/^你/, user)}）` : `${m.role === "user" ? user : "你"}${m.kind === "note" ? "（写在歌笺上）" : ""}：${m.text}`);
     const chat = createOrGetSession(charId);
     pushChatMessage({
         sessionId: chat.id,
@@ -165,7 +165,7 @@ export function syncMemory(charId: string, session?: LTActive | null) {
 
 // ── 他说话 ───────────────────────────────────
 
-function parseLrc(lrc?: string): { time: number; text: string }[] {
+export function parseLrc(lrc?: string): { time: number; text: string }[] {
     if (!lrc) return [];
     const lines: { time: number; text: string }[] = [];
     for (const line of lrc.split("\n")) {
@@ -214,14 +214,20 @@ async function charGenerate(charId: string, instruction: string): Promise<string
 export type ReplyMode = "reply" | "nudge" | "greet";
 
 let replying = false;
+// 他在回的时候她又发了：回完接着回她后面那几句
+let replyAgain = false;
 export function isReplying() {
     return replying;
 }
 
 /** 让他在一起听里说话。会自己点歌、留歌笺 */
 export async function charSpeak(charId: string, mode: ReplyMode): Promise<void> {
-    if (replying) return;
+    if (replying) {
+        if (mode === "reply") replyAgain = true;
+        return;
+    }
     replying = true;
+    replyAgain = false;
     window.dispatchEvent(new CustomEvent(LISTEN_TOGETHER_EVENT));
     try {
         const store = loadLT();
@@ -231,12 +237,15 @@ export async function charSpeak(charId: string, mode: ReplyMode): Promise<void> 
         const track = state?.currentTrack ?? null;
         const lyric = track ? lyricAt(track, state?.currentTime ?? 0) : "";
         const notes = track ? (c.notes[songKey(track)] || []).slice(-3) : [];
-        const recent = c.messages.slice(-20).map(m => m.role === "system" ? `（${m.text}）` : `${m.role === "user" ? user : "你"}：${m.text}`);
+        const recent = c.messages.slice(-20).map(m => m.role === "system" ? `（${m.kind === "like" ? m.text.replace(/^你/, user) : m.text}）` : `${m.role === "user" ? user : "你"}：${m.text}`);
+        const waiting = unreplied(c.messages);
         const task = mode === "greet"
             ? `你刚进入一起听，跟${user}打个招呼。${track ? "" : "现在还没放歌，挑一首你想和她一起听的。"}`
             : mode === "nudge"
                 ? `${user}想听你说点什么：可以聊这首歌、正在唱的歌词、此刻的心情，或者想换一首。`
-                : `回${user}刚说的话（上面对话最后几句）。`;
+                : waiting.length
+                    ? `回${user}刚说的话：${waiting.map(m => `「${m.text}」`).join("")}。她连着发了几句就每句都要接到，可以合在一起回。`
+                    : `回${user}刚说的话（上面对话最后几句）。`;
         const instruction = [
             `你正在和${user}用音乐 App 的「一起听」一起听歌：你们不在一起，各自戴着耳机，同时听同一首。`,
             track ? `现在放的是 ${songLabel(track)}，进度 ${mmss(state?.currentTime ?? 0)} / ${mmss(state?.duration ?? track.duration ?? 0)}${state?.isPlaying ? "" : "（暂停中）"}。` : "现在没有在放歌。",
@@ -257,7 +266,22 @@ export async function charSpeak(charId: string, mode: ReplyMode): Promise<void> 
     } finally {
         replying = false;
         window.dispatchEvent(new CustomEvent(LISTEN_TOGETHER_EVENT));
+        if (replyAgain) {
+            replyAgain = false;
+            if (unreplied(ltChar(loadLT(), charId).messages).length) void charSpeak(charId, "reply");
+        }
     }
+}
+
+/** 他最后一次说话之后她发的话 */
+function unreplied(messages: { role: string; text: string; kind?: string }[]) {
+    const out: { text: string }[] = [];
+    for (let i = messages.length - 1; i >= 0; i--) {
+        const m = messages[i];
+        if (m.role === "char") break;
+        if (m.role === "user" && m.kind !== "note") out.unshift(m);
+    }
+    return out;
 }
 
 async function applyReply(charId: string, raw: string) {
@@ -323,6 +347,25 @@ export function userNote(charId: string, text: string) {
         c.notes[key] = [...(c.notes[key] || []), { by: "user" as const, text, at: new Date().toISOString() }].slice(-10);
         pushMsg(store, charId, { role: "user", text, kind: "note" });
     });
+}
+
+/** 一起听里点红心：记下来，聊天里留一行，他也知道 */
+export function isSongLiked(store: Store, track: MusicTrack | null): boolean {
+    return Boolean(track && (track.liked || store.liked?.includes(songKey(track))));
+}
+
+export function toggleSongLike(charId: string, track: MusicTrack): boolean {
+    const key = songKey(track);
+    let on = false;
+    updateLT(store => {
+        const list = store.liked || [];
+        on = !list.includes(key) && !track.liked;
+        store.liked = on ? [...list, key].slice(-500) : list.filter(k => k !== key);
+        if (on) pushMsg(store, charId, { role: "system", kind: "like", text: `你给${songLabel(track)}点了红心` });
+    });
+    if (track.liked !== on) void toggleLike(track.id).catch(() => undefined);
+    track.liked = on;
+    return on;
 }
 
 export function setDistance(charId: string, distance: string) {

@@ -16,7 +16,10 @@ import {
     LISTEN_TOGETHER_OPEN_EVENT,
     loadLT,
     ltChar,
+    isSongLiked,
     lyricAt,
+    parseLrc,
+    toggleSongLike,
     setDistance,
     songKey,
     startListening,
@@ -94,6 +97,8 @@ export function ListenTogetherOverlay() {
     const [text, setText] = useState("");
     const [noteMode, setNoteMode] = useState(false);
     const [showQueue, setShowQueue] = useState(false);
+    const [showLyrics, setShowLyrics] = useState(false);
+    const lyricBoxRef = useRef<HTMLDivElement | null>(null);
     const [editingDistance, setEditingDistance] = useState<string | null>(null);
     const replyTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
     const listRef = useRef<HTMLDivElement | null>(null);
@@ -111,14 +116,24 @@ export function ListenTogetherOverlay() {
     const c = active ? ltChar(store, active.charId) : null;
     const track = player.currentTrack;
     const lyric = lyricAt(track, player.currentTime);
+    const lyricLines = useMemo(() => parseLrc(track?.lyrics), [track?.lyrics]);
+    let lyricIdx = -1;
+    lyricLines.forEach((l, i) => { if (l.time <= player.currentTime) lyricIdx = i; });
     const sessionMsgs = useMemo(() => {
         if (!c || !active) return [];
         const start = new Date(active.startedAt).getTime();
         return c.messages.filter(m => new Date(m.at).getTime() >= start);
     }, [c, active]);
-    const talk = sessionMsgs.filter(m => m.role !== "system" || m.kind === "pick" || m.kind === "song");
+    const talk = sessionMsgs.filter(m => m.role !== "system" || m.kind === "pick" || m.kind === "song" || m.kind === "like");
     const notes = c && track ? c.notes[songKey(track)] || [] : [];
     const quiet = !sessionMsgs.some(m => m.role !== "system");
+
+    // 全部歌词：正在唱的那句滚到中间
+    useEffect(() => {
+        const box = lyricBoxRef.current;
+        const cur = box?.querySelector<HTMLElement>("[data-cur]");
+        if (box && cur) box.scrollTo({ top: cur.offsetTop - box.clientHeight / 2 + cur.clientHeight / 2, behavior: "smooth" });
+    }, [lyricIdx, showLyrics, tab]);
 
     useEffect(() => {
         if (tab === "chat") listRef.current?.scrollTo({ top: listRef.current.scrollHeight });
@@ -143,8 +158,15 @@ export function ListenTogetherOverlay() {
             return;
         }
         userSay(active.charId, value);
+        waitReply(active.charId);
+    };
+    // 她停手 4 秒再回；还在打字就接着等
+    const waitReply = (charId: string) => {
         if (replyTimer.current) clearTimeout(replyTimer.current);
-        replyTimer.current = setTimeout(() => void charSpeak(active.charId, "reply"), 2500);
+        replyTimer.current = setTimeout(() => {
+            replyTimer.current = null;
+            void charSpeak(charId, "reply");
+        }, 4000);
     };
     const nudge = () => {
         if (replyTimer.current) clearTimeout(replyTimer.current);
@@ -203,7 +225,14 @@ export function ListenTogetherOverlay() {
 
             {tab === "music" ? (
                 <div className="lt-music">
-                    <div className="lt-vinyl-area" onClick={player.togglePlay}>
+                    {showLyrics ? (
+                        <div className="lt-lyrics-full" ref={lyricBoxRef} onClick={() => setShowLyrics(false)}>
+                            {lyricLines.length ? lyricLines.map((l, i) => (
+                                <p key={i} data-cur={i === lyricIdx || undefined}>{l.text}</p>
+                            )) : <p className="lt-lyrics-empty">这首歌没有歌词</p>}
+                        </div>
+                    ) : (
+                    <div className="lt-vinyl-area" onClick={() => setShowLyrics(true)}>
                         <div className="lt-vinyl" data-spinning={player.isPlaying || undefined}>
                             <div className="lt-label">
                                 {track?.coverUrl ? <img src={track.coverUrl} alt="" /> : <span className="lt-label-empty">♪</span>}
@@ -216,13 +245,19 @@ export function ListenTogetherOverlay() {
                             <span className="lt-arm-head" />
                         </div>
                     </div>
+                    )}
                     <div className="lt-song">
                         <div>
                             <div className="lt-song-title">{track?.title || "还没有在放歌"}</div>
                             <div className="lt-song-artist">{track?.artist || (track ? "未知歌手" : "去音乐 app 选一首，或者在对话里让 TA 选")}</div>
                         </div>
+                        {track ? (
+                            <button type="button" className="lt-like" data-on={isSongLiked(store, track) || undefined} aria-label="红心" onClick={() => toggleSongLike(active.charId, track)}>
+                                <svg width="24" height="24" viewBox="0 0 24 24" fill={isSongLiked(store, track) ? "currentColor" : "none"} stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" /></svg>
+                            </button>
+                        ) : null}
                     </div>
-                    <div className="lt-lyric">{lyric || " "}</div>
+                    <div className="lt-lyric" onClick={() => setShowLyrics(v => !v)}>{showLyrics ? " " : lyric || " "}</div>
                     <div className="lt-progress" onPointerDown={seekAt}>
                         <div className="lt-progress-fill" style={{ width: `${progress * 100}%` }} />
                         <div className="lt-progress-knob" style={{ left: `${progress * 100}%` }} />
@@ -301,7 +336,10 @@ export function ListenTogetherOverlay() {
                             <input
                                 value={text}
                                 placeholder={noteMode ? "写给这首歌的几句话" : "说点什么，或让 TA 选歌…"}
-                                onChange={e => setText(e.target.value)}
+                                onChange={e => {
+                                    setText(e.target.value);
+                                    if (replyTimer.current && !noteMode) waitReply(active.charId);
+                                }}
                                 onKeyDown={e => { if (e.key === "Enter" && !e.nativeEvent.isComposing) send(); }}
                             />
                             <span className="lt-field-time">{mmss(player.currentTime)}</span>
@@ -317,12 +355,15 @@ export function ListenTogetherOverlay() {
             {showQueue ? (
                 <div className="lt-pick-mask" onClick={() => setShowQueue(false)}>
                     <div className="lt-pick lt-queue" onClick={e => e.stopPropagation()}>
-                        <div className="lt-pick-title">播放列表</div>
+                        <div className="lt-queue-head"><div className="lt-pick-title">播放列表</div><small>{player.queue.length} 首</small></div>
                         {player.queue.length === 0 ? <div className="lt-pick-empty">列表是空的，在对话里让 {name} 选一首吧</div> : null}
-                        {player.queue.map(q => (
+                        {player.queue.map((q, i) => (
                             <button key={q.id} type="button" className="lt-pick-item" data-current={q.id === track?.id || undefined} onClick={() => { player.playTrack(q); setShowQueue(false); }}>
-                                <span className="lt-queue-title">{q.title}</span>
-                                <span className="lt-queue-artist">{q.artist}</span>
+                                <span className="lt-queue-no">{q.id === track?.id && player.isPlaying ? <span className="lt-queue-bars"><i /><i /><i /></span> : i + 1}</span>
+                                <span className="lt-queue-text">
+                                    <span className="lt-queue-title">{q.title}</span>
+                                    <span className="lt-queue-artist">{q.artist || "未知歌手"}</span>
+                                </span>
                             </button>
                         ))}
                     </div>

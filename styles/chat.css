@@ -7557,4 +7557,5 @@ html body .chat-role-badge[data-tone="peach"] { background: linear-gradient(90de
 .feed-post-edit-photo-actions .ui-btn { display: inline-flex; align-items: center; justify-content: flex-start; gap: 5px; font-size: 13px; font-weight: 500; padding: 5px 10px; min-height: 0; }
 .feed-post-edit-photo-del { color: #e5484d !important; }
 .feed-post-edit-hint { display: block; font-size: 11.5px; font-weight: 400; color: var(--c-icon); }
-.chat-retry-dialog .modal-footer .ui-btn { white-space: nowrap; padding-left: 12px; padding-right: 12px; }
+.chat-retry-dialog .modal-footer { gap: 8px; }
+.chat-retry-dialog .modal-footer .ui-btn { flex: 1 1 0; min-width: 0; white-space: nowrap; padding-left: 6px; padding-right: 6px; font-size: 14px; }

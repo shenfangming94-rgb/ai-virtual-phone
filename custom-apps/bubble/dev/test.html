@@ -1,0 +1,731 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<title>bubble</title>
+<style>:root {
+  /* 照参考包：白底 + 紫，她的房间粉色 */
+  --brand: #A970EA; --ink: #0F1115; --ink2: #565C66; --sub: #A0A6AE; --line: #EDEFF2; --mist: #F5F6F8;
+  --theme: #B07CE8; --tint: #FAF8FD; --said: #F1F1F4; --org: #FF8A1F;
+  --bar-top: var(--ai-phone-app-bar-top, 56px);
+  --bar-h: var(--ai-phone-app-bar-height, 30px);
+  --bar-clear: var(--ai-phone-app-bar-clear-right, 96px);
+  --safe-bottom: var(--ai-phone-app-safe-bottom, 20px);
+}
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+html, body { margin: 0; width: 100%; height: 100%; background: #fff; color: var(--ink); overflow: hidden;
+  font: 13px/1.5 -apple-system, BlinkMacSystemFont, "PingFang SC", "Helvetica Neue", sans-serif; }
+button, input, textarea { font: inherit; color: inherit; }
+button { border: 0; background: none; padding: 0; cursor: pointer; text-align: inherit; }
+button:disabled { opacity: .45; cursor: default; }
+svg { display: block; }
+.cell-main { flex: 1; min-width: 0; }
+#app { position: fixed; inset: 0; display: flex; flex-direction: column; }
+.loading { margin: auto; font-size: 22px; font-weight: 800; color: var(--brand); }
+
+/* 顶栏：返回 / 标题 / ···，右边让开宿主胶囊 */
+.hd { flex: none; height: calc(var(--bar-top) + 44px); position: relative; background: rgba(255,255,255,.92); border-bottom: 1px solid var(--line); z-index: 5; }
+.hd-in { position: absolute; left: 8px; right: var(--bar-clear); top: var(--bar-top); height: 44px; display: flex; align-items: center; transform: translateY(calc((var(--bar-h) - 44px) / 2)); }
+.ic { width: 34px; height: 34px; display: grid; place-items: center; color: #222; flex: none; }
+.ic svg { width: 20px; height: 20px; }
+.hd-t { flex: 1; min-width: 0; text-align: center; }
+/* 标题按整屏居中：两边都留出胶囊的宽度 */
+.hd > .hd-t { position: absolute; left: var(--bar-clear); right: var(--bar-clear); top: var(--bar-top); height: 44px; display: flex; flex-direction: column; align-items: center; justify-content: center; transform: translateY(calc((var(--bar-h) - 44px) / 2)); pointer-events: none; }
+.hd-in .ic:last-child { margin-left: auto; }
+.hd-t b { display: inline-flex; align-items: center; gap: 3px; font-size: 14px; }
+.hd-t b i svg { width: 13px; height: 13px; color: var(--sub); }
+.hd-t small { display: block; font-size: 9.5px; color: var(--sub); line-height: 1.3; }
+
+/* 首页 */
+.home { flex: 1; overflow-y: auto; padding: 0 0 calc(var(--safe-bottom) + 20px); }
+.brand { font-size: 26px; font-weight: 800; color: var(--brand); padding: 8px 18px 6px; letter-spacing: -.5px; display: flex; align-items: flex-start; gap: 3px; }
+.brand i { width: 7px; height: 7px; border-radius: 50%; background: var(--brand); margin-top: 7px; }
+.sec { display: flex; align-items: center; justify-content: space-between; font-size: 11px; font-weight: 700; color: var(--sub); padding: 14px 18px 6px; }
+.sec-btn { display: inline-flex; align-items: center; gap: 3px; color: var(--brand); font-size: 11.5px; font-weight: 700; }
+.sec-btn svg { width: 13px; height: 13px; }
+.row { width: 100%; display: flex; align-items: center; gap: 11px; padding: 9px 18px; }
+.row .ava { width: 44px; height: 44px; }
+.row b { display: flex; align-items: center; gap: 5px; font-size: 13.5px; }
+.row small { display: block; font-size: 11.5px; color: var(--ink2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 2px; }
+.row .tm { font-size: 10px; color: var(--sub); align-self: flex-start; margin-top: 4px; }
+.days { font-size: 10px; font-weight: 600; color: var(--sub); }
+.empty { padding: 18px; color: var(--sub); font-size: 12px; text-align: center; }
+.ver { text-align: center; font-size: 10px; color: #c7cbd1; margin-top: 30px; }
+.ver button { color: #c7cbd1; text-decoration: underline; }
+.art { font-style: normal; font-size: 7.5px; font-weight: 800; color: #fff; background: var(--org); padding: 2px 5px; border-radius: 3px; letter-spacing: .3px; line-height: 1.2; }
+.is-char .art, .home .row:not(:first-of-type) .art { background: var(--theme); }
+
+.ava { width: 30px; height: 30px; border-radius: 50%; flex: none; object-fit: cover; display: block; }
+.artist-ava { border: 2px solid #fff; box-shadow: 0 0 0 1.5px var(--theme); }
+.me-ava { border: 2px solid #fff; box-shadow: 0 0 0 1.5px var(--mine, #F4A7B9); }
+.is-char .me-ava { box-shadow: 0 0 0 1.5px #E9C7D2; }
+.him-ava { border: 2px solid var(--org); }
+.fan-ava { width: 24px; height: 24px; border: 2px solid #fff; box-shadow: 0 0 0 1px #eee; }
+
+/* 泡泡房 */
+.room { flex: 1; min-height: 0; position: relative; background: var(--tint); overflow: hidden; }
+.room.is-me { background: #FDF8FA; }
+.scroll { position: relative; z-index: 1; height: 100%; overflow-y: auto; padding: 10px 12px 14px; }
+.chip { display: flex; justify-content: center; margin: 4px 0 10px; }
+.chip span { background: rgba(0,0,0,.06); color: var(--ink2); font-size: 9.5px; font-weight: 600; padding: 4px 11px; border-radius: 999px; }
+.theme-journal .chip span, .theme-custom .chip span { background: rgba(255,255,255,.82); }
+.empty-room { text-align: center; color: var(--sub); padding: 60px 0; font-size: 12.5px; }
+.empty-room small { font-size: 11px; }
+.typing { font-size: 10.5px; color: var(--sub); padding: 4px 4px 0; }
+
+.grp { display: flex; gap: 8px; margin-bottom: 8px; align-items: flex-start; }
+.grp.me { justify-content: flex-end; }
+.stack { display: flex; flex-direction: column; gap: 4px; max-width: 76%; min-width: 0; }
+.grp.me .stack { align-items: flex-end; }
+.who { font-size: 10.5px; font-weight: 700; margin: 2px 0 2px 2px; display: flex; gap: 5px; align-items: center; }
+.grp.me .who { margin: 2px 2px 2px 0; }
+.line { display: flex; align-items: flex-end; gap: 5px; }
+.grp.me .line { flex-direction: row-reverse; }
+.bub { padding: 7px 11px; border-radius: 16px; background: var(--said); font-size: 12px; line-height: 1.5; white-space: pre-wrap; word-break: break-word; }
+.grp:not(.me) .line:first-of-type .bub { border-top-left-radius: 6px; }
+.is-char .grp.me .bub { background: var(--theme); color: #fff; }
+.is-me .grp.me .bub { background: var(--mine); color: #fff; box-shadow: 0 2px 6px rgba(244,167,185,.3); }
+.stamp { font-size: 8.5px; color: #B3B8BF; padding-bottom: 2px; flex: none; }
+.quote { border-left: 2px solid var(--theme); background: rgba(0,0,0,.045); border-radius: 4px; padding: 4px 7px; margin: -1px -2px 5px; font-size: 10.5px; color: #6B7078; }
+.grp.me .quote { border-left-color: #fff; background: rgba(255,255,255,.25); color: #fff; }
+
+.fold { margin: 0 0 10px 38px; display: flex; align-items: center; gap: 7px; font-size: 10px; color: var(--ink2); font-weight: 600; }
+.fold .heads { display: flex; }
+.fold .heads i { width: 15px; height: 15px; border-radius: 50%; border: 1.5px solid #fff; margin-left: -5px; }
+.fold .heads i:first-child { margin-left: 0; }
+.fold .n { background: #fff; border: 1px solid var(--line); border-radius: 999px; padding: 4px 10px; }
+
+/* 我的房间：粉丝在左边，白卡片 */
+.fan .stack { max-width: 78%; }
+.fn { font-size: 9.5px; color: #9a9ca3; font-weight: 600; margin: 0 0 1px 2px; display: flex; align-items: center; gap: 5px; }
+.him .fn { color: #3a3d44; font-weight: 700; font-size: 10px; }
+.him .fn small { font-size: 7.5px; font-weight: 600; color: #C4A3AD; background: rgba(255,241,245,.95); border-radius: 4px; padding: 1px 5px; }
+.card { background: rgba(255,255,255,.9); border-radius: 6px; padding: 7px 10px; font-size: 12px; line-height: 1.55; box-shadow: 0 1px 2px rgba(0,0,0,.03); white-space: pre-wrap; word-break: break-word; cursor: pointer; }
+.tr { color: #F08AA4; border-top: 1px dashed #F3D6DE; margin-top: 5px; padding-top: 5px; }
+
+/* 粉色手账装扮 */
+.deco-layer { position: absolute; inset: 0; pointer-events: none; }
+.theme-journal { background: #FCFAFB; }
+.theme-journal::before { content: ""; position: absolute; inset: 0; background: radial-gradient(circle at 12% 18%, rgba(244,167,185,.10), transparent 30%), radial-gradient(circle at 85% 70%, rgba(244,167,185,.12), transparent 32%); }
+.plaid { position: absolute; opacity: .55; border-radius: 3px; background: repeating-linear-gradient(0deg, rgba(244,167,185,.35) 0 6px, transparent 6px 14px), repeating-linear-gradient(90deg, rgba(244,167,185,.35) 0 6px, transparent 6px 14px), #fff; }
+.tape { position: absolute; height: 16px; opacity: .8; background: repeating-linear-gradient(45deg, rgba(244,167,185,.55) 0 4px, rgba(255,255,255,.6) 4px 8px); }
+.dots { position: absolute; width: 60px; height: 40px; opacity: .7; background-image: radial-gradient(#cfcfd6 1px, transparent 1.3px); background-size: 6px 6px; }
+.script { position: absolute; font-family: "Snell Roundhand", "Segoe Script", "Brush Script MT", cursive; font-style: italic; color: #b7b2b8; font-size: 14px; line-height: 1.05; transform: rotate(-12deg); }
+.dg { position: absolute; }
+/* 自己上传的背景 */
+.bg-layer { position: absolute; inset: 0; background: var(--bg-img) center / cover no-repeat; opacity: var(--bg-op, .6); }
+
+/* 底部 */
+.bottom { flex: none; background: #fff; position: relative; z-index: 3; }
+.qbar { display: flex; align-items: center; gap: 8px; margin: 8px 12px 0; padding: 6px 10px; border-radius: 8px; background: var(--mist); font-size: 11px; color: var(--ink2); }
+.qbar span { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; border-left: 2px solid var(--mine, var(--theme)); padding-left: 6px; }
+.qbar svg { width: 13px; height: 13px; }
+.tray { display: flex; gap: 7px; padding: 9px 10px 8px; overflow-x: auto; scrollbar-width: none; }
+.tray::-webkit-scrollbar { display: none; }
+.tchip { flex: none; display: flex; align-items: center; gap: 4px; background: var(--mist); border-radius: 999px; padding: 6px 10px; font-size: 11px; font-weight: 700; }
+.tchip svg { width: 12px; height: 12px; }
+.sendbar { display: flex; align-items: center; padding: 7px 14px; border-top: 1px solid var(--line); }
+.sendbar span { flex: 1; font-size: 10.5px; color: var(--ink2); font-weight: 600; }
+.sendbar button { background: var(--brand); color: #fff; font-size: 11px; font-weight: 700; padding: 7px 14px; border-radius: 999px; }
+.composer { display: flex; gap: 7px; align-items: center; padding: 8px 11px calc(var(--safe-bottom) + 6px); border-top: 1px solid var(--line); }
+.composer .x { width: 32px; height: 32px; border-radius: 50%; background: var(--mist); display: grid; place-items: center; color: #444; flex: none; }
+.composer .x svg { width: 14px; height: 14px; }
+.composer .ta { flex: 1; min-width: 0; background: var(--mist); border: 0; outline: 0; border-radius: 19px; padding: 8px 12px; font-size: 12.5px; }
+.composer .send { width: 34px; height: 34px; border-radius: 50%; background: #CFC2EE; color: #fff; display: grid; place-items: center; flex: none; }
+.composer .send svg { width: 15px; height: 15px; }
+.is-me ~ .bottom .send, .bottom .send { background: var(--brand); }
+#app:has(.is-me) .composer .send { background: var(--mine, #F7AFC0); }
+
+/* 弹层 */
+.mask { position: fixed; inset: 0; z-index: 50; background: rgba(10,11,14,.35); display: flex; align-items: flex-end; }
+.sheet { width: 100%; max-height: 78%; overflow-y: auto; background: #fff; border-radius: 20px 20px 0 0; padding: 8px 0 calc(var(--safe-bottom) + 10px); }
+.grab { width: 36px; height: 4px; border-radius: 3px; background: #DDE0E5; margin: 0 auto 10px; }
+.sheet-h { font-size: 11.5px; font-weight: 700; color: var(--sub); padding: 0 18px 8px; }
+.sheet-hint { font-size: 11px; color: var(--sub); padding: 0 18px 8px; }
+.sheet-t { font-size: 10.5px; font-weight: 700; color: var(--sub); padding: 0 20px 6px; }
+.sheet-t2 { font-size: 13px; font-weight: 800; padding: 0 16px 10px; }
+.opt { width: 100%; display: flex; align-items: center; gap: 10px; padding: 12px 18px; font-size: 13px; border-top: 1px solid #F3F4F6; }
+.opt small { display: block; font-size: 10.5px; color: var(--sub); margin-top: 1px; }
+.opt.danger { color: #E5484D; }
+.opt.ok { justify-content: center; text-align: center; color: var(--brand); font-weight: 700; }
+.opt .ck svg { width: 16px; height: 16px; color: var(--brand); }
+.field { width: 100%; border: 0; outline: 0; background: var(--mist); border-radius: 10px; padding: 9px 11px; font-size: 13px; resize: vertical; }
+.fl { padding: 9px 20px; font-size: 12px; line-height: 1.55; color: #2f3238; border-bottom: 1px solid #F3F4F6; }
+.fl.me { color: var(--brand); font-weight: 600; }
+.dress { padding-left: 0; padding-right: 0; }
+.themes { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; padding: 0 16px; }
+.th { border-radius: 12px; border: 2px solid transparent; text-align: center; padding-bottom: 4px; }
+.th.on { border-color: #F4A7B9; }
+.th b { display: block; font-size: 10.5px; margin-top: 5px; }
+.th small { display: block; font-size: 9px; color: var(--sub); min-height: 13px; }
+.pv { height: 110px; border-radius: 10px; position: relative; overflow: hidden; background: #FAF8FD; display: grid; place-items: center; color: #9a9ca3; font-size: 22px; background-size: cover; background-position: center; }
+.pv i { position: absolute; height: 12px; border-radius: 6px; background: #EDEDF2; }
+.pv i:nth-child(1) { left: 10px; top: 20px; width: 55%; } .pv i:nth-child(2) { right: 10px; top: 46px; width: 45%; background: #FFE1E8; } .pv i:nth-child(3) { left: 10px; top: 72px; width: 62%; }
+.pv-journal { background: repeating-linear-gradient(0deg, rgba(244,167,185,.18) 0 4px, transparent 4px 10px), repeating-linear-gradient(90deg, rgba(244,167,185,.18) 0 4px, transparent 4px 10px), #FCFAFB; }
+.pv-journal i { background: #fff; border-radius: 3px; } .pv-journal i:nth-child(2) { background: #F7AFC0; border-radius: 6px; }
+.pv-custom { background-color: #F2F2F4; }
+.drow { display: flex; align-items: center; justify-content: space-between; margin: 12px 16px 0; padding-top: 12px; border-top: 1px solid var(--line); font-size: 12px; font-weight: 600; }
+.drow input[type=range] { width: 140px; accent-color: #F4A7B9; }
+.cols { display: flex; gap: 8px; }
+.cols button { width: 18px; height: 18px; border-radius: 50%; }
+.cols button.on { box-shadow: 0 0 0 2px #fff, 0 0 0 3.5px currentColor; color: #F4A7B9; }
+.dbg { padding: 0 16px; font-size: 11px; }
+.dbg pre { white-space: pre-wrap; word-break: break-all; background: var(--mist); padding: 6px 8px; border-radius: 6px; max-height: 180px; overflow: auto; font-size: 10.5px; }
+.toast { position: fixed; left: 50%; top: 42%; transform: translateX(-50%); z-index: 99; background: rgba(20,20,24,.86); color: #fff; font-size: 12px; padding: 8px 14px; border-radius: 10px; max-width: 80%; text-align: center; }
+</style>
+</head>
+<body>
+<div id="app"></div>
+<script>// 本地测试用：模拟小手机宿主的 window.AiPhone
+(function () {
+  const db = window.__SEED_DB || {}; window.__DB = db;
+  const col = c => (db[c] = db[c] || []);
+  const sleep = ms => new Promise(r => setTimeout(r, ms));
+  const chars = window.__MOCK_CHARS || [{ id: "c1", name: "权时焕", avatar: "" }, { id: "c2", name: "李想", avatar: "" }];
+  const calls = []; window.__mockCalls = calls;
+  const FANS = "===粉丝回复===\n- 清仪的小狗：在等你！！！\n- sunny_0412：오빠 밥 먹었어요?ㅠㅠ｜哥哥吃饭了吗呜呜\n- momo：腿借我我替你扛\n- yuki：お疲れ様です！｜辛苦啦！\n- 北北北：练到现在？？心疼死了\n- jenny：take a rest pls｜快休息一下\n- 晚风：吃了就好 晚安\n- 一只小土豆：今天也好帅";
+  window.AiPhone = {
+    db: {
+      async list(c) { return col(c).slice(0, 500); },
+      async create(c, data) { const row = { ...data, id: data.id || "r" + Math.random() }; col(c).unshift(row); return row; },
+      async update(c, id, patch) { const i = col(c).findIndex(r => r.id === id); if (i < 0) return null; col(c)[i] = { ...col(c)[i], ...patch }; return col(c)[i]; },
+      async delete(c, id) { db[c] = col(c).filter(r => r.id !== id); return true; },
+    },
+    user: { async getProfile() { return { id: "u1", name: "沈清仪", avatarUrl: "" }; } },
+    characters: { async list() { return chars; } },
+    ai: {
+      async generate(p) {
+        calls.push(p); await sleep(300);
+        if (p.appTags[1] === "room") return { text: "===泡泡===\n引用：无\n内容：大家吃饭了吗\n===泡泡===\n引用：无\n内容：练到现在才结束 腿已经不是我的了\n===泡泡===\n引用：腿借我我替你扛\n内容：不用了 自己的腿自己扛\n" + FANS };
+        if (p.appTags[1] === "secret") return { text: FANS + "\n===你的回复===\n内容：少说话 早点睡" };
+        return { text: "" };
+      },
+      async chat(p) { calls.push(p); await sleep(300); return { text: FANS }; },
+    },
+    memory: { async addTimeline(p) { calls.push({ memory: p }); return {}; } },
+    ui: { async toast() {} },
+  };
+})();
+</script>
+<script>/* bubble · 小手机自定义 APP：订阅 char 的泡泡房；她也是爱豆，有自己的泡泡房，他会偷偷订阅混在粉丝里回她 */
+(function () {
+  "use strict";
+  const api = window.AiPhone || window.AiPhoneApp;
+  const VERSION = "0.1.1";
+
+  // ───────────────────────── 工具 ─────────────────────────
+  const $ = (sel, root) => (root || document).querySelector(sel);
+  const esc = s => String(s == null ? "" : s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  let uidN = 0;
+  const uid = p => `${p}_${Date.now().toString(36)}${(uidN++).toString(36)}${Math.random().toString(36).slice(2, 6)}`;
+  const rand = (a, b) => Math.floor(a + Math.random() * (b - a + 1));
+  const pick = arr => arr[Math.floor(Math.random() * arr.length)];
+  const nowIso = () => new Date().toISOString();
+  const none = v => !v || /^(无|没有|不回|none|null|-|—)$/i.test(String(v).trim());
+  const pad = x => String(x).padStart(2, "0");
+  const hm = iso => { const t = new Date(iso); return isNaN(t) ? "" : `${pad(t.getHours())}:${pad(t.getMinutes())}`; };
+  const dayLabel = iso => { const t = new Date(iso); return `${t.getFullYear()}年${t.getMonth() + 1}月${t.getDate()}日 星期${"日一二三四五六"[t.getDay()]}`; };
+  function listTime(iso) {
+    const t = new Date(iso); const now = new Date(); if (isNaN(t)) return "";
+    if (t.toDateString() === now.toDateString()) return hm(iso);
+    const y = new Date(now); y.setDate(now.getDate() - 1);
+    if (t.toDateString() === y.toDateString()) return "昨天";
+    return `${t.getMonth() + 1}/${t.getDate()}`;
+  }
+  function hashHue(s) { let h = 2166136261; for (const ch of String(s)) { h ^= ch.codePointAt(0); h = Math.imul(h, 16777619) >>> 0; } return (h >>> 8) % 360; }
+  const PASTEL = ["#FFD6E0", "#D6E9FF", "#DDF5E4", "#FFE9C7", "#E7DDFB", "#FCE1F4", "#D9F1F6"];
+  const pastelFor = s => PASTEL[hashHue(s) % PASTEL.length];
+
+  const sv = (d, w) => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="${w || 1.8}" stroke-linecap="round" stroke-linejoin="round">${d}</svg>`;
+  const I = {
+    back: sv('<path d="M15 5 8 12l7 7"/>', 2), down: sv('<path d="m7 10 5 5 5-5"/>', 1.8), more: '<svg viewBox="0 0 24 24" fill="currentColor"><circle cx="6" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="18" cy="12" r="1.6"/></svg>',
+    send: sv('<path d="M5 12h14M13 6l6 6-6 6"/>', 2.4), x: sv('<path d="M6 6l12 12M18 6 6 18"/>', 2),
+    bubble: sv('<path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z"/>', 2), photo: sv('<rect x="3" y="5" width="18" height="14" rx="3"/><circle cx="9" cy="10" r="1.6"/><path d="M21 16l-5-5-8 8"/>', 2),
+    smile: sv('<circle cx="12" cy="12" r="9"/><path d="M8.5 14.5a4.5 4.5 0 0 0 7 0M9 9.5h.01M15 9.5h.01"/>', 2), swap: sv('<path d="M4 8h14l-3-3M20 16H6l3 3"/>', 2),
+    spark: sv('<path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M18.4 5.6l-2.1 2.1M7.7 16.3l-2.1 2.1"/>', 2), pen: sv('<path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/>', 2),
+    palette: sv('<path d="M12 3a9 9 0 1 0 0 18c1 0 1.5-.7 1.5-1.5 0-.4-.2-.8-.4-1.1-.3-.3-.4-.6-.4-1 0-.8.7-1.5 1.5-1.5H16a5 5 0 0 0 5-5c0-4.4-4-7.9-9-7.9z"/><circle cx="7.5" cy="11.5" r="1"/><circle cx="10.5" cy="7.5" r="1"/><circle cx="15" cy="8" r="1"/>', 1.8),
+    plus: sv('<path d="M12 5v14M5 12h14"/>', 2), quote: sv('<path d="M7 7h4v4H8c0 2 1 3 3 3v2c-3 0-5-2-5-5zM14 7h4v4h-3c0 2 1 3 3 3v2c-3 0-5-2-5-5z"/>', 1.6),
+    check: sv('<path d="m5 12.5 4.5 4.5L19 7.5"/>', 2.2),
+  };
+
+  // ───────────────────────── 数据 ─────────────────────────
+  // rooms：每个泡泡房一条 { id, scope, kind: "char" | "me", charId, items, pending, ... }
+  //   char 房 items: { id, by: "char" | "me", text, at, quote, fans: [{ t, tr, me }], fanN }
+  //   我的房 items: { id, by: "me" | "fan" | "him", name, charId, text, tr, at, quote }
+  // meta：{ me: { name, avatar }, theme, bg, bgOpacity, myColor, subN, secret: [charId] }
+  const COL = { rooms: "rooms", meta: "meta" };
+  const S = { identity: null, chars: [], meta: null, rooms: [], debug: [], busy: new Set(), view: { page: "home", roomId: null }, quote: null, fanSheet: null };
+  async function dbList(c) { try { return (await api.db.list(c, { limit: 500 })) || []; } catch (e) { console.warn(e); return []; } }
+  async function dbUpsert(c, row) {
+    try { const u = await api.db.update(c, row.id, row); if (u) return u; } catch (e) { /* 没有就 create */ }
+    return api.db.create(c, row);
+  }
+  async function dbDelete(c, id) { try { await api.db.delete(c, id); } catch (e) { console.warn(e); } }
+  let metaTimer = null;
+  function saveMeta() { clearTimeout(metaTimer); metaTimer = setTimeout(() => dbUpsert(COL.meta, S.meta).catch(e => console.warn(e)), 250); }
+  const saveRoom = r => dbUpsert(COL.rooms, r).catch(e => console.warn(e));
+
+  async function loadAll() {
+    const identity = await api.user.getProfile({}).catch(() => null);
+    S.identity = identity || { id: "default", name: "我" };
+    const chars = await api.characters.list().catch(() => []);
+    const owners = await Promise.all(chars.map(c => api.user.getProfile({ characterId: c.id }).catch(() => null)));
+    S.chars = chars.filter((c, i) => !owners[i] || !identity || owners[i].id === identity.id);
+    const [rooms, metas] = await Promise.all([dbList(COL.rooms), dbList(COL.meta)]);
+    const scope = S.identity.id;
+    S.rooms = rooms.filter(r => r.scope === scope).map(r => ({ ...r, items: r.items || [], pending: r.pending || [] }));
+    S.debug = (metas.find(m => m.id === "debug_log") || {}).entries || [];
+    S.meta = metas.find(m => m.id === `meta_${scope}`) || { id: `meta_${scope}` };
+    S.meta = { me: {}, theme: "journal", bg: "", bgOpacity: 0.6, myColor: "#F7AFC0", subN: (rand(30, 180) / 10).toFixed(1), secret: [], publicWith: [], ...S.meta };
+    if (!S.rooms.some(r => r.kind === "me")) {
+      const me = { id: `room_${scope}_me`, scope, kind: "me", items: [], pending: [], createdAt: nowIso() };
+      S.rooms.push(me); saveRoom(me);
+    }
+  }
+  const charById = id => S.chars.find(c => c.id === id);
+  const myRoom = () => S.rooms.find(r => r.kind === "me");
+  const roomById = id => S.rooms.find(r => r.id === id);
+  const herName = () => S.identity.name || "她";
+  const myStage = () => S.meta.me.name || herName();
+  const myAvatar = () => S.meta.me.avatar || S.identity.avatarUrl || "";
+  const stageName = r => (r && r.stage) || (charById(r && r.charId) || {}).name || "TA";
+  const roomAvatar = r => (r && r.avatar) || (charById(r && r.charId) || {}).avatar || "";
+  const subDays = r => Math.max(1, Math.floor((Date.now() - new Date(r.createdAt || Date.now()).getTime()) / 86400e3) + 1);
+  function remember(charId, summary) {
+    if (!charId || !api.memory || !api.memory.addTimeline) return;
+    api.memory.addTimeline({ characterId: charId, appLabel: "bubble", detail: "bubble", summary, appEventId: uid("ev") }).catch(e => console.warn(e));
+  }
+
+  // ───────────────────────── 提示 ─────────────────────────
+  function toast(msg) { const el = document.createElement("div"); el.className = "toast"; el.textContent = msg; document.body.appendChild(el); setTimeout(() => el.remove(), 1800); }
+  function sheet(title, items) {
+    return new Promise(resolve => {
+      const mask = document.createElement("div"); mask.className = "mask";
+      mask.innerHTML = `<div class="sheet"><div class="grab"></div>${title ? `<div class="sheet-h">${esc(title)}</div>` : ""}${items.map((it, i) => `<button class="opt ${it.danger ? "danger" : ""}" data-i="${i}"><div class="cell-main">${esc(it.label)}${it.sub ? `<small>${esc(it.sub)}</small>` : ""}</div>${it.on ? `<span class="ck">${I.check}</span>` : ""}</button>`).join("")}</div>`;
+      mask.onclick = e => { const b = e.target.closest("[data-i]"); if (!b && e.target !== mask) return; mask.remove(); resolve(b ? items[+b.dataset.i].value : null); };
+      document.body.appendChild(mask);
+    });
+  }
+  function inputSheet(title, value, opts = {}) {
+    return new Promise(resolve => {
+      const mask = document.createElement("div"); mask.className = "mask";
+      const field = opts.long ? `<textarea class="field" rows="4" maxlength="${opts.max || 300}" placeholder="${esc(opts.ph || "")}">${esc(value || "")}</textarea>` : `<input class="field" maxlength="${opts.max || 40}" placeholder="${esc(opts.ph || "")}" value="${esc(value || "")}">`;
+      mask.innerHTML = `<form class="sheet" action="#"><div class="grab"></div><div class="sheet-h">${esc(title)}</div>${opts.hint ? `<div class="sheet-hint">${esc(opts.hint)}</div>` : ""}<div style="padding:0 18px 12px">${field}</div><button class="opt ok" type="submit"><div class="cell-main">确定</div></button></form>`;
+      const input = $(".field", mask);
+      $("form", mask).onsubmit = e => { e.preventDefault(); mask.remove(); resolve(input.value.trim()); };
+      mask.onclick = e => { if (e.target === mask) { mask.remove(); resolve(null); } };
+      document.body.appendChild(mask); setTimeout(() => input.focus(), 50);
+    });
+  }
+  /** 选图：压到 maxSize 转 dataURL 存起来 */
+  function pickImage(maxSize) {
+    return new Promise(resolve => {
+      const inp = document.createElement("input"); inp.type = "file"; inp.accept = "image/*";
+      inp.onchange = () => {
+        const f = inp.files && inp.files[0]; if (!f) return resolve(null);
+        const img = new Image(); const url = URL.createObjectURL(f);
+        img.onload = () => {
+          let w = img.width, h = img.height; const k = Math.min(1, maxSize / Math.max(w, h)); w = Math.round(w * k); h = Math.round(h * k);
+          const cv = document.createElement("canvas"); cv.width = w; cv.height = h; cv.getContext("2d").drawImage(img, 0, 0, w, h);
+          URL.revokeObjectURL(url); resolve(cv.toDataURL("image/jpeg", 0.85));
+        };
+        img.onerror = () => { URL.revokeObjectURL(url); resolve(null); };
+        img.src = url;
+      };
+      inp.click();
+    });
+  }
+
+  // ───────────────────────── AI ─────────────────────────
+  function logAi(entry) {
+    S.debug = [{ at: nowIso(), ...entry, text: String(entry.text || "").slice(0, 6000) }, ...S.debug].slice(0, 10);
+    dbUpsert(COL.meta, { id: "debug_log", entries: S.debug }).catch(() => {});
+  }
+  const FAN_MOOD = "粉丝绝对不能接受爱豆谈恋爱：嗅到一点恋爱苗头就紧张、否认、生气、阴阳、喊着要脱粉，不会祝福。";
+  const isPublic = charId => (S.meta.publicWith || []).includes(charId);
+  const LOVE_RULE = (charId, who) => isPublic(charId)
+    ? `你们的恋情已经公开了，可以大方一点，但粉丝大多还是接受不了。`
+    : `爱豆不许谈恋爱，你们的关系没公开：不能直接秀恩爱、不能说破你们的关系，想对${who}好只能暗戳戳、让别人看不出来。`;
+  const FAN_FORMAT = "每行一条粉丝回复，开头写「- 昵称：」。像真实追星粉丝：短、口语、情绪直接，有尖叫有心疼有玩梗有关心身体。大部分用中文，也要有几条韩语、日语、英文；外语那条写成「原文｜中文翻译」。";
+  async function busyWrap(label, fn) {
+    const job = uid("job"); S.busy.add(job); render();
+    try { return await fn(); } catch (e) { console.error(e); logAi({ label, ok: false, error: String((e && e.message) || e) }); toast(`${label}失败：${(e && e.message) || e}`.slice(0, 60)); return null; } finally { S.busy.delete(job); render(); }
+  }
+  async function charGen(charId, scene, instruction, label) {
+    return busyWrap(label, async () => {
+      const r = await api.ai.generate({ characterId: charId, appTags: ["nox_bubble", scene], instruction: [`当前时间：${new Date().toLocaleString("zh-CN", { hour12: false })}`, instruction, "【输出要求】只输出要求的块，字段名照抄，不要解释、不要旁白、不要 markdown。"].join("\n\n") });
+      const text = (r && r.text) || ""; logAi({ label, ok: true, text }); return text;
+    });
+  }
+  async function plainGen(instruction, label) {
+    return busyWrap(label, async () => {
+      const r = await api.ai.chat({ system: "你负责模拟追星 app 里粉丝的回复，只输出要求的格式，不要任何解释。", prompt: instruction, timeoutMs: 120000 });
+      const text = (r && r.text) || ""; logAi({ label, ok: true, text }); return text;
+    });
+  }
+  function parseFans(block) {
+    return String(block || "").split("\n").map(l => l.trim().replace(/^[-*•·\d.、]+\s*/, "")).filter(Boolean).map(l => {
+      const m = l.match(/^([^：:]{1,16})[：:]\s*(.+)$/);
+      const name = m ? m[1].trim() : pick(["momo", "晚风", "小土豆", "sunny", "北北北"]);
+      const body = (m ? m[2] : l).trim();
+      const [t, tr] = body.split(/[｜|]/).map(x => x.trim());
+      return t ? { name, t, tr: tr || "" } : null;
+    }).filter(Boolean).slice(0, 14);
+  }
+  const blockOf = (text, name) => { const m = String(text || "").match(new RegExp(`===\\s*${name}\\s*===([\\s\\S]*?)(?====|$)`)); return m ? m[1].trim() : ""; };
+  const field = (text, name) => (String(text || "").match(new RegExp(`${name}[：:][ \\t]*([^\\n]*)`)) || [])[1]?.trim() || "";
+
+  // 他的泡泡房：催他发泡泡 / 她把留言发出去之后他回
+  async function charBubbles(room, opts = {}) {
+    const c = charById(room.charId); if (!c) return toast("找不到这个人了");
+    const name = stageName(room);
+    const recent = room.items.filter(i => i.by === "char").slice(-8).map(i => `- ${i.text}`).join("\n");
+    const lastChar = [...room.items].reverse().find(i => i.by === "char");
+    const fanPool = lastChar && lastChar.fans ? lastChar.fans.filter(f => !f.me).slice(0, 6) : [];
+    const hers = opts.sent || [];
+    const mixed = [...fanPool.map(f => f.t), ...hers.map(t => room.known ? `${t}（这条是${herName()}的账号发的）` : t)].sort(() => Math.random() - 0.5);
+    const raw = await charGen(room.charId, "room", [
+      `【bubble 是什么】你是爱豆「${name}」，在付费粉丝通讯 app bubble 上给订阅你的粉丝发消息（泡泡）。泡泡是群发的，所有订阅的人都看得到；粉丝的回复只有你看得到，粉丝之间互相看不到。`,
+      `【${herName()}】她也订阅了你的泡泡，用的是一个粉丝账号。${room.known ? "你知道哪个账号是她。可以装作不知道，也可以引用她的话暗戳戳回应，但不能在泡泡里点破她是谁。" : "你不知道哪个账号是她，她的回复对你来说和其他粉丝一样。"}你们现实里的关系按你的记忆来。`,
+      recent ? `你最近发过的泡泡：\n${recent}` : "这是你第一次在这个泡泡房发泡泡。",
+      mixed.length ? `粉丝刚发来的回复（随便挑了几条）：\n${mixed.map(t => `- ${t}`).join("\n")}` : "",
+      `【恋爱】${LOVE_RULE(room.charId, herName())}`,
+      `【粉丝】${FAN_MOOD}`,
+      opts.direction ? `【这次的情况】${opts.direction}` : "",
+      "【这次】发 1~4 条新泡泡。像真爱豆发泡泡：短、口语、分享此刻在干嘛和心情，偶尔引用某条粉丝回复再回它。不要每条都引用，不要写成公告。",
+      "【输出】每条泡泡一个块：\n===泡泡===\n引用：被引用的那条粉丝回复原话（不引用写 无）\n内容：泡泡内容\n所有泡泡写完后：\n===粉丝回复===\n" + FAN_FORMAT + "写 8~12 条，是粉丝对你这几条泡泡的反应。",
+    ].filter(Boolean).join("\n\n"), "他发泡泡");
+    if (!raw) return;
+    const bubbles = String(raw).split(/===\s*泡泡\s*===/).slice(1).map(b => ({ quote: field(b, "引用"), text: field(b, "内容") || b.split("===")[0].replace(/引用[：:][^\n]*\n?/, "").trim() })).filter(b => b.text).slice(0, 4);
+    if (!bubbles.length) return toast("他没发出来，再催一次");
+    const fans = parseFans(blockOf(raw, "粉丝回复"));
+    const base = Date.now();
+    bubbles.forEach((b, i) => {
+      room.items.push({ id: uid("b"), by: "char", text: b.text.slice(0, 300), quote: none(b.quote) ? "" : b.quote.slice(0, 120), at: new Date(base + i * 1000).toISOString(), ...(i === bubbles.length - 1 ? { fans: fans.map(f => ({ t: f.t, tr: f.tr })), fanN: rand(120, 980) } : {}) });
+    });
+    room.lastAt = nowIso(); saveRoom(room);
+    remember(room.charId, `你在 bubble（粉丝通讯 app）上以爱豆「${name}」的身份给粉丝发了泡泡：${bubbles.map(b => `「${b.text}」`).join("")}。${hers.length ? `${herName()}用粉丝账号回过你：${hers.map(t => `「${t}」`).join("")}${room.known ? "（你知道是她）" : "（你不知道是她）"}。` : ""}`);
+  }
+
+  // 我的泡泡房：粉丝回一波，偷偷订阅的他可能混进来
+  async function fanWave() {
+    const room = myRoom();
+    const mine = room.items.filter(i => i.by === "me").slice(-6);
+    if (!mine.length) return toast("先发个泡泡吧");
+    const mineText = mine.map(i => `- ${i.quote ? `（引用了「${i.quote}」）` : ""}${i.text}`).join("\n");
+    const secret = S.meta.secret.filter(id => charById(id));
+    const lastHim = {}; room.items.forEach(i => { if (i.by === "him") lastHim[i.charId] = i.at; });
+    const him = secret.find(id => Math.random() < 0.45 && (!lastHim[id] || Date.now() - new Date(lastHim[id]).getTime() > 20 * 60e3)) || null;
+    const head = `爱豆「${myStage()}」在粉丝通讯 app bubble 上给订阅的粉丝发了这些泡泡（最新的在最后）：\n${mineText}`;
+    let raw;
+    if (him) {
+      const hc = charById(him);
+      raw = await charGen(him, "secret", [
+        `【bubble 是什么】bubble 是付费粉丝通讯 app：爱豆发泡泡，订阅的粉丝能回复，粉丝之间看不到彼此的回复，只有爱豆能看到所有回复。`,
+        `【你】${herName()}（艺名「${myStage()}」）也是爱豆。你偷偷订阅了她的泡泡，用的是一个普通粉丝账号，别的粉丝不知道是你；她看得到是你。你们现实里的关系按你的记忆来。`,
+        head,
+        `【恋爱】${LOVE_RULE(him, "她")}`,
+        `【粉丝】${FAN_MOOD}`,
+        "【这次】先写其他粉丝对这几条泡泡的回复，再决定你要不要也回一条。你回的话按你的人设和你们的关系，像你会对她说的话，一两句；不想回就写 无。",
+        "【输出】\n===粉丝回复===\n" + FAN_FORMAT + "写 8~12 条。\n===你的回复===\n内容：你的回复（不回写 无）",
+      ].join("\n\n"), "粉丝回一波");
+      if (!raw) return;
+      const mineReply = field(blockOf(raw, "你的回复"), "内容") || blockOf(raw, "你的回复");
+      const fans = parseFans(blockOf(raw, "粉丝回复"));
+      pushFans(room, fans, none(mineReply) ? null : { charId: him, text: mineReply.slice(0, 200) });
+      if (!none(mineReply)) remember(him, `你用粉丝小号偷偷回了${herName()}的泡泡（bubble，她是爱豆「${myStage()}」）：她发的是${mine.slice(-2).map(i => `「${i.text}」`).join("")}，你回「${mineReply}」。别的粉丝不知道是你。`);
+      else remember(him, `你刷到了${herName()}在 bubble 发的泡泡${mine.slice(-2).map(i => `「${i.text}」`).join("")}，看了没回。`);
+      if (hc) S.lastHimName = hc.name;
+    } else {
+      raw = await plainGen([head, `【粉丝】${FAN_MOOD}`, "【这次】写粉丝们对这几条泡泡的回复。", "【输出】\n===粉丝回复===\n" + FAN_FORMAT + "写 8~12 条。"].join("\n\n"), "粉丝回一波");
+      if (!raw) return;
+      pushFans(room, parseFans(blockOf(raw, "粉丝回复") || raw), null);
+    }
+  }
+  function pushFans(room, fans, himReply) {
+    const list = fans.map(f => ({ id: uid("f"), by: "fan", name: f.name, text: f.t, tr: f.tr }));
+    if (himReply) list.splice(rand(1, Math.min(4, list.length)), 0, { id: uid("h"), by: "him", charId: himReply.charId, text: himReply.text });
+    const base = Date.now();
+    list.forEach((it, i) => { it.at = new Date(base + i * 700).toISOString(); room.items.push(it); });
+    room.lastAt = nowIso(); saveRoom(room);
+  }
+
+  // ───────────────────────── 渲染 ─────────────────────────
+  const app = () => $("#app");
+  function avatarEl(src, seed, cls) { return src ? `<img class="ava ${cls || ""}" src="${esc(src)}" alt="">` : `<div class="ava ${cls || ""}" style="background:${seed === "me" ? "linear-gradient(135deg,#f6d3dc,#c98a9c)" : `linear-gradient(135deg,hsl(${hashHue(seed)},50%,72%),hsl(${(hashHue(seed) + 40) % 360},50%,58%))`}"></div>`; }
+  function header(title, sub, opts = {}) {
+    return `<div class="hd"><div class="hd-t"><b>${esc(title)}${opts.caret ? `<i>${I.down}</i>` : ""}</b>${sub ? `<small>${sub}</small>` : ""}</div><div class="hd-in">${opts.back ? `<button class="ic" data-act="back">${I.back}</button>` : `<span class="ic"></span>`}${opts.more ? `<button class="ic" data-act="more">${I.more}</button>` : `<span class="ic"></span>`}</div></div>`;
+  }
+  function render() {
+    const v = S.view;
+    if (v.page === "room") return renderRoom(roomById(v.roomId));
+    renderHome();
+  }
+  function renderHome() {
+    const me = myRoom();
+    const lastMine = [...me.items].reverse().find(i => i.by === "me");
+    const charRooms = S.rooms.filter(r => r.kind === "char" && charById(r.charId)).sort((a, b) => String(b.lastAt || b.createdAt).localeCompare(String(a.lastAt || a.createdAt)));
+    app().innerHTML = `${header("", "")}<div class="home">
+      <div class="brand">bubble<i></i></div>
+      <div class="sec">我的泡泡房</div>
+      <button class="row" data-room="${me.id}">${avatarEl(myAvatar(), "me")}<div class="cell-main"><b><em class="art">ARTIST</em>${esc(myStage())}</b><small>${esc(lastMine ? lastMine.text : "还没发过泡泡")}</small></div><span class="tm">${lastMine ? listTime(lastMine.at) : ""}</span></button>
+      <div class="sec">订阅中<button class="sec-btn" data-act="sub">${I.plus}订阅</button></div>
+      ${charRooms.map(r => { const last = [...r.items].reverse().find(i => i.by === "char"); return `<button class="row" data-room="${r.id}">${avatarEl(roomAvatar(r), r.charId)}<div class="cell-main"><b>${esc(stageName(r))}<span class="days">💜 +${subDays(r)}</span></b><small>${esc(last ? last.text : "还没有泡泡，进去催一催")}</small></div><span class="tm">${last ? listTime(last.at) : ""}</span></button>`; }).join("") || `<div class="empty">还没订阅谁。点右边「订阅」，选一个你的 char 当爱豆</div>`}
+      <div class="ver">bubble ${esc(VERSION)} · <button data-act="debug">调试记录</button></div>
+    </div>`;
+  }
+
+  function journalDeco() {
+    return `<div class="deco-layer">
+      <i class="plaid" style="left:-20px;top:90px;width:90px;height:70px;transform:rotate(-6deg)"></i><i class="plaid" style="right:-30px;top:300px;width:110px;height:80px;transform:rotate(8deg)"></i><i class="plaid" style="left:-10px;bottom:60px;width:80px;height:90px;transform:rotate(4deg)"></i>
+      <i class="tape" style="left:20px;top:270px;width:70px;transform:rotate(-14deg)"></i><i class="tape" style="right:30px;top:60px;width:60px;transform:rotate(18deg)"></i>
+      <i class="dots" style="left:120px;top:16px"></i><i class="dots" style="right:40px;bottom:140px"></i>
+      <span class="script" style="left:14px;top:40px">a little<br>bright<br>today</span><span class="script" style="right:20px;top:200px;transform:rotate(-18deg)">stars in my<br>heart ♡</span>
+      <span class="script" style="right:16px;top:440px;transform:rotate(-10deg)">keep<br>going ♡</span><span class="script" style="left:30px;bottom:24px;transform:rotate(-14deg)">good things<br>await ♡</span>
+      <svg class="dg" style="right:40px;top:110px" width="30" height="30" viewBox="0 0 24 24" fill="#ECE6EA"><circle cx="9" cy="9" r="4"/><circle cx="15" cy="9" r="4"/><circle cx="9" cy="15" r="4"/><circle cx="15" cy="15" r="4"/></svg>
+      <svg class="dg" style="left:18px;top:230px" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#E6D3DA" stroke-width="1.4"><path d="M12 3l2.6 5.6 6 .7-4.5 4.1 1.2 6L12 16.5 6.7 19.4l1.2-6L3.4 9.3l6-.7z"/></svg>
+      <svg class="dg" style="right:22px;top:380px" width="50" height="36" viewBox="0 0 60 40" fill="none" stroke="#EBC9D3" stroke-width="1.6"><path d="M30 20c-8-12-24-12-22 0s16 2 22 0zM30 20c8-12 24-12 22 0s-16 2-22 0zM30 20l-8 18M30 20l8 18"/></svg>
+    </div>`;
+  }
+
+  function renderRoom(room) {
+    if (!room) { S.view = { page: "home" }; return renderHome(); }
+    const isMe = room.kind === "me";
+    const busy = S.busy.size > 0;
+    const title = isMe ? myStage() : stageName(room);
+    const sub = isMe ? `我的泡泡房 · 订阅 ${esc(S.meta.subN)} 万` : `bubble 💜 +${subDays(room)}`;
+    const theme = isMe ? S.meta.theme : "plain";
+    const bgStyle = isMe && theme === "custom" && S.meta.bg ? `style="--bg-img:url('${S.meta.bg}');--bg-op:${S.meta.bgOpacity}"` : "";
+    const scroll = $(".scroll", app());
+    const keepBottom = !scroll || scroll.scrollHeight - scroll.scrollTop - scroll.clientHeight < 80;
+    app().innerHTML = `${header(title, sub, { back: true, more: true, caret: true })}
+      <div class="room ${isMe ? "is-me" : "is-char"} theme-${theme}" ${bgStyle} style="--mine:${isMe ? S.meta.myColor : "#B07CE8"}">
+        ${theme === "journal" ? journalDeco() : ""}${theme === "custom" ? `<div class="bg-layer"></div>` : ""}
+        <div class="scroll">${isMe ? renderMyItems(room) : renderCharItems(room)}${busy ? `<div class="typing">${isMe ? "粉丝们在回复…" : `${esc(title)} 正在输入…`}</div>` : ""}</div>
+      </div>
+      <div class="bottom">
+        ${S.quote && S.quote.roomId === room.id ? `<div class="qbar"><span>引用：${esc(S.quote.text)}</span><button data-act="unquote">${I.x}</button></div>` : ""}
+        <div class="tray">${isMe
+          ? `<button class="tchip" data-act="wave" ${busy ? "disabled" : ""}>${I.bubble}让粉丝回一波</button><button class="tchip" data-act="dress">${I.palette}装扮</button><button class="tchip" data-act="soon">${I.photo}照片</button><button class="tchip" data-act="soon">${I.smile}表情</button>`
+          : `<button class="tchip" data-act="urge" ${busy ? "disabled" : ""}>${I.bubble}催TA发泡泡</button><button class="tchip" data-act="soon">${I.photo}照片</button><button class="tchip" data-act="soon">${I.smile}表情</button><button class="tchip" data-act="switch">${I.swap}换个人</button><button class="tchip" data-act="direct">${I.spark}场外指示</button><button class="tchip" data-act="handwrite">${I.pen}手写TA的话</button>`}</div>
+        ${!isMe && room.pending.length ? `<div class="sendbar"><span>${room.pending.length} 条还没发出去</span><button data-act="flush" ${busy ? "disabled" : ""}>发出去</button></div>` : ""}
+        <form class="composer"><button type="button" class="x" data-act="clear">${I.x}</button><input class="ta" maxlength="200" placeholder="${isMe ? "发个泡泡…" : "给TA留言…"}"><button class="send" type="submit">${I.send}</button></form>
+      </div>`;
+    const sc = $(".scroll", app());
+    if (keepBottom || S.forceBottom) { sc.scrollTop = sc.scrollHeight; S.forceBottom = false; }
+  }
+
+  /** 连着的同一个人归成一组：头像和名字跟着第一条 */
+  function groups(items, keyOf) {
+    const out = [];
+    for (const it of items) { const k = keyOf(it); const g = out[out.length - 1]; if (g && g.key === k) g.items.push(it); else out.push({ key: k, items: [it] }); }
+    return out;
+  }
+  function dayChips(items, render1) {
+    let lastDay = ""; let html = "";
+    for (const g of items) { const d = new Date(g.items[0].at).toDateString(); if (d !== lastDay) { html += `<div class="chip"><span>${dayLabel(g.items[0].at)}</span></div>`; lastDay = d; } html += render1(g); }
+    return html;
+  }
+  const quoteHtml = q => q ? `<div class="quote">${esc(q)}</div>` : "";
+  const trHtml = tr => tr ? `<div class="tr">${esc(tr)}</div>` : "";
+
+  function renderCharItems(room) {
+    if (!room.items.length) return `<div class="empty-room">${esc(stageName(room))} 还没发泡泡<br><small>点下面「催TA发泡泡」</small></div>`;
+    const gs = groups(room.items, it => it.by);
+    return dayChips(gs, g => {
+      const last = g.items[g.items.length - 1];
+      if (g.key === "me") {
+        return `<div class="grp me"><div class="stack">${g.items.map((it, i) => `<div class="line"><div class="bub">${quoteHtml(it.quote)}${esc(it.text)}</div>${i === 0 ? `<span class="stamp">${hm(it.at)}</span>` : ""}</div>`).join("")}</div>${avatarEl(myAvatar(), "me", "me-ava")}</div>`;
+      }
+      const fold = last.fans && last.fans.length ? `<button class="fold" data-fans="${last.id}"><span class="heads"><i style="background:#FFD6E0"></i><i style="background:#D6E9FF"></i><i style="background:#DDF5E4"></i></span><span class="n">粉丝回复 ${last.fanN || last.fans.length} ›</span></button>` : "";
+      return `<div class="grp">${avatarEl(roomAvatar(room), room.charId, "artist-ava")}<div class="stack"><div class="who"><em class="art">ARTIST</em>${esc(stageName(room))}</div>${g.items.map((it, i) => `<div class="line" data-item="${it.id}"><div class="bub">${quoteHtml(it.quote)}${esc(it.text)}</div>${i === 0 ? `<span class="stamp">${hm(it.at)}</span>` : ""}</div>`).join("")}</div></div>${fold}`;
+    });
+  }
+
+  function renderMyItems(room) {
+    if (!room.items.length) return `<div class="empty-room">这是你的泡泡房<br><small>发个泡泡，再点「让粉丝回一波」</small></div>`;
+    const gs = groups(room.items, it => it.by === "me" ? "me" : `${it.by}:${it.name || it.charId}`);
+    return dayChips(gs, g => {
+      const f = g.items[0];
+      if (g.key === "me") {
+        return `<div class="grp me"><div class="stack"><div class="who"><em class="art">ARTIST</em>${esc(myStage())}</div>${g.items.map((it, i) => `<div class="line"><div class="bub">${quoteHtml(it.quote)}${esc(it.text)}</div>${i === 0 ? `<span class="stamp">${hm(it.at)}</span>` : ""}</div>`).join("")}</div>${avatarEl(myAvatar(), "me", "me-ava")}</div>`;
+      }
+      if (f.by === "him") {
+        const c = charById(f.charId) || {}; const r = S.rooms.find(x => x.kind === "char" && x.charId === f.charId);
+        return `<div class="grp fan him">${avatarEl(r && r.avatar || c.avatar, f.charId, "him-ava")}<div class="stack"><div class="fn">${esc(c.name || "他")}<small>粉丝看不到是他</small></div>${g.items.map(it => `<div class="line"><div class="card" data-quote="${it.id}">${esc(it.text)}</div><span class="stamp">${hm(it.at)}</span></div>`).join("")}</div></div>`;
+      }
+      return `<div class="grp fan"><div class="ava fan-ava" style="background:${pastelFor(f.name)}"></div><div class="stack"><div class="fn">${esc(f.name || "粉丝")}</div>${g.items.map(it => `<div class="line"><div class="card" data-quote="${it.id}">${esc(it.text)}${trHtml(it.tr)}</div></div>`).join("")}</div></div>`;
+    });
+  }
+
+  function openFans(room, itemId) {
+    const it = room.items.find(i => i.id === itemId); if (!it) return;
+    const mask = document.createElement("div"); mask.className = "mask";
+    mask.innerHTML = `<div class="sheet fans"><div class="grab"></div><div class="sheet-t">粉丝回复 · ${it.fanN || it.fans.length}</div><div class="fl-wrap">${it.fans.map(f => `<div class="fl ${f.me ? "me" : ""}">${esc(f.t)}${f.tr ? `<div class="tr">${esc(f.tr)}</div>` : ""}</div>`).join("")}</div></div>`;
+    mask.onclick = e => { if (e.target === mask) mask.remove(); };
+    document.body.appendChild(mask);
+  }
+
+  // ───────────────────────── 交互 ─────────────────────────
+  async function subscribe() {
+    const taken = new Set(S.rooms.filter(r => r.kind === "char").map(r => r.charId));
+    const list = S.chars.filter(c => !taken.has(c.id));
+    if (!list.length) return toast(S.chars.length ? "都订阅啦" : "还没有角色");
+    const id = await sheet("订阅谁的泡泡", list.map(c => ({ label: c.name, value: c.id })));
+    if (!id) return;
+    const r = { id: `room_${S.identity.id}_${id}`, scope: S.identity.id, kind: "char", charId: id, items: [], pending: [], known: false, createdAt: nowIso() };
+    S.rooms.push(r); saveRoom(r);
+    S.view = { page: "room", roomId: r.id }; S.forceBottom = true; render();
+  }
+
+  async function roomMenu(room) {
+    if (room.kind === "me") {
+      const secretNames = S.meta.secret.map(id => (charById(id) || {}).name).filter(Boolean).join("、");
+      const v = await sheet("", [
+        { label: "装扮", value: "dress" },
+        { label: "我的泡泡头像", sub: "只在 bubble 里用", value: "ava" },
+        { label: "我的艺名", sub: myStage(), value: "name" },
+        { label: "谁偷偷订阅了我", sub: secretNames || "还没有人", value: "secret" },
+        { label: "清空我的泡泡房", danger: true, value: "clear" },
+      ]);
+      if (v === "dress") return dressPanel();
+      if (v === "ava") { const d = await pickImage(320); if (d) { S.meta.me.avatar = d; saveMeta(); render(); } return; }
+      if (v === "name") { const n = await inputSheet("我的艺名", myStage()); if (n) { S.meta.me.name = n; saveMeta(); render(); } return; }
+      if (v === "secret") return pickSecret();
+      if (v === "clear") { const ok = await sheet("清空后泡泡和粉丝回复都没了", [{ label: "清空", danger: true, value: 1 }]); if (ok) { room.items = []; saveRoom(room); render(); } }
+      return;
+    }
+    const v = await sheet("", [
+      { label: "他的泡泡头像", sub: "只在 bubble 里用，不设就用原来的", value: "ava" },
+      { label: "他的艺名", sub: stageName(room), value: "name" },
+      { label: room.known ? "他知道你在订阅" : "他不知道哪个是你", sub: "点一下切换", value: "known" },
+      { label: isPublic(room.charId) ? "你们已经公开了" : "你们没公开", sub: "点一下切换；没公开他只能暗戳戳", value: "public" },
+      { label: "清空这个泡泡房", danger: true, value: "clear" },
+      { label: "退订", danger: true, value: "unsub" },
+    ]);
+    if (v === "ava") { const d = await pickImage(320); if (d) { room.avatar = d; saveRoom(room); render(); } }
+    else if (v === "name") { const n = await inputSheet("他的艺名", stageName(room)); if (n) { room.stage = n; saveRoom(room); render(); } }
+    else if (v === "public") { const on = !isPublic(room.charId); S.meta.publicWith = on ? [...(S.meta.publicWith || []), room.charId] : (S.meta.publicWith || []).filter(x => x !== room.charId); saveMeta(); toast(on ? "公开了" : "改回没公开"); }
+    else if (v === "known") { room.known = !room.known; saveRoom(room); render(); toast(room.known ? "他知道哪个账号是你了" : "他不知道哪个是你"); }
+    else if (v === "clear") { const ok = await sheet("清空后泡泡都没了", [{ label: "清空", danger: true, value: 1 }]); if (ok) { room.items = []; room.pending = []; saveRoom(room); render(); } }
+    else if (v === "unsub") { const ok = await sheet(`退订 ${stageName(room)}？记录会一起删掉`, [{ label: "退订", danger: true, value: 1 }]); if (ok) { S.rooms = S.rooms.filter(r => r !== room); dbDelete(COL.rooms, room.id); S.view = { page: "home" }; render(); } }
+  }
+
+  async function pickSecret() {
+    const v = await sheet("谁偷偷订阅了你的泡泡（选了的人会混在粉丝里回你）", S.chars.map(c => ({ label: c.name, value: c.id, on: S.meta.secret.includes(c.id) })));
+    if (!v) return;
+    S.meta.secret = S.meta.secret.includes(v) ? S.meta.secret.filter(x => x !== v) : [...S.meta.secret, v];
+    saveMeta(); toast(S.meta.secret.includes(v) ? `${(charById(v) || {}).name} 偷偷订阅了你` : "取消了"); pickSecret();
+  }
+
+  function dressPanel() {
+    const mask = document.createElement("div"); mask.className = "mask";
+    const colors = ["#F7AFC0", "#FFC9D6", "#B9A8F0", "#9FD3C7"];
+    const draw = () => {
+      mask.innerHTML = `<div class="sheet dress"><div class="grab"></div><div class="sheet-t2">泡泡房装扮</div>
+        <div class="themes">
+          <button class="th ${S.meta.theme === "plain" ? "on" : ""}" data-th="plain"><div class="pv pv-plain"><i></i><i></i><i></i></div><b>简洁</b><small>默认</small></button>
+          <button class="th ${S.meta.theme === "journal" ? "on" : ""}" data-th="journal"><div class="pv pv-journal"><i></i><i></i><i></i></div><b>粉色手账</b><small>${S.meta.theme === "journal" ? "使用中" : ""}</small></button>
+          <button class="th ${S.meta.theme === "custom" ? "on" : ""}" data-th="custom"><div class="pv pv-custom" ${S.meta.bg ? `style="background-image:url('${S.meta.bg}')"` : ""}>${S.meta.bg ? "" : "＋"}</div><b>上传背景图</b><small>${S.meta.bg ? "点一下换一张" : "相册里选一张"}</small></button>
+        </div>
+        ${S.meta.theme === "custom" ? `<div class="drow">背景图透明度<input type="range" min="0.15" max="1" step="0.05" value="${S.meta.bgOpacity}" data-op></div>` : ""}
+        <div class="drow">我的气泡颜色<span class="cols">${colors.map(c => `<button data-col="${c}" class="${S.meta.myColor === c ? "on" : ""}" style="background:${c}"></button>`).join("")}</span></div>
+      </div>`;
+    };
+    draw();
+    mask.onclick = async e => {
+      if (e.target === mask) { mask.remove(); return; }
+      const th = e.target.closest("[data-th]"); const col = e.target.closest("[data-col]");
+      if (th) {
+        if (th.dataset.th === "custom") { const d = await pickImage(1000); if (d) S.meta.bg = d; if (!S.meta.bg) return; }
+        S.meta.theme = th.dataset.th; saveMeta(); draw(); render();
+      } else if (col) { S.meta.myColor = col.dataset.col; saveMeta(); draw(); render(); }
+    };
+    mask.oninput = e => { if (e.target.matches("[data-op]")) { S.meta.bgOpacity = +e.target.value; saveMeta(); render(); } };
+    document.body.appendChild(mask);
+  }
+
+  async function onAct(act, el) {
+    const room = roomById(S.view.roomId);
+    switch (act) {
+      case "back": S.view = { page: "home" }; S.quote = null; return render();
+      case "more": return room && roomMenu(room);
+      case "sub": return subscribe();
+      case "debug": return showDebug();
+      case "soon": return toast("照片和表情下一版就来");
+      case "dress": return dressPanel();
+      case "wave": await fanWave(); S.forceBottom = true; return render();
+      case "urge": await charBubbles(room); S.forceBottom = true; return render();
+      case "flush": {
+        const sent = room.pending.map(p => p.text);
+        const base = Date.now();
+        room.pending.forEach((p, i) => room.items.push({ id: uid("m"), by: "me", text: p.text, at: new Date(base + i * 500).toISOString() }));
+        const lastChar = [...room.items].reverse().find(i => i.by === "char");
+        if (lastChar) { lastChar.fans = [...(lastChar.fans || []), ...sent.map(t => ({ t, me: true }))]; lastChar.fanN = (lastChar.fanN || 0) + sent.length; }
+        room.pending = []; saveRoom(room); S.forceBottom = true; render();
+        await charBubbles(room, { sent, direction: room.direction }); room.direction = ""; saveRoom(room); S.forceBottom = true; return render();
+      }
+      case "switch": {
+        const rooms = S.rooms.filter(r => r.kind === "char" && r !== room && charById(r.charId));
+        if (!rooms.length) return toast("只订阅了这一个");
+        const id = await sheet("换个人", rooms.map(r => ({ label: stageName(r), value: r.id })));
+        if (id) { S.view = { page: "room", roomId: id }; S.forceBottom = true; render(); }
+        return;
+      }
+      case "direct": {
+        const t = await inputSheet("场外指示", room.direction || "", { long: true, ph: "这次他发泡泡的情况，比如刚下练习、在外地拍摄", hint: "只用在下一次他发泡泡" });
+        if (t != null) { room.direction = t; saveRoom(room); toast(t ? "下次他发泡泡会照这个来" : "清掉了"); }
+        return;
+      }
+      case "handwrite": {
+        const t = await inputSheet(`替 ${stageName(room)} 写一条泡泡`, "", { long: true, max: 300 });
+        if (t) { room.items.push({ id: uid("b"), by: "char", text: t, at: nowIso() }); room.lastAt = nowIso(); saveRoom(room); S.forceBottom = true; render(); }
+        return;
+      }
+      case "clear": { const inp = $(".composer .ta", app()); if (inp) inp.value = ""; if (room && room.kind === "char" && room.pending.length) { room.pending = []; saveRoom(room); render(); } return; }
+      case "unquote": S.quote = null; return render();
+    }
+  }
+
+  function onSend(text) {
+    const room = roomById(S.view.roomId); if (!room || !text) return;
+    if (room.kind === "char") { room.pending.push({ text }); saveRoom(room); return render(); }
+    const q = S.quote && S.quote.roomId === room.id ? S.quote : null;
+    room.items.push({ id: uid("m"), by: "me", text, at: nowIso(), quote: q ? q.text : "" });
+    room.lastAt = nowIso(); saveRoom(room);
+    if (q && q.charId) remember(q.charId, `${herName()}在她的泡泡房（bubble，艺名「${myStage()}」）引用了你用粉丝小号回的那句「${q.text}」，回了「${text}」。所有粉丝都看得到这条，但不知道被引用的是你。`);
+    S.quote = null; S.forceBottom = true; render();
+  }
+
+  async function showDebug() {
+    const mask = document.createElement("div"); mask.className = "mask";
+    mask.innerHTML = `<div class="sheet"><div class="grab"></div><div class="sheet-h">调试记录（最近 10 次）</div><div class="dbg">${S.debug.map(d => `<div><b>${esc(d.label)} ${d.ok ? "✓" : "✗"}</b> <small>${esc(d.at.slice(5, 16).replace("T", " "))}</small><pre>${esc(d.ok ? d.text : d.error)}</pre></div>`).join("") || "还没有"}</div></div>`;
+    mask.onclick = e => { if (e.target === mask) mask.remove(); };
+    document.body.appendChild(mask);
+  }
+
+  document.addEventListener("click", e => {
+    const a = e.target.closest("[data-act]"); if (a && !a.disabled) { e.preventDefault(); onAct(a.dataset.act, a); return; }
+    const r = e.target.closest("[data-room]"); if (r) { S.view = { page: "room", roomId: r.dataset.room }; S.forceBottom = true; render(); return; }
+    const f = e.target.closest("[data-fans]"); if (f) { openFans(roomById(S.view.roomId), f.dataset.fans); return; }
+    const q = e.target.closest("[data-quote]");
+    if (q) {
+      const room = roomById(S.view.roomId); const it = room && room.items.find(i => i.id === q.dataset.quote); if (!it) return;
+      sheet(it.text.slice(0, 40), [{ label: "引用这条回复", value: 1 }]).then(v => { if (v) { S.quote = { roomId: room.id, text: it.text, charId: it.by === "him" ? it.charId : null }; render(); const inp = $(".composer .ta", app()); inp && inp.focus(); } });
+    }
+  });
+  document.addEventListener("submit", e => {
+    if (!e.target.matches(".composer")) return; e.preventDefault();
+    const inp = $(".ta", e.target); const t = inp.value.trim(); inp.value = ""; onSend(t);
+  });
+
+  (async function boot() {
+    app().innerHTML = `<div class="loading">bubble</div>`;
+    await loadAll();
+    render();
+  })();
+})();
+</script>
+</body>
+</html>

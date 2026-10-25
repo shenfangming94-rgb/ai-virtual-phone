@@ -24,6 +24,9 @@ svg { display: block; }
 .ic { width: 34px; height: 34px; display: grid; place-items: center; color: #222; flex: none; }
 .ic svg { width: 20px; height: 20px; }
 .hd-t { flex: 1; min-width: 0; text-align: center; }
+/* 标题按整屏居中：两边都留出胶囊的宽度 */
+.hd > .hd-t { position: absolute; left: var(--bar-clear); right: var(--bar-clear); top: var(--bar-top); height: 44px; display: flex; flex-direction: column; align-items: center; justify-content: center; transform: translateY(calc((var(--bar-h) - 44px) / 2)); pointer-events: none; }
+.hd-in .ic:last-child { margin-left: auto; }
 .hd-t b { display: inline-flex; align-items: center; gap: 3px; font-size: 14px; }
 .hd-t b i svg { width: 13px; height: 13px; color: var(--sub); }
 .hd-t small { display: block; font-size: 9.5px; color: var(--sub); line-height: 1.3; }

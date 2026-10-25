@@ -245,7 +245,7 @@
   const app = () => $("#app");
   function avatarEl(src, seed, cls) { return src ? `<img class="ava ${cls || ""}" src="${esc(src)}" alt="">` : `<div class="ava ${cls || ""}" style="background:${seed === "me" ? "linear-gradient(135deg,#f6d3dc,#c98a9c)" : `linear-gradient(135deg,hsl(${hashHue(seed)},50%,72%),hsl(${(hashHue(seed) + 40) % 360},50%,58%))`}"></div>`; }
   function header(title, sub, opts = {}) {
-    return `<div class="hd"><div class="hd-in">${opts.back ? `<button class="ic" data-act="back">${I.back}</button>` : `<span class="ic"></span>`}<div class="hd-t"><b>${esc(title)}${opts.caret ? `<i>${I.down}</i>` : ""}</b>${sub ? `<small>${sub}</small>` : ""}</div>${opts.more ? `<button class="ic" data-act="more">${I.more}</button>` : `<span class="ic"></span>`}</div></div>`;
+    return `<div class="hd"><div class="hd-t"><b>${esc(title)}${opts.caret ? `<i>${I.down}</i>` : ""}</b>${sub ? `<small>${sub}</small>` : ""}</div><div class="hd-in">${opts.back ? `<button class="ic" data-act="back">${I.back}</button>` : `<span class="ic"></span>`}${opts.more ? `<button class="ic" data-act="more">${I.more}</button>` : `<span class="ic"></span>`}</div></div>`;
   }
   function render() {
     const v = S.view;

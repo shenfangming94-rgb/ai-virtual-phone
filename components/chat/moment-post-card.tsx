@@ -17,12 +17,12 @@ import {
 import { loadCharacters } from "@/lib/character-storage";
 import { resolveUserIdentity } from "@/lib/settings-storage";
 import { buildTwoLevelMomentThreads } from "@/lib/moments-comment-threading";
-import { getChatImageFromIndexedDB } from "@/lib/chat-asset-storage";
+import { getChatImageFromIndexedDB, saveChatImageToIndexedDB } from "@/lib/chat-asset-storage";
 import { splitBilingualText } from "@/lib/bilingual-text";
 import { retryMomentGeneratedPhoto } from "@/lib/generated-image-retry";
 import { hasCharacterReferenceImage } from "@/lib/image-generation-service";
 import { GeneratedImageErrorDialog } from "./generated-image-error-dialog";
-import { Trash2, MoreHorizontal, MapPin, Heart, MessageCircle, Pencil } from "lucide-react";
+import { Trash2, MoreHorizontal, MapPin, Heart, MessageCircle, Pencil, ImagePlus, RefreshCw } from "lucide-react";
 import { ConfirmDialog } from "@/components/ui";
 
 type Props = {
@@ -34,6 +34,37 @@ type Props = {
 };
 
 const DEFAULT_MOMENT_AVATAR_SRC = "/images/default-moment-avatar.png";
+
+/** 换图：压到 800px 存进 IndexedDB，和发朋友圈选图一样 */
+function compressMomentPhoto(file: File): Promise<{ assetId: string; preview: string } | null> {
+    return new Promise(resolve => {
+        const img = new Image();
+        const objectUrl = URL.createObjectURL(file);
+        img.onload = () => {
+            const maxSize = 800;
+            let w = img.width, h = img.height;
+            if (w > maxSize || h > maxSize) {
+                if (w > h) { h = Math.round((h / w) * maxSize); w = maxSize; }
+                else { w = Math.round((w / h) * maxSize); h = maxSize; }
+            }
+            const canvas = document.createElement("canvas");
+            canvas.width = w;
+            canvas.height = h;
+            const ctx = canvas.getContext("2d");
+            if (!ctx) { URL.revokeObjectURL(objectUrl); resolve(null); return; }
+            ctx.drawImage(img, 0, 0, w, h);
+            canvas.toBlob(blob => {
+                URL.revokeObjectURL(objectUrl);
+                if (!blob) { resolve(null); return; }
+                saveChatImageToIndexedDB(blob)
+                    .then(assetId => resolve({ assetId, preview: URL.createObjectURL(blob) }))
+                    .catch(() => resolve(null));
+            }, "image/jpeg", 0.85);
+        };
+        img.onerror = () => { URL.revokeObjectURL(objectUrl); resolve(null); };
+        img.src = objectUrl;
+    });
+}
 
 function MomentDefaultAvatar({ alt = "" }: { alt?: string }) {
     return <img src={DEFAULT_MOMENT_AVATAR_SRC} alt={alt} className="feed-default-avatar w-full h-full object-cover" />;
@@ -59,6 +90,10 @@ export function MomentPostCard({ post, onUpdate, onRequestDelete, onOpenCommentC
     const [postPhotoDescDraft, setPostPhotoDescDraft] = useState("");
     const [postUseReferenceDraft, setPostUseReferenceDraft] = useState(false);
     const [postLocationDraft, setPostLocationDraft] = useState("");
+    // 配图：不动 / 删掉 / 换成她选的照片
+    const [postPhotoDraft, setPostPhotoDraft] = useState<"keep" | "remove" | { assetId: string; preview: string }>("keep");
+    const [postPhotoBusy, setPostPhotoBusy] = useState(false);
+    const postPhotoInputRef = useRef<HTMLInputElement>(null);
     const [editingComment, setEditingComment] = useState<MomentComment | null>(null);
     const [commentDraft, setCommentDraft] = useState("");
     const [deleteCommentTarget, setDeleteCommentTarget] = useState<MomentComment | null>(null);
@@ -166,23 +201,45 @@ export function MomentPostCard({ post, onUpdate, onRequestDelete, onOpenCommentC
         setPostPhotoDescDraft(post.photoDescription || "");
         setPostUseReferenceDraft(post.photoUseReferenceImage === true);
         setPostLocationDraft(post.location || "");
+        setPostPhotoDraft("keep");
         setShowPostActions(false);
         setEditingPostOpen(true);
     };
 
-    const handlePostEditSave = () => {
+    const savePostDrafts = () => {
         const content = postContentDraft.trim();
-        if (!content) return;
-        const photoDescription = postPhotoDescDraft.trim();
+        if (!content) return false;
+        const photoDescription = postPhotoDraft === "remove" ? "" : postPhotoDescDraft.trim();
+        const photoPatch: Partial<MomentPost> = postPhotoDraft === "remove"
+            ? { photoUrl: undefined, photoGenerationStatus: undefined, photoGenerationPrompt: undefined, photoGenerationError: undefined }
+            : postPhotoDraft === "keep"
+                ? {}
+                : { photoUrl: `asset://${postPhotoDraft.assetId}`, photoGenerationStatus: "generated", photoGenerationError: undefined };
         updateMomentPost(post.id, {
             content,
             photoDescription: photoDescription || undefined,
             photoUseReferenceImage: photoDescription ? postUseReferenceDraft : false,
             location: postLocationDraft.trim() || undefined,
+            ...photoPatch,
         });
+        return true;
+    };
+
+    const handlePostEditSave = () => {
+        if (!savePostDrafts()) return;
         setEditingPostOpen(false);
         onUpdate();
         dispatchMomentsUpdated();
+    };
+
+    const handlePostPhotoPick = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        e.target.value = "";
+        if (!file) return;
+        setPostPhotoBusy(true);
+        const saved = await compressMomentPhoto(file);
+        setPostPhotoBusy(false);
+        if (saved) setPostPhotoDraft(saved);
     };
 
     const openCommentEditor = (comment: MomentComment) => {
@@ -486,6 +543,50 @@ export function MomentPostCard({ post, onUpdate, onRequestDelete, onOpenCommentC
                                     placeholder="输入动态正文"
                                 />
                             </label>
+                            <div className="feed-post-edit-field">
+                                <span>配图</span>
+                                <div className="feed-post-edit-photo-row">
+                                <div className="feed-post-edit-photo">
+                                    {postPhotoDraft === "remove" ? (
+                                        <div className="feed-post-edit-photo-empty">已删掉<br />保存后生效</div>
+                                    ) : postPhotoDraft !== "keep" ? (
+                                        <img src={postPhotoDraft.preview} alt="" />
+                                    ) : resolvedPhotoUrl ? (
+                                        <img src={resolvedPhotoUrl} alt="" />
+                                    ) : (
+                                        <div className="feed-post-edit-photo-empty">{post.photoDescription ? "只有文字描述" : "没有配图"}</div>
+                                    )}
+                                </div>
+                                <input ref={postPhotoInputRef} type="file" accept="image/*" hidden onChange={handlePostPhotoPick} />
+                                <div className="feed-post-edit-photo-actions">
+                                    <button type="button" className="ui-btn ui-btn-ghost" disabled={postPhotoBusy} onClick={() => postPhotoInputRef.current?.click()}>
+                                        <ImagePlus size={14} strokeWidth={1.75} />{postPhotoBusy ? "处理中…" : "换成我的照片"}
+                                    </button>
+                                    {characterId && postPhotoDraft !== "remove" ? (
+                                        <button type="button" className="ui-btn ui-btn-ghost" disabled={!postPhotoDescDraft.trim() || photoRegenerating} onClick={() => {
+                                            if (!savePostDrafts()) return;
+                                            setEditingPostOpen(false);
+                                            setHasRef(hasCharacterReferenceImage(characterId));
+                                            setPhotoPromptDraft(postPhotoDescDraft.trim());
+                                            setPhotoUseReferenceDraft(hasCharacterReferenceImage(characterId) && postUseReferenceDraft);
+                                            setPhotoRetryError("");
+                                            setShowPhotoPromptEditor(true);
+                                            onUpdate();
+                                        }}>
+                                            <RefreshCw size={14} strokeWidth={1.75} />重新生成
+                                        </button>
+                                    ) : null}
+                                    {postPhotoDraft === "remove" ? (
+                                        <button type="button" className="ui-btn ui-btn-ghost" onClick={() => { setPostPhotoDraft("keep"); setPostPhotoDescDraft(post.photoDescription || ""); }}>撤销删除</button>
+                                    ) : (resolvedPhotoUrl || post.photoDescription || postPhotoDraft !== "keep") ? (
+                                        <button type="button" className="ui-btn ui-btn-ghost feed-post-edit-photo-del" onClick={() => { setPostPhotoDraft("remove"); setPostPhotoDescDraft(""); }}>
+                                            <Trash2 size={14} strokeWidth={1.75} />删除配图
+                                        </button>
+                                    ) : null}
+                                </div>
+                                </div>
+                                {postPhotoDraft !== "keep" && postPhotoDraft !== "remove" ? <small className="feed-post-edit-hint">图片描述是他和评论的人「看到」的内容，换了图记得改一下</small> : null}
+                            </div>
                             <label className="feed-post-edit-field">
                                 <span>图片描述</span>
                                 <textarea

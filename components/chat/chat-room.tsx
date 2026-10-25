@@ -4,7 +4,7 @@ import { forwardRef, Fragment, memo, useCallback, useEffect, useImperativeHandle
 import { ChatSession, ChatMessage, CHAT_APP_SETTINGS_UPDATED_EVENT, CHAT_INITIAL_VISIBLE_MESSAGE_COUNT, CHAT_LOAD_MORE_MESSAGE_COUNT, CHAT_REQUEST_REPLY_EVENT, loadChatAppSettings, loadChatMessages, loadChatContacts, loadChatSessions, saveChatSessions, pushChatMessage, updateChatMessage, deleteChatMessage, deleteChatMessagesFrom, deleteChatMessagesByIds, retractChatMessage, editChatMessage, updateMessageMediaData, replaceResponseBatchWithParts, replaceGroupResponseRound, isReadingDiscussMessage, isSystemInstructionMessage, getSystemInstructionDisplayContent, createResponseBatchId, createResponseRoundId, getLatestStateValues, getLatestCharacterStateValues, compareChatMessages, isSessionStreamingEnabled, resolveChatBackgroundImage, resolveChatUserAvatar } from "@/lib/chat-storage";
 import { cleanStreamText, splitStreamPreviewSegments, stripLiteralTexts, stripXmlTagBlocks } from "@/lib/stream-preview";
 import type { StateValue } from "@/lib/chat-storage";
-import { getReplyVersionInfo, stashReplyBeforeRetry, switchReplyVersion } from "@/lib/reply-versions";
+import { buildRetryHintMessage, forgetRetryHint, getReplyVersionInfo, loadRetryHints, rememberRetryHint, stashReplyBeforeRetry, switchReplyVersion } from "@/lib/reply-versions";
 import { parseStateValues, mergeStateValues } from "@/lib/state-value-parser";
 import { parseAIResponse, type ParsedMessagePart } from "@/lib/rich-message-parser";
 import { isKnownStickerLabel } from "@/lib/sticker-data";
@@ -1312,6 +1312,10 @@ export function ChatRoom({ session, onBack, onDeleted }: ChatRoomProps) {
 
     // Message Actions state
     const [activeMessageId, setActiveMessageId] = useState<string | null>(null);
+    // 重 roll 弹窗：可以写修正指令，也可以直接重 roll
+    const [retryTarget, setRetryTarget] = useState<string | null>(null);
+    const [retryHint, setRetryHint] = useState("");
+    const [retryHints, setRetryHints] = useState<string[]>([]);
     const [contextMenuAnchor, setContextMenuAnchor] = useState<ContextMenuAnchor | null>(null);
     const [isMultiSelectMode, setIsMultiSelectMode] = useState(false);
     const [selectedMessageIds, setSelectedMessageIds] = useState<Set<string>>(new Set());
@@ -4553,11 +4557,16 @@ export function ChatRoom({ session, onBack, onDeleted }: ChatRoomProps) {
         }
     };
 
-    const handleRetry = async (msgId: string) => {
+    const handleRetry = async (msgId: string, hint?: string) => {
         const msgIndex = messages.findIndex(m => m.id === msgId);
         if (msgIndex === -1 || messages[msgIndex].role !== "assistant") return;
 
         const contextMessages = messages.slice(0, msgIndex);
+        // 修正指令只跟这一次请求走，不存进聊天记录
+        if (hint?.trim()) {
+            rememberRetryHint(hint);
+            contextMessages.push(buildRetryHintMessage(session.id, hint, contextMessages[contextMessages.length - 1]?.createdAt));
+        }
 
         // 旧回复先存成一个版本，重 roll 完还能翻回去
         stashReplyBeforeRetry(session.id, msgId);
@@ -5117,7 +5126,7 @@ export function ChatRoom({ session, onBack, onDeleted }: ChatRoomProps) {
                         <button onClick={() => handleRetractMessage(storedMessageId)} className="ctx-menu-btn">撤回消息</button>
                     )}
                     {m.role === "assistant" && (
-                        <button onClick={() => handleRetry(storedMessageId)} className="ctx-menu-btn ctx-menu-btn-danger">重试以下</button>
+                        <button onClick={() => { setRetryTarget(storedMessageId); setRetryHint(""); setRetryHints(loadRetryHints()); setActiveMessageId(null); }} className="ctx-menu-btn ctx-menu-btn-danger">重试以下</button>
                     )}
                 </div>
                 <div className="flex">
@@ -6479,6 +6488,42 @@ export function ChatRoom({ session, onBack, onDeleted }: ChatRoomProps) {
                             <ChevronRight size={14} strokeWidth={2} />
                         </button>
                     </div>
+                )}
+                {retryTarget && typeof document !== "undefined" && createPortal(
+                    <div className="modal-overlay" data-ui="modal" onClick={() => setRetryTarget(null)}>
+                        <div className="modal-dialog chat-retry-dialog" data-ui="modal-dialog" onClick={e => e.stopPropagation()}>
+                            <div className="modal-header" data-ui="modal-header">
+                                <h3 className="modal-title">重新生成</h3>
+                            </div>
+                            <div className="modal-body chat-retry-body" data-ui="modal-body">
+                                <textarea
+                                    className="ui-textarea chat-retry-input"
+                                    value={retryHint}
+                                    onChange={e => setRetryHint(e.target.value)}
+                                    placeholder="想让他往哪个方向改？只用在这一次，不会进聊天记录。不写就直接重 roll"
+                                    maxLength={300}
+                                    autoFocus
+                                />
+                                {retryHints.length ? (
+                                    <div className="chat-retry-recent">
+                                        <span>最近用过</span>
+                                        {retryHints.map(h => (
+                                            <span key={h} className="chat-retry-chip">
+                                                <button type="button" onClick={() => setRetryHint(h)}>{h}</button>
+                                                <button type="button" aria-label="删掉" onClick={() => { forgetRetryHint(h); setRetryHints(loadRetryHints()); }}>×</button>
+                                            </span>
+                                        ))}
+                                    </div>
+                                ) : null}
+                            </div>
+                            <div className="modal-footer" data-ui="modal-footer">
+                                <button className="ui-btn ui-btn-ghost" onClick={() => setRetryTarget(null)}>取消</button>
+                                <button className="ui-btn ui-btn-outline" onClick={() => { const id = retryTarget; setRetryTarget(null); void handleRetry(id); }}>直接重 roll</button>
+                                <button className="ui-btn ui-btn-action" disabled={!retryHint.trim()} onClick={() => { const id = retryTarget; const h = retryHint; setRetryTarget(null); void handleRetry(id, h); }}>按这个改</button>
+                            </div>
+                        </div>
+                    </div>,
+                    document.body,
                 )}
                 {/* Scroll anchor: browser keeps this in view when content above changes height */}
                 <div style={{ overflowAnchor: 'auto', height: 1 }} />

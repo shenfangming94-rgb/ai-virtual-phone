@@ -7536,3 +7536,25 @@ html body .chat-role-badge[data-tone="peach"] { background: linear-gradient(90de
 .global-call-host[data-minimized] {
   pointer-events: none;
 }
+
+/* 重 roll 弹窗：修正指令 */
+.chat-retry-dialog { width: min(92%, 380px); }
+.chat-retry-body { display: flex; flex-direction: column; gap: 10px; }
+.chat-retry-input { min-height: 88px; resize: vertical; }
+.chat-retry-recent { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: 12px; }
+.chat-retry-recent > span:first-child { color: var(--c-icon); opacity: 0.8; margin-right: 2px; }
+.chat-retry-chip { display: inline-flex; align-items: center; max-width: 100%; border-radius: 999px; background: color-mix(in srgb, var(--c-text) 8%, transparent); }
+.chat-retry-chip button { border: 0; background: none; color: var(--c-text); font-size: 12px; padding: 4px 4px 4px 10px; max-width: 220px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.chat-retry-chip button + button { padding: 4px 9px 4px 2px; opacity: 0.5; }
+
+/* 编辑动态：配图（左缩略图，右按钮） */
+.feed-post-edit-body > * { flex-shrink: 0; }
+.feed-post-edit-photo-row { display: flex; gap: 10px; align-items: flex-start; }
+.feed-post-edit-photo { width: 92px; height: 92px; flex: none; border-radius: 10px; overflow: hidden; background: color-mix(in srgb, var(--c-text) 6%, transparent); display: flex; align-items: center; justify-content: center; }
+.feed-post-edit-photo img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.feed-post-edit-photo-empty { padding: 6px; text-align: center; font-size: 11.5px; font-weight: 400; line-height: 1.5; color: var(--c-icon); }
+.feed-post-edit-photo-actions { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: stretch; gap: 5px; }
+.feed-post-edit-photo-actions .ui-btn { display: inline-flex; align-items: center; justify-content: flex-start; gap: 5px; font-size: 13px; font-weight: 500; padding: 5px 10px; min-height: 0; }
+.feed-post-edit-photo-del { color: #e5484d !important; }
+.feed-post-edit-hint { display: block; font-size: 11.5px; font-weight: 400; color: var(--c-icon); }
+.chat-retry-dialog .modal-footer .ui-btn { white-space: nowrap; padding-left: 12px; padding-right: 12px; }

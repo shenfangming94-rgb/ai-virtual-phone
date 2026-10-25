@@ -5652,6 +5652,18 @@
   opacity: 0.6;
 }
 
+.mem-tl-cluster-delete {
+  display: block;
+  width: 100%;
+  margin-top: 10px;
+  padding: 9px;
+  border-radius: 10px;
+  border: 1px dashed var(--c-panel-border);
+  background: transparent;
+  color: var(--c-danger);
+  font-size: calc(12px*var(--app-text-scale,1));
+}
+
 .mem-st-edit-prefix {
   margin: 0;
   font-size: calc(11px*var(--app-text-scale,1));

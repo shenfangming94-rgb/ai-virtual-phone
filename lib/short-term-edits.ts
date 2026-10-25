@@ -54,6 +54,14 @@ export function deleteShortTermEntry(id: string) {
     saveAll(all);
 }
 
+/** 一整段一起删（记忆库里展开的那一大条） */
+export function deleteShortTermEntries(ids: string[]) {
+    const all = loadAll();
+    const at = new Date().toISOString();
+    for (const id of ids) all[id] = { deleted: true, at };
+    saveAll(all);
+}
+
 export function editShortTermEntry(id: string, prefix: string, body: string) {
     const all = loadAll();
     all[id] = { content: prefix + body, body, at: new Date().toISOString() };

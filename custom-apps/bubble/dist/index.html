@@ -270,7 +270,7 @@ svg { display: block; }
 (function () {
   "use strict";
   const api = window.AiPhone || window.AiPhoneApp;
-  const VERSION = "0.1.9";
+  const VERSION = "0.1.10";
 
   // ───────────────────────── 工具 ─────────────────────────
   const $ = (sel, root) => (root || document).querySelector(sel);
@@ -822,8 +822,9 @@ svg { display: block; }
     it.photo.busy = true; render();
     try {
       const isHim = it.by === "char";
-      const prompt = `${it.photo.desc}。手机随手拍的照片，真实自然，不要文字水印。`;
-      const r = await api.ai.generateImage({ prompt, ...(isHim ? { characterId: room.charId, useReferenceImage: !!it.photo.self } : {}), timeoutMs: 180000 });
+      // 跟微博配图同一种写法：照片里有他本人才带他和参考图，别的只发描述
+      const withFace = isHim && !!it.photo.self;
+      const r = await api.ai.generateImage({ prompt: it.photo.desc, ...(withFace ? { characterId: room.charId, useReferenceImage: true } : {}), timeoutMs: 120000 });
       if (!r || !r.dataUrl) throw new Error("没有生成出图片");
       it.photo.ref = await storeDataUrl(r.dataUrl);
     } catch (e) { toast(`生图失败：${(e && e.message) || e}`.slice(0, 60)); }

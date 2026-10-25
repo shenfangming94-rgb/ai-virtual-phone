@@ -229,12 +229,13 @@
   async function fanWave() {
     const room = myRoom();
     const mine = room.items.filter(i => i.by === "me").slice(-6);
-    if (!mine.length) return toast("先发个泡泡吧");
     const mineText = mine.map(i => `- ${i.quote ? `（引用了「${i.quote}」）` : ""}${i.text}${i.photo ? `［照片：${i.photo.desc || "一张照片"}］` : ""}${i.sticker ? `［表情包：${i.sticker.name}］` : ""}`).join("\n");
     const secret = S.meta.secret.filter(id => charById(id));
     const lastHim = {}; room.items.forEach(i => { if (i.by === "him") lastHim[i.charId] = i.at; });
     const him = secret.find(id => Math.random() < 0.45 && (!lastHim[id] || Date.now() - new Date(lastHim[id]).getTime() > 20 * 60e3)) || null;
-    const head = `爱豆「${myStage()}」在粉丝通讯 app bubble 上给订阅的粉丝发了这些泡泡（最新的在最后）：\n${mineText}`;
+    const head = mine.length
+      ? `爱豆「${myStage()}」在粉丝通讯 app bubble 上给订阅的粉丝发了这些泡泡（最新的在最后）：\n${mineText}`
+      : `爱豆「${myStage()}」还没在粉丝通讯 app bubble 上发过泡泡。订阅她的粉丝自己来留言：想她、问她在干嘛、催她发泡泡、聊自己的日常。`;
     let raw;
     if (him) {
       const hc = charById(him);
@@ -244,7 +245,7 @@
         head,
         `【恋爱】${LOVE_RULE(him, "她")}`,
         `【粉丝】${FAN_MOOD}`, NO_HER(),
-        "【这次】先写其他粉丝对这几条泡泡的回复，再决定你要不要也回一条。你回的话按你的人设和你们的关系，像你会对她说的话，一两句；不想回就写 无。",
+        (mine.length ? "【这次】先写其他粉丝对这几条泡泡的回复，再决定你要不要也回一条。" : "【这次】她最近没发泡泡。先写其他粉丝主动发来的留言，再决定你要不要也留一条。") + "你回的话按你的人设和你们的关系，像你会对她说的话，一两句；不想回就写 无。",
         "【输出】\n===粉丝回复===\n" + FAN_FORMAT + "写 8~12 条。\n===你的回复===\n内容：你的回复（不回写 无）",
       ].join("\n\n"), "粉丝回一波");
       if (!raw) return;
@@ -252,15 +253,15 @@
       const fans = parseFans(blockOf(raw, "粉丝回复"));
       pushFans(room, fans, none(mineReply) ? null : { charId: him, text: mineReply.slice(0, 200) });
       if (!none(mineReply)) {
-        const evSum = `你用粉丝小号偷偷回了${herName()}的泡泡（bubble，她是爱豆「${myStage()}」）：她发的是${mine.slice(-2).map(i => `「${i.text}」`).join("")}，你回「${mineReply.slice(0, 200)}」。别的粉丝不知道是你。`;
+        const evSum = `你用粉丝小号偷偷回了${herName()}的泡泡（bubble，她是爱豆「${myStage()}」）：${mine.length ? `她发的是${mine.slice(-2).map(i => `「${i.text}」`).join("")}，你回` : "她最近没发泡泡，你在她的泡泡房留言"}「${mineReply.slice(0, 200)}」。别的粉丝不知道是你。`;
         const ev = remember(him, evSum);
         const hi = [...room.items].reverse().find(i => i.by === "him" && i.charId === him);
         if (hi) { hi.ev = ev; hi.evChar = him; hi.evSum = evSum; saveRoom(room); }
       }
-      else remember(him, `你刷到了${herName()}在 bubble 发的泡泡${mine.slice(-2).map(i => `「${i.text}」`).join("")}，看了没回。`);
+      else if (mine.length) remember(him, `你刷到了${herName()}在 bubble 发的泡泡${mine.slice(-2).map(i => `「${i.text}」`).join("")}，看了没回。`);
       if (hc) S.lastHimName = hc.name;
     } else {
-      raw = await plainGen([head, `【粉丝】${FAN_MOOD}`, NO_HER(), "【这次】写粉丝们对这几条泡泡的回复。", "【输出】\n===粉丝回复===\n" + FAN_FORMAT + "写 8~12 条。"].join("\n\n"), "粉丝回一波");
+      raw = await plainGen([head, `【粉丝】${FAN_MOOD}`, NO_HER(), (mine.length ? "【这次】写粉丝们对这几条泡泡的回复。" : "【这次】写粉丝们主动发来的留言。"), "【输出】\n===粉丝回复===\n" + FAN_FORMAT + "写 8~12 条。"].join("\n\n"), "粉丝回一波");
       if (!raw) return;
       pushFans(room, parseFans(blockOf(raw, "粉丝回复") || raw), null);
     }

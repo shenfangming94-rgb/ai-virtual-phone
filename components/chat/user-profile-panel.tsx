@@ -763,7 +763,33 @@ function FollowUpSettingsEditor({ onBack }: { onBack: () => void }) {
 /* ══════════════════════════════════════════
    API Log Viewer (sub-page)
    ══════════════════════════════════════════ */
+/** 整次请求拼成一段文字，复制出去对比用 */
+function apiLogToText(log: DebugInfo): string {
+    const head = [log.characterName, log.model, log.usage ? `tokens ${log.usage.prompt_tokens ?? "—"} / ${log.usage.completion_tokens ?? "—"}` : ""].filter(Boolean).join(" · ");
+    const parts = log.messages.map((m, i) => `===== [${i}] ${m.role}${m.marker ? ` · ${m.marker}` : ""} · ${m.content.length} 字 =====\n${m.content}`);
+    return [head, ...parts, `===== AI 原始回复 =====\n${log.rawResponse}`].join("\n\n");
+}
+
+async function copyText(text: string): Promise<boolean> {
+    try {
+        await navigator.clipboard.writeText(text);
+        return true;
+    } catch {
+        // 有的浏览器不给 clipboard，用老办法
+        const area = document.createElement("textarea");
+        area.value = text;
+        area.style.position = "fixed";
+        area.style.opacity = "0";
+        document.body.appendChild(area);
+        area.select();
+        const ok = document.execCommand("copy");
+        area.remove();
+        return ok;
+    }
+}
+
 function ApiLogViewer({ onBack }: { onBack: () => void }) {
+    const [copiedId, setCopiedId] = useState<string | null>(null);
     const [logs, setLogs] = useState<DebugInfo[]>([]);
     const [expandedId, setExpandedId] = useState<string | null>(null);
     // 来源过滤：hiddenSources 里记录被取消勾选的来源；空集 = 全部显示。
@@ -917,6 +943,18 @@ function ApiLogViewer({ onBack }: { onBack: () => void }) {
 
                                         {isOpen && (
                                             <div className="api-log-panel">
+                                                <button
+                                                    type="button"
+                                                    className="api-log-copy"
+                                                    onClick={async () => {
+                                                        if (await copyText(apiLogToText(log))) {
+                                                            setCopiedId(log.id);
+                                                            setTimeout(() => setCopiedId(id => id === log.id ? null : id), 1800);
+                                                        }
+                                                    }}
+                                                >
+                                                    {copiedId === log.id ? "已复制" : "复制整条"}
+                                                </button>
                                                 <div className="font-bold px-1 pt-3 pb-2 text-[var(--c-warning)]">
                                                     Prompt ({log.messages.length} 条消息)
                                                 </div>
@@ -926,6 +964,7 @@ function ApiLogViewer({ onBack }: { onBack: () => void }) {
                                                             <span className="font-bold text-[var(--log-role-color)]">
                                                                 [{i}] {m.role}
                                                             </span>
+                                                            <span className="opacity-50">{m.content.length} 字</span>
                                                             {(m as any).marker && (
                                                                 <span className="api-log-marker">
                                                                     {(m as any).marker}

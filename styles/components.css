@@ -5652,6 +5652,17 @@
   opacity: 0.6;
 }
 
+.api-log-copy {
+  display: block;
+  margin: 10px 0 0 auto;
+  padding: 5px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--c-panel-border);
+  background: transparent;
+  color: var(--c-text);
+  font-size: calc(12px*var(--app-text-scale,1));
+}
+
 .mem-tl-cluster-delete {
   display: block;
   width: 100%;

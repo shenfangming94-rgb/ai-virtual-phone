@@ -148,13 +148,18 @@ export function endListening() {
 export function syncMemory(charId: string, session?: LTActive | null) {
     const store = loadLT();
     const c = ltChar(store, charId);
-    const since = c.memorySyncedAt ? new Date(c.memorySyncedAt).getTime() : 0;
+    const chat = createOrGetSession(charId);
+    let since = c.memorySyncedAt ? new Date(c.memorySyncedAt).getTime() : 0;
+    // 她把私聊删了，之前写进去的一起听也跟着没了 → 这一场从头再写一遍
+    const current = session || store.active;
+    const lost = since > 0 && current?.charId === charId
+        && !loadChatMessages(chat.id).some(m => m.content.startsWith("<hidden-system>音乐一起听") && new Date(m.createdAt).getTime() >= since - 5 * 60_000);
+    if (lost) since = new Date(current.startedAt).getTime();
     const fresh = c.messages.filter(m => new Date(m.at).getTime() > since && (m.role !== "system" || m.kind === "like"));
     if (fresh.length === 0) return;
     const user = userName(charId);
     const songs = (session?.songs || store.active?.songs || []).slice(-8);
-    const lines = fresh.slice(-16).map(m => m.kind === "like" ? `（${m.text.replace(/^你/, user)}）` : `${m.role === "user" ? user : "你"}${m.kind === "note" ? "（写在歌笺上）" : ""}：${m.text}`);
-    const chat = createOrGetSession(charId);
+    const lines = fresh.slice(lost ? -40 : -16).map(m => m.kind === "like" ? `（${m.text.replace(/^你/, user)}）` : `${m.role === "user" ? user : "你"}${m.kind === "note" ? "（写在歌笺上）" : ""}：${m.text}`);
     pushChatMessage({
         sessionId: chat.id,
         role: "system",

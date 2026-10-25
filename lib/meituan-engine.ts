@@ -48,10 +48,11 @@ import { resolveShoppingApiConfig } from "./shopping-engine";
 import { writeCharAddress } from "./shopping-gift-engine";
 import { loadGiftStore, updateGiftStore, USER_ADDRESS_ID, type GiftAddress } from "./shopping-gift-store";
 import { payWithWalletAccount } from "./wallet-storage";
+import { devMyShop, myShopTick } from "./meituan-myshop";
 
 // ── 小工具 ──
 
-function userName(charId?: string): string {
+export function userName(charId?: string): string {
     try {
         return resolveUserIdentity(charId, "chat")?.name || "她";
     } catch {
@@ -63,7 +64,7 @@ export function mtCharName(charId: string): string {
     return loadCharacters().find(c => c.id === charId)?.name || "他";
 }
 
-function isFriend(charId: string): boolean {
+export function isFriend(charId: string): boolean {
     return loadChatContacts().some(c => c.characterId === charId);
 }
 
@@ -73,7 +74,7 @@ function charIdOfSession(sessionId: string): string | null {
     return loadChatContacts().find(c => c.id === session.contactId)?.characterId || session.contactId;
 }
 
-function pushEvent(charId: string, visible: string, hidden: string): ChatSession {
+export function pushEvent(charId: string, visible: string, hidden: string): ChatSession {
     const session = createOrGetSession(charId);
     const stamp = new Date().toLocaleString("zh-CN", { hour12: false });
     pushChatMessage({
@@ -87,7 +88,7 @@ function pushEvent(charId: string, visible: string, hidden: string): ChatSession
     return session;
 }
 
-function requestReply(sessionId: string) {
+export function requestReply(sessionId: string) {
     window.setTimeout(() => {
         window.dispatchEvent(new CustomEvent(CHAT_REQUEST_REPLY_EVENT, { detail: { sessionId } }));
     }, 0);
@@ -106,7 +107,7 @@ function pushCard(charId: string, role: "user" | "assistant", card: MeituanCardD
     return msg;
 }
 
-async function charGenerate(charId: string, instruction: string): Promise<string> {
+export async function charGenerate(charId: string, instruction: string): Promise<string> {
     const session: ChatSession = {
         id: `meituan_${charId}_${Date.now().toString(36)}`,
         contactId: "group_meituan",
@@ -130,21 +131,21 @@ async function charGenerate(charId: string, instruction: string): Promise<string
     return result.text || "";
 }
 
-async function llm(prompt: string): Promise<string> {
+export async function llm(prompt: string): Promise<string> {
     const config = resolveShoppingApiConfig();
     if (!config) throw new Error("没有可用的 API");
     return sendLLMRequest(config, null, [{ role: "user", content: prompt }], [], { characterName: "美团App" }, { skipOutputRegex: true, appId: "meituan" });
 }
 
-function field(text: string, name: string): string {
-    return text.match(new RegExp(`${name}[：:]\\s*([^\\n]+)`))?.[1]?.trim() || "";
+export function field(text: string, name: string): string {
+    return text.match(new RegExp(`${name}[：:][ \\t]*([^\\n]+)`))?.[1]?.trim() || "";
 }
 
-function blocks(text: string, name: string): string[] {
+export function blocks(text: string, name: string): string[] {
     return text.split(new RegExp(`===\\s*${name}\\s*===`)).slice(1);
 }
 
-function num(text: string, fallback = 0): number {
+export function num(text: string, fallback = 0): number {
     const raw = text.replace(/[,，¥￥元\s]/g, "");
     const wan = raw.match(/(\d+(?:\.\d+)?)万/);
     if (wan) return Math.round(Number(wan[1]) * 10000);
@@ -152,7 +153,7 @@ function num(text: string, fallback = 0): number {
     return Number.isFinite(n) ? n : fallback;
 }
 
-function firstEmoji(text: string, fallback: string): string {
+export function firstEmoji(text: string, fallback: string): string {
     const m = text.match(/\p{Extended_Pictographic}(?:️|‍\p{Extended_Pictographic})*/u);
     return m?.[0] || fallback;
 }
@@ -795,6 +796,7 @@ export async function meituanTick(): Promise<void> {
         const ids = new Set<string | undefined>([undefined, ...loadChatContacts().map(c => getCharacterIdentityId(c.characterId))]);
         for (const id of ids) handleOrderEvents(id);
         await rollProactive();
+        await myShopTick(ids);
     } finally {
         ticking = false;
     }
@@ -818,6 +820,7 @@ export function startMeituanService(): void {
                 return meituanTick();
             },
             deals: generateDeals,
+            myshop: devMyShop(),
         };
     }
     stopTimer = () => {

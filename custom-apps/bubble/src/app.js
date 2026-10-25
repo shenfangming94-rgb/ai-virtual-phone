@@ -503,6 +503,13 @@
   const quoteHtml = q => q ? `<div class="quote">${esc(q)}</div>` : "";
   const IMG = {};
   /** 泡泡里面：引用 + 照片 + 文字 */
+  /** 一条泡泡：照片单独一个，说的话另起一个气泡；时间跟着这一组第一条 */
+  function lineHtml(it, stamp) {
+    const st = stamp ? `<span class="stamp">${hm(it.at)}</span>` : "";
+    const photo = it.photo ? `<div class="line"><div class="bub ph-only">${bubInner({ photo: it.photo, id: it.id })}</div>${st}</div>` : "";
+    const words = it.text || (it.quote && !it.photo) ? `<div class="line"><div class="bub">${bubInner({ text: it.text, quote: it.quote })}</div>${it.photo ? "" : st}</div>` : "";
+    return photo + words;
+  }
   function bubInner(it) {
     const ph = it.photo;
     const photo = !ph ? "" : ph.ref
@@ -563,10 +570,10 @@
     return dayChips(gs, g => {
       const last = g.items[g.items.length - 1];
       if (g.key === "me") {
-        return `<div class="grp me"><div class="stack">${g.items.map((it, i) => `<div class="line"><div class="bub ${it.photo ? (it.text || it.quote ? "has-ph" : "ph-only") : ""}">${bubInner(it)}</div>${i === 0 ? `<span class="stamp">${hm(it.at)}</span>` : ""}</div>`).join("")}</div>${avatarEl(myAvatar(), "me", "me-ava")}</div>`;
+        return `<div class="grp me"><div class="stack">${g.items.map((it, i) => lineHtml(it, i === 0)).join("")}</div>${avatarEl(myAvatar(), "me", "me-ava")}</div>`;
       }
       const fold = last.fans && last.fans.length ? `<button class="fold" data-fans="${last.id}"><span class="heads"><i style="background:#FFD6E0"></i><i style="background:#D6E9FF"></i><i style="background:#DDF5E4"></i></span><span class="n">粉丝回复 ${last.fanN || last.fans.length} ›</span></button>` : "";
-      return `<div class="grp">${avatarEl(roomAvatar(room), room.charId, "artist-ava")}<div class="stack"><div class="who"><em class="art">ARTIST</em>${esc(stageName(room))}</div>${g.items.map((it, i) => `<div class="line" data-item="${it.id}"><div class="bub ${it.photo ? (it.text || it.quote ? "has-ph" : "ph-only") : ""}">${bubInner(it)}</div>${i === 0 ? `<span class="stamp">${hm(it.at)}</span>` : ""}</div>`).join("")}</div></div>${fold}`;
+      return `<div class="grp">${avatarEl(roomAvatar(room), room.charId, "artist-ava")}<div class="stack"><div class="who"><em class="art">ARTIST</em>${esc(stageName(room))}</div>${g.items.map((it, i) => lineHtml(it, i === 0)).join("")}</div></div>${fold}`;
     });
   }
 
@@ -576,7 +583,7 @@
     return dayChips(gs, g => {
       const f = g.items[0];
       if (g.key === "me") {
-        return `<div class="grp me"><div class="stack"><div class="who"><em class="art">ARTIST</em>${esc(myStage())}</div>${g.items.map((it, i) => `<div class="line"><div class="bub ${it.photo ? (it.text || it.quote ? "has-ph" : "ph-only") : ""}">${bubInner(it)}</div>${i === 0 ? `<span class="stamp">${hm(it.at)}</span>` : ""}</div>`).join("")}</div>${avatarEl(myAvatar(), "me", "me-ava")}</div>`;
+        return `<div class="grp me"><div class="stack"><div class="who"><em class="art">ARTIST</em>${esc(myStage())}</div>${g.items.map((it, i) => lineHtml(it, i === 0)).join("")}</div>${avatarEl(myAvatar(), "me", "me-ava")}</div>`;
       }
       if (f.by === "him") {
         const c = charById(f.charId) || {}; const r = S.rooms.find(x => x.kind === "char" && x.charId === f.charId);

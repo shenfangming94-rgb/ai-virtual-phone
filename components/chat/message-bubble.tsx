@@ -112,6 +112,8 @@ export const MessageBubble = memo(function MessageBubble({ msg, onUpdate, charNa
             return <LocationBubble msg={msg} />;
         case "poke":
             return <PokeBubble msg={msg} charName={charName} userName={userName} />;
+        case "narration":
+            return <div className="chat-narration">{msg.content}</div>;
         case "sticker":
             return <StickerBubble msg={msg} characterId={characterId} />;
         case "dice":

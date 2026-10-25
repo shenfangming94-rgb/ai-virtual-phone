@@ -1,6 +1,7 @@
 // lib/chat-engine.ts
 
 import { buildAlipayChatHint } from "./alipay-chat";
+import { buildOnlineNarrationPrompt, getNarrationConfig } from "./online-narration";
 import { buildMeituanChatHint } from "./meituan-chat";
 import { createSseJsonParser } from "./sse-json";
 import { maybeAppendShortcutCapability } from "./offline-shortcut-capability";
@@ -2019,6 +2020,11 @@ export async function buildChatPromptMessages(
     }
     appendEmptyGenerateGuardMessage(llmMessages, config, historyForPrompt);
 
+    // 线上动作描写：附在最后，不管用哪个预设都生效
+    if (!session.isGroup) {
+        const narrationPrompt = buildOnlineNarrationPrompt(getNarrationConfig(session), character.name, userIdentity?.name || "用户");
+        if (narrationPrompt) llmMessages.push({ role: "system", content: narrationPrompt });
+    }
     return { llmMessages, character, config, preset, regexes, userIdentity, toolsEnabled };
 }
 

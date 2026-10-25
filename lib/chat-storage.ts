@@ -97,6 +97,8 @@ export type ChatSession = {
     groupTitles?: Record<string, { text: string; color?: string }>; // (characterId | "self") → 群头衔
     allowAdminActionsOnUser?: boolean; // characters may kick/mute the user (default off)
     isSpectator?: boolean; // 围观群：用户不在群内，只能生成/线下
+    /** 线上动作描写（旁白）设置，见 lib/online-narration.ts */
+    onlineNarration?: { on?: boolean; person?: "default" | "second" | "third" | "first"; style?: string; plot?: boolean; faceToFace?: boolean };
 };
 
 export type ChatMessageStatus = "sending" | "sent" | "read" | "failed" | "rejected";
@@ -125,6 +127,7 @@ export type ChatMessage = {
         | "poke" | "sticker" | "quote" | "dice"
         | "voice_call" | "video_call"
         | "meeting_invite"
+        | "narration"
         | "accept_red_packet" | "decline_red_packet" | "accept_transfer" | "decline_transfer"
         | "payment_request" | "accept_payment_request" | "decline_payment_request"
         | "music" | "music_share" | "music_notify" | "music_not_found"
@@ -635,6 +638,8 @@ export function getChatMessagePreview(msg: ChatMessage): string {
     if (callReject) return `你拒绝了${callReject[1]}`;
     const callCancel = msg.content?.match(/\[我取消了((?:群?(?:语音|视频))通话)\]/);
     if (callCancel) return `你取消了${callCancel[1]}`;
+
+    if (msg.mediaType === "narration") return `[旁白] ${msg.content.slice(0, 40)}`;
 
     // Poke: "你 拍了拍 XX" / "XX 拍了拍 你" (no brackets, user name → "你")
     if (msg.mediaType === "poke") {
@@ -1625,6 +1630,7 @@ function formatStateValuesForRaw(stateValues?: StateValue[]): string {
 
 function messageToEditableRawPart(message: ChatMessage): string {
     if (message.mediaType === "tool_notice" || message.mediaType === "tool_result") return "";
+    if (message.mediaType === "narration") return `[旁白] ${message.content.trim()}`;
     if (message.mediaType === "poke") {
         const sender = message.mediaData?.pokeSender?.trim();
         const target = message.mediaData?.pokeTarget?.trim();

@@ -140,7 +140,7 @@
   const LOVE_RULE = (charId, who) => isPublic(charId)
     ? `你们的恋情已经公开了，可以大方一点，但粉丝大多还是接受不了。`
     : `爱豆不许谈恋爱，你们的关系没公开：不能直接秀恩爱、不能说破你们的关系，想对${who}好只能暗戳戳、让别人看不出来。`;
-  const FAN_FORMAT = "每行一条粉丝回复，开头写「- 昵称：」。像真实追星粉丝：短、口语、情绪直接，有尖叫有心疼有玩梗有关心身体。大部分用中文，也要有几条韩语、日语、英文；外语那条写成「原文｜中文翻译」。";
+  const FAN_FORMAT = "每行一条粉丝回复，开头写「- 昵称：」，昵称要像这个爱豆自己的粉丝会起的，不能带别的爱豆的名字。像真实追星粉丝：短、口语、情绪直接，有尖叫有心疼有玩梗有关心身体。大部分用中文，也要有几条韩语、日语、英文；外语那条写成「原文｜中文翻译」。";
   async function busyWrap(label, fn) {
     const job = uid("job"); S.busy.add(job); render();
     try { return await fn(); } catch (e) { console.error(e); logAi({ label, ok: false, error: String((e && e.message) || e) }); toast(`${label}失败：${(e && e.message) || e}`.slice(0, 60)); return null; } finally { S.busy.delete(job); render(); }
@@ -296,7 +296,7 @@
       recentPosts ? `【广场上已经有的帖】（不要重复）\n${recentPosts}` : "",
       `【粉丝】${FAN_MOOD}`,
       "【这次】写 5~7 条新帖：有讨论泡泡的、扒被引用那句是谁的（只有泡泡里真引用了才会扒）、心疼、玩梗、吐槽公司，也要有粉丝发自己的日常，但日常一定和这个爱豆沾边。大部分中文，也有韩语日语英文，外语写成「原文｜中文翻译」。",
-      "【输出】每条：\n===帖子===\n昵称：\n内容：\n截图：帖子里截图的那条泡泡原文（没截图写 无）\n点赞：数字\n评论数：数字",
+      "【输出】每条（昵称要像这个爱豆自己的粉丝会起的，不能带别的爱豆的名字）：\n===帖子===\n昵称：\n内容：\n截图：帖子里截图的那条泡泡原文（没截图写 无）\n点赞：数字\n评论数：数字",
     ].filter(Boolean).join("\n\n"), "刷新广场");
     if (!raw) return;
     const posts = parsePosts(raw).map(p => ({ id: uid("p"), by: "fan", name: p.name, ...splitTr(p.text), shot: matchShot(key, p.shot), likes: p.likes, cmtN: p.cmtN, comments: [], at: nowIso() }));
@@ -335,7 +335,7 @@
       post.comments.length ? `【已有评论】\n${post.comments.slice(-10).map(c => `- ${c.name}：${c.text}`).join("\n")}` : "",
       mine ? `【要接住的】\n${mine}` : "",
       `【粉丝】${FAN_MOOD}`,
-      "【这次】写 6~10 条新评论，可以互相吵、互相回。" + "每行一条，开头写「- 昵称：」。大部分中文，也有韩语日语英文，外语写成「原文｜中文翻译」。",
+      "【这次】写 6~10 条新评论，可以互相吵、互相回。" + "每行一条，开头写「- 昵称：」，昵称要像这个爱豆自己的粉丝会起的，不能带别的爱豆的名字。大部分中文，也有韩语日语英文，外语写成「原文｜中文翻译」。",
     ].filter(Boolean).join("\n\n"), "看评论");
     if (!raw) return;
     const list = parseFans(raw).map(f => ({ id: uid("c"), by: "fan", name: f.name, text: f.t, tr: f.tr, at: nowIso() }));

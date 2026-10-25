@@ -627,6 +627,8 @@ type Props = {
     activeTags?: ReadonlySet<string>;
     /** 点某一条（编辑/删除） */
     onEntryTap?: (id: string) => void;
+    /** 整段删除：给这一段里所有条目的 id */
+    onClusterDelete?: (ids: string[]) => void;
     /** 换了它才回到首屏；不给就是 events 一变就回 */
     resetKey?: string;
 };
@@ -636,7 +638,7 @@ const EMPTY_ACTIVE_TAGS: ReadonlySet<string> = new Set<string>();
 // 每批渲染的簇数：全部一次性渲染会在重数据账号上把 DOM 撑爆
 const CLUSTER_PAGE_SIZE = 30;
 
-export function MemoryTimeline({ events, userName, activeTags = EMPTY_ACTIVE_TAGS, onEntryTap, resetKey }: Props) {
+export function MemoryTimeline({ events, userName, activeTags = EMPTY_ACTIVE_TAGS, onEntryTap, onClusterDelete, resetKey }: Props) {
     const [expandedClusterId, setExpandedClusterId] = useState<string | null>(null);
     const [visibleCount, setVisibleCount] = useState(CLUSTER_PAGE_SIZE);
 
@@ -702,7 +704,18 @@ export function MemoryTimeline({ events, userName, activeTags = EMPTY_ACTIVE_TAG
                                 <span className="mem-tl-card-count">{cluster.entryCount} 条记录</span>
                             </div>
                             {expanded ? (
-                                <ClusterDetail cluster={cluster} onEntryTap={onEntryTap} editedIds={editedIds} />
+                                <>
+                                    <ClusterDetail cluster={cluster} onEntryTap={onEntryTap} editedIds={editedIds} />
+                                    {onClusterDelete && (
+                                        <button
+                                            type="button"
+                                            className="mem-tl-cluster-delete"
+                                            onClick={event => { event.stopPropagation(); onClusterDelete(cluster.entries.map(e => e.id)); }}
+                                        >
+                                            删除这一整段（{cluster.entryCount} 条）
+                                        </button>
+                                    )}
+                                </>
                             ) : (
                                 <div className="mem-tl-card-excerpts">
                                     {cluster.excerpts.length > 0 ? cluster.excerpts.map((ex, i) => (

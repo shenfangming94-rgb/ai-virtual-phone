@@ -24,7 +24,7 @@ import {
 import { hydrateChatStorage } from "@/lib/chat-storage";
 import { loadNativeTimeline, type NativeTimelineEntry } from "@/lib/short-term-assembler";
 import { exportMemoryBackup, importMemoryPack, parseMemoryBackup, type CharacterMemoryPack } from "@/lib/memory-backup";
-import { deleteShortTermEntry, editShortTermEntry, restoreShortTermEntry, splitShortTermLine } from "@/lib/short-term-edits";
+import { deleteShortTermEntries, deleteShortTermEntry, editShortTermEntry, restoreShortTermEntry, splitShortTermLine } from "@/lib/short-term-edits";
 import { runSummarizationPipeline } from "@/lib/memory-summarizer";
 import { runCoreMemoryPipeline } from "@/lib/core-memory-builder";
 import { resolveAuxiliaryApiConfig, resolveUserIdentity } from "@/lib/settings-storage";
@@ -223,6 +223,7 @@ export function MemoryBankPage({
     const [stActionId, setStActionId] = useState<string | null>(null);
     const [stEditor, setStEditor] = useState<{ id: string; prefix: string; body: string } | null>(null);
     const [stConfirmDeleteId, setStConfirmDeleteId] = useState<string | null>(null);
+    const [stConfirmDeleteIds, setStConfirmDeleteIds] = useState<string[] | null>(null);
     // 记忆备份
     const [backupBusy, setBackupBusy] = useState(false);
     const [importPlan, setImportPlan] = useState<{ pack: CharacterMemoryPack; target: string }[] | null>(null);
@@ -476,6 +477,15 @@ export function MemoryBankPage({
         updateTimelineEntry(id, null);
         setStConfirmDeleteId(null);
         showNotice("他已经忘掉这条了");
+    };
+
+    const handleDeleteShortTermCluster = (ids: string[]) => {
+        deleteShortTermEntries(ids);
+        const gone = new Set(ids);
+        setShortTermEvents(list => list.filter(e => !gone.has(e.id)));
+        setSharedEvents(list => list.filter(e => !gone.has(e.id)));
+        setStConfirmDeleteIds(null);
+        showNotice(`他已经忘掉这一段了（${ids.length} 条）`);
     };
 
     const handleRestoreShortTerm = (id: string) => {
@@ -832,6 +842,7 @@ export function MemoryBankPage({
                                 userName={resolveUserIdentity(selectedCharId!)?.name || "用户"}
                                 activeTags={activeTimelineTags}
                                 onEntryTap={setStActionId}
+                                onClusterDelete={setStConfirmDeleteIds}
                                 resetKey={`${selectedCharId}:short`}
                             />
                         </>
@@ -847,6 +858,7 @@ export function MemoryBankPage({
                                 userName={resolveUserIdentity(selectedCharId!)?.name || "用户"}
                                 activeTags={activeTimelineTags}
                                 onEntryTap={setStActionId}
+                                onClusterDelete={setStConfirmDeleteIds}
                                 resetKey={`${selectedCharId}:shared`}
                             />
                         )
@@ -1074,6 +1086,18 @@ export function MemoryBankPage({
                         confirmLabel="删除"
                         onConfirm={() => handleDeleteShortTerm(stConfirmDeleteId)}
                         onCancel={() => setStConfirmDeleteId(null)}
+                    />
+                )}
+
+                {stConfirmDeleteIds && (
+                    <ConfirmDialog
+                        title="让他忘掉这一整段？"
+                        message={`这一段 ${stConfirmDeleteIds.length} 条他都不会再记得，聊天记录里还在。`}
+                        icon={AlertCircle}
+                        variant="danger"
+                        confirmLabel="删除"
+                        onConfirm={() => handleDeleteShortTermCluster(stConfirmDeleteIds)}
+                        onCancel={() => setStConfirmDeleteIds(null)}
                     />
                 )}
 

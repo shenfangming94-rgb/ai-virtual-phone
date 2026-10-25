@@ -514,7 +514,7 @@
     const ph = it.photo;
     const photo = !ph ? "" : ph.ref
       ? `<img class="ph-img" data-ref="${esc(ph.ref)}" ${IMG[ph.ref] ? `src="${IMG[ph.ref]}"` : ""} alt="">`
-      : `<div class="ph-text">${esc(ph.desc || "一张照片")}${ph.busy ? `<span class="ph-gen">生成中…</span>` : `<button class="ph-gen" data-gen="${it.id}">点一下生成</button>`}</div>`;
+      : `<div class="ph-text"><i class="ph-cam">${I.photo}</i><p>${esc(ph.desc || "一张照片")}</p>${ph.busy ? `<span class="ph-gen">生成中…</span>` : `<button class="ph-gen" data-gen="${it.id}">点一下生成</button>`}</div>`;
     return `${quoteHtml(it.quote)}${photo}${it.text ? `<div class="bt">${esc(it.text)}</div>` : ""}`;
   }
   function hydrateImages() {

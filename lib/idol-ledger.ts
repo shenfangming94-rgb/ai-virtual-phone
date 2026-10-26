@@ -167,7 +167,8 @@ function computeRank(node: CareerNode): MonthRank {
   save({ ...load(), levels });
   const rows = order.map((p, i) => {
     const before = prevPos.get(p.id);
-    const change = before == null ? "NEW" : before === i + 1 ? "—" : before > i + 1 ? `↑${before - i - 1}` : `↓${i + 1 - before}`;
+    // 第一次排名没得比，都写「—」；之后只有新进来的人才是 NEW
+    const change = !prev ? "—" : before == null ? "NEW" : before === i + 1 ? "—" : before > i + 1 ? `↑${before - i - 1}` : `↓${i + 1 - before}`;
     return { id: p.id, name: p.name, group: p.group, rank: i + 1, change };
   });
   const d = new Date(node.dueAt);
@@ -199,7 +200,7 @@ async function words(r: MonthRank, teacherName: string, mates: string[]): Promis
   try {
     const recent = load().entries.filter(e => e.at >= (load().months.slice(-2)[0]?.at ?? 0)).slice(-6).map(e => e.why).join("；");
     const res = await simpleLLMCall(chatConfig(), [
-      { role: "system", content: `你在写韩国练习生公司月末评价出结果那天，KakaoTalk 练习生群里的几句话。只输出 JSON：{"announce":"管理老师${teacherName}在群里发结果时说的话，一两句","comment":"${teacherName}私下给${me}的一句评语，照她这个月的表现说","reactions":[{"who":"","text":""}]}。reactions 是群里两三个人看到结果的反应，只用给定的名字，口语、短，提到${me}的名次要对得上。` },
+      { role: "system", content: `你在写韩国练习生公司月末评价出结果那天，KakaoTalk 练习生群里的几句话。只输出 JSON：{"announce":"管理老师${teacherName}在群里发结果时说的话，一两句","comment":"${teacherName}私下给${me}的一句评语，照她这个月的表现说","reactions":[{"who":"","text":""}]}。reactions 是群里两三个人看到结果的反应，只用给定的名字，口语、短，提到${me}的名次要对得上；第一次排名没有升降可说。` },
       { role: "user", content: `${me}这次第 ${r.rank} 名（共 ${r.total} 人）${r.prevRank ? `，上次第 ${r.prevRank} 名` : "，第一次排名"}。她这个月：${recent || "照常训练"}。前三名：${r.rows.slice(0, 3).map(x => x.name).join("、")}。可以说话的人：${mates.join("、") || "群里的路人"}` },
     ], { temperature: 0.85, label: "月末排名" });
     const j = JSON.parse(res.content?.match(/\{[\s\S]*\}/)?.[0] ?? "{}") as { announce?: string; comment?: string; reactions?: { who?: string; text?: string }[] };
@@ -276,7 +277,7 @@ export function overrideMyRank(month: string, rank: number): MonthRank | null {
   const prevPos = new Map(prev?.rows.map(x => [x.id, x.rank]) ?? []);
   const rows = order.map((p, i) => {
     const before = prevPos.get(p.id);
-    return { ...p, rank: i + 1, change: before == null ? "NEW" : before === i + 1 ? "—" : before > i + 1 ? `↑${before - i - 1}` : `↓${i + 1 - before}` };
+    return { ...p, rank: i + 1, change: !prev ? "—" : before == null ? "NEW" : before === i + 1 ? "—" : before > i + 1 ? `↑${before - i - 1}` : `↓${i + 1 - before}` };
   });
   const next: MonthRank = { ...r, rows, rank: want };
   next.image = imageFor(next);

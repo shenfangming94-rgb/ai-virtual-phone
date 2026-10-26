@@ -14,7 +14,7 @@ import {
 } from "./chat-storage";
 import { generateChatCompletion, flattenCompletionResult } from "./chat-engine";
 import { resolveUserIdentity } from "./settings-storage";
-import { onKakaoAccepted } from "./idol-kakao";
+import { fleshOut, needsFleshOut, onKakaoAccepted } from "./idol-kakao";
 
 export const PENDING_REPLY_PREFIX = "pending_friend_reply_";
 registerDynamicPrefix(PENDING_REPLY_PREFIX);
@@ -99,6 +99,9 @@ export async function handleAcceptFriendRequest(
     const chars = loadCharacters();
     const char = chars.find(c => c.id === characterId);
     const userName = resolveUserIdentity(characterId, "chat")?.name ?? "用户";
+
+    // 爱豆版：戏里只露过名字的人来加她，通过时先照模板把卡补全（满不满意去通讯录看）
+    if (sourcePlace && needsFleshOut(characterId)) await fleshOut(characterId).catch(() => undefined);
 
     // Re-add to contacts
     addChatContact(characterId);

@@ -16,7 +16,7 @@ import { simpleLLMCall } from "./api-helpers";
 import { loadApiConfigs, loadBindingConfig, resolveBinding, resolveUserIdentity } from "./settings-storage";
 import { composePersona, createPerson, emptyProfile, fmtDay, getProfile, saveProfile } from "./idol-people";
 import { describeTrainee, loadTraineeCard } from "./trainee-card";
-import { shiftWorldTime, setWorldTime } from "./world-clock";
+import { jumpWorld } from "./idol-reminders";
 import { saveMemoryEntry } from "./memory-storage";
 
 const KEY = "idol_scenes_v1";
@@ -109,15 +109,14 @@ export function runTimeCommand(cmd: string): string | null {
   if (m) {
     const n = parseNum(m[1]);
     if (n != null) {
-      shiftWorldTime(n * UNIT_MS[m[2]]);
-      return `过了${m[1]}${m[2]}`;
+      const stop = jumpWorld(Date.now() + n * UNIT_MS[m[2]]);
+      return stop || `过了${m[1]}${m[2]}`;
     }
   }
   const now = new Date();
   if (/^(跳到)?(明天|第二天)(早上|早晨)?/.test(t)) {
     const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1, 8, 0, 0);
-    setWorldTime(d.getTime());
-    return "到第二天早上 8 点了";
+    return jumpWorld(d.getTime()) || "到第二天早上 8 点了";
   }
   const w = t.match(/^(?:跳到)?(?:下)?(?:周|星期)([一二三四五六日天])/);
   if (w) {
@@ -125,8 +124,7 @@ export function runTimeCommand(cmd: string): string | null {
     let add = (target - now.getDay() + 7) % 7;
     if (add === 0) add = 7;
     const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() + add, 9, 0, 0);
-    setWorldTime(d.getTime());
-    return `到星期${w[1]}早上 9 点了`;
+    return jumpWorld(d.getTime()) || `到星期${w[1]}早上 9 点了`;
   }
   return null;
 }

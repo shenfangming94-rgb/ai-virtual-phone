@@ -29,18 +29,40 @@ export const COMPANIES: Company[] = [
 export const companyOf = (id?: string) => COMPANIES.find(c => c.id === id);
 
 export type Offer = { id: string; companyId: string; kind: "scout" | "audition"; at: number; message: string; place: string; status: "new" | "accepted" | "declined"; notified?: boolean };
+export type NodeKind = "audition" | "first_day" | "weekly" | "monthly" | "talk" | "makeup" | "chance" | "date" | "custom";
+/** invite = 待回复；pending = 定了还没到/没做；done = 演了或打勾；leave = 请假；absent = 缺席；declined = 不去/过期；passed = 旧数据（当缺席） */
+export type NodeStatus = "invite" | "pending" | "done" | "leave" | "absent" | "declined" | "passed";
 export type CareerNode = {
   id: string;
-  kind: "audition" | "first_day" | "weekly" | "monthly";
+  kind: NodeKind;
   title: string;
   place: string;
   premise: string;
   dueAt: number;
-  status: "pending" | "done" | "passed";
+  status: NodeStatus;
   companyId?: string;
   remindedEve?: boolean;
   remindedDue?: boolean;
+  /** 谁通知的 / 谁约的（人名） */
+  from?: string;
+  fromId?: string;
+  /** 待回复的截止时间 */
+  replyBy?: number;
+  /** 打勾写的那句、请假理由 */
+  result?: string;
+  /** 她想要的结果（考前定） */
+  wish?: string;
+  note?: string;
+  doneAt?: number;
 };
+
+/** 节点归哪个列表 */
+export function listOf(n: CareerNode): "company" | "chance" | "date" | "mine" {
+  if (n.kind === "chance") return "chance";
+  if (n.kind === "date") return "date";
+  if (n.kind === "custom") return "mine";
+  return "company";
+}
 export type Career = {
   stage: "pre" | "trainee";
   companyId?: string;
@@ -94,7 +116,7 @@ const pad = (n: number) => String(n).padStart(2, "0");
 const isoDate = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 const hhmm = (d: Date) => `${pad(d.getHours())}:${pad(d.getMinutes())}`;
 
-function addToCalendar(node: CareerNode): void {
+export function addToCalendar(node: CareerNode): void {
   try {
     const d = new Date(node.dueAt);
     const end = new Date(node.dueAt + 2 * HOUR);
@@ -105,7 +127,7 @@ function addToCalendar(node: CareerNode): void {
       endTime: end.getDate() === d.getDate() ? hhmm(end) : "23:59",
       location: node.place,
       title: node.title,
-      emoji: node.kind === "monthly" ? "📋" : node.kind === "weekly" ? "🎬" : node.kind === "audition" ? "🎤" : "🏢",
+      emoji: node.kind === "monthly" ? "📋" : node.kind === "weekly" ? "🎬" : node.kind === "audition" ? "🎤" : node.kind === "date" ? "☕" : node.kind === "custom" ? "📝" : node.kind === "chance" ? "⭐" : "🏢",
       source: "generated",
     });
   } catch { /* 日历写不进去不影响剧情 */ }
@@ -272,7 +294,8 @@ export async function completeNode(nodeId: string): Promise<string | null> {
 
 /** 去演某个节点：存一个「待开的戏」，剧情 app 打开时接着开 */
 export function requestNodeScene(node: CareerNode): void {
-  kvSet(PENDING_SCENE_KEY, JSON.stringify({ nodeId: node.id, place: node.place, premise: node.premise }));
+  const premise = node.wish ? `${node.premise}（她想要的结果：${node.wish}。照这个结果写，写得合理，要有具体的原因）` : node.premise;
+  kvSet(PENDING_SCENE_KEY, JSON.stringify({ nodeId: node.id, place: node.place, premise }));
   if (typeof window !== "undefined") {
     window.dispatchEvent(new CustomEvent("open-app", { detail: { appId: "story" } }));
     window.dispatchEvent(new Event(OPEN_SCENE_EVENT));
@@ -304,7 +327,16 @@ export function careerPromptBlock(): string {
     career.insider ? `【公司内部档案】\n${career.insider}` : "",
     career.facts.length ? `【戏里已经定下来的公司细节】\n${career.facts.slice(-30).map(f => `- ${f}`).join("\n")}` : "",
     next.length ? `【接下来的日程】${next.join("；")}` : "",
+    recentResults(career),
   ].filter(Boolean).join("\n\n");
+}
+
+/** 最近过去的日程怎么样了（演了、打勾写的、请假、缺席），世界要知道 */
+function recentResults(career: Career): string {
+  const label: Record<string, string> = { done: "完成", leave: "请假", absent: "缺席", passed: "缺席" };
+  const past = career.nodes.filter(n => label[n.status] && n.kind !== "custom").sort((a, b) => b.dueAt - a.dueAt).slice(0, 8);
+  if (!past.length) return "";
+  return `【最近的日程结果】\n${past.map(n => `- ${new Date(n.dueAt).getMonth() + 1}月${new Date(n.dueAt).getDate()}日 ${n.title}：${label[n.status]}${n.result ? `（${n.result}）` : ""}`).join("\n")}`;
 }
 
 export function addCompanyFacts(facts: string[]): void {
@@ -337,9 +369,8 @@ export function careerTick(notify: (msg: string) => void): void {
   });
   const nodes = career.nodes.map(n => {
     if (n.status !== "pending") return n;
-    if (now > n.dueAt + 12 * HOUR) { changed = true; return { ...n, status: "passed" as const }; }
-    if (!n.remindedDue && now >= n.dueAt) { notify(`⏰ 到点了：${n.title}，去「提醒事项」开这场戏`); changed = true; return { ...n, remindedDue: true, remindedEve: true }; }
-    if (!n.remindedEve && now >= n.dueAt - DAY) { notify(`📅 明天：${n.title}`); changed = true; return { ...n, remindedEve: true }; }
+    if (!n.remindedDue && now >= n.dueAt) { notify(`⏰ 到点了：${n.title}，去「提醒事项」演或者打勾`); changed = true; return { ...n, remindedDue: true, remindedEve: true }; }
+    if (!n.remindedEve && now >= n.dueAt - DAY && n.kind !== "custom") { notify(`📅 明天：${n.title}`); changed = true; return { ...n, remindedEve: true }; }
     return n;
   });
   if (changed) saveCareer({ ...career, offers, nodes });

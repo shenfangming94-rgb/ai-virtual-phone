@@ -53,7 +53,7 @@ import { CHARACTERS_UPDATED_EVENT, loadAllCharacters, saveCharacters } from "@/l
 import { WORLD_CHAR_ID, closeWorldScene, createWorldScene, ensureWorldCharacter, getSceneMeta, worldAvatar } from "@/lib/idol-world";
 import { comparePinyin, loadProfiles } from "@/lib/idol-people";
 import { fmtWorld, runTimeCommand } from "@/lib/idol-scenes";
-import { setWorldTime, shiftWorldTime } from "@/lib/world-clock";
+import { jumpWorld } from "@/lib/idol-reminders";
 import { OPEN_SCENE_EVENT, takePendingScene } from "@/lib/idol-career";
 import { PLACE_GROUPS, fullPlaceName, placeGroupLocked } from "@/lib/idol-places";
 import { maybeRunSummarization } from "@/lib/memory-summarizer";
@@ -2323,9 +2323,9 @@ export function StoryApp({ onClose }: StoryAppProps) {
                 {sceneEnd.milestone ? <p className="story-idol-text">🎉 {sceneEnd.milestone}。日程排好了，去「提醒事项」看看</p> : null}
                 <p className="story-idol-sub">接下来跳到什么时候？</p>
                 <div className="story-idol-jumps">
-                  <button type="button" onClick={() => { shiftWorldTime(3600e3); showVoiceNotice("过了 1 小时"); setSceneEnd(null); }}>过 1 小时</button>
-                  <button type="button" onClick={() => { const d = new Date(); setWorldTime(new Date(d.getFullYear(), d.getMonth(), d.getDate() + 1, 8, 0, 0).getTime()); showVoiceNotice("到第二天早上 8 点了"); setSceneEnd(null); }}>第二天早上</button>
-                  <button type="button" onClick={() => { shiftWorldTime(7 * 864e5); showVoiceNotice("过了 1 周"); setSceneEnd(null); }}>过 1 周</button>
+                  <button type="button" onClick={() => { showVoiceNotice(jumpWorld(Date.now() + 3600e3) || "过了 1 小时"); setSceneEnd(null); }}>过 1 小时</button>
+                  <button type="button" onClick={() => { const d = new Date(); showVoiceNotice(jumpWorld(new Date(d.getFullYear(), d.getMonth(), d.getDate() + 1, 8, 0, 0).getTime()) || "到第二天早上 8 点了"); setSceneEnd(null); }}>第二天早上</button>
+                  <button type="button" onClick={() => { showVoiceNotice(jumpWorld(Date.now() + 7 * 864e5) || "过了 1 周"); setSceneEnd(null); }}>过 1 周</button>
                   <button type="button" onClick={() => setSceneEnd(null)}>留在这</button>
                 </div>
               </>

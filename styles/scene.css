@@ -72,3 +72,62 @@
 .sc-primary:disabled, .sc-secondary:disabled { opacity: 0.5; }
 .sc-jumps { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .sc-jumps button { border: none; border-radius: 16px; background: #fff; padding: 12px; font-size: 15px; }
+
+/* ── 原剧情 app 里的「世界」模式：跟着剧情 app 自己的字体和颜色 ── */
+.story-idol-newface { color: #b08a3e; font-size: 0.9em; }
+.story-idol-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 16px;
+  font-family: var(--story-font, "Noto Serif SC", "Songti SC", serif);
+  font-size: calc(13px * var(--app-text-scale, 1));
+  color: var(--c-story-sub, #64748b);
+}
+.story-idol-bar > span { flex: 1; }
+.story-idol-bar button {
+  border: 1px solid var(--c-story-border, #e2e8f0);
+  background: var(--c-story-card, #fff);
+  color: var(--c-story-heading, #1e293b);
+  padding: 4px 12px;
+  font-family: inherit;
+  font-size: inherit;
+}
+.story-idol-bar button:disabled { opacity: 0.45; }
+.story-idol-dialog { font-family: var(--story-font, "Noto Serif SC", "Songti SC", serif); }
+.story-idol-text { font-size: calc(14px * var(--app-text-scale, 1)); line-height: 1.8; color: var(--c-story-heading, #1e293b); margin: 4px 0 12px; }
+.story-idol-sub { font-size: calc(12px * var(--app-text-scale, 1)); color: var(--c-story-sub, #94a3b8); margin: 2px 0 10px; line-height: 1.6; }
+.story-idol-quote { font-size: calc(14px * var(--app-text-scale, 1)); line-height: 1.8; color: var(--c-story-heading, #334155); background: var(--c-story-soft, #f8fafc); border-left: 2px solid var(--c-story-border, #cbd5e1); padding: 8px 12px; margin: 0 0 12px; }
+.story-idol-field { display: block; margin-bottom: 12px; }
+.story-idol-field > span { display: block; font-size: calc(12px * var(--app-text-scale, 1)); color: var(--c-story-sub, #64748b); margin-bottom: 6px; }
+.story-idol-field input, .story-idol-field textarea { width: 100%; border: 1px solid var(--c-story-border, #e2e8f0); background: var(--c-story-soft, #fafbfc); padding: 9px 11px; font-size: calc(14px * var(--app-text-scale, 1)); font-family: inherit; color: var(--c-story-heading, #1e293b); outline: none; resize: none; }
+.story-idol-picks { display: flex; flex-wrap: wrap; gap: 6px; }
+.story-idol-picks button { border: 1px solid var(--c-story-border, #e2e8f0); background: var(--c-story-card, #fff); padding: 5px 12px; font-family: inherit; font-size: calc(13px * var(--app-text-scale, 1)); color: var(--c-story-heading, #475569); }
+.story-idol-picks button.on { background: var(--c-story-heading, #1e293b); color: #fff; border-color: var(--c-story-heading, #1e293b); }
+.story-idol-picks small { font-size: calc(12px * var(--app-text-scale, 1)); color: var(--c-story-sub, #94a3b8); }
+.story-idol-jumps { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.story-idol-jumps button { border: 1px solid var(--c-story-border, #e2e8f0); background: var(--c-story-card, #fff); padding: 10px; font-family: inherit; font-size: calc(14px * var(--app-text-scale, 1)); color: var(--c-story-heading, #1e293b); }
+.story-idol-jumps button { border: 0; border-radius: 13px; background: rgba(148, 163, 184, 0.1); }
+.story-idol-picks button { border-radius: 12px; }
+.story-idol-field input, .story-idol-field textarea { border-radius: 12px; }
+.story-idol-bar button { border-radius: 12px; }
+/* 结束这场：跟「续写」一样的小胶囊，放在输入框右上方 */
+.story-idol-bar {
+  position: absolute;
+  right: 12px;
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 72px);
+  z-index: 10;
+  padding: 0;
+  gap: 6px;
+}
+.story-idol-bar > span { flex: none; font-size: calc(12px * var(--app-text-scale, 1)); color: var(--c-story-sub, #94a3b8); }
+.story-idol-bar button {
+  height: 26px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 13px;
+  background: var(--c-story-bubble-bg, rgba(255, 255, 255, 0.96));
+  color: var(--c-story-sub, #94a3b8);
+  box-shadow: var(--story-paper-shadow-soft);
+  font-size: calc(12px * var(--app-text-scale, 1));
+}

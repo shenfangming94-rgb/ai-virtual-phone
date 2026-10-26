@@ -49,7 +49,11 @@ import CSSSchemeBar from "@/components/ui/css-scheme-picker";
 import { Avatar } from "@/components/ui/primitives";
 import { StoryHtmlRenderer, type StoryVoiceSegment } from "@/components/ui/story-html-renderer";
 import { StorySettingsPage, STORY_DEFAULT_STATUS_RENDER, STORY_DEFAULT_THEATER_RENDER } from "@/components/story/story-settings-page";
-import { loadCharacters } from "@/lib/character-storage";
+import { CHARACTERS_UPDATED_EVENT, loadAllCharacters, saveCharacters } from "@/lib/character-storage";
+import { WORLD_CHAR_ID, closeWorldScene, createWorldScene, ensureWorldCharacter, getSceneMeta, worldAvatar } from "@/lib/idol-world";
+import { comparePinyin, loadProfiles } from "@/lib/idol-people";
+import { fmtWorld, runTimeCommand } from "@/lib/idol-scenes";
+import { setWorldTime, shiftWorldTime } from "@/lib/world-clock";
 import { maybeRunSummarization } from "@/lib/memory-summarizer";
 import { incrementEventCounter } from "@/lib/memory-storage";
 import { loadBindingConfig, loadPresets, resolveBinding, resolveUserIdentity } from "@/lib/settings-storage";
@@ -552,7 +556,21 @@ export function StoryApp({ onClose }: StoryAppProps) {
   const miniPhoneScrollRef = useRef<HTMLDivElement | null>(null);
   const autoStartedSessionIdsRef = useRef(new Set<string>());
 
-  const characters = useMemo(() => loadCharacters(), []);
+  // 爱豆小手机：角色列表跟着变（戏里冒出新面孔要马上认得），「世界」只在剧情 app 里出现
+  const [charsVersion, setCharsVersion] = useState(0);
+  useEffect(() => {
+    const bump = () => setCharsVersion((v) => v + 1);
+    window.addEventListener(CHARACTERS_UPDATED_EVENT, bump);
+    return () => window.removeEventListener(CHARACTERS_UPDATED_EVENT, bump);
+  }, []);
+  // 「世界」在挂上之后再建（在渲染里存角色会让别的组件跟着在渲染中更新）
+  useEffect(() => { ensureWorldCharacter(); }, []);
+  const characters = useMemo(() => loadAllCharacters(), [charsVersion]);
+  const [scenePeopleOpen, setScenePeopleOpen] = useState(false);
+  const [sceneHint, setSceneHint] = useState(false);
+  const [sceneNewOpen, setSceneNewOpen] = useState(false);
+  const [sceneEnd, setSceneEnd] = useState<null | "ask" | "working" | { summary: string; recorded: string[]; firstMeet: string[] }>(null);
+  const worldAvatarInputRef = useRef<HTMLInputElement | null>(null);
   const userIdentity = useMemo(
     () => resolveUserIdentity(activeCharacterId, "story") ?? resolveUserIdentity(activeCharacterId) ?? resolveUserIdentity(),
     [activeCharacterId]
@@ -572,8 +590,14 @@ export function StoryApp({ onClose }: StoryAppProps) {
     () => sessions.find((session) => session.id === activeSessionId) || null,
     [sessions, activeSessionId]
   );
+  const isWorldScene = activeGroup?.characterIds[0] === WORLD_CHAR_ID || activeCharacterId === WORLD_CHAR_ID;
+  const sceneMeta = activeGroup && isWorldScene ? getSceneMeta(activeGroup.id) : null;
+  const scenePeople = isWorldScene
+    ? (activeGroup?.characterIds ?? []).filter((id) => id !== WORLD_CHAR_ID).map((id) => characters.find((c) => c.id === id)).filter((c): c is NonNullable<typeof c> => Boolean(c))
+    : [];
+  const sceneNewFaces = scenePeople.filter((c) => sceneMeta?.newFaces.includes(c.id)).map((c) => c.name);
   const storyDisplayName = activeGroup?.name || currentCharacter?.name || "剧情";
-  const storyAvatar = ownerMainSession?.storyAvatar || currentCharacter?.avatar || "";
+  const storyAvatar = isWorldScene ? (ownerMainSession?.storyAvatar || worldAvatar()) : (ownerMainSession?.storyAvatar || currentCharacter?.avatar || "");
   const uiPrefs = currentSession?.uiPrefs || {};
   const customFontSource = uiPrefs.customFontDataUrl || uiPrefs.customFontUrl || "";
   const storyShellStyle = customFontSource
@@ -701,7 +725,7 @@ export function StoryApp({ onClose }: StoryAppProps) {
 
   useEffect(() => {
     hydrateStoryStorage().then(() => {
-      const availableCharacters = loadCharacters();
+      const availableCharacters = loadAllCharacters();
       const groups = loadStoryGroups();
       const rememberedTarget = loadStoryActiveTarget();
       const rememberedCharacterId = kvGet(STORY_ACTIVE_CHARACTER_KEY) || "";
@@ -1422,9 +1446,22 @@ export function StoryApp({ onClose }: StoryAppProps) {
     voiceSequenceIndexRef.current = segments.length;
   }, [collectStoryVoiceSegments, playStoryVoice, playingVoiceSegmentId, showVoiceNotice, uiPrefs.voiceEnabled]);
 
+  function handleIdolResult(result: { idol?: { added: string[]; closing: boolean } }) {
+    if (!result.idol) return;
+    if (result.idol.added.length) showVoiceNotice(`新面孔：${result.idol.added.join("、")}`);
+    setSceneHint(result.idol.closing);
+  }
+
   async function handleSend(userTextInput: string) {
-    const userText = userTextInput.trim();
+    let userText = userTextInput.trim();
     if (!activeSessionId || !userText || isGenerating) return;
+    if (isWorldScene) setSceneHint(false);
+    // $ 开头是跟系统说话：能办的（跳时间）直接办；其余当场外指令发给 AI，不算台词
+    if (isWorldScene && userText.startsWith("$")) {
+      const done = runTimeCommand(userText);
+      if (done) { showVoiceNotice(done); setStorageVersion((value) => value + 1); return; }
+      userText = `（场外指令，不是戏里的话）${userText.replace(/^\$\s*/, "")}`;
+    }
     const sessionId = activeSessionId;
     const characterId = activeCharacterId;
 
@@ -1457,6 +1494,7 @@ export function StoryApp({ onClose }: StoryAppProps) {
         signal: generationRun.controller.signal,
       });
       if (!isCurrentGeneration()) return;
+      handleIdolResult(result);
       const assistantMessage = pushStoryMessage({
         sessionId,
         role: "assistant",
@@ -1546,6 +1584,7 @@ export function StoryApp({ onClose }: StoryAppProps) {
       signal: generationRun.controller.signal,
     }).then((result) => {
       if (!isCurrentGeneration()) return;
+      handleIdolResult(result);
       pushStoryMessage({
         sessionId,
         role: "assistant",
@@ -1829,6 +1868,7 @@ export function StoryApp({ onClose }: StoryAppProps) {
         signal: generationRun.controller.signal,
       });
       if (!isCurrentGeneration()) return;
+      handleIdolResult(result);
       const assistantMessage = pushStoryMessage({
         sessionId, role: "assistant",
         rawContent: result.rawText, renderedContent: result.renderedText,
@@ -1999,7 +2039,7 @@ export function StoryApp({ onClose }: StoryAppProps) {
             </div>
             <div className="story-header-center" />
             <div className="story-header-right" style={{ gap: 8 }}>
-              <button className="story-top-btn" onClick={() => setQuickStoryOpen(true)} aria-label="快捷进入新剧情">
+              <button className="story-top-btn" onClick={() => setSceneNewOpen(true)} aria-label="开一场戏">
                 <PlusIcon width={16} height={16} />
               </button>
               <button className="story-top-btn" onClick={() => setCssModalOpen(true)} aria-label="页面样式">
@@ -2028,7 +2068,7 @@ export function StoryApp({ onClose }: StoryAppProps) {
             {/* ====== 顶部信息阅读卡片 ====== */}
             <div className="story-meta">
               <div className="story-meta-layout">
-                <div className="story-meta-cover">
+                <div className="story-meta-cover" onClick={isWorldScene ? () => worldAvatarInputRef.current?.click() : undefined} style={isWorldScene ? { cursor: "pointer" } : undefined}>
                   {storyAvatar ? (
                     <img src={storyAvatar} alt="cover" />
                   ) : (
@@ -2040,13 +2080,19 @@ export function StoryApp({ onClose }: StoryAppProps) {
                   )}
                 </div>
                 <div className="story-meta-body">
-                  <div className="story-meta-title">本次阅读：《 {storyDisplayName} 》</div>
+                  <div className="story-meta-title">本次阅读：《 {sceneMeta?.place || storyDisplayName} 》</div>
                   <div className="story-meta-tags">
-                    {userIdentity?.name || "我"} x {storyDisplayName}
+                    {isWorldScene
+                      ? <>{userIdentity?.name || "我"} x {scenePeople.length
+                          ? (scenePeople.length > 3 && !scenePeopleOpen
+                            ? <span role="button" onClick={() => setScenePeopleOpen(true)} style={{ cursor: "pointer" }}>{scenePeople.slice(0, 3).map((c) => c.name).join("、")} 等 {scenePeople.length} 人 ›</span>
+                            : <span role="button" onClick={() => setScenePeopleOpen(false)}>{scenePeople.map((c) => c.name).join("、")}</span>)
+                          : "还没有人"}{sceneNewFaces.length ? <span className="story-idol-newface"> · 新面孔：{sceneNewFaces.join("、")}</span> : null}</>
+                      : <>{userIdentity?.name || "我"} x {storyDisplayName}</>}
                   </div>
                   <div className="story-meta-desc">
                     {/* Character type might not have description, so we use a stylized default text */}
-                    “有些故事，在开始之前就已经写好了结局。”
+                    {isWorldScene ? fmtWorld(Date.now()) : "“有些故事，在开始之前就已经写好了结局。”"}
                   </div>
                 </div>
               </div>
@@ -2191,6 +2237,76 @@ export function StoryApp({ onClose }: StoryAppProps) {
 
       {voiceNotice ? (
         <div className="story-voice-notice" role="status">{voiceNotice}</div>
+      ) : null}
+
+      {isWorldScene && activeGroup && !sceneMeta?.ended ? (
+        <div className="story-idol-bar">
+          {sceneHint && !isGenerating ? <span>这场好像差不多了</span> : <span />}
+          <button type="button" onClick={() => setSceneEnd("ask")} disabled={isGenerating}>结束这场</button>
+          {sceneHint && !isGenerating ? <button type="button" onClick={() => setSceneHint(false)}>接着演</button> : null}
+        </div>
+      ) : null}
+      <input ref={worldAvatarInputRef} type="file" accept="image/*" hidden onChange={(event) => {
+        const file = event.target.files?.[0];
+        event.target.value = "";
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = () => {
+          const img = new Image();
+          img.onload = () => {
+            const scale = Math.min(1, 512 / Math.max(img.width, img.height));
+            const canvas = document.createElement("canvas");
+            canvas.width = Math.round(img.width * scale);
+            canvas.height = Math.round(img.height * scale);
+            canvas.getContext("2d")?.drawImage(img, 0, 0, canvas.width, canvas.height);
+            const url = canvas.toDataURL("image/jpeg", 0.88);
+            saveCharacters(loadAllCharacters().map((c) => c.id === WORLD_CHAR_ID ? { ...c, avatar: url } : c));
+            showVoiceNotice("封面换好了");
+          };
+          img.src = String(reader.result);
+        };
+        reader.readAsDataURL(file);
+      }} />
+      {sceneNewOpen ? <StorySceneNewDialog onClose={() => setSceneNewOpen(false)} onStart={(place, premise, ids) => {
+        const { groupId, session } = createWorldScene(place, premise, ids);
+        setSceneNewOpen(false);
+        setSceneHint(false);
+        setActiveGroupId(groupId);
+        setActiveCharacterId(WORLD_CHAR_ID);
+        activateStorySession(session);
+      }} /> : null}
+      {sceneEnd && activeGroup ? (
+        <div className="story-dialog-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget && sceneEnd === "ask") setSceneEnd(null); }}>
+          <section className="story-dialog story-idol-dialog" role="dialog" aria-modal="true">
+            {sceneEnd === "ask" ? (
+              <>
+                <header><strong>这场结束？</strong><button type="button" onClick={() => setSceneEnd(null)}><XMarkIcon width={16} /></button></header>
+                <p className="story-idol-text">会给在场的每个人记一笔你们之间的事，第一次见你的人写上第一印象，主要人物还会记进记忆。</p>
+                <footer><button type="button" onClick={() => setSceneEnd(null)}>再演一会儿</button><button type="button" className="story-settings-primary" onClick={() => {
+                  setSceneEnd("working");
+                  closeWorldScene(activeGroup.id, activeSessionId)
+                    .then((r) => setSceneEnd(r))
+                    .catch((error) => { showVoiceNotice(error instanceof Error ? error.message : "没记上"); setSceneEnd(null); });
+                }}>结束这场</button></footer>
+              </>
+            ) : sceneEnd === "working" ? (
+              <p className="story-idol-text">在记……</p>
+            ) : (
+              <>
+                <header><strong>记好了</strong></header>
+                {sceneEnd.recorded.length ? <p className="story-idol-sub">{sceneEnd.recorded.join("、")}各记了一笔{sceneEnd.firstMeet.length ? `；${sceneEnd.firstMeet.join("、")}是第一次见你，写上了第一印象` : ""}</p> : null}
+                {sceneEnd.summary ? <p className="story-idol-quote">{sceneEnd.summary}</p> : null}
+                <p className="story-idol-sub">接下来跳到什么时候？</p>
+                <div className="story-idol-jumps">
+                  <button type="button" onClick={() => { shiftWorldTime(3600e3); showVoiceNotice("过了 1 小时"); setSceneEnd(null); }}>过 1 小时</button>
+                  <button type="button" onClick={() => { const d = new Date(); setWorldTime(new Date(d.getFullYear(), d.getMonth(), d.getDate() + 1, 8, 0, 0).getTime()); showVoiceNotice("到第二天早上 8 点了"); setSceneEnd(null); }}>第二天早上</button>
+                  <button type="button" onClick={() => { shiftWorldTime(7 * 864e5); showVoiceNotice("过了 1 周"); setSceneEnd(null); }}>过 1 周</button>
+                  <button type="button" onClick={() => setSceneEnd(null)}>留在这</button>
+                </div>
+              </>
+            )}
+          </section>
+        </div>
       ) : null}
 
       <StoryComposer
@@ -2402,6 +2518,34 @@ export function StoryApp({ onClose }: StoryAppProps) {
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+/** 开一场戏：地点、开头、在场的人（从通讯录挑） */
+function StorySceneNewDialog({ onClose, onStart }: { onClose: () => void; onStart: (place: string, premise: string, ids: string[]) => void }) {
+  const [place, setPlace] = useState("");
+  const [premise, setPremise] = useState("");
+  const [picked, setPicked] = useState<string[]>([]);
+  const profiles = loadProfiles();
+  const people = loadAllCharacters().filter((c) => profiles[c.id]).sort((a, b) => comparePinyin(a.name, b.name));
+  return (
+    <div className="story-dialog-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
+      <section className="story-dialog story-idol-dialog" role="dialog" aria-modal="true" aria-label="开一场戏">
+        <header><strong>开一场戏</strong><button type="button" onClick={onClose}><XMarkIcon width={16} /></button></header>
+        <p className="story-idol-sub">现在是 {fmtWorld(Date.now())}</p>
+        <label className="story-idol-field"><span>地点</span><input value={place} onChange={(e) => setPlace(e.target.value)} placeholder="比如：公司地下二层练习室" /></label>
+        <label className="story-idol-field"><span>开头（可以不写）</span><textarea rows={2} value={premise} onChange={(e) => setPremise(e.target.value)} placeholder="比如：月考前一晚，大家都在加练" /></label>
+        <div className="story-idol-field"><span>在场的人（可以不选，戏里再进来）</span>
+          <div className="story-idol-picks">
+            {people.length ? people.map((c) => {
+              const on = picked.includes(c.id);
+              return <button key={c.id} type="button" className={on ? "on" : ""} onClick={() => setPicked(on ? picked.filter((x) => x !== c.id) : [...picked, c.id])}>{c.name}</button>;
+            }) : <small>通讯录里还没有人</small>}
+          </div>
+        </div>
+        <footer><button type="button" onClick={onClose}>取消</button><button type="button" className="story-settings-primary" onClick={() => onStart(place, premise, picked)}>开始</button></footer>
+      </section>
     </div>
   );
 }

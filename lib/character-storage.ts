@@ -30,7 +30,17 @@ export function generateWechatID(): string {
   return prefix + suffix;
 }
 
+/**
+ * 爱豆小手机：「世界」是剧情 app 专用的旁白角色，不进档案库、通讯录、KakaoTalk、朋友圈或任何别的 app。
+ * loadCharacters() 永远看不到它；剧情相关代码用 loadAllCharacters()。
+ */
+export const HIDDEN_WORLD_CHAR_ID = "idol_world";
+
 export function loadCharacters(): Character[] {
+  return loadAllCharacters().filter((c) => c.id !== HIDDEN_WORLD_CHAR_ID);
+}
+
+export function loadAllCharacters(): Character[] {
   if (_charsCache) return _charsCache;
   if (typeof window === "undefined") return [];
   try {
@@ -80,6 +90,11 @@ export function loadCharacters(): Character[] {
 
 export function saveCharacters(chars: Character[]): void {
   if (typeof window === "undefined") return;
+  // 别的地方拿 loadCharacters()（不含「世界」）改完存回来时，把「世界」带上，免得被删掉
+  if (!chars.some((c) => c.id === HIDDEN_WORLD_CHAR_ID)) {
+    const world = loadAllCharacters().find((c) => c.id === HIDDEN_WORLD_CHAR_ID);
+    if (world) chars = [...chars, world];
+  }
   kvSet(STORAGE_KEY, JSON.stringify(chars));
   _charsCache = null;
   window.dispatchEvent(new CustomEvent(CHARACTERS_UPDATED_EVENT));

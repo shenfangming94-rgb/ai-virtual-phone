@@ -1,4 +1,4 @@
-import { loadCharacters } from "./character-storage";
+import { loadAllCharacters as loadCharacters } from "./character-storage";
 import {
   loadBindingConfig,
   loadApiConfigs,
@@ -19,9 +19,17 @@ import { buildCalendarScheduleMarker, getCurrentCalendarScheduleForPrompt } from
 import { getWeekStartIso } from "./calendar-utils";
 import { parseStoryResponse } from "./story-parser";
 import { STORY_PARSER_VERSION } from "./story-parser";
-import { loadStoryMessages, replaceStoryMessages, resolveActiveStorySchemes, type StoryCharacterSettings, type StoryMessage } from "./story-storage";
+import { loadStorySessions, loadStoryMessages, replaceStoryMessages, resolveActiveStorySchemes, type StoryCharacterSettings, type StoryMessage } from "./story-storage";
 import type { ChatMessage } from "./chat-storage";
 import { MacroEngine } from "./macro-engine";
+import { WORLD_CHAR_ID, applySceneTags, buildWorldScenePrompt, extractSceneTags } from "./idol-world";
+
+/** 这段历史属于哪场戏（分组 id）：按会话找，同一批人开好几场也不会认错 */
+function sceneGroupIdOf(history: StoryMessage[]): string | undefined {
+  const sessionId = history[history.length - 1]?.sessionId;
+  const session = sessionId ? loadStorySessions().find((item) => item.id === sessionId) : undefined;
+  return session?.ownerType === "group" ? session.ownerId : undefined;
+}
 
 const DEFAULT_STORY_FOLD_TAGS = "think,thinking,summary,story_status,story_theater";
 const DEFAULT_STORY_CONTEXT_EXCLUDED_TAGS = "think,thinking,story_theater";
@@ -95,6 +103,8 @@ export type StoryGenerationResult = {
   promptMessages: LLMMessage[];
   model: string;
   presetName: string;
+  /** 「世界」主导的戏：这次冒出来的新面孔、是否自然收尾 */
+  idol?: { added: string[]; closing: boolean };
 };
 
 export type StoryPreviewResult = {
@@ -233,7 +243,20 @@ export async function generateStoryCompletion(
     macroEngine,
     activeTags: ["story"],
   });
+  // 「世界」主导的戏：摘掉记号，处理新面孔和时间
+  let idol: StoryGenerationResult["idol"];
+  if (characterId === WORLD_CHAR_ID) {
+    const raw = extractSceneTags(parsed.rawText);
+    const rendered = extractSceneTags(parsed.renderedText);
+    parsed.rawText = raw.text;
+    parsed.renderedText = rendered.text;
+    const groupId = sceneGroupIdOf(history);
+    const sessionId = history[history.length - 1]?.sessionId;
+    const added = groupId && sessionId ? applySceneTags(groupId, sessionId, raw.tags) : [];
+    idol = { added, closing: raw.tags.closing };
+  }
   return {
+    idol,
     rawText: parsed.rawText,
     renderedText: parsed.renderedText,
     storySummary: parsed.summaryText,
@@ -311,7 +334,9 @@ async function buildStoryPromptMessages(
   const participantCharacters = Array.from(new Set(participantIds || []))
     .map((id) => loadCharacters().find((item) => item.id === id))
     .filter((item): item is NonNullable<typeof item> => Boolean(item));
-  if (participantCharacters.length > 1) {
+  if (characterId === WORLD_CHAR_ID) {
+    messages.push({ role: "system", content: buildWorldScenePrompt(sceneGroupIdOf(history), participantIds || [WORLD_CHAR_ID]) });
+  } else if (participantCharacters.length > 1) {
     const roster = participantCharacters.map((item, index) => {
       const profile = item.briefPersona?.trim() || item.personality?.trim() || item.persona?.trim();
       return `${index + 1}. ${item.name}${profile ? `：${profile}` : ""}`;

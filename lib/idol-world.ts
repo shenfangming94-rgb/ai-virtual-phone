@@ -1,0 +1,222 @@
+/**
+ * 爱豆小手机：剧情 app 的「世界」模式。
+ *
+ * 「世界」是一个特殊角色，当剧情 app 的主角色：API、预设、文风、状态栏、正则、世界书都绑在它身上。
+ * 一场戏 = 原剧情 app 的多人分组（第一个是「世界」，后面是在场的人，分组名 = 地点）。
+ * 生成时 story-engine 给「世界」主导的戏注入：她是谁、世界时间、地点、在场每个人的完整档案、规矩和记号说明；
+ * 回复里的记号 [新人]/[时间]/[收尾] 由这里处理。
+ */
+
+import { kvGet, kvSet } from "./kv-db";
+import { HIDDEN_WORLD_CHAR_ID, loadAllCharacters as loadCharacters, saveCharacters } from "./character-storage";
+import type { Character } from "./character-types";
+import { resolveUserIdentity } from "./settings-storage";
+import { composePersona, createPerson, emptyProfile, fmtDay, getProfile, saveProfile } from "./idol-people";
+import { describeTrainee, loadTraineeCard } from "./trainee-card";
+import { shiftWorldTime } from "./world-clock";
+import { fmtWorld, parseReply } from "./idol-scenes";
+import { createOrGetStorySession, createStoryGroup, loadStoryGroups, loadStoryMessages, updateStoryGroup, updateStorySession, type StorySession } from "./story-storage";
+import { simpleLLMCall } from "./api-helpers";
+import { loadApiConfigs, loadBindingConfig, resolveBinding } from "./settings-storage";
+import { saveMemoryEntry } from "./memory-storage";
+
+export const WORLD_CHAR_ID = HIDDEN_WORLD_CHAR_ID;
+const META_KEY = "idol_scene_meta_v1";
+
+export type SceneMeta = { place: string; premise: string; startAt: number; newFaces: string[]; ended?: boolean; summary?: string };
+
+const WORLD_PERSONA = "「世界」不是一个人，是这个故事的旁白和所有配角。它负责写她身边发生的事、在场的人说的话和做的事，从不替她说话、不替她做决定。";
+
+/** 确保「世界」角色存在；没设头像时用她的头像 */
+export function ensureWorldCharacter(): Character {
+  const chars = loadCharacters();
+  const found = chars.find(c => c.id === WORLD_CHAR_ID);
+  if (found) return found;
+  const now = new Date().toISOString();
+  const world: Character = {
+    id: WORLD_CHAR_ID,
+    name: "世界",
+    avatar: resolveUserIdentity()?.avatarUrl ?? null,
+    persona: WORLD_PERSONA,
+    tags: [],
+    createdAt: now,
+    updatedAt: now,
+  };
+  saveCharacters([...chars, world]);
+  return world;
+}
+
+/** 封面用的头像：「世界」自己的头像，没有就用她的 */
+export function worldAvatar(): string {
+  const c = loadCharacters().find(x => x.id === WORLD_CHAR_ID);
+  return c?.avatar || resolveUserIdentity()?.avatarUrl || "";
+}
+
+/** 按在场名单找这场戏的分组（分组和会话的名单一直同步改） */
+export function findWorldGroupId(participantIds: string[] | undefined): string | undefined {
+  if (!participantIds?.length) return undefined;
+  const want = [...new Set(participantIds)].sort().join("|");
+  const groups = loadStoryGroups().filter(g => g.characterIds[0] === WORLD_CHAR_ID);
+  return (groups.find(g => [...new Set(g.characterIds)].sort().join("|") === want) ?? null)?.id;
+}
+
+export function isWorldGroupIds(ids: string[] | undefined): boolean {
+  return Boolean(ids?.length && ids[0] === WORLD_CHAR_ID);
+}
+
+function loadMetaAll(): Record<string, SceneMeta> {
+  try { return JSON.parse(kvGet(META_KEY) || "{}") as Record<string, SceneMeta>; } catch { return {}; }
+}
+export function getSceneMeta(groupId: string): SceneMeta | null {
+  return loadMetaAll()[groupId] ?? null;
+}
+export function saveSceneMeta(groupId: string, meta: SceneMeta): void {
+  const all = loadMetaAll();
+  all[groupId] = meta;
+  kvSet(META_KEY, JSON.stringify(all));
+}
+
+/** 开一场戏：建分组（世界 + 在场的人）和主线会话，让「世界」先写开场 */
+export function createWorldScene(place: string, premise: string, peopleIds: string[]): { groupId: string; session: StorySession } {
+  ensureWorldCharacter();
+  const name = place.trim() || "某个地方";
+  const ids = [WORLD_CHAR_ID, ...peopleIds.filter(id => id !== WORLD_CHAR_ID)];
+  // 原剧情分组至少两个人；没选人时也先把「世界」放两次以外的方式建：只有世界时照样建组
+  const group = createStoryGroup(ids.length >= 2 ? ids : [WORLD_CHAR_ID, WORLD_CHAR_ID], name);
+  if (ids.length < 2) updateStoryGroup(group.id, { characterIds: [WORLD_CHAR_ID] });
+  saveSceneMeta(group.id, { place: name, premise: premise.trim(), startAt: Date.now(), newFaces: [] });
+  const session = createOrGetStorySession(WORLD_CHAR_ID, { ownerType: "group", ownerId: group.id, participantIds: ids, branchId: "main" });
+  const opening = premise.trim()
+    ? `（开场：${premise.trim()}。写她到了这里看到的情形，写到需要她反应的地方停）`
+    : "（开场：写她到了这里看到的情形，写到需要她反应的地方停）";
+  updateStorySession(session.id, { autoStartPrompt: opening, autoStartRequestedAt: new Date().toISOString() });
+  return { groupId: group.id, session: { ...session, autoStartPrompt: opening } };
+}
+
+function whoIsShe(): string {
+  const card = loadTraineeCard();
+  if (card) return describeTrainee(card);
+  const me = resolveUserIdentity();
+  return me ? `${me.name}。${me.bio || ""}` : "一个想当爱豆的女生。";
+}
+
+/** 给「世界」主导的戏加的系统提示（文风、字数这些交给她自己的预设和剧情设置） */
+export function buildWorldScenePrompt(groupId: string | undefined, participantIds: string[]): string {
+  const meta = groupId ? getSceneMeta(groupId) : null;
+  const group = groupId ? loadStoryGroups().find(g => g.id === groupId) : null;
+  const chars = loadCharacters();
+  const people = participantIds.filter(id => id !== WORLD_CHAR_ID).map(id => chars.find(c => c.id === id)).filter((c): c is Character => Boolean(c));
+  const peopleBlock = people.map(c => `## ${c.name}\n${composePersona(getProfile(c.id)) || c.persona || "（还没写设定）"}`).join("\n\n");
+  return [
+    "# 这一场戏",
+    "这是一出以韩国娱乐圈为背景的戏，主角是「她」（用户）。你是「世界」：写旁白和除她以外所有人的言行。",
+    `【她是谁】\n${whoIsShe()}`,
+    `【时间和地点】\n现在：${fmtWorld(Date.now())}\n地点：${meta?.place || group?.name || "某个地方"}${meta?.premise ? `\n开头：${meta.premise}` : ""}`,
+    `【在场的人】${people.length ? people.map(c => c.name).join("、") : "暂时只有她"}${peopleBlock ? `\n\n${peopleBlock}` : ""}`,
+    `【规矩】
+- 不替她说话、不替她做决定、不写她的心理。
+- 只写在场的人；不在场的人可以被提到，要出场就写他进来了。
+- 有人被问到就必须回应。
+- 结果跟着她写的走，她认真做了的事不能硬说她没做好；挫折要有剧情里的具体原因。
+- 写到下一个需要她反应的地方就停。`,
+    `【记号】回复最后另起一行写（她看不到，没有就不写）：
+- 名单里没有、但这次出场并且有名字的人：[新人:名字|一句话身份]
+- 戏里过去了一段时间：[时间:+N分钟]
+- 这一场已经自然收尾：[收尾]`,
+  ].join("\n\n");
+}
+
+export type SceneTags = { newFaces: { name: string; role: string }[]; minutes: number; closing: boolean };
+
+/** 把记号从文字里摘掉，返回干净文字和记号 */
+export function extractSceneTags(text: string): { text: string; tags: SceneTags } {
+  const r = parseReply(text);
+  return { text: r.text, tags: { newFaces: r.newFaces, minutes: r.minutes, closing: r.closing } };
+}
+
+/** 处理记号：新面孔建成背景人物并拉进这场，时间往前拨。返回新加的人名 */
+export function applySceneTags(groupId: string, sessionId: string, tags: SceneTags): string[] {
+  if (tags.minutes > 0) shiftWorldTime(tags.minutes * 60e3);
+  if (!tags.newFaces.length) return [];
+  const group = loadStoryGroups().find(g => g.id === groupId);
+  if (!group) return [];
+  const meta = getSceneMeta(groupId) ?? { place: group.name, premise: "", startAt: Date.now(), newFaces: [] };
+  const ids = [...group.characterIds];
+  const added: string[] = [];
+  for (const f of tags.newFaces) {
+    if (!f.name || f.name.length > 12) continue;
+    const exist = loadCharacters().find(c => c.name === f.name && c.id !== WORLD_CHAR_ID);
+    if (exist) {
+      if (!ids.includes(exist.id)) ids.push(exist.id);
+      continue;
+    }
+    const char = createPerson(f.name, { ...emptyProfile(""), layer: "background", role: f.role, met: true, metAt: { at: Date.now(), place: meta.place } });
+    ids.push(char.id);
+    meta.newFaces.push(char.id);
+    added.push(char.name);
+  }
+  updateStoryGroup(groupId, { characterIds: ids });
+  updateStorySession(sessionId, { participantIds: ids });
+  saveSceneMeta(groupId, meta);
+  return added;
+}
+
+function chatConfig() {
+  const slot = resolveBinding(loadBindingConfig(), WORLD_CHAR_ID, "story");
+  const config = loadApiConfigs().find(c => c.id === slot.apiConfigId) ?? loadApiConfigs()[0];
+  if (!config) throw new Error("还没配置 API");
+  return config;
+}
+
+const uid = (p: string) => `${p}_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
+
+/** 这场结束：每个在场的人记一笔，第一次见的写第一印象，主要人物存长期记忆 */
+export async function closeWorldScene(groupId: string, sessionId: string): Promise<{ summary: string; recorded: string[]; firstMeet: string[] }> {
+  const group = loadStoryGroups().find(g => g.id === groupId);
+  const meta = getSceneMeta(groupId) ?? { place: group?.name || "某个地方", premise: "", startAt: Date.now(), newFaces: [] };
+  const chars = loadCharacters();
+  const present = (group?.characterIds ?? []).filter(id => id !== WORLD_CHAR_ID).map(id => chars.find(c => c.id === id)).filter((c): c is Character => Boolean(c));
+  const transcript = loadStoryMessages(sessionId)
+    .filter(m => (m.role === "user" || m.role === "assistant") && !m.rawContent.startsWith("（场外指令") && !m.rawContent.startsWith("（开场"))
+    .map(m => (m.role === "user" ? `她：${m.rawContent}` : m.renderedContent || m.rawContent))
+    .join("\n\n")
+    .slice(-12000);
+  const firstMeet = present.filter(c => !getProfile(c.id).withYou).map(c => c.name);
+  const recorded: string[] = [];
+  let summary = "";
+  if (present.length && transcript) {
+    const res = await simpleLLMCall(chatConfig(), [
+      { role: "system", content: `把这场戏记下来。只输出 JSON：{"summary":"这场戏两三句","people":[{"name":"","event":"站在这个人的角度，这场里他和她之间发生了什么，一句话；没交集就写空","impression":"只给第一次见她的人写：他对她的第一印象，一两句；其他人写空"}]}\n第一次见她的人：${firstMeet.join("、") || "无"}` },
+      { role: "user", content: `地点：${meta.place}\n在场：${present.map(c => c.name).join("、")}\n\n${transcript}` },
+    ], { temperature: 0.4, label: "剧情记账" });
+    if (!res.content) throw new Error(res.error || "AI 没回");
+    const j = JSON.parse(res.content.match(/\{[\s\S]*\}/)?.[0] ?? "{}") as { summary?: string; people?: { name?: string; event?: string; impression?: string }[] };
+    summary = String(j.summary ?? "");
+    for (const item of j.people ?? []) {
+      const c = present.find(x => x.name === item.name);
+      if (!c) continue;
+      const p = getProfile(c.id);
+      const event = String(item.event ?? "").trim();
+      const next = { ...p, met: true, metAt: p.metAt ?? { at: meta.startAt, place: meta.place } };
+      if (event) { next.events = [...p.events, { id: uid("ev"), at: meta.startAt, place: meta.place, text: event }]; recorded.push(c.name); }
+      if (!p.withYou && item.impression) next.withYou = String(item.impression);
+      saveProfile(next);
+      if (event && p.layer === "main") {
+        const now = new Date().toISOString();
+        await saveMemoryEntry({
+          id: uid(`scene_mem_${c.id}`),
+          characterId: c.id,
+          sourceApp: "story",
+          type: "long_term",
+          content: `${fmtDay(meta.startAt)}在${meta.place}：${event}`,
+          importance: 0.6,
+          createdAt: now,
+          updatedAt: now,
+          metadata: { origin: "idol_scene", groupId },
+        }).catch(() => undefined);
+      }
+    }
+  }
+  saveSceneMeta(groupId, { ...meta, ended: true, summary });
+  return { summary, recorded, firstMeet: firstMeet.filter(n => recorded.includes(n)) };
+}

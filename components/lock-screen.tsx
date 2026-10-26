@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from "react";
-import { Delete } from "lucide-react";
 
 import { LOCK_CHANGED_EVENT, LOCK_NOW_EVENT, loadLock, loadLockWallpaper, lunarLabel, saveLock } from "@/lib/lock-screen";
 import { subscribeWorldClock } from "@/lib/world-clock";
@@ -123,7 +122,7 @@ export function LockScreen({ wallpaperStyle }: { wallpaperStyle?: CSSProperties 
               <i />
             </button>
             <button type="button" className="lock-round" aria-label="相机" onClick={e => e.stopPropagation()}>
-              <svg width="24" height="19" viewBox="0 0 24 19" fill="currentColor"><path d="M8 1h8l2 3h3a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h3z" /><circle cx="12" cy="10.5" r="4" fill="rgba(0,0,0,.45)" /></svg>
+              <svg width="24" height="19" viewBox="0 0 24 19" fill="currentColor" fillRule="evenodd"><path d="M8 1h8l2 3h3a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h3zM12 6.5a4 4 0 1 0 0 8a4 4 0 1 0 0-8z" /></svg>
             </button>
           </div>
         </div>
@@ -144,7 +143,7 @@ export function LockScreen({ wallpaperStyle }: { wallpaperStyle?: CSSProperties 
           <div className="lock-pad-foot">
             <button type="button" onClick={() => setForgot(true)}>忘记密码</button>
             {entry ? (
-              <button type="button" onClick={() => setEntry(entry.slice(0, -1))} aria-label="删除"><Delete size={22} /></button>
+              <button type="button" onClick={() => setEntry(entry.slice(0, -1))}>删除</button>
             ) : (
               <button type="button" onClick={() => setPad6(false)}>取消</button>
             )}
@@ -180,12 +179,14 @@ function WidgetFace({ now, text }: { now: Date; text: string }) {
         <span>{EN_WEEK[now.getDay()]} {EN_MONTH[now.getMonth()]} {now.getDate()}</span>
       </div>
       <div className="lock-widget-row">
-        <div className="lock-widget-text">{text || "今天也要好好练习"}</div>
-        <div className="lock-widget-day">
-          <b>{pad(now.getDate())}</b>
-          <span>{lunarLabel(now)}</span>
+        <div className="lock-widget-glass lock-widget-left">
+          <div className="lock-widget-text">{text || "今天也要好好练习"}</div>
+          <div className="lock-widget-day">
+            <b>{pad(now.getDate())}</b>
+            <span>{lunarLabel(now)}</span>
+          </div>
         </div>
-        <div className="lock-widget-cal">
+        <div className="lock-widget-glass lock-widget-cal">
           {["日", "一", "二", "三", "四", "五", "六"].map(w => <i key={w} className="is-head">{w}</i>)}
           {days.map(d => (
             <i key={d.getTime()} className={d.toDateString() === now.toDateString() ? "is-today" : ""}>

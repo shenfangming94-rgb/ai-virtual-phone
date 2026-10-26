@@ -16,7 +16,7 @@ import {
     type FriendRequest,
 } from "@/lib/friend-request-storage";
 import { handleAcceptFriendRequest, triggerRejectReaction } from "@/lib/friend-request-engine";
-import { addByKakaoId, findByKakaoId } from "@/lib/idol-kakao";
+import { addByKakaoId, findByKakaoId, fleshOut, needsFleshOut } from "@/lib/idol-kakao";
 import { PageShell } from "@/components/ui/page-shell";
 import { pinyin } from "pinyin-pro";
 import { kvSet } from "@/lib/kv-db";
@@ -555,8 +555,9 @@ export function ChatContactsList({ onCloseApp, onSelectSession, onSelectMascot, 
                             </div>
                             <div className="flex flex-col gap-3">
                                 <button
-                                    onClick={() => {
+                                    onClick={async () => {
                                         if (!addFromCardRef.current) {
+                                            if (needsFleshOut(addResult.id)) await fleshOut(addResult.id).catch(() => undefined);
                                             const added = addByKakaoId(addResult, greetingText);
                                             refresh();
                                             onSelectSession(added);

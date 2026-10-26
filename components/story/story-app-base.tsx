@@ -1471,8 +1471,7 @@ export function StoryApp({ onClose }: StoryAppProps) {
       result.idol.added.length ? `新面孔：${result.idol.added.join("、")}` : "",
       ...(result.idol.notes ?? []),
     ].filter(Boolean);
-    // 给了 ID 的提示多留一会儿，够她记下来（通讯录名片上也能看到）
-    if (notes.length) showVoiceNotice(notes.join("\n"), result.idol.notes?.length ? 8000 : 2600);
+    if (notes.length) showVoiceNotice(notes.join("\n"));
     setSceneHint(result.idol.closing);
   }
 

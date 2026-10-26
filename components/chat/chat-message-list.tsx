@@ -25,7 +25,6 @@ import {
 import { kvSet } from "@/lib/kv-db";
 import { ChatFallbackAvatar } from "./chat-fallback-avatar";
 import { addByKakaoId, findByKakaoId, fleshOut, myKakaoId, needsFleshOut } from "@/lib/idol-kakao";
-import { fmtDay, getProfile } from "@/lib/idol-people";
 import {
     getMascotLastPreview,
     getMascotChatSnapshot,
@@ -113,7 +112,6 @@ export function ChatMessageList({ onCloseApp, activeSession, onSelectSession, on
     const [isSendingRequest, setIsSendingRequest] = useState(false);
     const [greetingText, setGreetingText] = useState("");
     const [fleshing, setFleshing] = useState(false);
-    const [fleshError, setFleshError] = useState("");
 
     const [showUserProfile, setShowUserProfile] = useState(false);
     const [showContactPicker, setShowContactPicker] = useState(false);
@@ -383,15 +381,7 @@ export function ChatMessageList({ onCloseApp, activeSession, onSelectSession, on
                                     <button
                                         className="menu-item"
                                         onClick={() => {
-                                            const found = findByKakaoId(searchQuery);
-                                            setSearchResult(found);
-                                            if (found && needsFleshOut(found.id)) {
-                                                setFleshing(true);
-                                                setFleshError("");
-                                                fleshOut(found.id)
-                                                    .catch(e => setFleshError(e instanceof Error ? e.message : "没捏成"))
-                                                    .finally(() => setFleshing(false));
-                                            }
+                                            setSearchResult(findByKakaoId(searchQuery));
                                         }}
                                     >
                                         <div className="menu-icon">
@@ -414,7 +404,6 @@ export function ChatMessageList({ onCloseApp, activeSession, onSelectSession, on
                     )}
 
                     {searchResult && !isSendingRequest && (() => {
-                        const p = getProfile(searchResult.id);
                         const already = loadChatContacts().some(c => c.characterId === searchResult.id);
                         return (
                             <div className="page-menu">
@@ -430,43 +419,10 @@ export function ChatMessageList({ onCloseApp, activeSession, onSelectSession, on
                                         <div className="menu-label-group">
                                             <div className="ts-18 font-bold text-[var(--c-text-title)] mb-1">{searchResult.name || "UNNAMED"}</div>
                                             <div className="menu-desc">KakaoTalk ID：{searchResult.wechatID}</div>
-                                            {p.role && <div className="menu-desc">{p.role}</div>}
-                                            {p.metAt && <div className="menu-desc">{fmtDay(p.metAt.at)}在「{p.metAt.place}」认识</div>}
                                         </div>
                                     </div>
-                                    {(fleshing || fleshError || p.privateLines.length > 0) && (
-                                        <div className="menu-item !items-start">
-                                            <div className="menu-label-group">
-                                                {fleshing ? (
-                                                    <span className="menu-desc">正在想他平时是个什么样的人……</span>
-                                                ) : fleshError ? (
-                                                    <span className="menu-desc">{fleshError}</span>
-                                                ) : (
-                                                    <>
-                                                        {p.privateLines.map((l, i) => <span key={i} className="menu-desc">· {l}</span>)}
-                                                        {p.speech && <span className="menu-desc">说话：{p.speech}</span>}
-                                                    </>
-                                                )}
-                                            </div>
-                                        </div>
-                                    )}
                                 </div>
-                                {!fleshing && (fleshError || (p.layer === "background" && p.privateLines.length > 0)) && (
-                                    <button
-                                        onClick={() => {
-                                            setFleshing(true);
-                                            setFleshError("");
-                                            fleshOut(searchResult.id, true)
-                                                .catch(e => setFleshError(e instanceof Error ? e.message : "没捏成"))
-                                                .finally(() => setFleshing(false));
-                                        }}
-                                        className="ui-btn ui-btn-ghost w-full mb-3"
-                                    >
-                                        换一个
-                                    </button>
-                                )}
                                 <button
-                                    disabled={fleshing}
                                     onClick={() => {
                                         if (already) {
                                             const session = createOrGetSession(searchResult.id);
@@ -503,7 +459,14 @@ export function ChatMessageList({ onCloseApp, activeSession, onSelectSession, on
                             </div>
                             <div className="flex flex-col gap-3">
                                 <button
-                                    onClick={() => {
+                                    disabled={fleshing}
+                                    onClick={async () => {
+                                        // 戏里只露过名字的人：先照模板补全卡（悄悄的，满不满意去通讯录看），他回话才像个人
+                                        if (needsFleshOut(searchResult.id)) {
+                                            setFleshing(true);
+                                            await fleshOut(searchResult.id).catch(() => undefined);
+                                            setFleshing(false);
+                                        }
                                         const newSession = addByKakaoId(searchResult, greetingText);
                                         setSessions(loadChatSessions());
                                         onSelectSession(newSession);
@@ -514,7 +477,7 @@ export function ChatMessageList({ onCloseApp, activeSession, onSelectSession, on
                                     }}
                                     className="ui-btn ui-btn-success w-full"
                                 >
-                                    加为好友
+                                    {fleshing ? "正在加…" : "加为好友"}
                                 </button>
                                 <button
                                     onClick={() => setIsSendingRequest(false)}

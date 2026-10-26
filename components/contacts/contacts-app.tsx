@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ChevronLeft, ChevronRight, Mail, MessageCircle, Phone, Plus, Search, Sparkles, Trash2, Video, X } from "lucide-react";
-import { myKakaoId, setMyKakaoId } from "@/lib/idol-kakao";
+import { fleshOut, myKakaoId, setMyKakaoId } from "@/lib/idol-kakao";
 
 import { loadCharacters, CHARACTERS_UPDATED_EVENT } from "@/lib/character-storage";
 import type { Character } from "@/lib/character-types";
@@ -425,6 +425,18 @@ function CardView({ data, id, onBack, onEdit, onNotice }: { data: Data; id: stri
     }
   };
 
+  const flesh = async () => {
+    setBusy(true);
+    try {
+      await fleshOut(id);
+      onNotice?.("补好了，不满意可以在下面照方向改");
+    } catch (e) {
+      onNotice?.(e instanceof Error ? e.message : "没补成");
+    } finally {
+      setBusy(false);
+    }
+  };
+
   return (
     <div className="ct-card" style={{ "--ct-tint": color } as React.CSSProperties}>
       <div className="ct-card-bg" />
@@ -459,6 +471,16 @@ function CardView({ data, id, onBack, onEdit, onNotice }: { data: Data; id: stri
             <div className="ct-k">公开人设</div>
             {p.publicLabels.length ? <div className="ct-chips">{p.publicLabels.map(l => <span key={l}>{l}</span>)}</div> : null}
             {p.publicText ? <div className="ct-v">{p.publicText}</div> : null}
+          </div>
+        ) : null}
+
+        {!p.privateLines.length ? (
+          <div className="ct-block">
+            <div className="ct-k">平时</div>
+            <div className="ct-v is-dim">戏里见过，还只知道名字</div>
+            <button type="button" className="ct-wide-dark" disabled={busy} onClick={() => void flesh()}>
+              <Sparkles size={16} /> {busy ? "在想…" : "照模板补全"}
+            </button>
           </div>
         ) : null}
 

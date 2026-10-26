@@ -111,7 +111,6 @@ export function applyKakaoTags(tags: KakaoTags, place: string): string[] {
     const id = validId(g.id) ? g.id.trim() : c.wechatID || genKakaoId();
     const p = getProfile(c.id);
     saveProfile({ ...p, met: true, gaveId: true, metAt: p.metAt ?? { at: Date.now(), place } }, { wechatID: id });
-    if (!isKakaoFriend(c.id)) notes.push(`${c.name} 的 KakaoTalk ID：${id}`);
   }
   if (tags.adds.length) {
     const s = load();

@@ -219,3 +219,4 @@
 .lock-widget-text { text-decoration: none; }
 .lock-widget-cal { align-content: center; }
 .lock-keys + .lock-pad-foot button, .lock-pad-foot button { font-size: 17px; }
+.lock-widget-head { font-size: 22px; gap: 20px; margin-top: 6px; }

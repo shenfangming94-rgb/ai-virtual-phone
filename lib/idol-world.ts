@@ -8,6 +8,7 @@
  */
 
 import { kvGet, kvSet } from "./kv-db";
+import { loadChatContacts } from "./chat-storage";
 import { HIDDEN_WORLD_CHAR_ID, loadAllCharacters as loadCharacters, saveCharacters } from "./character-storage";
 import type { Character } from "./character-types";
 import { resolveUserIdentity } from "./settings-storage";
@@ -115,7 +116,7 @@ export function buildWorldScenePrompt(groupId: string | undefined, participantId
     careerPromptBlock(),
     `【时间和地点】\n现在：${fmtWorld(Date.now())}\n地点：${meta?.place || group?.name || "某个地方"}${meta?.premise ? `\n开头：${meta.premise}` : ""}`,
     `【在场的人】${people.length ? people.map(c => c.name).join("、") : "暂时只有她"}${peopleBlock ? `\n\n${peopleBlock}` : ""}`,
-    meta?.open ? mightMeetBlock(participantIds) : "",
+    meta?.open ? mightMeetBlock(participantIds, meta.place) : "",
     `【规矩】
 - 不替她说话、不替她做决定、不写她的心理。
 - 只写在场的人；不在场的人可以被提到，要出场就写他进来了。
@@ -132,18 +133,35 @@ ${KAKAO_TAG_RULES}`,
   ].join("\n\n");
 }
 
-/** 谁在交给世界时：她认识的人都列出来，世界自己判断谁这会儿会在这里 */
-function mightMeetBlock(presentIds: string[]): string {
+/** 谁在交给世界时：她认识的人都列给世界，最相关的写详细，其余只写名字身份（人多也不漏） */
+function mightMeetBlock(presentIds: string[], place: string): string {
   const profiles = loadProfiles();
-  const lines = loadCharacters()
+  const friends = new Set(loadChatContacts().map(c => c.characterId));
+  const now = Date.now();
+  const scored = loadCharacters()
     .filter(c => c.id !== WORLD_CHAR_ID && !presentIds.includes(c.id) && profiles[c.id] && (profiles[c.id].met || profiles[c.id].layer === "main"))
-    .slice(0, 40)
     .map(c => {
       const p = profiles[c.id];
       const last = p.events[p.events.length - 1];
-      return `- ${c.name}（${p.role || p.group || "身份没写"}）${p.privateLines.length ? `：${p.privateLines.slice(0, 2).join("；")}` : ""}${last ? `。最近：${last.text}` : ""}`;
-    });
-  return `【可能碰上的人】这里有谁交给你定：按现在几点、这是什么地方、她的日程，以及每个人的身份和习惯，判断这会儿谁合理会在这里。可以是下面的人，也可以是没名字的路人或新面孔，也可以没人。不要为了凑人硬塞。${lines.length ? `\n${lines.join("\n")}` : "\n（她还谁都不认识）"}`;
+      const days = last ? (now - last.at) / 864e5 : 999;
+      let score = 0;
+      if (p.events.some(e => e.place && place && (e.place.includes(place) || place.includes(e.place)))) score += 40;
+      if (p.metAt?.place && place && (p.metAt.place.includes(place) || place.includes(p.metAt.place))) score += 20;
+      score += Math.max(0, 30 - days);
+      if (p.layer === "main") score += 15;
+      if (friends.has(c.id)) score += 10;
+      score += Math.min(p.events.length, 10);
+      return { c, p, last, score };
+    })
+    .sort((x, y) => y.score - x.score);
+  const detail = scored.slice(0, 25).map(({ c, p, last }) =>
+    `- ${c.name}（${p.role || p.group || "身份没写"}）${p.privateLines.length ? `：${p.privateLines.slice(0, 2).join("；")}` : ""}${last ? `。最近：${last.text}` : ""}`);
+  const rest = scored.slice(25).map(({ c, p }) => `${c.name}（${p.role || p.group || "身份没写"}）`);
+  return [
+    "【可能碰上的人】这里有谁交给你定：按现在几点、这是什么地方、她的日程，以及每个人的身份和习惯，判断这会儿谁合理会在这里。可以是下面的人，也可以是没名字的路人或新面孔，也可以没人。不要为了凑人硬塞。",
+    detail.length ? detail.join("\n") : "（她还谁都不认识）",
+    rest.length ? `她还认识：${rest.join("、")}` : "",
+  ].filter(Boolean).join("\n");
 }
 
 export type SceneTags = { newFaces: { name: string; role: string }[]; minutes: number; closing: boolean; facts: string[]; kakao: KakaoTags };

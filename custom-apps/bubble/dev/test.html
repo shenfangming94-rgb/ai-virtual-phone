@@ -307,7 +307,7 @@ svg { display: block; }
 (function () {
   "use strict";
   const api = window.AiPhone || window.AiPhoneApp;
-  const VERSION = "0.1.12";
+  const VERSION = "0.1.13";
 
   // ───────────────────────── 工具 ─────────────────────────
   const $ = (sel, root) => (root || document).querySelector(sel);
@@ -360,7 +360,16 @@ svg { display: block; }
   async function dbDelete(c, id) { try { await api.db.delete(c, id); } catch (e) { console.warn(e); } }
   let metaTimer = null;
   function saveMeta() { clearTimeout(metaTimer); metaTimer = setTimeout(() => dbUpsert(COL.meta, S.meta).catch(e => console.warn(e)), 250); }
-  const saveRoom = r => dbUpsert(COL.rooms, r).catch(e => console.warn(e));
+  // 同一行的保存排队：两次同时到的话宿主都以为没有这行，会各建一行
+  const saveQueue = new Map();
+  function queued(c, row) {
+    const k = c + ":" + row.id;
+    const next = (saveQueue.get(k) || Promise.resolve()).then(() => dbUpsert(c, row)).catch(e => console.warn(e));
+    saveQueue.set(k, next);
+    next.then(() => { if (saveQueue.get(k) === next) saveQueue.delete(k); });
+    return next;
+  }
+  const saveRoom = r => queued(COL.rooms, r);
 
   async function loadAll() {
     const identity = await api.user.getProfile({}).catch(() => null);
@@ -398,6 +407,25 @@ svg { display: block; }
     const ev = uid("ev");
     api.memory.addTimeline({ characterId: charId, appLabel: "bubble", detail: "bubble", summary, appEventId: ev }).catch(e => console.warn(e));
     return ev;
+  }
+  /** 她说的话写进了谁的记忆：挂在她那条上，改/删的时候能找回去 */
+  function linkMem(items, ev, charId, sum) {
+    if (!ev) return;
+    items.forEach(i => { i.mems = [...(i.mems || []).filter(x => x.ev !== ev), { ev, charId, sum }]; });
+  }
+  /** 改/删她的话：每条挂着的记忆删掉，换成新内容重记（同一条记忆挂着的其他话一起更新） */
+  function refreshHerMems(it, oldText, newText) {
+    if (!it.mems || !it.mems.length) return false;
+    const all = S.rooms.flatMap(r => r.items);
+    for (const m of it.mems) {
+      if (api.memory && api.memory.deleteTimeline) api.memory.deleteTimeline({ characterId: m.charId, appEventId: m.ev }).catch(e => console.warn(e));
+      const sum = m.sum.split(`「${oldText}」`).join(newText ? `「${newText}」` : "");
+      const ev = remember(m.charId, sum);
+      for (const i of all) for (const x of i.mems || []) if (x.ev === m.ev) { x.ev = ev; x.sum = sum; }
+      for (const i of all) if (i.ev === m.ev) { i.ev = ev; i.evSum = sum; }
+    }
+    S.rooms.forEach(r => { if (r.items.some(i => (i.mems || []).length || i.ev)) saveRoom(r); });
+    return true;
   }
 
   // ───────────────────────── 提示 ─────────────────────────
@@ -445,7 +473,10 @@ svg { display: block; }
     S.debug = [{ at: nowIso(), ...entry, text: String(entry.text || "").slice(0, 6000) }, ...S.debug].slice(0, 10);
     dbUpsert(COL.meta, { id: "debug_log", entries: S.debug }).catch(() => {});
   }
-  const FAN_MOOD = "粉丝绝对不能接受爱豆谈恋爱：嗅到一点恋爱苗头就紧张、否认、生气、阴阳、喊着要脱粉，不会祝福。";
+  // 粉丝是来爱爱豆的；恋爱只在有明显证据时才炸，没证据时偶尔（掷骰子）放一条捕风捉影
+  const FAN_MOOD = () => "粉丝是来爱爱豆的：大多是开心、尖叫、心疼、想念、接梗、聊自己的日常。粉丝接受不了爱豆谈恋爱，泡泡里有明显的恋爱证据才会怀疑，那时会紧张、阴阳、喊脱粉。"
+    + (Math.random() < 0.2 ? "这次没有明显证据的话，可以有一条粉丝大惊小怪地捕风捉影，其他人不跟。" : "这次没有明显证据的话，不许有任何一条怀疑恋爱。");
+  const HER_FANS = "粉丝的回复要跟着她泡泡里的具体内容走；她问了问题，大多数粉丝认真回答，带上自己的事。";
   const isPublic = charId => (S.meta.publicWith || []).includes(charId);
   const LOVE_RULE = (charId, who) => isPublic(charId)
     ? `你们的恋情已经公开了，可以大方一点，但粉丝大多还是接受不了。`
@@ -501,7 +532,7 @@ svg { display: block; }
       recent ? `你最近发过的泡泡：\n${recent}` : "这是你第一次在这个泡泡房发泡泡。",
       mixed.length ? `粉丝刚发来的回复（随便挑了几条）：\n${mixed.map(t => `- ${t}`).join("\n")}` : "",
       `【恋爱】${LOVE_RULE(room.charId, herName())}`,
-      `【粉丝】${FAN_MOOD}`, NO_HER(),
+      `【粉丝】${FAN_MOOD()}`, NO_HER(),
       opts.hint ? `【这次重写】上一版不满意，这次照这个要求写：${opts.hint}` : "",
       (() => { const pb = S.plaza.find(x => x.board === room.charId); const hotP = pb ? pb.posts.filter(p => p.by !== "him").slice(0, 3) : []; return hotP.length && Math.random() < 0.3 ? `【粉丝广场】你偶尔会看一眼自己的粉丝广场，最近在聊：${hotP.map(p => `「${p.text.slice(0, 40)}」`).join("")}。一般明星不太当回事，泡泡里不用提；除非事情闹得很大，才可能顺口回应一下。` : ""; })(),
       opts.direction ? `【这次的情况】${opts.direction}` : "",
@@ -526,15 +557,35 @@ svg { display: block; }
     const evSum = `你在 bubble（粉丝通讯 app）上以爱豆「${name}」的身份给粉丝发了泡泡：${bubbles.map(b => `「${b.text}${b.photo ? `［照片：${b.photo.desc}］` : ""}」`).join("")}。${hers.length ? `${herName()}用粉丝账号回过你：${hers.map(t => `「${t}」`).join("")}${room.known ? "（你知道是她）" : "（你不知道是她）"}。` : ""}`;
     const ev = remember(room.charId, evSum);
     const batch = uid("bt");
-    room.items.slice(-bubbles.length).forEach(it => { it.ev = ev; it.evChar = room.charId; it.evSum = evSum; it.batch = batch; it.ropt = { sent: hers, wantPhoto: !!opts.wantPhoto }; });
+    room.items.slice(-bubbles.length).forEach(it => { it.ev = ev; it.evChar = room.charId; it.evSum = evSum; it.batch = batch; it.ropt = { sent: hers, sentIds: opts.sentIds, wantPhoto: !!opts.wantPhoto }; });
+    if (hers.length) linkMem(room.items.filter(i => i.by === "me" && (opts.sentIds || []).includes(i.id)), ev, room.charId, evSum);
     room.lastAt = nowIso(); saveRoom(room);
   }
+
+  /** 她发的相册照片没写描述：借一个角色的识图客观看一遍，存成 photo.seen，每张只看一次 */
+  async function seePhotos(room, items) {
+    const ch = S.chars[0]; if (!ch) return;
+    let changed = false;
+    for (const it of items) {
+      const ph = it.photo; if (!ph || !ph.ref || ph.desc || ph.seen) continue;
+      try {
+        const g = await api.media.get({ ref: ph.ref }); if (!g || !g.dataUrl) continue;
+        const r = await api.ai.generate({ characterId: ch.id, appTags: ["nox_bubble", "vision"], instruction: "这一轮不扮演任何人，只做一件事：用一两句话客观描述上面这张图片里有什么（人物穿着、物品、场景、文字、氛围），不评价、不加戏、不要任何格式，直接输出描述。", appMessages: [{ role: "user", content: "（要描述的图片）", image: g.dataUrl }] });
+        const t = String((r && r.text) || "").replace(/^[\s"「]+|[\s"」]+$/g, "").slice(0, 200);
+        logAi({ label: "看照片", ok: true, text: t });
+        if (t) { ph.seen = t; changed = true; }
+      } catch (e) { logAi({ label: "看照片", ok: false, error: String((e && e.message) || e) }); }
+    }
+    if (changed) saveRoom(room);
+  }
+  const photoText = ph => ph.desc || ph.seen || "一张照片";
 
   // 我的泡泡房：粉丝回一波，偷偷订阅的他可能混进来
   async function fanWave() {
     const room = myRoom();
+    await seePhotos(room, room.items.filter(i => i.by === "me").slice(-6));
     const mine = room.items.filter(i => i.by === "me").slice(-6);
-    const mineText = mine.map(i => `- ${i.quote ? `（引用了「${i.quote}」）` : ""}${i.text}${i.photo ? `［照片：${i.photo.desc || "一张照片"}］` : ""}${i.sticker ? `［表情包：${i.sticker.name}］` : ""}`).join("\n");
+    const mineText = mine.map(i => `- ${i.quote ? `（引用了「${i.quote}」）` : ""}${i.text}${i.photo ? `［照片：${photoText(i.photo)}］` : ""}${i.sticker ? `［表情包：${i.sticker.name}］` : ""}`).join("\n");
     const secret = S.meta.secret.filter(id => charById(id));
     const lastHim = {}; room.items.forEach(i => { if (i.by === "him") lastHim[i.charId] = i.at; });
     const him = secret.find(id => Math.random() < 0.45 && (!lastHim[id] || Date.now() - new Date(lastHim[id]).getTime() > 20 * 60e3)) || null;
@@ -549,8 +600,8 @@ svg { display: block; }
         `【你】${herName()}（艺名「${myStage()}」）也是爱豆。你偷偷订阅了她的泡泡，用的是一个普通粉丝账号，别的粉丝不知道是你；她看得到是你。你们现实里的关系按你的记忆来。`,
         head,
         `【恋爱】${LOVE_RULE(him, "她")}`,
-        `【粉丝】${FAN_MOOD}`, NO_HER(),
-        (mine.length ? "【这次】先写其他粉丝对这几条泡泡的回复，再决定你要不要也回一条。" : "【这次】她最近没发泡泡。先写其他粉丝主动发来的留言，再决定你要不要也留一条。") + "你回的话按你的人设和你们的关系，像你会对她说的话，一两句；不想回就写 无。",
+        `【粉丝】${FAN_MOOD()}`, NO_HER(),
+        (mine.length ? `【这次】先写其他粉丝对这几条泡泡的回复，再决定你要不要也回一条。${HER_FANS}` : "【这次】她最近没发泡泡。先写其他粉丝主动发来的留言，再决定你要不要也留一条。") + "你回的话按你的人设和你们的关系，像你会对她说的话，一两句；不想回就写 无。",
         "【输出】\n===粉丝回复===\n" + FAN_FORMAT + "写 8~12 条。\n===你的回复===\n内容：你的回复（不回写 无）",
       ].join("\n\n"), "粉丝回一波");
       if (!raw) return;
@@ -561,12 +612,13 @@ svg { display: block; }
         const evSum = `你用粉丝小号偷偷回了${herName()}的泡泡（bubble，她是爱豆「${myStage()}」）：${mine.length ? `她发的是${mine.slice(-2).map(i => `「${i.text}」`).join("")}，你回` : "她最近没发泡泡，你在她的泡泡房留言"}「${mineReply.slice(0, 200)}」。别的粉丝不知道是你。`;
         const ev = remember(him, evSum);
         const hi = [...room.items].reverse().find(i => i.by === "him" && i.charId === him);
-        if (hi) { hi.ev = ev; hi.evChar = him; hi.evSum = evSum; saveRoom(room); }
+        if (hi) { hi.ev = ev; hi.evChar = him; hi.evSum = evSum; }
+        linkMem(mine.slice(-2), ev, him, evSum); saveRoom(room);
       }
-      else if (mine.length) remember(him, `你刷到了${herName()}在 bubble 发的泡泡${mine.slice(-2).map(i => `「${i.text}」`).join("")}，看了没回。`);
+      else if (mine.length) { const sum = `你刷到了${herName()}在 bubble 发的泡泡${mine.slice(-2).map(i => `「${i.text}」`).join("")}，看了没回。`; linkMem(mine.slice(-2), remember(him, sum), him, sum); saveRoom(room); }
       if (hc) S.lastHimName = hc.name;
     } else {
-      raw = await plainGen([head, `【粉丝】${FAN_MOOD}`, NO_HER(), (mine.length ? "【这次】写粉丝们对这几条泡泡的回复。" : "【这次】写粉丝们主动发来的留言。"), "【输出】\n===粉丝回复===\n" + FAN_FORMAT + "写 8~12 条。"].join("\n\n"), "粉丝回一波");
+      raw = await plainGen([head, `【粉丝】${FAN_MOOD()}`, NO_HER(), (mine.length ? `【这次】写粉丝们对这几条泡泡的回复。${HER_FANS}` : "【这次】写粉丝们主动发来的留言。"), "【输出】\n===粉丝回复===\n" + FAN_FORMAT + "写 8~12 条。"].join("\n\n"), "粉丝回一波");
       if (!raw) return;
       pushFans(room, parseFans(blockOf(raw, "粉丝回复") || raw), null);
     }
@@ -588,7 +640,7 @@ svg { display: block; }
     if (!b) { b = { id: `plaza_${S.identity.id}_${key}`, scope: S.identity.id, board: key, posts: [] }; S.plaza.push(b); }
     return b;
   }
-  const savePlaza = b => dbUpsert(COL.plaza, b).catch(e => console.warn(e));
+  const savePlaza = b => queued(COL.plaza, b);
   const boardName = key => key === "me" ? myStage() : stageName(S.rooms.find(r => r.kind === "char" && r.charId === key));
   /** 这个广场能看到的东西：爱豆发的泡泡，和被引用的那几句（不带 ID 名字） */
   function visibleBubbles(key) {
@@ -596,7 +648,7 @@ svg { display: block; }
     if (!room) return [];
     return room.items.filter(i => (key === "me" ? i.by === "me" : i.by === "char")).slice(-10);
   }
-  const bubbleLine = i => `${hm(i.at)} ${i.quote ? `（引用了一条粉丝回复「${i.quote}」）` : ""}${i.text}${i.photo ? `［照片：${i.photo.desc || "一张照片"}］` : ""}`;
+  const bubbleLine = i => `${hm(i.at)} ${i.quote ? `（引用了一条粉丝回复「${i.quote}」）` : ""}${i.text}${i.photo ? `［照片：${photoText(i.photo)}］` : ""}`;
   /** 他是不是爱豆：在 bubble 里有自己的泡泡房 */
   const isIdol = charId => S.rooms.some(r => r.kind === "char" && r.charId === charId);
   const PLAZA_RULE = "【广场是什么】bubble 的粉丝广场：粉丝自己发帖讨论爱豆。粉丝只看得到爱豆发的泡泡；粉丝回复别人看不到，只有被爱豆引用的那句会出现在泡泡里，而且不显示是谁发的。说到爱豆时只能根据泡泡、被引用的句子和帖子里的内容，不能编出别人看不到的东西。";
@@ -628,7 +680,7 @@ svg { display: block; }
       `【${idolName} 最近的泡泡】\n${bubbles.map(bubbleLine).join("\n")}`,
       herMain ? `【大事】爱豆「${myStage()}」本人用大号在这里发过帖：${herMain}。这件事大家一定会议论。` : "",
       recentPosts ? `【广场上已经有的帖】（不要重复）\n${recentPosts}` : "",
-      `【粉丝】${FAN_MOOD}`, NO_HER(),
+      `【粉丝】${FAN_MOOD()}`, NO_HER(),
       "【这次】写 5~7 条新帖：有讨论泡泡的、扒被引用那句是谁的（只有泡泡里真引用了才会扒）、心疼、玩梗、吐槽公司，也要有粉丝发自己的日常，但日常一定和这个爱豆沾边。大部分中文，也有韩语日语英文，外语写成「原文｜中文翻译」。",
       "【输出】每条（昵称要像这个爱豆自己的粉丝会起的，不能带别的爱豆的名字）：\n===帖子===\n昵称：\n内容：\n截图：帖子里截图的那条泡泡原文（没截图写 无）\n点赞：数字\n评论数：数字",
     ].filter(Boolean).join("\n\n"), "刷新广场");
@@ -668,7 +720,7 @@ svg { display: block; }
       `【帖子】（在爱豆「${boardName(key)}」的粉丝广场）${post.by === "me" ? `这帖是爱豆「${myStage()}」本人用大号发的！` : ""}\n${post.name}：${post.text}${post.shot ? `\n（截图了泡泡：${post.shot.quote ? `引用「${post.shot.quote}」` : ""}${post.shot.text}）` : ""}`,
       post.comments.length ? `【已有评论】\n${post.comments.slice(-10).map(c => `- ${c.name}：${c.text}`).join("\n")}` : "",
       mine ? `【要接住的】\n${mine}` : "",
-      `【粉丝】${FAN_MOOD}`, NO_HER(),
+      `【粉丝】${FAN_MOOD()}`, NO_HER(),
       "【这次】写 6~10 条新评论，可以互相吵、互相回。" + "每行一条，开头写「- 昵称：」，昵称要像这个爱豆自己的粉丝会起的，不能带别的爱豆的名字。大部分中文，也有韩语日语英文，外语写成「原文｜中文翻译」。",
     ].filter(Boolean).join("\n\n"), "看评论");
     if (!raw) return;
@@ -881,19 +933,23 @@ svg { display: block; }
     keep.forEach(i => { i.ev = ev; i.evSum = sum; });
     return true;
   }
+  /** 进过记忆、但当时没记下是哪条记忆的旧泡泡（手写的泡泡本来就没进记忆） */
+  const oldMemo = it => !it.ev && ((it.by === "char" && !it.hand) || it.by === "him");
   const pieceOf = it => it.by === "char" ? `「${it.text}${it.photo ? `［照片：${it.photo.desc}］` : ""}」` : it.by === "him" ? `你回「${it.text}」` : "";
   async function itemMenu(room, itemId) {
     const it = room.items.find(i => i.id === itemId); if (!it) return;
     const canEdit = !it.sticker && (it.text || !it.photo);
     const lastBatch = it.by === "char" && it.batch && ![...room.items].reverse().find(i => i.by === "char" && i.batch !== it.batch && room.items.indexOf(i) > room.items.indexOf(it));
-    const v = await sheet("", [...(canEdit ? [{ label: "编辑", value: "edit" }] : []), ...(lastBatch ? [{ label: "重 roll（他这一批重新发）", value: "reroll" }] : []), { label: it.ev ? "删除（他也不记得了）" : "删除", danger: true, value: "del" }]);
+    const v = await sheet("", [...(canEdit ? [{ label: "编辑", value: "edit" }] : []), ...(lastBatch ? [{ label: "重 roll（他这一批重新发）", value: "reroll" }] : []), { label: it.ev || (it.mems || []).length ? "删除（他也不记得了）" : "删除", danger: true, value: "del" }]);
     if (!v) return;
     if (v === "reroll") {
       const same = room.items.filter(i => i.batch === it.batch);
       if (it.ev && api.memory && api.memory.deleteTimeline) api.memory.deleteTimeline({ characterId: it.evChar, appEventId: it.ev }).catch(e => console.warn(e));
       const hint = await inputSheet("重 roll", "", { long: true, max: 300, ph: "想让他这次怎么改，可以不填", hint: "他这一批泡泡和记忆会删掉，按你写的重新发" });
       if (hint == null) return;
-      room.items = room.items.filter(i => !same.includes(i)); saveRoom(room); render();
+      room.items = room.items.filter(i => !same.includes(i));
+      if (it.ev) room.items.forEach(i => { if (i.mems) i.mems = i.mems.filter(x => x.ev !== it.ev); });
+      saveRoom(room); render();
       await charBubbles(room, { ...(it.ropt || {}), hint });
       S.forceBottom = true; render();
       return;
@@ -903,18 +959,19 @@ svg { display: block; }
       const t = await inputSheet("编辑", it.text, { long: true, max: 300 });
       if (t == null || t === it.text) return;
       if (!t) return toast("不能是空的，不要就删掉");
+      const oldText = it.text;
       it.text = t;
-      const changed = refreshMemory(room, it, oldPiece, pieceOf(it));
+      const changed = it.by === "me" ? refreshHerMems(it, oldText, t) : refreshMemory(room, it, oldPiece, pieceOf(it));
       saveRoom(room); render();
-      toast(changed ? "改好了，他记得的也改了" : it.by === "char" || it.by === "him" ? "改好了（这条是之前发的，他记得的那句没法跟着改）" : "改好了");
+      toast(changed ? "改好了，他记得的也改了" : oldMemo(it) ? "改好了（这条是 0.1.9 之前发的，他记得的那句没法跟着改）" : "改好了");
     } else {
-      const ok = await sheet(it.ev ? "删掉这条，他也会忘掉" : "删掉这条？", [{ label: "删除", danger: true, value: 1 }]); if (!ok) return;
+      const ok = await sheet(it.ev || (it.mems || []).length ? "删掉这条，他也会忘掉" : "删掉这条？", [{ label: "删除", danger: true, value: 1 }]); if (!ok) return;
       const idx = room.items.indexOf(it);
       if (it.fans) { const prev = [...room.items.slice(0, idx)].reverse().find(i => i.by === it.by && i.ev && i.ev === it.ev); if (prev) { prev.fans = it.fans; prev.fanN = it.fanN; } }
       room.items.splice(idx, 1);
-      const changed = refreshMemory(room, it, oldPiece, "");
+      const changed = it.by === "me" ? refreshHerMems(it, it.text, "") : refreshMemory(room, it, oldPiece, "");
       saveRoom(room); render();
-      toast(changed ? "删掉了，他也不记得了" : it.by === "char" || it.by === "him" ? "删掉了（这条是之前发的，他记得的那句没法跟着删）" : "删掉了");
+      toast(changed ? "删掉了，他也不记得了" : oldMemo(it) ? "删掉了（这条是 0.1.9 之前发的，他记得的那句没法跟着删）" : "删掉了");
     }
   }
   /** 点照片：看完整描述 / 大图，改描述，生成或重新生成 */
@@ -1135,11 +1192,12 @@ svg { display: block; }
       case "flush": {
         const sent = room.pending.map(p => p.text);
         const base = Date.now();
-        room.pending.forEach((p, i) => room.items.push({ id: uid("m"), by: "me", text: p.text, at: new Date(base + i * 500).toISOString() }));
+        const sentIds = room.pending.map(() => uid("m"));
+        room.pending.forEach((p, i) => room.items.push({ id: sentIds[i], by: "me", text: p.text, at: new Date(base + i * 500).toISOString() }));
         const lastChar = [...room.items].reverse().find(i => i.by === "char");
         if (lastChar) { lastChar.fans = [...(lastChar.fans || []), ...sent.map(t => ({ t, me: true }))]; lastChar.fanN = (lastChar.fanN || 0) + sent.length; }
         room.pending = []; saveRoom(room); S.forceBottom = true; render();
-        await charBubbles(room, { sent, direction: room.direction }); room.direction = ""; saveRoom(room); S.forceBottom = true; return render();
+        await charBubbles(room, { sent, sentIds, direction: room.direction }); room.direction = ""; saveRoom(room); S.forceBottom = true; return render();
       }
       case "switch": {
         const rooms = S.rooms.filter(r => r.kind === "char" && r !== room && charById(r.charId));
@@ -1155,7 +1213,7 @@ svg { display: block; }
       }
       case "handwrite": {
         const t = await inputSheet(`替 ${stageName(room)} 写一条泡泡`, "", { long: true, max: 300 });
-        if (t) { room.items.push({ id: uid("b"), by: "char", text: t, at: nowIso() }); room.lastAt = nowIso(); saveRoom(room); S.forceBottom = true; render(); }
+        if (t) { room.items.push({ id: uid("b"), by: "char", text: t, hand: true, at: nowIso() }); room.lastAt = nowIso(); saveRoom(room); S.forceBottom = true; render(); }
         return;
       }
       case "clear": { const inp = $(".composer .ta", app()); if (inp) inp.value = ""; if (room && room.kind === "char" && room.pending.length) { room.pending = []; saveRoom(room); render(); } return; }
@@ -1186,9 +1244,11 @@ svg { display: block; }
     const room = roomById(S.view.roomId); if (!room || !text) return;
     if (room.kind === "char") { room.pending.push({ text }); saveRoom(room); return render(); }
     const q = S.quote && S.quote.roomId === room.id ? S.quote : null;
-    room.items.push({ id: uid("m"), by: "me", text, at: nowIso(), quote: q ? q.text : "" });
-    room.lastAt = nowIso(); saveRoom(room);
-    if (q && q.charId) remember(q.charId, `${herName()}在她的泡泡房（bubble，艺名「${myStage()}」）引用了你用粉丝小号回的那句「${q.text}」，回了「${text}」。所有粉丝都看得到这条，但不知道被引用的是你。`);
+    const it = { id: uid("m"), by: "me", text, at: nowIso(), quote: q ? q.text : "" };
+    room.items.push(it);
+    room.lastAt = nowIso();
+    if (q && q.charId) { const sum = `${herName()}在她的泡泡房（bubble，艺名「${myStage()}」）引用了你用粉丝小号回的那句「${q.text}」，回了「${text}」。所有粉丝都看得到这条，但不知道被引用的是你。`; linkMem([it], remember(q.charId, sum), q.charId, sum); }
+    saveRoom(room);
     S.quote = null; S.forceBottom = true; render();
   }
 

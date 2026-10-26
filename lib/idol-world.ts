@@ -17,7 +17,8 @@ import { shiftWorldTime } from "./world-clock";
 import { fmtWorld, parseReply } from "./idol-scenes";
 import { createOrGetStorySession, createStoryGroup, loadStoryGroups, loadStoryMessages, updateStoryGroup, updateStorySession, type StorySession } from "./story-storage";
 import { simpleLLMCall } from "./api-helpers";
-import { addCompanyFacts, careerPromptBlock, completeNode } from "./idol-career";
+import { addCompanyFacts, careerPromptBlock, completeNode, nodeById } from "./idol-career";
+import { KAKAO_TAG_RULES, afterNodeScene, applyKakaoTags, extractKakaoTags, genKakaoId, kakaoPromptLine, type KakaoTags } from "./idol-kakao";
 import { loadApiConfigs, loadBindingConfig, resolveBinding } from "./settings-storage";
 import { saveMemoryEntry } from "./memory-storage";
 
@@ -109,7 +110,7 @@ export function buildWorldScenePrompt(groupId: string | undefined, participantId
   return [
     "# 这一场戏",
     "这是一出以韩国娱乐圈为背景的戏，主角是「她」（用户）。你是「世界」：写旁白和除她以外所有人的言行。",
-    `【她是谁】\n${whoIsShe()}`,
+    `【她是谁】\n${whoIsShe()}\n${kakaoPromptLine()}`,
     careerPromptBlock(),
     `【时间和地点】\n现在：${fmtWorld(Date.now())}\n地点：${meta?.place || group?.name || "某个地方"}${meta?.premise ? `\n开头：${meta.premise}` : ""}`,
     `【在场的人】${people.length ? people.map(c => c.name).join("、") : "暂时只有她"}${peopleBlock ? `\n\n${peopleBlock}` : ""}`,
@@ -123,36 +124,57 @@ export function buildWorldScenePrompt(groupId: string | undefined, participantId
 - 名单里没有、但这次出场并且有名字的人：[新人:名字|一句话身份]
 - 戏里过去了一段时间：[时间:+N分钟]
 - 这一场已经自然收尾：[收尾]
-- 戏里第一次说清楚、以后要照着来的公司细节（楼层、作息、规矩、老师）：[公司:一句话]`,
+- 戏里第一次说清楚、以后要照着来的公司细节（楼层、作息、规矩、老师）：[公司:一句话]
+${KAKAO_TAG_RULES}`,
   ].join("\n\n");
 }
 
-export type SceneTags = { newFaces: { name: string; role: string }[]; minutes: number; closing: boolean; facts: string[] };
+export type SceneTags = { newFaces: { name: string; role: string }[]; minutes: number; closing: boolean; facts: string[]; kakao: KakaoTags };
 
 /** 把记号从文字里摘掉，返回干净文字和记号 */
 export function extractSceneTags(text: string): { text: string; tags: SceneTags } {
-  const r = parseReply(text);
-  return { text: r.text, tags: { newFaces: r.newFaces, minutes: r.minutes, closing: r.closing, facts: r.facts } };
+  const k = extractKakaoTags(text);
+  const r = parseReply(k.text);
+  return { text: r.text, tags: { newFaces: r.newFaces, minutes: r.minutes, closing: r.closing, facts: r.facts, kakao: k.tags } };
 }
 
-/** 处理记号：新面孔建成背景人物并拉进这场，时间往前拨。返回新加的人名 */
-export function applySceneTags(groupId: string, sessionId: string, tags: SceneTags): string[] {
+/** 处理记号：新面孔建成背景人物并拉进这场，时间往前拨，交换 KakaoTalk。返回新加的人名和要给她看的提示 */
+export function applySceneTags(groupId: string, sessionId: string, tags: SceneTags): { added: string[]; notes: string[] } {
   if (tags.minutes > 0) shiftWorldTime(tags.minutes * 60e3);
   if (tags.facts.length) addCompanyFacts(tags.facts);
-  if (!tags.newFaces.length) return [];
+  const group = loadStoryGroups().find(g => g.id === groupId);
+  if (!group) return { added: [], notes: [] };
+  const added = addFaces(group.id, sessionId, tags.newFaces);
+  // 新面孔先建好，再处理给号 / 加你（名字对得上）
+  const place = getSceneMeta(groupId)?.place || group.name;
+  const notes = applyKakaoTags(tags.kakao, place);
+  // 给号 / 加你里提到、名单外的人也拉进这场
+  const names = [...tags.kakao.gives.map(g => g.name), ...tags.kakao.adds.map(a => a.name)];
+  const extra = loadCharacters().filter(c => names.includes(c.name) && c.id !== WORLD_CHAR_ID).map(c => c.id);
+  const now = loadStoryGroups().find(g => g.id === groupId)?.characterIds ?? [];
+  const missing = extra.filter(id => !now.includes(id));
+  if (missing.length) {
+    updateStoryGroup(groupId, { characterIds: [...now, ...missing] });
+    updateStorySession(sessionId, { participantIds: [...now, ...missing] });
+  }
+  return { added, notes };
+}
+
+function addFaces(groupId: string, sessionId: string, faces: SceneTags["newFaces"]): string[] {
+  if (!faces.length) return [];
   const group = loadStoryGroups().find(g => g.id === groupId);
   if (!group) return [];
   const meta = getSceneMeta(groupId) ?? { place: group.name, premise: "", startAt: Date.now(), newFaces: [] };
   const ids = [...group.characterIds];
   const added: string[] = [];
-  for (const f of tags.newFaces) {
+  for (const f of faces) {
     if (!f.name || f.name.length > 12) continue;
     const exist = loadCharacters().find(c => c.name === f.name && c.id !== WORLD_CHAR_ID);
     if (exist) {
       if (!ids.includes(exist.id)) ids.push(exist.id);
       continue;
     }
-    const char = createPerson(f.name, { ...emptyProfile(""), layer: "background", role: f.role, met: true, metAt: { at: Date.now(), place: meta.place } });
+    const char = createPerson(f.name, { ...emptyProfile(""), layer: "background", role: f.role, met: true, metAt: { at: Date.now(), place: meta.place } }, null, genKakaoId());
     ids.push(char.id);
     meta.newFaces.push(char.id);
     added.push(char.name);
@@ -220,6 +242,8 @@ export async function closeWorldScene(groupId: string, sessionId: string): Promi
     }
   }
   saveSceneMeta(groupId, { ...meta, ended: true, summary });
+  const node = meta.nodeId ? nodeById(meta.nodeId) : undefined;
   const milestone = meta.nodeId ? await completeNode(meta.nodeId) : null;
+  await afterNodeScene(node, present.map(c => c.id), meta.place).catch(() => undefined);
   return { summary, recorded, firstMeet: firstMeet.filter(n => recorded.includes(n)), ...(milestone ? { milestone } : {}) };
 }

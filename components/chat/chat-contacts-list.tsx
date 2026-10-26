@@ -16,6 +16,7 @@ import {
     type FriendRequest,
 } from "@/lib/friend-request-storage";
 import { handleAcceptFriendRequest, triggerRejectReaction } from "@/lib/friend-request-engine";
+import { addByKakaoId, findByKakaoId } from "@/lib/idol-kakao";
 import { PageShell } from "@/components/ui/page-shell";
 import { pinyin } from "pinyin-pro";
 import { kvSet } from "@/lib/kv-db";
@@ -157,7 +158,7 @@ export function ChatContactsList({ onCloseApp, onSelectSession, onSelectMascot, 
     const handleAccept = async (req: FriendRequest) => {
         setIsProcessing(true);
         try {
-            const session = await handleAcceptFriendRequest(req.characterId, req.message, req.sourceGroupName);
+            const session = await handleAcceptFriendRequest(req.characterId, req.message, req.sourceGroupName, req.sourcePlace);
             setSelectedRequest(null);
             setShowRequestList(false);
             refresh();
@@ -177,7 +178,7 @@ export function ChatContactsList({ onCloseApp, onSelectSession, onSelectMascot, 
             setSelectedRequest(null);
 
             // Trigger AI's next attempt (fire-and-forget)；群里认识的人隔几天在群里再来
-            if (!req.sourceGroupId) triggerRejectReaction(req.characterId).catch(() => {});
+            if (!req.sourceGroupId && !req.sourcePlace) triggerRejectReaction(req.characterId).catch(() => {});
             refresh();
         } finally {
             setIsProcessing(false);
@@ -367,6 +368,9 @@ export function ChatContactsList({ onCloseApp, onSelectSession, onSelectMascot, 
                                                 {req.sourceGroupName && (
                                                     <div className="ts-11 text-[var(--c-icon)] truncate mt-[2px]">来自群聊「{req.sourceGroupName}」</div>
                                                 )}
+                                                {req.sourcePlace && (
+                                                    <div className="ts-11 text-[var(--c-icon)] truncate mt-[2px]">在「{req.sourcePlace}」认识</div>
+                                                )}
                                             </div>
                                         </div>
                                     );
@@ -412,6 +416,9 @@ export function ChatContactsList({ onCloseApp, onSelectSession, onSelectMascot, 
                             {selectedRequest.sourceGroupName && (
                                 <div className="ts-12 text-center text-[var(--c-icon)]">来自群聊「{selectedRequest.sourceGroupName}」</div>
                             )}
+                            {selectedRequest.sourcePlace && (
+                                <div className="ts-12 text-center text-[var(--c-icon)]">在「{selectedRequest.sourcePlace}」认识</div>
+                            )}
 
                             {/* Actions */}
                             <div className="flex gap-3 w-full">
@@ -449,7 +456,7 @@ export function ChatContactsList({ onCloseApp, onSelectSession, onSelectMascot, 
                                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--c-icon)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
                                     <input
                                         autoFocus
-                                        placeholder="微信号/手机号"
+                                        placeholder="KakaoTalk ID"
                                         value={addQuery}
                                         onChange={(e) => { setAddQuery(e.target.value); setAddResult(undefined); }}
                                         className="ui-input ui-input-inline"
@@ -464,8 +471,7 @@ export function ChatContactsList({ onCloseApp, onSelectSession, onSelectMascot, 
                                     <button
                                         className="menu-item"
                                         onClick={() => {
-                                            const found = chars.find(c => c.wechatID === addQuery.trim() || c.id === addQuery.trim());
-                                            setAddResult(found || null);
+                                            setAddResult(findByKakaoId(addQuery));
                                         }}
                                     >
                                         <div className="menu-icon">
@@ -522,7 +528,7 @@ export function ChatContactsList({ onCloseApp, onSelectSession, onSelectMascot, 
                                     </div>
                                     <div className="menu-label-group">
                                         <div className="ts-18 font-bold text-[var(--c-text-title)] mb-1">{addResult.name || "UNNAMED"}</div>
-                                        <div className="menu-desc">微信号: {addResult.wechatID || "N/A"}</div>
+                                        <div className="menu-desc">KakaoTalk ID：{addResult.wechatID || "—"}</div>
                                         <div className="menu-desc">个性签名: {addResult.persona ? addResult.persona.slice(0, 30) + (addResult.persona.length > 30 ? "..." : "") : "暂无"}</div>
                                     </div>
                                 </div>
@@ -550,6 +556,13 @@ export function ChatContactsList({ onCloseApp, onSelectSession, onSelectMascot, 
                             <div className="flex flex-col gap-3">
                                 <button
                                     onClick={() => {
+                                        if (!addFromCardRef.current) {
+                                            const added = addByKakaoId(addResult, greetingText);
+                                            refresh();
+                                            onSelectSession(added);
+                                            setIsAddFriendOpen(false);
+                                            return;
+                                        }
                                         addChatContact(addResult.id);
                                         clearRequestsForCharacter(addResult.id);
                                         dispatchFriendRequestUpdated();

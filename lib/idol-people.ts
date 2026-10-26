@@ -47,6 +47,8 @@ export type IdolProfile = {
   withYou: string;
   met: boolean;
   metAt?: { at: number; place: string };
+  /** 他把 KakaoTalk ID 给过她（没给过，名片上不显示 ID） */
+  gaveId?: boolean;
   events: PersonEvent[];
   /** 只有她看得到 */
   note: string;
@@ -299,6 +301,22 @@ export async function reviseCard(p: IdolProfile, name: string, direction: string
     { role: "system", content: `${CARD_RULES}\n这次是改一张已有的卡：只改她要求的地方，其余照抄，名字不改。` },
     { role: "user", content: `${rosterLine(p.charId)}\n私下跟公开人设：${FACE_LABEL[p.face]}\n现在的卡：${JSON.stringify(current)}\n她要的方向：${direction}` },
   ], { temperature: 0.8, label: "通讯录改卡" });
+  if (!res.content) throw new Error(res.error || "AI 没回");
+  return { ...parseDraft(res.content), name };
+}
+
+/** 她搜 ID 搜到一个只有名字的人：照模板把卡补全（名字、身份、你们见过的事不改） */
+export async function completeCard(p: IdolProfile, name: string): Promise<CardDraft> {
+  const known = [
+    p.role ? `身份：${p.role}` : "",
+    p.metAt ? `${fmtDay(p.metAt.at)}在「${p.metAt.place}」见过她` : "",
+    p.events.length ? `和她之间的事：${p.events.map(e => e.text).join("；")}` : "",
+    p.withYou ? `对她的第一印象：${p.withYou}` : "",
+  ].filter(Boolean).join("\n");
+  const res = await simpleLLMCall(chatConfig(), [
+    { role: "system", content: `${CARD_RULES.replace("- 不写他对她的第一印象，他们还没见过。\n", "")}\n这次是把一个戏里出现过的人补成完整的卡：名字不改，已知的身份和发生过的事要对得上。` },
+    { role: "user", content: `${rosterLine(p.charId)}\n骰子：如果他是爱豆，私下跟公开人设「${FACE_LABEL[p.face]}」。\n名字：${name}\n${known || "只知道名字"}` },
+  ], { temperature: 0.9, label: "通讯录补全卡" });
   if (!res.content) throw new Error(res.error || "AI 没回");
   return { ...parseDraft(res.content), name };
 }

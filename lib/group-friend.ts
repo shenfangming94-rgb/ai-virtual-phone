@@ -123,7 +123,7 @@ export async function maybeRequestFriendFromGroup(session: ChatSession): Promise
             participantIds: [picked],
         };
         const lines = [
-            `[群聊「${groupName}」] 你和${userName}都在这个群里，但你们还不是微信好友。下面是群里最近的聊天：`,
+            `[群聊「${groupName}」] 你和${userName}都在这个群里，但你们还不是 KakaoTalk 好友。下面是群里最近的聊天：`,
             transcript(messages, userName, names),
             "",
             `按你的人设、你对${userName}的印象和你们在群里聊得怎么样，决定现在要不要加她好友。`,

@@ -24,6 +24,8 @@ import {
 } from "@/lib/chat-session-merge";
 import { kvSet } from "@/lib/kv-db";
 import { ChatFallbackAvatar } from "./chat-fallback-avatar";
+import { addByKakaoId, findByKakaoId, fleshOut, myKakaoId, needsFleshOut } from "@/lib/idol-kakao";
+import { fmtDay, getProfile } from "@/lib/idol-people";
 import {
     getMascotLastPreview,
     getMascotChatSnapshot,
@@ -110,6 +112,8 @@ export function ChatMessageList({ onCloseApp, activeSession, onSelectSession, on
 
     const [isSendingRequest, setIsSendingRequest] = useState(false);
     const [greetingText, setGreetingText] = useState("");
+    const [fleshing, setFleshing] = useState(false);
+    const [fleshError, setFleshError] = useState("");
 
     const [showUserProfile, setShowUserProfile] = useState(false);
     const [showContactPicker, setShowContactPicker] = useState(false);
@@ -253,7 +257,7 @@ export function ChatMessageList({ onCloseApp, activeSession, onSelectSession, on
                                         setSearchResult(undefined);
 
                                         setIsSendingRequest(false);
-                                        setGreetingText(identity?.name ? `我是${identity.name}` : "你好");
+                                        setGreetingText(identity?.name ? `我是${identity.name}` : "");
                                     }}
                                 />
                             </div>
@@ -345,7 +349,7 @@ export function ChatMessageList({ onCloseApp, activeSession, onSelectSession, on
                 </div>
             </PageShell>
 
-            {/* Add Friend Search Modal */}
+            {/* Add Friend Search Modal（爱豆版：只能搜 KakaoTalk ID 加人） */}
             {isSearchModalOpen && (
                 <div style={{ position: 'absolute', inset: 0, zIndex: 9999, background: '#ffffff' }}>
                 <div style={{ position: 'absolute', inset: 0, background: 'var(--c-page-body-bg)' }}>
@@ -358,8 +362,10 @@ export function ChatMessageList({ onCloseApp, activeSession, onSelectSession, on
                                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--c-icon)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="shrink-0"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
                                     <input
                                         autoFocus
-                                        placeholder="微信号/手机号"
+                                        placeholder="KakaoTalk ID"
                                         value={searchQuery}
+                                        autoCapitalize="none"
+                                        autoCorrect="off"
                                         onChange={(e) => {
                                             setSearchQuery(e.target.value);
                                             setSearchResult(undefined);
@@ -377,9 +383,15 @@ export function ChatMessageList({ onCloseApp, activeSession, onSelectSession, on
                                     <button
                                         className="menu-item"
                                         onClick={() => {
-                                            const chars = loadCharacters();
-                                            const found = chars.find(c => c.wechatID === searchQuery.trim() || c.id === searchQuery.trim());
-                                            setSearchResult(found || null);
+                                            const found = findByKakaoId(searchQuery);
+                                            setSearchResult(found);
+                                            if (found && needsFleshOut(found.id)) {
+                                                setFleshing(true);
+                                                setFleshError("");
+                                                fleshOut(found.id)
+                                                    .catch(e => setFleshError(e instanceof Error ? e.message : "没捏成"))
+                                                    .finally(() => setFleshing(false));
+                                            }
                                         }}
                                     >
                                         <div className="menu-icon">
@@ -391,110 +403,97 @@ export function ChatMessageList({ onCloseApp, activeSession, onSelectSession, on
                                     </button>
                                 )}
                             </div>
-
-                            {/* 备选：已有角色卡但还不在联系人里，点击直接填入号码 */}
-                            {(() => {
-                                const contactIds = new Set(loadChatContacts().map(c => c.characterId));
-                                const candidates = loadCharacters().filter(c => !contactIds.has(c.id));
-                                if (candidates.length === 0 && mascotSettings.chatEnabled) return null;
-                                return (
-                                    <div className="menu-group" style={{ marginTop: 12 }}>
-                                        <div className="menu-item" style={{ pointerEvents: "none" }}>
-                                            <span className="menu-desc">还不是好友的角色（点击填入号码）</span>
-                                        </div>
-                                        {!mascotSettings.chatEnabled && (
-                                            <button
-                                                className="menu-item"
-                                                onClick={() => {
-                                                    updateMascotSettings({ chatEnabled: true });
-                                                    setIsSearchModalOpen(false);
-                                                    setSearchQuery("");
-                                                    setSearchResult(undefined);
-                                                    onSelectMascot();
-                                                }}
-                                            >
-                                                <div className="add-friend-avatar" style={{ width: 36, height: 36, borderRadius: 8, overflow: "hidden", flexShrink: 0, background: "#fff" }}>
-                                                    <img src={mascotAvatarUrl} className="w-full h-full object-contain p-[2px]" alt="" />
-                                                </div>
-                                                <div className="menu-label-group" style={{ minWidth: 0 }}>
-                                                    <span className="menu-label">AI助手</span>
-                                                    <span className="menu-desc">内置创作助手</span>
-                                                </div>
-                                            </button>
-                                        )}
-                                        {candidates.map(c => (
-                                            <button
-                                                key={c.id}
-                                                className="menu-item"
-                                                onClick={() => {
-                                                    setSearchQuery(c.wechatID?.trim() || c.id);
-                                                    setSearchResult(undefined);
-                                                }}
-                                            >
-                                                <div className="add-friend-avatar" style={{ width: 36, height: 36, borderRadius: 8, overflow: "hidden", flexShrink: 0 }}>
-                                                    {c.avatar ? (
-                                                        <img src={c.avatar} className="w-full h-full object-cover" alt="" />
-                                                    ) : (
-                                                        <div className="w-full h-full flex items-center justify-center bg-[var(--c-page-body-bg)] text-[var(--c-icon)]" style={{ fontSize: 14 }}>
-                                                            {c.name.slice(0, 1)}
-                                                        </div>
-                                                    )}
-                                                </div>
-                                                <div className="menu-label-group" style={{ minWidth: 0 }}>
-                                                    <span className="menu-label" style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.name}</span>
-                                                    <span className="menu-desc" style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.wechatID?.trim() || c.id}</span>
-                                                </div>
-                                            </button>
-                                        ))}
-                                    </div>
-                                );
-                            })()}
+                            <p className="menu-group-desc">我的 KakaoTalk ID：{myKakaoId()}</p>
                         </div>
                     )}
 
                     {searchResult === null && (
                         <div className="ui-empty">
-                            <span className="menu-desc">该用户不存在</span>
+                            <span className="menu-desc">没有找到这个 ID</span>
                         </div>
                     )}
 
-                    {searchResult && !isSendingRequest && (
-                        <div className="page-menu">
-                            <div className="menu-group">
-                                <div className="menu-item !items-start">
-                                    <div className="add-friend-avatar">
-                                        {searchResult.avatar ? (
-                                            <img src={searchResult.avatar} className="w-full h-full object-cover" alt="" />
-                                        ) : (
-                                            <ChatFallbackAvatar />
-                                        )}
+                    {searchResult && !isSendingRequest && (() => {
+                        const p = getProfile(searchResult.id);
+                        const already = loadChatContacts().some(c => c.characterId === searchResult.id);
+                        return (
+                            <div className="page-menu">
+                                <div className="menu-group">
+                                    <div className="menu-item !items-start">
+                                        <div className="add-friend-avatar">
+                                            {searchResult.avatar ? (
+                                                <img src={searchResult.avatar} className="w-full h-full object-cover" alt="" />
+                                            ) : (
+                                                <ChatFallbackAvatar />
+                                            )}
+                                        </div>
+                                        <div className="menu-label-group">
+                                            <div className="ts-18 font-bold text-[var(--c-text-title)] mb-1">{searchResult.name || "UNNAMED"}</div>
+                                            <div className="menu-desc">KakaoTalk ID：{searchResult.wechatID}</div>
+                                            {p.role && <div className="menu-desc">{p.role}</div>}
+                                            {p.metAt && <div className="menu-desc">{fmtDay(p.metAt.at)}在「{p.metAt.place}」认识</div>}
+                                        </div>
                                     </div>
-                                    <div className="menu-label-group">
-                                        <div className="ts-18 font-bold text-[var(--c-text-title)] mb-1">{searchResult.name || "UNNAMED"}</div>
-                                        <div className="menu-desc">微信号: {searchResult.wechatID || "N/A"}</div>
-                                        <div className="menu-desc">个性签名: {searchResult.persona ? searchResult.persona.slice(0, 30) + (searchResult.persona.length > 30 ? "..." : "") : "暂无"}</div>
-                                    </div>
+                                    {(fleshing || fleshError || p.privateLines.length > 0) && (
+                                        <div className="menu-item !items-start">
+                                            <div className="menu-label-group">
+                                                {fleshing ? (
+                                                    <span className="menu-desc">正在想他平时是个什么样的人……</span>
+                                                ) : fleshError ? (
+                                                    <span className="menu-desc">{fleshError}</span>
+                                                ) : (
+                                                    <>
+                                                        {p.privateLines.map((l, i) => <span key={i} className="menu-desc">· {l}</span>)}
+                                                        {p.speech && <span className="menu-desc">说话：{p.speech}</span>}
+                                                    </>
+                                                )}
+                                            </div>
+                                        </div>
+                                    )}
                                 </div>
+                                {!fleshing && (fleshError || (p.layer === "background" && p.privateLines.length > 0)) && (
+                                    <button
+                                        onClick={() => {
+                                            setFleshing(true);
+                                            setFleshError("");
+                                            fleshOut(searchResult.id, true)
+                                                .catch(e => setFleshError(e instanceof Error ? e.message : "没捏成"))
+                                                .finally(() => setFleshing(false));
+                                        }}
+                                        className="ui-btn ui-btn-ghost w-full mb-3"
+                                    >
+                                        换一个
+                                    </button>
+                                )}
+                                <button
+                                    disabled={fleshing}
+                                    onClick={() => {
+                                        if (already) {
+                                            const session = createOrGetSession(searchResult.id);
+                                            onSelectSession(session);
+                                            setIsSearchModalOpen(false);
+                                            return;
+                                        }
+                                        setIsSendingRequest(true);
+                                    }}
+                                    className="ui-btn ui-btn-success w-full"
+                                >
+                                    {already ? "发消息" : "加为好友"}
+                                </button>
                             </div>
-                            <button
-                                onClick={() => setIsSendingRequest(true)}
-                                className="ui-btn ui-btn-success w-full"
-                            >
-                                添加到通讯录
-                            </button>
-                        </div>
-                    )}
+                        );
+                    })()}
 
                     {isSendingRequest && searchResult && (
                         <div className="page-menu">
-                            <p className="menu-group-desc mx-0">发送添加朋友申请</p>
+                            <p className="menu-group-desc mx-0">加好友时说一句（可以不写）</p>
                             <div className="menu-group">
                                 <div className="menu-item !items-start">
                                     <textarea
                                         autoFocus
                                         value={greetingText}
                                         onChange={e => setGreetingText(e.target.value)}
-                                        placeholder="输入打招呼信息..."
+                                        placeholder="打个招呼…"
                                         className="ui-textarea ui-input-inline min-h-[60px]"
                                     />
                                     <button onClick={() => setGreetingText("")} className="ui-bare-btn text-[var(--c-icon)]">
@@ -505,52 +504,7 @@ export function ChatMessageList({ onCloseApp, activeSession, onSelectSession, on
                             <div className="flex flex-col gap-3">
                                 <button
                                     onClick={() => {
-                                        // 1. Add to contacts
-                                        addChatContact(searchResult.id);
-                                        clearRequestsForCharacter(searchResult.id);
-                                        dispatchFriendRequestUpdated();
-                                        // 2. Create or get session
-                                        const newSession = createOrGetSession(searchResult.id);
-
-                                        // Check if re-adding (session already has messages)
-                                        const isReAdd = loadChatMessages(newSession.id).length > 0;
-
-                                        // Resolve character-bound user identity
-                                        const charIdentity = resolveUserIdentity(searchResult.id, "chat");
-                                        const userName = charIdentity?.name || identity?.name || "你";
-
-                                        // 3. Insert system message(s)
-                                        if (isReAdd) {
-                                            // Re-add: single message with both lines for memory
-                                            const charName = searchResult.name || "用户";
-                                            pushChatMessage({
-                                                sessionId: newSession.id,
-                                                role: "system",
-                                                content: `${userName}向${charName}发起了好友申请\n${charName}通过了好友申请`,
-                                                status: "sent"
-                                            });
-                                            // Set flag to trigger AI reply on chat room mount
-                                            kvSet(PENDING_REPLY_PREFIX + newSession.id, "1");
-                                        } else {
-                                            pushChatMessage({
-                                                sessionId: newSession.id,
-                                                role: "system",
-                                                content: `${userName}已添加了${searchResult.name || "用户"}，现在可以开始聊天了。`,
-                                                status: "sent"
-                                            });
-                                        }
-
-                                        // 4. Insert user greeting message if any
-                                        if (greetingText.trim()) {
-                                            pushChatMessage({
-                                                sessionId: newSession.id,
-                                                role: "user",
-                                                content: greetingText.trim(),
-                                                status: "sent"
-                                            });
-                                        }
-
-                                        // 6. Open Chat
+                                        const newSession = addByKakaoId(searchResult, greetingText);
                                         setSessions(loadChatSessions());
                                         onSelectSession(newSession);
                                         setIsSearchModalOpen(false);
@@ -560,7 +514,7 @@ export function ChatMessageList({ onCloseApp, activeSession, onSelectSession, on
                                     }}
                                     className="ui-btn ui-btn-success w-full"
                                 >
-                                    发送
+                                    加为好友
                                 </button>
                                 <button
                                     onClick={() => setIsSendingRequest(false)}

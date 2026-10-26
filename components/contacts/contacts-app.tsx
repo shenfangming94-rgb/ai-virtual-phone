@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ChevronLeft, ChevronRight, Mail, MessageCircle, Phone, Plus, Search, Sparkles, Trash2, Video, X } from "lucide-react";
+import { myKakaoId, setMyKakaoId } from "@/lib/idol-kakao";
 
 import { loadCharacters, CHARACTERS_UPDATED_EVENT } from "@/lib/character-storage";
 import type { Character } from "@/lib/character-types";
@@ -193,7 +194,8 @@ function ListView({ data, filter, onBack, onLists, onOpen, onMe, onAdd }: {
   const me = resolveUserIdentity();
   const people = data.chars
     .filter(c => matches(filter, c, data.profiles[c.id], data))
-    .filter(c => !q.trim() || c.name.includes(q.trim()) || (c.wechatID ?? "").toLowerCase().includes(q.trim().toLowerCase()))
+    .filter(c => !q.trim() || c.name.includes(q.trim())
+      || (idVisible(getProfile(c.id), data.kakao.has(c.id)) && (c.wechatID ?? "").toLowerCase().includes(q.trim().toLowerCase())))
     .sort((a, b) => comparePinyin(a.name, b.name));
   const sections = new Map<string, Character[]>();
   for (const c of people) {
@@ -381,6 +383,11 @@ function ListsView({ data, onBack, onPick, onNotice }: { data: Data; onBack: () 
   );
 }
 
+/** 背景人物没给过 ID 时，名片和搜索都看不到他的 ID */
+function idVisible(p: ReturnType<typeof getProfile>, added: boolean): boolean {
+  return added || Boolean(p.gaveId) || p.layer === "main";
+}
+
 function CardView({ data, id, onBack, onEdit, onNotice }: { data: Data; id: string; onBack: () => void; onEdit: () => void; onNotice: Notice }) {
   const char = data.chars.find(c => c.id === id);
   const p = getProfile(id);
@@ -389,10 +396,11 @@ function CardView({ data, id, onBack, onEdit, onNotice }: { data: Data; id: stri
   const [busy, setBusy] = useState(false);
   if (!char) return <div className="ct-page"><p className="ct-empty">这个人不在了</p></div>;
   const added = data.kakao.has(id);
+  const idKnown = idVisible(p, added);
 
   const openChat = (call?: "voice" | "video") => {
     if (!added) {
-      onNotice?.(`还没加 KakaoTalk。去 KakaoTalk 右上角「+」搜他的 ID：${char.wechatID ?? ""}`);
+      onNotice?.(idKnown ? `还没加 KakaoTalk。去 KakaoTalk 右上角「+」搜他的 ID：${char.wechatID ?? ""}` : "还没加 KakaoTalk，他也还没把 ID 给你");
       return;
     }
     const session = createOrGetSession(id);
@@ -440,7 +448,7 @@ function CardView({ data, id, onBack, onEdit, onNotice }: { data: Data; id: stri
 
         <div className="ct-block">
           <div className="ct-k"><span>KakaoTalk ID</span><span className={`ct-kakao ${added ? "on" : ""}`}>{added ? "已加" : "还没加"}</span></div>
-          <div className="ct-v">{char.wechatID || "—"}</div>
+          <div className="ct-v">{idKnown ? (char.wechatID || "—") : "他还没给你"}</div>
           <hr />
           <div className="ct-k">认识</div>
           <div className="ct-v">{p.met ? (p.metAt ? `${fmtDay(p.metAt.at)}${p.metAt.place ? ` · ${p.metAt.place}` : ""}` : "见过") : "还没见过"}</div>
@@ -635,6 +643,7 @@ function MeView({ onBack, onNotice }: { onBack: () => void; onNotice: Notice }) 
   const [name, setName] = useState(me?.name ?? "");
   const [avatar, setAvatar] = useState<string | undefined>(me?.avatarUrl);
   const [bio, setBio] = useState(me?.bio ?? "");
+  const [kakaoId, setKakaoId] = useState(() => myKakaoId());
   const [editing, setEditing] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
   const color = useAvatarColor(avatar, name || "me");
@@ -646,6 +655,8 @@ function MeView({ onBack, onNotice }: { onBack: () => void; onNotice: Notice }) 
     } else {
       saveUserIdentities([{ id: `identity-${Date.now()}`, name: name.trim() || "我", avatarUrl: avatar, bio, gender: "女", age: "", occupation: "", customSettings: "" }]);
     }
+    setMyKakaoId(kakaoId);
+    setKakaoId(myKakaoId());
     setEditing(false);
     onNotice?.("存好了");
   };
@@ -672,6 +683,14 @@ function MeView({ onBack, onNotice }: { onBack: () => void; onNotice: Notice }) 
           }} />
           {editing ? <input className="ct-hero-name-input" value={name} onChange={e => setName(e.target.value)} placeholder="名字" /> : <h1>{name || "我"}</h1>}
           <p>我的名片</p>
+        </div>
+        <div className="ct-block">
+          <div className="ct-k">KakaoTalk ID</div>
+          {editing ? (
+            <input className="ct-input-dark" value={kakaoId} onChange={e => setKakaoId(e.target.value.replace(/\s/g, ""))} placeholder="英文和数字" autoCapitalize="none" />
+          ) : (
+            <div className="ct-v">{kakaoId}</div>
+          )}
         </div>
         <div className="ct-block">
           <div className="ct-k">关于我</div>

@@ -14,6 +14,7 @@ export type FriendRequest = {
     createdAt: string;       // ISO date
     sourceGroupId?: string;  // 在群里认识、主动来加的：来自哪个群
     sourceGroupName?: string;
+    sourcePlace?: string;    // 爱豆版：在戏里哪儿认识的
 };
 
 const STORAGE_KEY = "ai_phone_friend_requests_v1";
@@ -39,6 +40,7 @@ export function addFriendRequest(
     message: string,
     round: number,
     source?: { groupId: string; groupName: string },
+    sourcePlace?: string,
 ): FriendRequest {
     const all = loadFriendRequests();
     const req: FriendRequest = {
@@ -49,6 +51,7 @@ export function addFriendRequest(
         round,
         createdAt: new Date().toISOString(),
         ...(source ? { sourceGroupId: source.groupId, sourceGroupName: source.groupName } : {}),
+        ...(sourcePlace ? { sourcePlace } : {}),
     };
     all.push(req);
     saveFriendRequests(all);

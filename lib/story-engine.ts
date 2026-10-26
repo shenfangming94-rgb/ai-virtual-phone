@@ -104,7 +104,7 @@ export type StoryGenerationResult = {
   model: string;
   presetName: string;
   /** 「世界」主导的戏：这次冒出来的新面孔、是否自然收尾 */
-  idol?: { added: string[]; closing: boolean };
+  idol?: { added: string[]; closing: boolean; notes: string[] };
 };
 
 export type StoryPreviewResult = {
@@ -252,8 +252,8 @@ export async function generateStoryCompletion(
     parsed.renderedText = rendered.text;
     const groupId = sceneGroupIdOf(history);
     const sessionId = history[history.length - 1]?.sessionId;
-    const added = groupId && sessionId ? applySceneTags(groupId, sessionId, raw.tags) : [];
-    idol = { added, closing: raw.tags.closing };
+    const applied = groupId && sessionId ? applySceneTags(groupId, sessionId, raw.tags) : { added: [], notes: [] };
+    idol = { ...applied, closing: raw.tags.closing };
   }
   return {
     idol,

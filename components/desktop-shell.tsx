@@ -6,6 +6,7 @@ import { ClockApp } from "./clock-app";
 import { ContactsApp } from "./contacts/contacts-app";
 import { CareerApp } from "./career/career-app";
 import { careerTick } from "@/lib/idol-career";
+import { kakaoTick } from "@/lib/idol-kakao";
 import { LockScreen } from "./lock-screen";
 import { TraineeOpening } from "./opening/trainee-opening";
 import { TRAINEE_CARD_EVENT, loadTraineeCard } from "@/lib/trainee-card";
@@ -1089,7 +1090,10 @@ export function DesktopShell({ initialThemeProfile, initialThemeAssets }: Deskto
   useWorldAlarms(setNotice);
   // 发动机：每隔几秒看一眼世界时间，该来的邀请、该提醒的日程到了就提醒
   useEffect(() => {
-    const run = () => { try { careerTick(setNotice); } catch { /* 发动机出错不挡着用手机 */ } };
+    const run = () => {
+      try { careerTick(setNotice); } catch { /* 发动机出错不挡着用手机 */ }
+      try { kakaoTick(setNotice); } catch { /* 同上 */ }
+    };
     run();
     const timer = window.setInterval(run, 5000);
     return () => window.clearInterval(timer);

@@ -1347,10 +1347,10 @@ export function StoryApp({ onClose }: StoryAppProps) {
     activateStorySession(next);
   }
 
-  const showVoiceNotice = useCallback((message: string) => {
+  const showVoiceNotice = useCallback((message: string, ms = 2600) => {
     setVoiceNotice(message);
     if (voiceNoticeTimerRef.current) clearTimeout(voiceNoticeTimerRef.current);
-    voiceNoticeTimerRef.current = setTimeout(() => setVoiceNotice(null), 2600);
+    voiceNoticeTimerRef.current = setTimeout(() => setVoiceNotice(null), ms);
   }, []);
 
   const playStoryVoice = useCallback(async (segment: StoryVoiceSegment): Promise<boolean> => {
@@ -1465,9 +1465,14 @@ export function StoryApp({ onClose }: StoryAppProps) {
     voiceSequenceIndexRef.current = segments.length;
   }, [collectStoryVoiceSegments, playStoryVoice, playingVoiceSegmentId, showVoiceNotice, uiPrefs.voiceEnabled]);
 
-  function handleIdolResult(result: { idol?: { added: string[]; closing: boolean } }) {
+  function handleIdolResult(result: { idol?: { added: string[]; closing: boolean; notes?: string[] } }) {
     if (!result.idol) return;
-    if (result.idol.added.length) showVoiceNotice(`新面孔：${result.idol.added.join("、")}`);
+    const notes = [
+      result.idol.added.length ? `新面孔：${result.idol.added.join("、")}` : "",
+      ...(result.idol.notes ?? []),
+    ].filter(Boolean);
+    // 给了 ID 的提示多留一会儿，够她记下来（通讯录名片上也能看到）
+    if (notes.length) showVoiceNotice(notes.join("\n"), result.idol.notes?.length ? 8000 : 2600);
     setSceneHint(result.idol.closing);
   }
 

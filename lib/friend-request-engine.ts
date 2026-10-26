@@ -14,6 +14,7 @@ import {
 } from "./chat-storage";
 import { generateChatCompletion, flattenCompletionResult } from "./chat-engine";
 import { resolveUserIdentity } from "./settings-storage";
+import { onKakaoAccepted } from "./idol-kakao";
 
 export const PENDING_REPLY_PREFIX = "pending_friend_reply_";
 registerDynamicPrefix(PENDING_REPLY_PREFIX);
@@ -93,6 +94,7 @@ export async function handleAcceptFriendRequest(
     characterId: string,
     requestMessage: string,
     sourceGroupName?: string,
+    sourcePlace?: string,
 ): Promise<ChatSession> {
     const chars = loadCharacters();
     const char = chars.find(c => c.id === characterId);
@@ -110,7 +112,9 @@ export async function handleAcceptFriendRequest(
         role: "system",
         content: sourceGroupName
             ? `${userName}通过了${char?.name ?? "角色"}的好友申请（你们是在群聊「${sourceGroupName}」里认识的，验证消息：${requestMessage}）`
-            : `${userName}通过了${char?.name ?? "角色"}的好友申请`,
+            : sourcePlace
+                ? `${userName}通过了${char?.name ?? "角色"}的好友申请（${onKakaoAccepted(characterId) || `你们是在「${sourcePlace}」认识的`}${requestMessage ? `，验证消息：${requestMessage}` : ""}）`
+                : `${userName}通过了${char?.name ?? "角色"}的好友申请`,
     });
 
     // Clean up friend requests for this character

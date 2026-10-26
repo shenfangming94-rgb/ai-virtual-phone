@@ -150,3 +150,15 @@
 .op-frame-btn { width: 100%; height: 44px; padding: 0 6px; font-size: var(--op-text); letter-spacing: 3px; display: inline-flex; align-items: center; justify-content: center; }
 .op-frame-btn.is-plain { border-color: #b9b0d6; color: #8a83a3; background: rgba(255, 255, 255, 0.5); }
 .op-frame-btn.is-plain::after { border-color: #e3dcf2; }
+
+/* ── 再统一：除了封面大标题、表头标题和红章，页面里所有字一律 13px，层级只靠颜色和粗细 ── */
+.op-root *, .ct-mini-id * { font-size: 13px !important; }
+.op-root .op-cover-ko { font-size: 24px !important; }
+.op-root .op-t1 { font-size: 15px !important; }
+.op-root .op-photo span { font-size: 22px !important; }
+.op-root .op-stamp, .op-root .op-stamp span { font-size: 9px !important; }
+.op-root .op-stamp b { font-size: 15px !important; }
+.op-root input[type="date"] { -webkit-appearance: none; appearance: none; text-align: left; min-height: 20px; }
+.op-root .op-f em, .op-root .op-review em, .op-root .op-id-kv em { width: 84px; }
+.op-root .op-id-kv em, .ct-mini-id .op-id-kv em { width: 40px; }
+.op-root .op-sec, .op-root .op-final-title, .op-root .op-tap { letter-spacing: 3px; }

@@ -43,7 +43,7 @@ import {
   mdiImageMultiple,
   mdiWalletBifoldOutline,
   mdiMoped,
-  mdiClockOutline, mdiCardAccountDetailsOutline,
+  mdiClockOutline, mdiCardAccountDetailsOutline, mdiFormatListChecks,
 } from "@mdi/js";
 
 type IconGlyphProps = {
@@ -76,6 +76,7 @@ const MDI_PATHS: Record<IconId, string> = {
   meituan: mdiMoped,
   clock: mdiClockOutline,
   contacts: mdiCardAccountDetailsOutline,
+  career: mdiFormatListChecks,
   vnplay: mdiPlayCircle,
   vnchapters: mdiBookmark,
   moments: mdiCamera,

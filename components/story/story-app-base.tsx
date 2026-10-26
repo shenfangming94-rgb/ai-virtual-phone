@@ -54,6 +54,7 @@ import { WORLD_CHAR_ID, closeWorldScene, createWorldScene, ensureWorldCharacter,
 import { comparePinyin, loadProfiles } from "@/lib/idol-people";
 import { fmtWorld, runTimeCommand } from "@/lib/idol-scenes";
 import { setWorldTime, shiftWorldTime } from "@/lib/world-clock";
+import { OPEN_SCENE_EVENT, takePendingScene } from "@/lib/idol-career";
 import { maybeRunSummarization } from "@/lib/memory-summarizer";
 import { incrementEventCounter } from "@/lib/memory-storage";
 import { loadBindingConfig, loadPresets, resolveBinding, resolveUserIdentity } from "@/lib/settings-storage";
@@ -569,7 +570,7 @@ export function StoryApp({ onClose }: StoryAppProps) {
   const [scenePeopleOpen, setScenePeopleOpen] = useState(false);
   const [sceneHint, setSceneHint] = useState(false);
   const [sceneNewOpen, setSceneNewOpen] = useState(false);
-  const [sceneEnd, setSceneEnd] = useState<null | "ask" | "working" | { summary: string; recorded: string[]; firstMeet: string[] }>(null);
+  const [sceneEnd, setSceneEnd] = useState<null | "ask" | "working" | { summary: string; recorded: string[]; firstMeet: string[]; milestone?: string }>(null);
   const worldAvatarInputRef = useRef<HTMLInputElement | null>(null);
   const userIdentity = useMemo(
     () => resolveUserIdentity(activeCharacterId, "story") ?? resolveUserIdentity(activeCharacterId) ?? resolveUserIdentity(),
@@ -756,6 +757,24 @@ export function StoryApp({ onClose }: StoryAppProps) {
     setAutoReading(false);
     setCurrentReadExpanded(false);
   }, [activeSessionId]);
+
+  // 星路里点「去演这场」：开一场带节点的戏
+  useEffect(() => {
+    if (!ready) return;
+    const open = () => {
+      const pending = takePendingScene();
+      if (!pending) return;
+      const { groupId, session } = createWorldScene(pending.place, pending.premise, [], pending.nodeId);
+      setSceneHint(false);
+      setActiveGroupId(groupId);
+      setActiveCharacterId(WORLD_CHAR_ID);
+      activateStorySession(session);
+    };
+    open();
+    window.addEventListener(OPEN_SCENE_EVENT, open);
+    return () => window.removeEventListener(OPEN_SCENE_EVENT, open);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ready]);
 
   // Listen for live CSS updates from 小卷
   useEffect(() => {
@@ -2296,6 +2315,7 @@ export function StoryApp({ onClose }: StoryAppProps) {
                 <header><strong>记好了</strong></header>
                 {sceneEnd.recorded.length ? <p className="story-idol-sub">{sceneEnd.recorded.join("、")}各记了一笔{sceneEnd.firstMeet.length ? `；${sceneEnd.firstMeet.join("、")}是第一次见你，写上了第一印象` : ""}</p> : null}
                 {sceneEnd.summary ? <p className="story-idol-quote">{sceneEnd.summary}</p> : null}
+                {sceneEnd.milestone ? <p className="story-idol-text">🎉 {sceneEnd.milestone}。日程排好了，去「提醒事项」看看</p> : null}
                 <p className="story-idol-sub">接下来跳到什么时候？</p>
                 <div className="story-idol-jumps">
                   <button type="button" onClick={() => { shiftWorldTime(3600e3); showVoiceNotice("过了 1 小时"); setSceneEnd(null); }}>过 1 小时</button>

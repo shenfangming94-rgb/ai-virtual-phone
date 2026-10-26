@@ -174,19 +174,21 @@ function peopleBlock(ids: string[]): string {
   }).filter(Boolean).join("\n\n");
 }
 
-export type StoryReply = { text: string; newFaces: { name: string; role: string }[]; minutes: number; closing: boolean };
+export type StoryReply = { text: string; newFaces: { name: string; role: string }[]; minutes: number; closing: boolean; facts: string[] };
 
 export function parseReply(raw: string): StoryReply {
   const newFaces: { name: string; role: string }[] = [];
   let minutes = 0;
   let closing = false;
+  const facts: string[] = [];
   const text = raw
+    .replace(/\[公司[:：]\s*([^\]]+)\]/g, (_, f: string) => { facts.push(f.trim()); return ""; })
     .replace(/\[新人[:：]\s*([^|｜\]]+)[|｜]?([^\]]*)\]/g, (_, n: string, r: string) => { newFaces.push({ name: n.trim(), role: (r || "").trim() }); return ""; })
     .replace(/\[时间[:：]\s*\+?\s*(\d+)\s*(分钟|小时)?\]/g, (_, n: string, u: string) => { minutes += Number(n) * (u === "小时" ? 60 : 1); return ""; })
     .replace(/\[收尾\]/g, () => { closing = true; return ""; })
     .replace(/\n{3,}/g, "\n\n")
     .trim();
-  return { text, newFaces, minutes, closing };
+  return { text, newFaces, minutes, closing, facts };
 }
 
 export async function continueScene(scene: Scene): Promise<StoryReply> {

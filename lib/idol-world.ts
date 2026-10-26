@@ -17,13 +17,14 @@ import { shiftWorldTime } from "./world-clock";
 import { fmtWorld, parseReply } from "./idol-scenes";
 import { createOrGetStorySession, createStoryGroup, loadStoryGroups, loadStoryMessages, updateStoryGroup, updateStorySession, type StorySession } from "./story-storage";
 import { simpleLLMCall } from "./api-helpers";
+import { addCompanyFacts, careerPromptBlock, completeNode } from "./idol-career";
 import { loadApiConfigs, loadBindingConfig, resolveBinding } from "./settings-storage";
 import { saveMemoryEntry } from "./memory-storage";
 
 export const WORLD_CHAR_ID = HIDDEN_WORLD_CHAR_ID;
 const META_KEY = "idol_scene_meta_v1";
 
-export type SceneMeta = { place: string; premise: string; startAt: number; newFaces: string[]; ended?: boolean; summary?: string };
+export type SceneMeta = { place: string; premise: string; startAt: number; newFaces: string[]; ended?: boolean; summary?: string; nodeId?: string };
 
 const WORLD_PERSONA = "「世界」不是一个人，是这个故事的旁白和所有配角。它负责写她身边发生的事、在场的人说的话和做的事，从不替她说话、不替她做决定。";
 
@@ -77,14 +78,12 @@ export function saveSceneMeta(groupId: string, meta: SceneMeta): void {
 }
 
 /** 开一场戏：建分组（世界 + 在场的人）和主线会话，让「世界」先写开场 */
-export function createWorldScene(place: string, premise: string, peopleIds: string[]): { groupId: string; session: StorySession } {
+export function createWorldScene(place: string, premise: string, peopleIds: string[], nodeId?: string): { groupId: string; session: StorySession } {
   ensureWorldCharacter();
   const name = place.trim() || "某个地方";
   const ids = [WORLD_CHAR_ID, ...peopleIds.filter(id => id !== WORLD_CHAR_ID)];
-  // 原剧情分组至少两个人；没选人时也先把「世界」放两次以外的方式建：只有世界时照样建组
-  const group = createStoryGroup(ids.length >= 2 ? ids : [WORLD_CHAR_ID, WORLD_CHAR_ID], name);
-  if (ids.length < 2) updateStoryGroup(group.id, { characterIds: [WORLD_CHAR_ID] });
-  saveSceneMeta(group.id, { place: name, premise: premise.trim(), startAt: Date.now(), newFaces: [] });
+  const group = createStoryGroup(ids, name);
+  saveSceneMeta(group.id, { place: name, premise: premise.trim(), startAt: Date.now(), newFaces: [], ...(nodeId ? { nodeId } : {}) });
   const session = createOrGetStorySession(WORLD_CHAR_ID, { ownerType: "group", ownerId: group.id, participantIds: ids, branchId: "main" });
   const opening = premise.trim()
     ? `（开场：${premise.trim()}。写她到了这里看到的情形，写到需要她反应的地方停）`
@@ -111,6 +110,7 @@ export function buildWorldScenePrompt(groupId: string | undefined, participantId
     "# 这一场戏",
     "这是一出以韩国娱乐圈为背景的戏，主角是「她」（用户）。你是「世界」：写旁白和除她以外所有人的言行。",
     `【她是谁】\n${whoIsShe()}`,
+    careerPromptBlock(),
     `【时间和地点】\n现在：${fmtWorld(Date.now())}\n地点：${meta?.place || group?.name || "某个地方"}${meta?.premise ? `\n开头：${meta.premise}` : ""}`,
     `【在场的人】${people.length ? people.map(c => c.name).join("、") : "暂时只有她"}${peopleBlock ? `\n\n${peopleBlock}` : ""}`,
     `【规矩】
@@ -122,21 +122,23 @@ export function buildWorldScenePrompt(groupId: string | undefined, participantId
     `【记号】回复最后另起一行写（她看不到，没有就不写）：
 - 名单里没有、但这次出场并且有名字的人：[新人:名字|一句话身份]
 - 戏里过去了一段时间：[时间:+N分钟]
-- 这一场已经自然收尾：[收尾]`,
+- 这一场已经自然收尾：[收尾]
+- 戏里第一次说清楚、以后要照着来的公司细节（楼层、作息、规矩、老师）：[公司:一句话]`,
   ].join("\n\n");
 }
 
-export type SceneTags = { newFaces: { name: string; role: string }[]; minutes: number; closing: boolean };
+export type SceneTags = { newFaces: { name: string; role: string }[]; minutes: number; closing: boolean; facts: string[] };
 
 /** 把记号从文字里摘掉，返回干净文字和记号 */
 export function extractSceneTags(text: string): { text: string; tags: SceneTags } {
   const r = parseReply(text);
-  return { text: r.text, tags: { newFaces: r.newFaces, minutes: r.minutes, closing: r.closing } };
+  return { text: r.text, tags: { newFaces: r.newFaces, minutes: r.minutes, closing: r.closing, facts: r.facts } };
 }
 
 /** 处理记号：新面孔建成背景人物并拉进这场，时间往前拨。返回新加的人名 */
 export function applySceneTags(groupId: string, sessionId: string, tags: SceneTags): string[] {
   if (tags.minutes > 0) shiftWorldTime(tags.minutes * 60e3);
+  if (tags.facts.length) addCompanyFacts(tags.facts);
   if (!tags.newFaces.length) return [];
   const group = loadStoryGroups().find(g => g.id === groupId);
   if (!group) return [];
@@ -171,7 +173,7 @@ function chatConfig() {
 const uid = (p: string) => `${p}_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
 
 /** 这场结束：每个在场的人记一笔，第一次见的写第一印象，主要人物存长期记忆 */
-export async function closeWorldScene(groupId: string, sessionId: string): Promise<{ summary: string; recorded: string[]; firstMeet: string[] }> {
+export async function closeWorldScene(groupId: string, sessionId: string): Promise<{ summary: string; recorded: string[]; firstMeet: string[]; milestone?: string }> {
   const group = loadStoryGroups().find(g => g.id === groupId);
   const meta = getSceneMeta(groupId) ?? { place: group?.name || "某个地方", premise: "", startAt: Date.now(), newFaces: [] };
   const chars = loadCharacters();
@@ -218,5 +220,6 @@ export async function closeWorldScene(groupId: string, sessionId: string): Promi
     }
   }
   saveSceneMeta(groupId, { ...meta, ended: true, summary });
-  return { summary, recorded, firstMeet: firstMeet.filter(n => recorded.includes(n)) };
+  const milestone = meta.nodeId ? await completeNode(meta.nodeId) : null;
+  return { summary, recorded, firstMeet: firstMeet.filter(n => recorded.includes(n)), ...(milestone ? { milestone } : {}) };
 }

@@ -759,6 +759,9 @@ export function deleteStorySessions(sessionIds: string[], options?: { allowMain?
   }).catch(() => undefined);
 }
 
+/** 爱豆小手机：「世界」主导的戏可以只有「世界」一个（在场的人戏里再进来） */
+const minGroupSize = (ids: string[]) => (ids[0] === "idol_world" ? 1 : 2);
+
 function sanitizeStoryGroup(raw: unknown): StoryGroup | null {
   if (!raw || typeof raw !== "object") return null;
   const item = raw as Record<string, unknown>;
@@ -766,7 +769,7 @@ function sanitizeStoryGroup(raw: unknown): StoryGroup | null {
   const characterIds = Array.isArray(item.characterIds)
     ? Array.from(new Set(item.characterIds.filter((value): value is string => typeof value === "string" && Boolean(value.trim())).map((value) => value.trim())))
     : [];
-  if (!id || characterIds.length < 2) return null;
+  if (!id || characterIds.length < minGroupSize(characterIds)) return null;
   const now = new Date().toISOString();
   return {
     id,
@@ -794,7 +797,7 @@ export function saveStoryGroups(groups: StoryGroup[]): void {
 
 export function createStoryGroup(characterIds: string[], name?: string): StoryGroup {
   const ids = Array.from(new Set(characterIds.filter(Boolean)));
-  if (ids.length < 2) throw new Error("多人剧情至少需要选择两个角色");
+  if (ids.length < minGroupSize(ids)) throw new Error("多人剧情至少需要选择两个角色");
   const now = new Date().toISOString();
   const group: StoryGroup = {
     id: generateId("story_group"),
@@ -814,7 +817,7 @@ export function updateStoryGroup(groupId: string, updates: Partial<Pick<StoryGro
   const characterIds = updates.characterIds
     ? Array.from(new Set(updates.characterIds.filter(Boolean)))
     : groups[index].characterIds;
-  if (characterIds.length < 2) return null;
+  if (characterIds.length < minGroupSize(characterIds)) return null;
   const next = {
     ...groups[index],
     ...updates,

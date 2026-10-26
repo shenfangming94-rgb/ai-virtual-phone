@@ -4,6 +4,8 @@ import { GlobalCallHost } from "./chat/global-call-host";
 import { AlbumApp } from "./album/album-app";
 import { ClockApp } from "./clock-app";
 import { ContactsApp } from "./contacts/contacts-app";
+import { CareerApp } from "./career/career-app";
+import { careerTick } from "@/lib/idol-career";
 import { LockScreen } from "./lock-screen";
 import { TraineeOpening } from "./opening/trainee-opening";
 import { TRAINEE_CARD_EVENT, loadTraineeCard } from "@/lib/trainee-card";
@@ -1085,6 +1087,13 @@ export function DesktopShell({ initialThemeProfile, initialThemeAssets }: Deskto
   const [glassPaintPass, setGlassPaintPass] = useState(0);
   const [notice, setNotice] = useState<string | null>(null);
   useWorldAlarms(setNotice);
+  // 发动机：每隔几秒看一眼世界时间，该来的邀请、该提醒的日程到了就提醒
+  useEffect(() => {
+    const run = () => { try { careerTick(setNotice); } catch { /* 发动机出错不挡着用手机 */ } };
+    run();
+    const timer = window.setInterval(run, 5000);
+    return () => window.clearInterval(timer);
+  }, []);
   // 爱豆小手机：还没有练习生证就先走开局
   const [needOpening, setNeedOpening] = useState(() => !loadTraineeCard());
   useEffect(() => {
@@ -4245,6 +4254,9 @@ html,body{margin:0;padding:0;width:100%;height:100%;background:#121110;color:rgb
 
     if (activeApp === "album") {
       return <AlbumApp onClose={() => setActiveApp(null)} onNotice={setNotice} />;
+    }
+    if (activeApp === "career") {
+      return <CareerApp onClose={() => setActiveApp(null)} onNotice={setNotice} />;
     }
     if (activeApp === "contacts") {
       return <ContactsApp onClose={() => setActiveApp(null)} onNotice={setNotice} />;

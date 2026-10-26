@@ -1,5 +1,6 @@
 "use client";
 
+import { loadProfiles } from "@/lib/idol-people";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { Character } from "@/lib/character-types";
 import {
@@ -515,7 +516,9 @@ function CharListView({
     ?? worldGroups.find(g => g.id === DEFAULT_CHARACTER_WORLD_ID)
     ?? worldGroups[0];
   const memberSet = new Set(currentGroup?.memberIds ?? []);
-  const worldCharacters = characters.filter(c => memberSet.has(c.id));
+  // 爱豆小手机：背景人物只待在通讯录，档案库只摆主要人物
+  const idolProfiles = loadProfiles();
+  const worldCharacters = characters.filter(c => memberSet.has(c.id) && idolProfiles[c.id]?.layer !== "background");
   const worldBgItems = (bgItems || []).filter(item => (item.worldId ?? DEFAULT_CHARACTER_WORLD_ID) === currentWorldId);
   const memberCounts = new Map(worldGroups.map(g => [g.id, g.memberIds.length]));
   const nameById = new Map(characters.map(c => [c.id, c.name || "未命名"]));

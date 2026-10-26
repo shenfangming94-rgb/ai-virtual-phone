@@ -14,8 +14,8 @@ import { addChatContact, createGroupSession, createOrGetSession, loadChatContact
 import { addFriendRequest, dispatchFriendRequestUpdated, loadFriendRequests, clearRequestsForCharacter } from "./friend-request-storage";
 import { PENDING_REPLY_PREFIX } from "./friend-request-engine";
 import { resolveUserIdentity, loadApiConfigs, loadBindingConfig, resolveBinding } from "./settings-storage";
-import { createPerson, emptyProfile, fmtDay, getProfile, saveProfile, draftPerson, completeCard, rollFace } from "./idol-people";
-import { companyOf, loadCareer, type CareerNode } from "./idol-career";
+import { createPerson, emptyProfile, fmtDay, getProfile, saveProfile, draftPerson, completeCard, rollFace, rollSecretKind, draftFields, decayRelations, herAge } from "./idol-people";
+import { companyOf, loadCareer, saveCareer, type CareerNode } from "./idol-career";
 import { simpleLLMCall } from "./api-helpers";
 import { loadTraineeCard } from "./trainee-card";
 import { seedCrowd } from "./idol-crowd";
@@ -141,20 +141,9 @@ export async function fleshOut(charId: string, reroll = false): Promise<void> {
   if (!c) return;
   const p = getProfile(charId);
   if (!reroll && p.privateLines.length) return;
-  const d = await completeCard(p, c.name);
-  saveProfile({
-    ...p,
-    role: d.role || p.role,
-    group: d.group || p.group,
-    age: d.age || p.age,
-    isIdol: d.isIdol,
-    publicLabels: d.publicLabels,
-    publicText: d.publicText,
-    privateLines: d.privateLines,
-    speech: d.speech,
-    taboo: d.taboo,
-    face: reroll ? rollFace() : p.face,
-  });
+  const d = await completeCard(p, c.name, reroll ? rollSecretKind() : undefined);
+  const f = draftFields(d, reroll ? undefined : p.secret);
+  saveProfile({ ...p, ...f, role: d.role || p.role, group: d.group || p.group, age: d.age || p.age, face: reroll ? rollFace() : p.face, ...(reroll ? { rolled: false } : {}) });
 }
 
 export function needsFleshOut(charId: string): boolean {
@@ -213,12 +202,31 @@ async function makeTeacher(companyName: string): Promise<Character> {
   try {
     const d = await draftPerson(`${companyName} 带新人练习生的管理老师，日常在 KakaoTalk 群里通知日程`, rollFace());
     return createPerson(d.name, {
-      ...emptyProfile(""), layer: "main", role: d.role || `${companyName} 练习生管理老师`, group: d.group || "公司",
-      age: d.age, privateLines: d.privateLines, speech: d.speech, taboo: d.taboo,
+      ...emptyProfile(""), ...draftFields(d), layer: "main", role: d.role || `${companyName} 练习生管理老师`, group: d.group || "公司",
     }, null, genKakaoId());
   } catch {
     return createPerson("管理老师", { ...emptyProfile(""), layer: "main", role: `${companyName} 练习生管理老师`, group: "公司" }, null, genKakaoId());
   }
+}
+
+/** 进公司第一天分一到两个室友：在场的同龄女练习生优先，不够就捏 */
+async function ensureRoommates(mates: Character[]): Promise<void> {
+  const career = loadCareer();
+  if (career.roommates?.length) return;
+  const mine = herAge() ?? 17;
+  const picks = mates.filter(m => { const p = getProfile(m.id); return p.gender === "女" && Math.abs((parseInt(p.age, 10) || mine) - mine) <= 3; }).slice(0, 2);
+  const want = 1 + (Math.random() < 0.5 ? 1 : 0);
+  while (picks.length < want) {
+    try {
+      const d = await draftPerson(`跟她分到同一间宿舍的室友，同公司的女练习生，年龄跟她差不多（她 ${mine} 岁）`, rollFace());
+      picks.push(createPerson(d.name, { ...emptyProfile(""), ...draftFields(d), layer: "main", group: "室友", met: true, metAt: { at: Date.now(), place: "宿舍" }, relation: "认识" }, null, genKakaoId()));
+    } catch { break; }
+  }
+  for (const m of picks) {
+    const p = getProfile(m.id);
+    saveProfile({ ...p, layer: "main", group: "室友", role: p.role.includes("室友") ? p.role : `${p.role || "同期练习生"} · 室友`, met: true, relation: p.relation && p.relation !== "陌生" ? p.relation : "认识" });
+  }
+  saveCareer({ ...loadCareer(), roommates: picks.map(m => m.id) });
 }
 
 let groupBusy = false;
@@ -234,6 +242,7 @@ export async function ensureTraineeGroup(present: Character[], notify?: (msg: st
   try {
     const teacher = present.find(isTeacher) ?? (s.teacherId ? loadCharacters().find(x => x.id === s.teacherId) : undefined) ?? await makeTeacher(c.name);
     const mates = present.filter(x => x.id !== teacher.id && isTrainee(x));
+    await ensureRoommates(mates);
     const name = `${c.name} 新人练习生`;
     const session = createGroupSession(name, [teacher.id, ...mates.map(m => m.id)]);
     saveChatSessions(loadChatSessions().map(x => x.id === session.id ? { ...x, groupOwnerId: teacher.id } : x));
@@ -290,11 +299,14 @@ export async function afterNodeScene(node: CareerNode | undefined, presentIds: s
 }
 
 let tickBusy = false;
+let lastDecayDay = "";
 
 /** 每 5 秒在桌面跑：到点的好友申请、群里的日程通知 */
 export function kakaoTick(notify: (msg: string) => void): void {
   if (tickBusy || !loadTraineeCard()) return;
   const now = Date.now();
+  const today = new Date(now).toDateString();
+  if (today !== lastDecayDay) { lastDecayDay = today; try { decayRelations(); } catch { /* 不挡着 */ } }
   const s = load();
   const due = s.incoming.filter(i => i.at <= now);
   if (due.length) {

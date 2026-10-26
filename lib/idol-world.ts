@@ -12,7 +12,7 @@ import { loadChatContacts } from "./chat-storage";
 import { HIDDEN_WORLD_CHAR_ID, loadAllCharacters as loadCharacters, saveCharacters } from "./character-storage";
 import type { Character } from "./character-types";
 import { resolveUserIdentity } from "./settings-storage";
-import { composePersona, createPerson, emptyProfile, fmtDay, getProfile, loadProfiles, saveProfile } from "./idol-people";
+import { composePersona, createPerson, emptyProfile, fmtDay, getProfile, loadProfiles, relationOf, saveProfile, stepRelation } from "./idol-people";
 import { describeTrainee, loadTraineeCard } from "./trainee-card";
 import { shiftWorldTime } from "./world-clock";
 import { fmtWorld, parseReply } from "./idol-scenes";
@@ -155,7 +155,7 @@ function mightMeetBlock(presentIds: string[], place: string): string {
     })
     .sort((x, y) => y.score - x.score);
   const detail = scored.slice(0, 25).map(({ c, p, last }) =>
-    `- ${c.name}（${p.role || p.group || "身份没写"}）${p.privateLines.length ? `：${p.privateLines.slice(0, 2).join("；")}` : ""}${last ? `。最近：${last.text}` : ""}`);
+    `- ${c.name}（${p.role || p.group || "身份没写"}，跟她：${relationOf(p)}）${p.privateLines.length ? `：${p.privateLines.slice(0, 2).join("；")}` : ""}${last ? `。最近：${last.text}` : ""}`);
   const rest = scored.slice(25).map(({ c, p }) => `${c.name}（${p.role || p.group || "身份没写"}）`);
   return [
     "【可能碰上的人】这里有谁交给你定：按现在几点、这是什么地方、她的日程，以及每个人的身份和习惯，判断这会儿谁合理会在这里。可以是下面的人，也可以是没名字的路人或新面孔，也可以没人。不要为了凑人硬塞。",
@@ -245,18 +245,24 @@ export async function closeWorldScene(groupId: string, sessionId: string): Promi
   let summary = "";
   if (present.length && transcript) {
     const res = await simpleLLMCall(chatConfig(), [
-      { role: "system", content: `把这场戏记下来。只输出 JSON：{"summary":"这场戏两三句","people":[{"name":"","event":"站在这个人的角度，这场里他和她之间发生了什么，一句话；没交集就写空","impression":"只给第一次见她的人写：他对她的第一印象，一两句；其他人写空"}]}\n第一次见她的人：${firstMeet.join("、") || "无"}` },
-      { role: "user", content: `地点：${meta.place}\n在场：${present.map(c => c.name).join("、")}\n\n${transcript}` },
+      { role: "system", content: `把这场戏记下来。只输出 JSON：{"summary":"这场戏两三句","people":[{"name":"","event":"站在这个人的角度，这场里他和她之间发生了什么，一句话；没交集就写空","impression":"只给第一次见她的人写：他对她的第一印象，一两句；其他人写空","relation":"up/down/same","heart":"up/down/same","secretLearned":"她这场知道了他的秘密就写她是怎么知道的，一句话；没有就写空"}]}\n关系和心动只按这场里真的发生的事判断，一场最多动一格，没发生什么就写 same；没有心动线的人 heart 写 same。\n第一次见她的人：${firstMeet.join("、") || "无"}` },
+      { role: "user", content: `地点：${meta.place}\n在场：\n${present.map(c => { const pp = getProfile(c.id); return `- ${c.name}：关系 ${relationOf(pp)}${pp.canCrush && pp.heart ? `，心动 ${pp.heart}` : "，没有心动线"}${pp.secret && pp.secret.kind !== "none" && pp.secret.text && !pp.secret.revealed ? `，秘密：${pp.secret.text}` : ""}`; }).join("\n")}\n\n${transcript}` },
     ], { temperature: 0.4, label: "剧情记账" });
     if (!res.content) throw new Error(res.error || "AI 没回");
-    const j = JSON.parse(res.content.match(/\{[\s\S]*\}/)?.[0] ?? "{}") as { summary?: string; people?: { name?: string; event?: string; impression?: string }[] };
+    const j = JSON.parse(res.content.match(/\{[\s\S]*\}/)?.[0] ?? "{}") as { summary?: string; people?: { name?: string; event?: string; impression?: string; relation?: string; heart?: string; secretLearned?: string }[] };
     summary = String(j.summary ?? "");
     for (const item of j.people ?? []) {
       const c = present.find(x => x.name === item.name);
       if (!c) continue;
       const p = getProfile(c.id);
       const event = String(item.event ?? "").trim();
-      const next = { ...p, met: true, metAt: p.metAt ?? { at: meta.startAt, place: meta.place } };
+      const dir = (v?: string) => (v === "up" || v === "down" ? v : "same") as "up" | "down" | "same";
+      const stepped = stepRelation({ ...p, relation: relationOf({ ...p, met: true }) }, dir(item.relation), dir(item.heart));
+      const learned = String(item.secretLearned ?? "").trim();
+      const next = {
+        ...stepped, met: true, metAt: p.metAt ?? { at: meta.startAt, place: meta.place },
+        ...(learned && p.secret && p.secret.kind !== "none" && !p.secret.revealed ? { secret: { ...p.secret, revealed: { at: meta.startAt, how: learned } } } : {}),
+      };
       if (event) { next.events = [...p.events, { id: uid("ev"), at: meta.startAt, place: meta.place, text: event }]; recorded.push(c.name); }
       if (!p.withYou && item.impression) next.withYou = String(item.impression);
       saveProfile(next);

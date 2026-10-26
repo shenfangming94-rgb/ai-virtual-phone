@@ -194,7 +194,7 @@ export function TraineeOpening({ onDone, onNotice }: { onDone: () => void; onNot
               <textarea className="op-line" rows={2} value={c.looks} placeholder="写一两句你长什么样" onChange={e => set("looks", e.target.value)} />
               <div className="op-sec">起点</div>
               <label className="op-f"><em>등록일 起点</em><input type="date" value={c.start} onChange={e => set("start", e.target.value)} /></label>
-              <label className="op-f"><em>练多久</em><input value={c.trainLength} placeholder="自己写，比如一年半" onChange={e => set("trainLength", e.target.value)} /></label>
+              <label className="op-f"><em>多久出道</em><input value={c.trainLength} placeholder="打算当多久练习生，比如一年半" onChange={e => set("trainLength", e.target.value)} /></label>
               <p className="op-note">起点就是这个世界开始的那天，世界时钟会拨到这天早上。</p>
             </>
           ) : null}

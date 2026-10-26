@@ -71,6 +71,12 @@ function makeNames(n: number, taken: Set<string>): CrowdMember[] {
       name = SURNAMES[Math.floor(Math.random() * SURNAMES.length)] + GIVEN[Math.floor(Math.random() * GIVEN.length)];
       role = `练习生 · ${roles[Math.floor(Math.random() * roles.length)]}`;
     }
+    {
+      // 年龄：多数 15～19，少数 12～14 的小练习生，偶尔 20、21
+      const r = Math.random();
+      const age = r < 0.15 ? 12 + Math.floor(Math.random() * 3) : r < 0.93 ? 15 + Math.floor(Math.random() * 5) : 20 + Math.floor(Math.random() * 2);
+      role = `${role} · ${age}岁`;
+    }
     if (taken.has(name)) continue;
     taken.add(name);
     out.push({ id: `${CROWD_PREFIX}${Date.now().toString(36)}${Math.random().toString(36).slice(2, 7)}`, name, role });

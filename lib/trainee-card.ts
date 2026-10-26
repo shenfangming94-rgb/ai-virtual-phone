@@ -104,7 +104,7 @@ export function describeTrainee(c: TraineeCard): string {
     c.mbti ? `MBTI：${c.mbti}` : "",
     c.other ? `其他：${c.other}` : "",
     c.company ? `现在：${c.company} 练习生` : "现在：还没进任何公司，准备投递",
-    c.trainLength ? `打算练习的时间：${c.trainLength}` : "",
+    c.trainLength ? `打算多久出道：${c.trainLength}` : "",
   ];
   return lines.filter(Boolean).join("\n");
 }
@@ -146,7 +146,7 @@ const pick = <T,>(arr: readonly T[]): T => arr[Math.floor(Math.random() * arr.le
 
 export function randomBasics(): Pick<TraineeCard, "name" | "nationality" | "mbti" | "birthday"> & { startYear: number } {
   const startYear = 2012 + Math.floor(Math.random() * 8);
-  const age = 15 + Math.floor(Math.random() * 5);
+  const age = 16 + Math.floor(Math.random() * 4);
   const m = 1 + Math.floor(Math.random() * 12);
   const d = 1 + Math.floor(Math.random() * 28);
   return {

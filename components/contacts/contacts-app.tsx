@@ -27,7 +27,18 @@ import {
   saveLists,
   saveProfile,
   type CardDraft,
+  type Charm,
   type ContactList,
+  type Heart,
+  type Relation,
+  type SecretKind,
+  CHARM_LABEL,
+  HEARTS,
+  RELATIONS,
+  draftFields,
+  loadCharm,
+  relationOf,
+  saveCharm,
   type FaceRelation,
   type IdolProfile,
 } from "@/lib/idol-people";
@@ -394,6 +405,7 @@ function CardView({ data, id, onBack, onEdit, onNotice }: { data: Data; id: stri
   const color = useAvatarColor(char?.avatar, char?.name ?? id);
   const [direction, setDirection] = useState("");
   const [busy, setBusy] = useState(false);
+  const [peek, setPeek] = useState(false);
   if (!char) return <div className="ct-page"><p className="ct-empty">这个人不在了</p></div>;
   const added = data.kakao.has(id);
   const idKnown = idVisible(p, added);
@@ -415,7 +427,7 @@ function CardView({ data, id, onBack, onEdit, onNotice }: { data: Data; id: stri
     setBusy(true);
     try {
       const d = await reviseCard(p, char.name, direction);
-      saveProfile({ ...p, ...draftToProfilePatch(d) });
+      saveProfile({ ...p, ...draftToProfilePatch(d, p.secret) });
       setDirection("");
       onNotice?.("改好了");
     } catch (e) {
@@ -449,7 +461,7 @@ function CardView({ data, id, onBack, onEdit, onNotice }: { data: Data; id: stri
         <div className="ct-hero">
           <Avatar name={char.name} src={char.avatar} size={168} className="ct-hero-avatar" />
           <h1>{char.name}</h1>
-          <p>{[p.role, p.age ? `${p.age} 岁` : ""].filter(Boolean).join(" · ") || "还没写身份"}</p>
+          <p>{[p.role, p.age ? `${p.age} 岁` : "", p.mbti].filter(Boolean).join(" · ") || "还没写身份"}</p>
         </div>
         <div className="ct-actions">
           <button type="button" className="ct-glass-dark" onClick={() => openChat()}><MessageCircle size={22} /><span>Kakao</span></button>
@@ -464,7 +476,19 @@ function CardView({ data, id, onBack, onEdit, onNotice }: { data: Data; id: stri
           <hr />
           <div className="ct-k">认识</div>
           <div className="ct-v">{p.met ? (p.metAt ? `${fmtDay(p.metAt.at)}${p.metAt.place ? ` · ${p.metAt.place}` : ""}` : "见过") : "还没见过"}</div>
+          <hr />
+          <div className="ct-k">关系</div>
+          <div className="ct-v">{relationOf(p)}</div>
+          {p.birthday ? <><hr /><div className="ct-k">生日</div><div className="ct-v">{p.birthday.split("-").map(x => String(parseInt(x, 10) || x)).join("月")}日</div></> : null}
         </div>
+
+        {p.secret?.revealed && p.secret.text ? (
+          <div className="ct-block">
+            <div className="ct-k">你知道的秘密</div>
+            <div className="ct-v">{p.secret.text}</div>
+            <div className="ct-v is-dim">{fmtDay(p.secret.revealed.at)}{p.secret.revealed.how ? ` · ${p.secret.revealed.how}` : ""}</div>
+          </div>
+        ) : null}
 
         {p.isIdol && (p.publicLabels.length || p.publicText) ? (
           <div className="ct-block">
@@ -517,6 +541,19 @@ function CardView({ data, id, onBack, onEdit, onNotice }: { data: Data; id: stri
         </div>
 
         <div className="ct-block">
+          {peek ? (
+            <>
+              <div className="ct-k">偷看</div>
+              <div className="ct-v">{p.secret && p.secret.kind !== "none" && p.secret.text && !p.secret.revealed ? `秘密：${p.secret.text}` : "他没什么瞒着你的"}</div>
+              {p.canCrush && p.heart ? <div className="ct-v">他对你：{p.heart}</div> : null}
+              <button type="button" className="ct-wide-dark" onClick={() => setPeek(false)}>收起来</button>
+            </>
+          ) : (
+            <button type="button" className="ct-wide-dark" onClick={() => setPeek(true)}>🤫 偷看秘密</button>
+          )}
+        </div>
+
+        <div className="ct-block">
           <div className="ct-k">照方向改</div>
           <textarea className="ct-input-dark" rows={2} value={direction} onChange={e => setDirection(e.target.value)} placeholder="写一句，比如「再酷一点，话少一点」" />
           <button type="button" className="ct-wide-dark" disabled={busy || !direction.trim()} onClick={() => void revise()}>
@@ -529,11 +566,8 @@ function CardView({ data, id, onBack, onEdit, onNotice }: { data: Data; id: stri
   );
 }
 
-function draftToProfilePatch(d: CardDraft): Partial<IdolProfile> {
-  return {
-    role: d.role, group: d.group, age: d.age, isIdol: d.isIdol,
-    publicLabels: d.publicLabels, publicText: d.publicText, privateLines: d.privateLines, speech: d.speech, taboo: d.taboo,
-  };
+function draftToProfilePatch(d: CardDraft & { secretKind?: SecretKind }, prev?: IdolProfile["secret"]): Partial<IdolProfile> {
+  return draftFields(d, prev);
 }
 
 function EditView({ data, id, onDone, onDeleted, onNotice }: { data: Data; id: string; onDone: () => void; onDeleted: () => void; onNotice: Notice }) {
@@ -576,7 +610,15 @@ function EditView({ data, id, onDone, onDeleted, onNotice }: { data: Data; id: s
         <Field label="名字"><input value={name} onChange={e => setName(e.target.value)} /></Field>
         <Field label="KakaoTalk ID"><input value={wid} onChange={e => setWid(e.target.value)} /></Field>
         <Field label="身份"><input value={p.role} onChange={e => set("role", e.target.value)} placeholder="比如：VANTA 主唱 · 同公司前辈" /></Field>
+        <Field label="性别">
+          <div className="ct-seg">
+            <button type="button" className={p.gender === "男" ? "on" : ""} onClick={() => set("gender", "男")}>男</button>
+            <button type="button" className={p.gender === "女" ? "on" : ""} onClick={() => set("gender", "女")}>女</button>
+          </div>
+        </Field>
         <Field label="年龄"><input value={p.age} onChange={e => set("age", e.target.value)} /></Field>
+        <Field label="生日"><input value={p.birthday ?? ""} onChange={e => set("birthday", e.target.value)} placeholder="月-日，比如 04-12" /></Field>
+        <Field label="MBTI"><input value={p.mbti ?? ""} onChange={e => set("mbti", e.target.value.toUpperCase())} placeholder="只是参考" /></Field>
         <Field label="分组">
           <input value={p.group} list="ct-groups" onChange={e => set("group", e.target.value)} placeholder="公司 / 同期练习生 / 家和老朋友…" />
           <datalist id="ct-groups">{groups.map(g => <option key={g} value={g} />)}</datalist>
@@ -631,6 +673,26 @@ function EditView({ data, id, onDone, onDeleted, onNotice }: { data: Data; id: s
             ))}
           </Field>
         ) : null}
+        <Field label="关系">
+          <select className="ct-select" value={relationOf(p)} onChange={e => set("relation", e.target.value as Relation)}>
+            {[...RELATIONS, "前任"].map(r => <option key={r} value={r}>{r}</option>)}
+          </select>
+        </Field>
+        <Field label="心动">
+          <select className="ct-select" value={p.canCrush && p.heart ? p.heart : ""} onChange={e => { const v = e.target.value as Heart | ""; setP(prev => ({ ...prev, canCrush: Boolean(v), heart: v || undefined, rolled: true })); }}>
+            <option value="">没有心动线</option>
+            {HEARTS.map(h => <option key={h} value={h}>{h}</option>)}
+          </select>
+        </Field>
+        <Field label="秘密（她不知道的）">
+          <textarea rows={2} value={p.secret?.text ?? ""} onChange={e => set("secret", { kind: e.target.value.trim() ? (p.secret?.kind === "heavy" ? "heavy" : "light") : "none", text: e.target.value, ...(p.secret?.revealed ? { revealed: p.secret.revealed } : {}) })} placeholder="没有就空着" />
+          {p.secret?.text ? (
+            <div className="ct-seg" style={{ marginTop: 8 }}>
+              <button type="button" className={!p.secret.revealed ? "on" : ""} onClick={() => set("secret", { ...p.secret!, revealed: undefined })}>她还不知道</button>
+              <button type="button" className={p.secret.revealed ? "on" : ""} onClick={() => set("secret", { ...p.secret!, revealed: p.secret!.revealed ?? { at: Date.now(), how: "" } })}>她知道了</button>
+            </div>
+          ) : null}
+        </Field>
         <Field label="备注（只有你看得到）"><textarea rows={3} value={p.note} onChange={e => set("note", e.target.value)} /></Field>
       </div>
       <button type="button" className="ct-danger" onClick={() => setConfirmDel(true)}>删除这个人</button>
@@ -666,6 +728,7 @@ function MeView({ onBack, onNotice }: { onBack: () => void; onNotice: Notice }) 
   const [avatar, setAvatar] = useState<string | undefined>(me?.avatarUrl);
   const [bio, setBio] = useState(me?.bio ?? "");
   const [kakaoId, setKakaoId] = useState(() => myKakaoId());
+  const [charm, setCharmState] = useState<Charm>(() => loadCharm());
   const [editing, setEditing] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
   const color = useAvatarColor(avatar, name || "me");
@@ -715,6 +778,15 @@ function MeView({ onBack, onNotice }: { onBack: () => void; onNotice: Notice }) 
           )}
         </div>
         <div className="ct-block">
+          <div className="ct-k">人缘</div>
+          <div className="ct-seg ct-seg-dark">
+            {(Object.keys(CHARM_LABEL) as Charm[]).map(c => (
+              <button key={c} type="button" className={charm === c ? "on" : ""} onClick={() => { saveCharm(c); setCharmState(c); }}>{CHARM_LABEL[c]}</button>
+            ))}
+          </div>
+          <div className="ct-v is-dim" style={{ fontSize: 13, marginTop: 6 }}>新认识的人一开始对你有没有好感。只影响之后新出现的人</div>
+        </div>
+        <div className="ct-block">
           <div className="ct-k">关于我</div>
           {editing ? (
             <textarea className="ct-input-dark" rows={5} value={bio} onChange={e => setBio(e.target.value)} placeholder="写点关于你自己的" />
@@ -731,7 +803,7 @@ function MeView({ onBack, onNotice }: { onBack: () => void; onNotice: Notice }) 
 function AddSheet({ onClose, onCreated, onNotice }: { onClose: () => void; onCreated: (id: string) => void; onNotice: Notice }) {
   const [wish, setWish] = useState("");
   const [busy, setBusy] = useState(false);
-  const [draft, setDraft] = useState<CardDraft | null>(null);
+  const [draft, setDraft] = useState<(CardDraft & { secretKind?: SecretKind }) | null>(null);
   const [face, setFace] = useState<FaceRelation>(rollFace);
   const [direction, setDirection] = useState("");
 
@@ -751,7 +823,7 @@ function AddSheet({ onClose, onCreated, onNotice }: { onClose: () => void; onCre
     setBusy(true);
     try {
       const p = { ...emptyProfile("draft"), ...draftToProfilePatch(draft), face };
-      setDraft(await reviseCard(p, draft.name, direction));
+      setDraft({ ...(await reviseCard(p, draft.name, direction)), secretKind: draft.secretKind });
       setDirection("");
     } catch (e) {
       onNotice?.(e instanceof Error ? e.message : "没改成");
@@ -759,7 +831,7 @@ function AddSheet({ onClose, onCreated, onNotice }: { onClose: () => void; onCre
       setBusy(false);
     }
   };
-  const accept = (d: CardDraft) => {
+  const accept = (d: CardDraft & { secretKind?: SecretKind }) => {
     const char = createPerson(d.name, { ...emptyProfile(""), ...draftToProfilePatch(d), face });
     onNotice?.(`${d.name} 进通讯录了`);
     onCreated(char.id);

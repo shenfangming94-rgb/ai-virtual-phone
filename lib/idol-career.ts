@@ -9,6 +9,7 @@
  */
 
 import { kvGet, kvSet } from "./kv-db";
+import { loadCharacters } from "./character-storage";
 import { simpleLLMCall } from "./api-helpers";
 import { loadApiConfigs, loadBindingConfig, resolveBinding } from "./settings-storage";
 import { loadTraineeCard, saveTraineeCard, describeTrainee } from "./trainee-card";
@@ -72,6 +73,8 @@ export type Career = {
   offers: Offer[];
   nodes: CareerNode[];
   offersMadeAt?: number;
+  /** 室友（角色 id） */
+  roommates?: string[];
 };
 
 const KEY = "idol_career_v1";
@@ -325,6 +328,7 @@ export function careerPromptBlock(): string {
     `【她现在】${c.name} 的练习生，进公司第 ${days} 天。`,
     `【公司】${c.name}：${c.scale}；${c.style}；练习生：${c.trainee}；名声：${c.fame}`,
     career.insider ? `【公司内部档案】\n${career.insider}` : "",
+    career.roommates?.length ? `【她的室友】${career.roommates.map(id => loadCharacters().find(c => c.id === id)?.name).filter(Boolean).join("、")}` : "",
     career.facts.length ? `【戏里已经定下来的公司细节】\n${career.facts.slice(-30).map(f => `- ${f}`).join("\n")}` : "",
     next.length ? `【接下来的日程】${next.join("；")}` : "",
     recentResults(career),

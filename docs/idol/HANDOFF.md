@@ -130,9 +130,30 @@ Flora 要一个专门玩「爱豆模拟器」的小手机：她是想当爱豆�
 - 发动机：第一天那场结束（或没演过去了）→ 管理老师（在场的老师，没有就 AI 捏）拉群「公司 新人练习生」，在场的同期一起进；节点前 20 小时内老师在群里发通知（AI 用老师口吻）；月考那场结束 → 70% 有一个在场同期来加
 - 测试：`docs/idol/tests/kk1.mjs`（按请求内容回假 AI）
 
+### 2.12 提醒事项重做（10-28，`lib/idol-reminders.ts`、`components/career/career-app.tsx`、`styles/reminders.css`）
+- iOS 原生样子，白天浅色晚上深色（世界时间 7～19 点白天）。首页六卡（今天/计划/待回复/全部/请假·缺席/完成）+ 我的列表（公司日程/机会/约/我自己记的，按 `listOf(node)`）+ 公司（档案、月末排名占位）+ 右下 +
+- CareerNode 加 kind（talk/makeup/chance/date/custom）、status（invite/leave/absent/declined）、from/fromId/replyBy/result/wish/note
+- 三结局：去演（详情页，wish 带进 premise）/ 打勾写一句 `checkNode`（老师或约的人记一笔，节点后续照走）/ 过 2 小时没动 `reminderTick` 标缺席 → `onAbsent`（老师私聊问，第二次起排「去办公室」；约的人来问）
+- 请假：左滑或详情 `leaveNode`（周评月考排补考，玩得好的人 1～4 小时后来关心）；KakaoTalk 私聊老师时 `buildIdolChatHint` 让老师决定批不批，回复里 `[准假:日程名]` 由 `installIdolChatHooks`（message.beforePersist）摘掉并请假
+- 待回复：`acceptInvite`/`declineInvite`（公司邀请 offers 也算），replyBy 过期作废
+- 跳时间：`jumpWorld` = `capJump`，遇到日程（提前半小时）或新待回复就停；`$` 指令和结束这场的跳时间按钮都走它
+- 后台消息 outbox：`sendAs` 用 chat 绑定的 API 让某人私聊她（没加过会自动加上，老师就是这样）
+
+### 2.13 人物（10-28）
+- IdolProfile 加 gender/birthday/mbti/relation/heart/canCrush/secret/rolled；CARD_RULES 加性别生日 MBTI、年龄规矩、秘密按骰子；`draftFields` 统一落字段
+- `applyStartRolls`（saveProfile/createPerson 自动跑一次，要有性别年龄）：心动线 = 年龄差（她未成年 3 岁内，成年 4 岁内）+ 不是管她的人 + 男（女 10%）；起点按人缘 `loadCharm`（默认招人喜欢）
+- `stepRelation`：关系 陌生→…→好朋友→暧昧→恋人（暧昧要心动≥有点在意，恋人≥喜欢），恋人往下是前任；`decayRelations` 每世界日跑一次（三周没交集好朋友→朋友、暧昧→好朋友）
+- 结束这场记账 JSON 加 relation/heart（up/down/same）、secretLearned（揭穿秘密写怎么知道的）
+- composePersona 带态度和秘密（她不知道时不说破）
+- 通讯录：名片显示关系、生日、MBTI、你知道的秘密、🤫偷看秘密（秘密+心动）；编辑页加性别生日 MBTI 关系心动秘密（她知道了吗）；我的名片加人缘
+- 室友：第一天拉群时 `ensureRoommates`（在场同龄女练习生优先，不够捏，1～2 个，career.roommates，世界提示里有）
+- 开局页「练多久」→「多久出道」，随便年龄 16～19；路人带年龄（多数 15～19，少数 12～14 小练习生，偶尔 20、21）
+
 ---
 
 ## 3. 定下来但还没做的（按她的意愿排）
+
+**10-28 进度**：第 1、2 块（提醒事项、人物）做完了。下一块是 3 事情发动机（三类事、挫折、关注度、生病、近况 + KakaoTalk 状态消息、动态改造），然后 4 账/排名/出道判定、5 大事记日历、6 锁屏通知和调用开关。完整设计在 `docs/idol/events.md`。
 
 ### 2.10 去哪儿（10-27，`lib/idol-places.ts`）
 - 剧情右上 + =「去哪儿」：类别（公司/宿舍/附近/出去玩/生活/自己写，出道后那类藏着）点地点，公司宿舍前面自动带公司名，没进公司锁着

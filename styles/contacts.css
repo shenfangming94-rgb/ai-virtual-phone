@@ -186,3 +186,7 @@ ul.ct-v { list-style: disc; }
 .ct-reopen span { width: 100%; opacity: 0.85; }
 .ct-reopen button { flex: 1; border: 0.5px solid rgba(255, 255, 255, 0.35); border-radius: 16px; padding: 9px; background: rgba(255, 255, 255, 0.18); font-size: 14px; }
 .ct-reopen .is-strong { background: rgba(255, 255, 255, 0.85); color: #4a4560 !important; font-weight: 600; }
+.ct-select { width: 100%; border: none; outline: none; background: transparent; font-size: 16px; font-family: inherit; color: #000; padding: 2px 0; -webkit-appearance: none; appearance: none; }
+.ct-seg-dark { background: rgba(0, 0, 0, 0.14); margin-top: 6px; }
+.ct-seg-dark button { color: rgba(255, 255, 255, 0.85) !important; }
+.ct-seg-dark button.on { background: rgba(255, 255, 255, 0.92); color: #000 !important; }

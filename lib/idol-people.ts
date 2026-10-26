@@ -26,6 +26,19 @@ export const FACE_LABEL: Record<FaceRelation, string> = {
 
 export type PersonEvent = { id: string; at: number; place: string; text: string };
 
+/** 关系线：从「跟你过不去」到「恋人」，「前任」单独 */
+export const RELATIONS = ["跟你过不去", "不喜欢你", "有点烦你", "陌生", "认识", "熟人", "朋友", "好朋友", "暧昧", "恋人"] as const;
+export type Relation = typeof RELATIONS[number] | "前任";
+/** 心动线：只有可能对她心动的人才有 */
+export const HEARTS = ["没感觉", "有好感", "有点在意", "喜欢", "很喜欢"] as const;
+export type Heart = typeof HEARTS[number];
+/** 秘密：none 没有 / light 小秘密 / heavy 重的（作风、关系户） */
+export type SecretKind = "none" | "light" | "heavy";
+export type Secret = { kind: SecretKind; text: string; revealed?: { at: number; how: string } };
+/** 她的人缘（默认招人喜欢） */
+export type Charm = "normal" | "likable" | "everyone";
+export const CHARM_LABEL: Record<Charm, string> = { normal: "普通", likable: "招人喜欢", everyone: "万人迷" };
+
 export type IdolProfile = {
   charId: string;
   /** main = 主要人物（进通讯录、能私聊），background = 背景人物 */
@@ -52,6 +65,17 @@ export type IdolProfile = {
   events: PersonEvent[];
   /** 只有她看得到 */
   note: string;
+  gender?: "男" | "女" | "";
+  /** 生日 MM-DD */
+  birthday?: string;
+  mbti?: string;
+  relation?: Relation;
+  /** undefined = 没有心动线 */
+  heart?: Heart;
+  canCrush?: boolean;
+  secret?: Secret;
+  /** 开局骰子掷过了（心动线、起点） */
+  rolled?: boolean;
 };
 
 export type ContactList = { id: string; name: string; memberIds: string[] };
@@ -107,7 +131,7 @@ export function rollFace(): FaceRelation {
 /** 档案拼成给 AI 读的人设 */
 export function composePersona(p: IdolProfile): string {
   const out: string[] = [];
-  const head = [p.role, p.age ? `${p.age}岁` : ""].filter(Boolean).join("，");
+  const head = [p.role, p.gender, p.age ? `${p.age}岁` : "", p.birthday ? `生日 ${p.birthday.replace("-", "月")}日` : "", p.mbti ? `MBTI ${p.mbti}（只是参考，不刻板）` : ""].filter(Boolean).join("，");
   if (head) out.push(`【身份】${head}`);
   if (p.isIdol && (p.publicLabels.length || p.publicText)) {
     out.push(`【公开人设】${p.publicLabels.length ? `标签：${p.publicLabels.join("、")}。` : ""}${p.publicText}`);
@@ -119,10 +143,111 @@ export function composePersona(p: IdolProfile): string {
   if (p.speech) out.push(`【说话】${p.speech}`);
   if (p.taboo) out.push(`【雷区】${p.taboo}`);
   if (p.met && p.withYou) out.push(`【对她的印象】${p.withYou}`);
+  const rel = relationOf(p);
+  out.push(`【你对她的态度】关系：${rel}${p.canCrush && p.heart ? `；心动：${p.heart}` : ""}。照这个态度说话做事，不要比它更热情或更冷淡；心动到哪一步就表现到哪一步，要不要表白、什么时候表白看你的性格和处境。`);
+  if (p.secret && p.secret.kind !== "none" && p.secret.text) {
+    out.push(`【你的秘密】${p.secret.text}${p.secret.revealed ? "（她已经知道了）" : "（她还不知道，不要自己说破，但会在言行里慢慢露出来）"}`);
+  }
   if (p.events.length) {
     out.push(`【和她之间的事】\n${p.events.slice(-12).map(e => `- ${fmtDay(e.at)}${e.place ? ` · ${e.place}` : ""}：${e.text}`).join("\n")}`);
   }
   return out.join("\n\n");
+}
+
+export function relationOf(p: IdolProfile): Relation {
+  return p.relation ?? (p.met ? "认识" : "陌生");
+}
+
+// ── 人缘、开局骰子 ──
+
+const CHARM_KEY = "idol_charm_v1";
+export function loadCharm(): Charm {
+  const v = kvGet(CHARM_KEY);
+  return v === "normal" || v === "everyone" ? v : "likable";
+}
+export function saveCharm(c: Charm): void { kvSet(CHARM_KEY, c); }
+
+/** 她现在几岁（练习生证生日 + 世界时间） */
+export function herAge(): number | null {
+  try {
+    const card = JSON.parse(kvGet("idol_trainee_card_v1") || "null") as { birthday?: string } | null;
+    if (!card?.birthday) return null;
+    const b = new Date(card.birthday);
+    const now = new Date();
+    let a = now.getFullYear() - b.getFullYear();
+    if (now.getMonth() < b.getMonth() || (now.getMonth() === b.getMonth() && now.getDate() < b.getDate())) a--;
+    return a;
+  } catch { return null; }
+}
+
+const AUTHORITY = /老师|经纪|管理|社长|理事|室长|组长|代表|制作人|PD|导演/;
+
+/** 秘密骰子：大概三分之一有小秘密，重的十个里最多一个 */
+export function rollSecretKind(): SecretKind {
+  const r = Math.random();
+  return r < 0.08 ? "heavy" : r < 0.35 ? "light" : "none";
+}
+
+/** 性别、年龄知道了以后掷一次：有没有心动线、心动起点、关系起点 */
+export function applyStartRolls(p: IdolProfile): IdolProfile {
+  if (p.rolled) return p;
+  const age = parseInt(p.age, 10);
+  if (!p.gender || !Number.isFinite(age)) return p;
+  const mine = herAge();
+  const gap = mine == null ? 99 : Math.abs(age - mine);
+  const limit = mine != null && mine < 18 ? 3 : 4;
+  const eligible = gap <= limit && !AUTHORITY.test(p.role) && (mine == null || mine >= 18 || age < 20);
+  const canCrush = eligible && (p.gender === "男" || Math.random() < 0.1);
+  let heart: Heart | undefined;
+  if (canCrush) {
+    const charm = loadCharm();
+    const [first, liked] = charm === "normal" ? [1 / 15, 0.2] : charm === "everyone" ? [0.2, 0.8] : [1 / 8, 0.5];
+    const r = Math.random();
+    heart = r < first ? "喜欢" : r < liked ? "有好感" : "没感觉";
+  }
+  return { ...p, canCrush, heart, rolled: true };
+}
+
+/** 关系、心动往上或往下走一格 */
+export function stepRelation(p: IdolProfile, dir: "up" | "down" | "same", heartDir: "up" | "down" | "same"): IdolProfile {
+  let heart = p.heart;
+  if (p.canCrush && heart && heartDir !== "same") {
+    const i = HEARTS.indexOf(heart);
+    heart = HEARTS[Math.max(0, Math.min(HEARTS.length - 1, i + (heartDir === "up" ? 1 : -1)))];
+  }
+  let rel = relationOf(p);
+  if (dir !== "same") {
+    if (rel === "前任") rel = dir === "up" ? "熟人" : "有点烦你";
+    else {
+      const i = RELATIONS.indexOf(rel);
+      let next = i + (dir === "up" ? 1 : -1);
+      // 暧昧、恋人只给有心动线、而且心动到了的人
+      const romantic = p.canCrush && heart && HEARTS.indexOf(heart) >= HEARTS.indexOf("有点在意");
+      if (RELATIONS[next] === "暧昧" && !romantic) next = i;
+      if (RELATIONS[next] === "恋人" && !(p.canCrush && heart && HEARTS.indexOf(heart) >= HEARTS.indexOf("喜欢"))) next = i;
+      if (rel === "恋人" && dir === "down") { rel = "前任"; next = -1; }
+      if (next >= 0) rel = RELATIONS[Math.max(0, Math.min(RELATIONS.length - 1, next))];
+    }
+  }
+  return { ...p, relation: rel, heart };
+}
+
+/** 很久没交集会淡：好朋友三周没事退回朋友，暧昧退回好朋友 */
+export function decayRelations(): void {
+  const all = loadProfiles();
+  const now = Date.now();
+  let changed = false;
+  for (const id of Object.keys(all)) {
+    const p = all[id];
+    const last = Math.max(p.metAt?.at ?? 0, ...p.events.map(e => e.at));
+    if (!last || now - last < 21 * 864e5) continue;
+    const rel = relationOf(p);
+    if (rel === "好朋友" || rel === "暧昧") {
+      all[id] = { ...p, relation: rel === "好朋友" ? "朋友" : "好朋友", events: [...p.events, { id: `ev_decay_${now.toString(36)}`, at: now, place: "", text: "很久没什么交集，关系淡了一点" }] };
+      changed = true;
+    }
+  }
+  if (changed) saveProfiles(all);
 }
 
 export function fmtDay(ms: number): string {
@@ -131,7 +256,8 @@ export function fmtDay(ms: number): string {
 }
 
 /** 存档案，顺手把角色的 persona、名字、头像更新掉 */
-export function saveProfile(p: IdolProfile, charPatch?: Partial<Pick<Character, "name" | "avatar" | "wechatID">>): void {
+export function saveProfile(input: IdolProfile, charPatch?: Partial<Pick<Character, "name" | "avatar" | "wechatID">>): void {
+  const p = applyStartRolls(input);
   const all = loadProfiles();
   all[p.charId] = p;
   saveProfiles(all);
@@ -146,7 +272,7 @@ export function saveProfile(p: IdolProfile, charPatch?: Partial<Pick<Character, 
 /** 新建一个人：建角色 + 存档案 */
 export function createPerson(name: string, profile: Omit<IdolProfile, "charId">, avatar: string | null = null, wechatID?: string): Character {
   const char = createCharacter({ name, avatar, persona: "", ...(wechatID ? { wechatID } : {}) });
-  const full: IdolProfile = { ...profile, charId: char.id };
+  const full: IdolProfile = applyStartRolls({ ...profile, charId: char.id });
   char.persona = composePersona(full);
   saveCharacters([...loadCharacters(), char]);
   const all = loadProfiles();
@@ -221,6 +347,10 @@ export function comparePinyin(a: string, b: string): number {
 
 export type CardDraft = {
   name: string;
+  gender: "男" | "女" | "";
+  birthday: string;
+  mbti: string;
+  secret: string;
   role: string;
   group: string;
   age: string;
@@ -242,8 +372,18 @@ const CARD_RULES = `写人物卡的规矩：
 - 不写他对她的第一印象，他们还没见过。
 - 名字用韩国人名的中文写法（外国人按国籍）。
 - 跟名单里已有的人不要撞型、不要重名。
+- 每个人都写性别、生日（月-日）、MBTI。MBTI 只是个标志，性格参考它但不刻板，也不要跟它差太远。
+- 年龄：跟她一起玩的同期练习生 16～19 岁，跟她差不多大；公司里的练习生 12～21 岁；20 岁以上的练习生少见，会被人议论年纪大。老师、经纪人、工作人员这些大人不限。
+- 秘密按给定的骰子写：没有就留空；小秘密写一件他瞒着别人的小事或心事；重的写作风不正（同时吊着好几个人、劈腿这类，成年人才可以写约炮）或者关系户。秘密只写一句事实，不写成创伤故事。
 只输出一个 JSON 对象，不要别的字：
-{"name":"","role":"一句话身份","group":"身份分组","age":"","isIdol":false,"publicLabels":[],"publicText":"","privateLines":[],"speech":"","taboo":""}`;
+{"name":"","gender":"男或女","birthday":"MM-DD","mbti":"","role":"一句话身份","group":"身份分组","age":"","isIdol":false,"publicLabels":[],"publicText":"","privateLines":[],"speech":"","taboo":"","secret":""}`;
+
+const SECRET_DICE: Record<SecretKind, string> = { none: "没有秘密", light: "有一个小秘密", heavy: "有一个重的秘密" };
+
+function herLine(): string {
+  const a = herAge();
+  return a == null ? "" : `她现在 ${a} 岁。`;
+}
 
 function chatConfig() {
   const slot = resolveBinding(loadBindingConfig(), undefined, "chat");
@@ -267,8 +407,13 @@ function parseDraft(text: string): CardDraft {
   const j = JSON.parse(m[0]) as Partial<CardDraft>;
   const arr = (v: unknown) => Array.isArray(v) ? v.map(String).filter(Boolean) : [];
   if (!j.name) throw new Error("AI 没给名字");
+  const g = String(j.gender ?? "");
   return {
     name: String(j.name),
+    gender: g.includes("女") ? "女" : g.includes("男") ? "男" : "",
+    birthday: String(j.birthday ?? "").replace(/[^0-9-]/g, "").slice(-5),
+    mbti: String(j.mbti ?? "").toUpperCase().replace(/[^A-Z]/g, "").slice(0, 4),
+    secret: String(j.secret ?? ""),
     role: String(j.role ?? ""),
     group: String(j.group ?? ""),
     age: String(j.age ?? ""),
@@ -282,31 +427,32 @@ function parseDraft(text: string): CardDraft {
 }
 
 /** 照描述捏一个新人。face 是代码掷的骰子 */
-export async function draftPerson(wish: string, face: FaceRelation): Promise<CardDraft> {
+export async function draftPerson(wish: string, face: FaceRelation, secret: SecretKind = rollSecretKind()): Promise<CardDraft & { secretKind: SecretKind }> {
   const res = await simpleLLMCall(chatConfig(), [
     { role: "system", content: CARD_RULES },
-    { role: "user", content: `${rosterLine()}\n骰子：如果他是爱豆，私下跟公开人设「${FACE_LABEL[face]}」。\n她想要的人：${wish.trim() || "随你，照这个世界里合理会出现的人来"}` },
+    { role: "user", content: `${rosterLine()}\n${herLine()}\n骰子：如果他是爱豆，私下跟公开人设「${FACE_LABEL[face]}」；秘密：${SECRET_DICE[secret]}。\n她想要的人：${wish.trim() || "随你，照这个世界里合理会出现的人来"}` },
   ], { temperature: 0.95, label: "通讯录捏人" });
   if (!res.content) throw new Error(res.error || "AI 没回");
-  return parseDraft(res.content);
+  return { ...parseDraft(res.content), secretKind: secret };
 }
 
 /** 照她写的方向改一张已有的卡 */
 export async function reviseCard(p: IdolProfile, name: string, direction: string): Promise<CardDraft> {
   const current: CardDraft = {
-    name, role: p.role, group: p.group, age: p.age, isIdol: p.isIdol,
+    name, gender: p.gender ?? "", birthday: p.birthday ?? "", mbti: p.mbti ?? "", secret: p.secret?.text ?? "",
+    role: p.role, group: p.group, age: p.age, isIdol: p.isIdol,
     publicLabels: p.publicLabels, publicText: p.publicText, privateLines: p.privateLines, speech: p.speech, taboo: p.taboo,
   };
   const res = await simpleLLMCall(chatConfig(), [
     { role: "system", content: `${CARD_RULES}\n这次是改一张已有的卡：只改她要求的地方，其余照抄，名字不改。` },
-    { role: "user", content: `${rosterLine(p.charId)}\n私下跟公开人设：${FACE_LABEL[p.face]}\n现在的卡：${JSON.stringify(current)}\n她要的方向：${direction}` },
+    { role: "user", content: `${rosterLine(p.charId)}\n${herLine()}\n私下跟公开人设：${FACE_LABEL[p.face]}；秘密：${SECRET_DICE[p.secret?.kind ?? "none"]}\n现在的卡：${JSON.stringify(current)}\n她要的方向：${direction}` },
   ], { temperature: 0.8, label: "通讯录改卡" });
   if (!res.content) throw new Error(res.error || "AI 没回");
   return { ...parseDraft(res.content), name };
 }
 
 /** 她搜 ID 搜到一个只有名字的人：照模板把卡补全（名字、身份、你们见过的事不改） */
-export async function completeCard(p: IdolProfile, name: string): Promise<CardDraft> {
+export async function completeCard(p: IdolProfile, name: string, secretKind: SecretKind = p.secret?.kind ?? rollSecretKind()): Promise<CardDraft & { secretKind: SecretKind }> {
   const known = [
     p.role ? `身份：${p.role}` : "",
     p.metAt ? `${fmtDay(p.metAt.at)}在「${p.metAt.place}」见过她` : "",
@@ -315,8 +461,18 @@ export async function completeCard(p: IdolProfile, name: string): Promise<CardDr
   ].filter(Boolean).join("\n");
   const res = await simpleLLMCall(chatConfig(), [
     { role: "system", content: `${CARD_RULES.replace("- 不写他对她的第一印象，他们还没见过。\n", "")}\n这次是把一个戏里出现过的人补成完整的卡：名字不改，已知的身份和发生过的事要对得上。` },
-    { role: "user", content: `${rosterLine(p.charId)}\n骰子：如果他是爱豆，私下跟公开人设「${FACE_LABEL[p.face]}」。\n名字：${name}\n${known || "只知道名字"}` },
+    { role: "user", content: `${rosterLine(p.charId)}\n${herLine()}\n骰子：如果他是爱豆，私下跟公开人设「${FACE_LABEL[p.face]}」；秘密：${SECRET_DICE[secretKind]}。\n名字：${name}\n${known || "只知道名字"}` },
   ], { temperature: 0.9, label: "通讯录补全卡" });
   if (!res.content) throw new Error(res.error || "AI 没回");
-  return { ...parseDraft(res.content), name };
+  return { ...parseDraft(res.content), name, secretKind };
+}
+
+/** AI 捏好的卡 → 档案字段（秘密按骰子） */
+export function draftFields(d: CardDraft & { secretKind?: SecretKind }, prev?: Secret): Partial<IdolProfile> {
+  const kind = d.secretKind ?? prev?.kind ?? "none";
+  return {
+    role: d.role, group: d.group, age: d.age, isIdol: d.isIdol, gender: d.gender, birthday: d.birthday, mbti: d.mbti,
+    publicLabels: d.publicLabels, publicText: d.publicText, privateLines: d.privateLines, speech: d.speech, taboo: d.taboo,
+    secret: { kind, text: kind === "none" ? "" : (d.secret || prev?.text || ""), ...(prev?.revealed ? { revealed: prev.revealed } : {}) },
+  };
 }

@@ -116,7 +116,7 @@ export function TraineeOpening({ onDone, onNotice }: { onDone: () => void; onNot
             <div className="op-cover-zh">练习生登记证</div>
             <div className="op-cover-en">TRAINEE ID CARD</div>
           </div>
-          <div className="op-tap">轻 点 开 始 填 写</div>
+          <div className="op-tap">轻点开始填写</div>
         </div>
       </div>
     );
@@ -127,7 +127,7 @@ export function TraineeOpening({ onDone, onNotice }: { onDone: () => void; onNot
     return (
       <div className="op-root">
         <div className="op-final">
-          <div className="op-final-title">你 的 练 习 生 证</div>
+          <div className="op-final-title">你的练习生证</div>
           <div className={`op-id ${stamping ? "is-stamped" : ""}`}>
             <div className="op-id-top"><img src={CREST} alt="" /><b>TRAINEE ID CARD</b><s>练习生证</s></div>
             <div className="op-id-in">
@@ -146,9 +146,10 @@ export function TraineeOpening({ onDone, onNotice }: { onDone: () => void; onNot
           </div>
           <SignaturePad value={c.signature} onChange={v => set("signature", v)} />
           <p className="op-final-hint">「所属」那一栏空着<br />等你进了哪家公司，这里会盖上公司的章</p>
-          <div className="op-final-btns">
-            <button type="button" className="op-text-btn" onClick={() => setStep(5)} disabled={stamping}>返回修改</button>
-            <button type="button" className="op-frame-btn" onClick={stamp} disabled={stamping}>{stamping ? "盖 章 中" : "盖 章 · 开 始"}</button>
+          <div className="op-foot is-static">
+            <button type="button" className="op-frame-btn is-plain" onClick={() => setStep(5)} disabled={stamping}>返回修改</button>
+            <span />
+            <button type="button" className="op-frame-btn" onClick={stamp} disabled={stamping}>{stamping ? "盖章中" : "盖章 · 开始"}</button>
           </div>
         </div>
         {stamping ? <div className="op-flash" /> : null}
@@ -189,9 +190,9 @@ export function TraineeOpening({ onDone, onNotice }: { onDone: () => void; onNot
 
           {step === 2 ? (
             <>
-              <div className="op-sec">外 貌</div>
+              <div className="op-sec">外貌</div>
               <textarea className="op-line" rows={2} value={c.looks} placeholder="写一两句你长什么样" onChange={e => set("looks", e.target.value)} />
-              <div className="op-sec">起 点</div>
+              <div className="op-sec">起点</div>
               <label className="op-f"><em>등록일 起点</em><input type="date" value={c.start} onChange={e => set("start", e.target.value)} /></label>
               <label className="op-f"><em>练多久</em><input value={c.trainLength} placeholder="自己写，比如一年半" onChange={e => set("trainLength", e.target.value)} /></label>
               <p className="op-note">起点就是这个世界开始的那天，世界时钟会拨到这天早上。</p>
@@ -200,7 +201,7 @@ export function TraineeOpening({ onDone, onNotice }: { onDone: () => void; onNot
 
           {step === 3 ? (
             <>
-              <div className="op-sec">家 境</div>
+              <div className="op-sec">家境</div>
               <div className="op-chk">
                 {FAMILY_OPTIONS.map(f => (
                   <button key={f.id} type="button" className={c.family === f.id ? "on" : ""} onClick={() => set("family", f.id)}>
@@ -219,7 +220,7 @@ export function TraineeOpening({ onDone, onNotice }: { onDone: () => void; onNot
 
           {step === 4 ? (
             <>
-              <div className="op-sec">特 长（可多选）</div>
+              <div className="op-sec">特长（可多选）</div>
               <div className="op-grid">
                 {TALENT_OPTIONS.map(t => {
                   const on = c.talents.includes(t.id);
@@ -234,14 +235,14 @@ export function TraineeOpening({ onDone, onNotice }: { onDone: () => void; onNot
               {c.talents.length ? (
                 <textarea className="op-line" rows={2} value={c.talentNote} placeholder="补充一下（可以不填）" onChange={e => set("talentNote", e.target.value)} />
               ) : null}
-              <div className="op-sec">短 板</div>
+              <div className="op-sec">短板</div>
               <input className="op-line" value={c.weakness} placeholder="可以不填" onChange={e => set("weakness", e.target.value)} />
             </>
           ) : null}
 
           {step === 5 ? (
             <>
-              <div className="op-sec">其 他</div>
+              <div className="op-sec">其他</div>
               <textarea className="op-line" rows={6} value={c.other} placeholder="还有什么想写的都写在这里，可以不填" onChange={e => set("other", e.target.value)} />
               <div className="op-review">
                 <div><em>姓名</em>{c.name}</div>
@@ -253,10 +254,11 @@ export function TraineeOpening({ onDone, onNotice }: { onDone: () => void; onNot
           ) : null}
         </div>
       </div>
+      {/* 三格固定：左上一页、中随便、右下一页，每页位置和大小都一样 */}
       <div className="op-foot">
-        {step > 1 ? <button type="button" className="op-text-btn" onClick={() => setStep(s => s - 1)}>上一页</button> : <span />}
-        {step < 5 ? <button type="button" className="op-text-btn" onClick={random}>🎲 随便</button> : <span />}
-        <button type="button" className="op-frame-btn" onClick={next}>{step === 5 ? "生 成 证 件" : "下 一 页"}</button>
+        <button type="button" className="op-frame-btn is-plain" style={{ visibility: step > 1 ? "visible" : "hidden" }} onClick={() => setStep(s => s - 1)}>上一页</button>
+        <button type="button" className="op-frame-btn is-plain" style={{ visibility: step < 5 ? "visible" : "hidden" }} onClick={random}>随便</button>
+        <button type="button" className="op-frame-btn" onClick={next}>{step === 5 ? "生成证件" : "下一页"}</button>
       </div>
     </div>
   );

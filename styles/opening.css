@@ -129,3 +129,24 @@
 .op-sign-clear { position: absolute; right: 10px; top: 6px; border: none; background: none; font-size: 12px; color: #8a83a3; }
 .op-final-hint { text-align: center; font-size: 12px; color: #9a93b2; line-height: 1.7; margin: 16px 0; }
 .op-final-btns { display: flex; justify-content: space-between; align-items: center; padding: 0 4px 40px; }
+
+/* ── 字号统一：正文 14 / 标签 12 / 小字 11；按钮一律 14、同高同字距 ── */
+.op-root { --op-text: 14px; --op-label: 12px; --op-tiny: 11px; }
+.op-root input, .op-root textarea { font-size: var(--op-text) !important; }
+.op-root input[type="date"] { font-family: inherit; line-height: 1.4; }
+.op-f, .op-line, .op-chk button, .op-review, .op-id-kv { font-size: var(--op-text); }
+.op-f em, .op-sec, .op-chk button small, .op-grid small, .op-review em, .op-id-kv em, .op-sign em, .op-sign-clear, .op-final-hint, .op-tap, .op-final-title { font-size: var(--op-label); }
+.op-step, .op-note, .op-id-no, .op-sign small, .op-t2 { font-size: var(--op-tiny); }
+.op-t1 { font-size: 15px; }
+.op-sec, .op-final-title, .op-tap { letter-spacing: 4px; }
+.op-review em, .op-id-kv em { width: 48px; }
+.op-id-kv { line-height: 1.8; }
+.op-id-top b { font-size: 13px; letter-spacing: 2px; }
+.op-id-top s { font-size: var(--op-label); letter-spacing: 2px; }
+.op-grid b { font-size: var(--op-text); }
+
+.op-foot { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; align-items: center; }
+.op-foot.is-static { position: static; margin: 4px 0 40px; }
+.op-frame-btn { width: 100%; height: 44px; padding: 0 6px; font-size: var(--op-text); letter-spacing: 3px; display: inline-flex; align-items: center; justify-content: center; }
+.op-frame-btn.is-plain { border-color: #b9b0d6; color: #8a83a3; background: rgba(255, 255, 255, 0.5); }
+.op-frame-btn.is-plain::after { border-color: #e3dcf2; }

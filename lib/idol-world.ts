@@ -11,7 +11,7 @@ import { kvGet, kvSet } from "./kv-db";
 import { HIDDEN_WORLD_CHAR_ID, loadAllCharacters as loadCharacters, saveCharacters } from "./character-storage";
 import type { Character } from "./character-types";
 import { resolveUserIdentity } from "./settings-storage";
-import { composePersona, createPerson, emptyProfile, fmtDay, getProfile, saveProfile } from "./idol-people";
+import { composePersona, createPerson, emptyProfile, fmtDay, getProfile, loadProfiles, saveProfile } from "./idol-people";
 import { describeTrainee, loadTraineeCard } from "./trainee-card";
 import { shiftWorldTime } from "./world-clock";
 import { fmtWorld, parseReply } from "./idol-scenes";
@@ -25,7 +25,7 @@ import { saveMemoryEntry } from "./memory-storage";
 export const WORLD_CHAR_ID = HIDDEN_WORLD_CHAR_ID;
 const META_KEY = "idol_scene_meta_v1";
 
-export type SceneMeta = { place: string; premise: string; startAt: number; newFaces: string[]; ended?: boolean; summary?: string; nodeId?: string };
+export type SceneMeta = { place: string; premise: string; startAt: number; newFaces: string[]; ended?: boolean; summary?: string; nodeId?: string; /** 谁在交给世界 */ open?: boolean };
 
 const WORLD_PERSONA = "「世界」不是一个人，是这个故事的旁白和所有配角。它负责写她身边发生的事、在场的人说的话和做的事，从不替她说话、不替她做决定。";
 
@@ -84,7 +84,8 @@ export function createWorldScene(place: string, premise: string, peopleIds: stri
   const name = place.trim() || "某个地方";
   const ids = [WORLD_CHAR_ID, ...peopleIds.filter(id => id !== WORLD_CHAR_ID)];
   const group = createStoryGroup(ids, name);
-  saveSceneMeta(group.id, { place: name, premise: premise.trim(), startAt: Date.now(), newFaces: [], ...(nodeId ? { nodeId } : {}) });
+  const open = ids.length === 1;
+  saveSceneMeta(group.id, { place: name, premise: premise.trim(), startAt: Date.now(), newFaces: [], ...(nodeId ? { nodeId } : {}), ...(open ? { open } : {}) });
   const session = createOrGetStorySession(WORLD_CHAR_ID, { ownerType: "group", ownerId: group.id, participantIds: ids, branchId: "main" });
   const opening = premise.trim()
     ? `（开场：${premise.trim()}。写她到了这里看到的情形，写到需要她反应的地方停）`
@@ -114,6 +115,7 @@ export function buildWorldScenePrompt(groupId: string | undefined, participantId
     careerPromptBlock(),
     `【时间和地点】\n现在：${fmtWorld(Date.now())}\n地点：${meta?.place || group?.name || "某个地方"}${meta?.premise ? `\n开头：${meta.premise}` : ""}`,
     `【在场的人】${people.length ? people.map(c => c.name).join("、") : "暂时只有她"}${peopleBlock ? `\n\n${peopleBlock}` : ""}`,
+    meta?.open ? mightMeetBlock(participantIds) : "",
     `【规矩】
 - 不替她说话、不替她做决定、不写她的心理。
 - 只写在场的人；不在场的人可以被提到，要出场就写他进来了。
@@ -122,11 +124,26 @@ export function buildWorldScenePrompt(groupId: string | undefined, participantId
 - 写到下一个需要她反应的地方就停。`,
     `【记号】回复最后另起一行写（她看不到，没有就不写）：
 - 名单里没有、但这次出场并且有名字的人：[新人:名字|一句话身份]
+- 「可能碰上的人」里有人出场：[出场:名字]
 - 戏里过去了一段时间：[时间:+N分钟]
 - 这一场已经自然收尾：[收尾]
 - 戏里第一次说清楚、以后要照着来的公司细节（楼层、作息、规矩、老师）：[公司:一句话]
 ${KAKAO_TAG_RULES}`,
   ].join("\n\n");
+}
+
+/** 谁在交给世界时：她认识的人都列出来，世界自己判断谁这会儿会在这里 */
+function mightMeetBlock(presentIds: string[]): string {
+  const profiles = loadProfiles();
+  const lines = loadCharacters()
+    .filter(c => c.id !== WORLD_CHAR_ID && !presentIds.includes(c.id) && profiles[c.id] && (profiles[c.id].met || profiles[c.id].layer === "main"))
+    .slice(0, 40)
+    .map(c => {
+      const p = profiles[c.id];
+      const last = p.events[p.events.length - 1];
+      return `- ${c.name}（${p.role || p.group || "身份没写"}）${p.privateLines.length ? `：${p.privateLines.slice(0, 2).join("；")}` : ""}${last ? `。最近：${last.text}` : ""}`;
+    });
+  return `【可能碰上的人】这里有谁交给你定：按现在几点、这是什么地方、她的日程，以及每个人的身份和习惯，判断这会儿谁合理会在这里。可以是下面的人，也可以是没名字的路人或新面孔，也可以没人。不要为了凑人硬塞。${lines.length ? `\n${lines.join("\n")}` : "\n（她还谁都不认识）"}`;
 }
 
 export type SceneTags = { newFaces: { name: string; role: string }[]; minutes: number; closing: boolean; facts: string[]; kakao: KakaoTags };

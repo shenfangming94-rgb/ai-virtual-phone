@@ -184,6 +184,7 @@ export function parseReply(raw: string): StoryReply {
   const text = raw
     .replace(/\[公司[:：]\s*([^\]]+)\]/g, (_, f: string) => { facts.push(f.trim()); return ""; })
     .replace(/\[新人[:：]\s*([^|｜\]]+)[|｜]?([^\]]*)\]/g, (_, n: string, r: string) => { newFaces.push({ name: n.trim(), role: (r || "").trim() }); return ""; })
+    .replace(/\[出场[:：]\s*([^\]|｜]+)[^\]]*\]/g, (_, n: string) => { newFaces.push({ name: n.trim(), role: "" }); return ""; })
     .replace(/\[时间[:：]\s*\+?\s*(\d+)\s*(分钟|小时)?\]/g, (_, n: string, u: string) => { minutes += Number(n) * (u === "小时" ? 60 : 1); return ""; })
     .replace(/\[收尾\]/g, () => { closing = true; return ""; })
     .replace(/\n{3,}/g, "\n\n")

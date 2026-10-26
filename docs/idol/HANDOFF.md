@@ -130,7 +130,7 @@ Flora 要一个专门玩「爱豆模拟器」的小手机：她是想当爱豆�
 - 发动机：第一天那场结束（或没演过去了）→ 管理老师（在场的老师，没有就 AI 捏）拉群「公司 新人练习生」，在场的同期一起进；节点前 20 小时内老师在群里发通知（AI 用老师口吻）；月考那场结束 → 70% 有一个在场同期来加
 - 测试：`docs/idol/tests/kk1.mjs`（按请求内容回假 AI）
 
-### 2.12 提醒事项重做（10-28，`lib/idol-reminders.ts`、`components/career/career-app.tsx`、`styles/reminders.css`）
+### 2.12 提醒事项重做（10-27，`lib/idol-reminders.ts`、`components/career/career-app.tsx`、`styles/reminders.css`）
 - iOS 原生样子，白天浅色晚上深色（世界时间 7～19 点白天）。首页六卡（今天/计划/待回复/全部/请假·缺席/完成）+ 我的列表（公司日程/机会/约/我自己记的，按 `listOf(node)`）+ 公司（档案、月末排名占位）+ 右下 +
 - CareerNode 加 kind（talk/makeup/chance/date/custom）、status（invite/leave/absent/declined）、from/fromId/replyBy/result/wish/note
 - 三结局：去演（详情页，wish 带进 premise）/ 打勾写一句 `checkNode`（老师或约的人记一笔，节点后续照走）/ 过 2 小时没动 `reminderTick` 标缺席 → `onAbsent`（老师私聊问，第二次起排「去办公室」；约的人来问）
@@ -139,7 +139,7 @@ Flora 要一个专门玩「爱豆模拟器」的小手机：她是想当爱豆�
 - 跳时间：`jumpWorld` = `capJump`，遇到日程（提前半小时）或新待回复就停；`$` 指令和结束这场的跳时间按钮都走它
 - 后台消息 outbox：`sendAs` 用 chat 绑定的 API 让某人私聊她（没加过会自动加上，老师就是这样）
 
-### 2.13 人物（10-28）
+### 2.13 人物（10-27）
 - IdolProfile 加 gender/birthday/mbti/relation/heart/canCrush/secret/rolled；CARD_RULES 加性别生日 MBTI、年龄规矩、秘密按骰子；`draftFields` 统一落字段
 - `applyStartRolls`（saveProfile/createPerson 自动跑一次，要有性别年龄）：心动线 = 年龄差（她未成年 3 岁内，成年 4 岁内）+ 不是管她的人 + 男（女 10%）；起点按人缘 `loadCharm`（默认招人喜欢）
 - `stepRelation`：关系 陌生→…→好朋友→暧昧→恋人（暧昧要心动≥有点在意，恋人≥喜欢），恋人往下是前任；`decayRelations` 每世界日跑一次（三周没交集好朋友→朋友、暧昧→好朋友）
@@ -149,7 +149,7 @@ Flora 要一个专门玩「爱豆模拟器」的小手机：她是想当爱豆�
 - 室友：第一天拉群时 `ensureRoommates`（在场同龄女练习生优先，不够捏，1～2 个，career.roommates，世界提示里有）
 - 开局页「练多久」→「多久出道」，随便年龄 16～19；路人带年龄（多数 15～19，少数 12～14 小练习生，偶尔 20、21）
 
-### 2.14 事情发动机（10-28，`lib/idol-events.ts`）
+### 2.14 事情发动机（10-27，`lib/idol-events.ts`）
 - kv `idol_events_v1`：plannedUntil、events（排好的）、posts、feed（发生过的，世界提示「最近正在发生的事」）、setbacks（挫折记账）、lastBig/lastSick、health（她生病）、fame（关注度，开局按家境：童星 50/星二代 40/富二代财阀 30/其他 5；完成机会 +5）
 - `eventsTick`（练习生阶段才跑）：排到的不足一天就 `plan(from, now+3天)`——一次 AI 调用（PLAN_RULES）排三天的事：events（at、kind small/big/setback/sick/chance/date、about、people、lines 群里或私聊的话、invite）、newPeople、status（近况要更新的人）、posts（动态）
 - 代码管频率：挫折约两个月一次（间隔 50 天、45% 概率）、一年最多六、同种不重复、按家境和关注度挑类型；生病 90 天以上、12%；大事 8 天一件
@@ -159,7 +159,7 @@ Flora 要一个专门玩「爱豆模拟器」的小手机：她是想当爱豆�
 - 动态：moments-engine 的定时自动发帖关掉（pollScheduledPosts 直接 return），发动机 posts 发帖（只发 KakaoTalk 好友的）；「让他立刻发一条」照旧
 - 聊天里答应/拒绝：`buildIdolChatHint` 给发出邀请的人列出等她回的事，回复里 `[答应:…]`/`[不去:…]` 自动更新待回复
 
-### 2.15 账和月末排名（10-28，`lib/idol-ledger.ts`、`lib/idol-rank-image.ts`）
+### 2.15 账和月末排名（10-27，`lib/idol-ledger.ts`、`lib/idol-rank-image.ts`）
 - kv `idol_ledger_v1`：entries（账）、levels（每人藏着的水平，她是 `__me__`）、months（每月结果，含画好的图和群消息 id）、ranked
 - 记账：打勾按她写的那句给分（`scoreResultText`），戏里演的考核记账时 AI 给 performance good/ok/bad，缺席 -4，完成机会 +3；算名次时加特长数和老师关系
 - `rankTick`：月考结束（演/打勾/请假/缺席都算）第二天 10 点，练习生群建好后才排；参加的人 = 她 + 女练习生主要人物 + 群里路人；新人从 68% 位置起步；一个月最多升降 8 名（有高分事件放宽到 14）；考前 wish 照着排
@@ -171,7 +171,7 @@ Flora 要一个专门玩「爱豆模拟器」的小手机：她是想当爱豆�
 
 ## 3. 定下来但还没做的（按她的意愿排）
 
-**10-28 进度**：第 1、2、3 块和第 4 块的账、排名做完了。出道判定和出道那一套（出道组名单等）**她说要精致，先出预览给她看再做**。然后然后 5 大事记日历、6 锁屏通知（她嫌现在桌面提示条丑，要 iOS 横幅）和调用开关。完整设计在 `docs/idol/events.md`。
+**10-27 进度**：第 1、2、3 块和第 4 块的账、排名做完了。出道判定和出道那一套（出道组名单等）**她说要精致，先出预览给她看再做**。然后然后 5 大事记日历、6 锁屏通知（她嫌现在桌面提示条丑，要 iOS 横幅）和调用开关。完整设计在 `docs/idol/events.md`。
 
 ### 2.10 去哪儿（10-27，`lib/idol-places.ts`）
 - 剧情右上 + =「去哪儿」：类别（公司/宿舍/附近/出去玩/生活/自己写，出道后那类藏着）点地点，公司宿舍前面自动带公司名，没进公司锁着

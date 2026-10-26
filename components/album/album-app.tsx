@@ -12,6 +12,7 @@ import {
   Info,
   LayoutGrid,
   Plus,
+  RefreshCw,
   Search,
   Sparkles,
   Trash2,
@@ -166,6 +167,26 @@ function PhotoViewer({
   const url = usePhotoUrl(photo);
   const [showInfo, setShowInfo] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [regen, setRegen] = useState(false);
+  const [regenScene, setRegenScene] = useState(photo.desc);
+  const [regenBusy, setRegenBusy] = useState(false);
+  const [regenError, setRegenError] = useState("");
+  const canRegen = photo.source === "generate";
+  const doRegen = async () => {
+    setRegenBusy(true);
+    setRegenError("");
+    try {
+      const scene = regenScene.trim();
+      const result = await generateAlbumPhoto(scene, photo.genWho || []);
+      if (!result) throw new Error("生图没有返回图片，检查一下生图设置");
+      updatePhoto(photo.id, { src: result.src, desc: scene });
+      setRegen(false);
+    } catch (err) {
+      setRegenError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setRegenBusy(false);
+    }
+  };
   const { day, time } = formatFull(photo.createdAt);
   const inAlbums = albums.filter(a => photo.albumIds.includes(a.id));
   const viewers = Array.from(new Set(inAlbums.flatMap(a => a.memberIds)))
@@ -212,10 +233,26 @@ function PhotoViewer({
           <Heart size={22} fill={photo.liked ? "currentColor" : "none"} />
         </button>
         <button type="button" aria-label="信息" onClick={() => setShowInfo(v => !v)}><Info size={22} /></button>
+        {canRegen ? (
+          <button type="button" aria-label="重新生成" onClick={() => { setRegenScene(photo.desc); setRegenError(""); setRegen(true); }}><RefreshCw size={21} /></button>
+        ) : null}
         <button type="button" className="album-trash-btn" aria-label="删除" onClick={() => setConfirmDelete(true)}>
           <Trash2 size={20} strokeWidth={1.9} />
         </button>
       </footer>
+      {regen ? (
+        <Sheet title="重新生成" onClose={regenBusy ? () => undefined : () => setRegen(false)}>
+          <div className="album-card">
+            <div className="album-label">场景（可以改一改再生成）</div>
+            <textarea className="album-textarea" value={regenScene} onChange={e => setRegenScene(e.target.value)} />
+          </div>
+          {regenError ? <p className="album-error">{regenError}</p> : null}
+          <button type="button" className="album-btn album-btn-primary" disabled={!regenScene.trim() || regenBusy} onClick={doRegen}>
+            {regenBusy ? "生成中…" : "重新生成"}
+          </button>
+          <p className="album-hint">新图会换掉这一张，照片里的人和原来一样</p>
+        </Sheet>
+      ) : null}
       {confirmDelete ? (
         <Sheet onClose={() => setConfirmDelete(false)}>
           <p className="album-hint">{photo.msgRef ? "从相册里删掉这张照片（聊天记录里还在）" : "这张照片会从相册里删掉"}</p>
@@ -252,7 +289,7 @@ function GenerateSheet({
     try {
       const result = await generateAlbumPhoto(scene.trim(), who);
       if (!result) throw new Error("生图没有返回图片，检查一下生图设置");
-      addPhotos([{ src: result.src, desc: scene.trim(), vision: "done", source: "generate", addedBy: ALBUM_SELF, albumIds }]);
+      addPhotos([{ src: result.src, desc: scene.trim(), vision: "done", source: "generate", addedBy: ALBUM_SELF, albumIds, genWho: who }]);
       const shared = albums.filter(a => a.kind === "shared" && albumIds.includes(a.id));
       for (const album of shared) noteUserAddedToShared(album, [{ desc: scene.trim() } as AlbumPhoto]);
       onDone("生成好了");

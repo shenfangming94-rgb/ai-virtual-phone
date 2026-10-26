@@ -22,6 +22,8 @@ export type AlbumPhoto = {
     /** 谁加的："self" 或 characterId */
     addedBy: string;
     caption?: string;
+    /** 生图时选的「照片里有谁」，重新生成时照用 */
+    genWho?: string[];
     createdAt: string;
     albumIds: string[];
     /** 在图库里（char 加到共享相簿的照片不在她图库里） */

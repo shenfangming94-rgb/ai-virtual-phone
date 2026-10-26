@@ -44,8 +44,9 @@
   window.AiPhone = {
     db: {
       async list(c) { return col(c).slice(); },
-      async create(c, row) { col(c).push({ ...row }); return row; },
-      async update(c, id, patch) { const r = col(c).find(x => x.id === id); if (!r) return null; Object.assign(r, patch); return r; },
+      // 照宿主：走消息来回有延迟，同一个 id 同时 update 两次都会扑空、各建一行
+      async create(c, row) { await new Promise(r => setTimeout(r, 30)); col(c).push({ ...row }); return row; },
+      async update(c, id, patch) { const r = col(c).find(x => x.id === id); await new Promise(r => setTimeout(r, 30)); if (!r) return null; Object.assign(r, patch); return r; },
       async delete(c, id) { db[c] = col(c).filter(x => x.id !== id); return true; },
     },
     user: { async getProfile() { return { id: "u1", name: "Flora", avatarUrl: face("#c58af9") }; } },

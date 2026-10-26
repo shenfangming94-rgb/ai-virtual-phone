@@ -156,7 +156,7 @@ svg{display:block;flex:none}
 .sheet .op svg{width:22px;height:22px;color:#444}
 .sheet .op small{margin-left:auto;color:#5f6368;font-size:13.5px}
 .sheet .op.c{color:#0b57d0;font-weight:600}.sheet .op.c svg{color:#0b57d0}
-.dialog{position:absolute;left:24px;right:24px;top:22%;background:#fff;border-radius:24px;padding:22px 22px 12px;box-shadow:0 10px 40px rgba(0,0,0,.25);animation:fin .2s}
+.dialog{position:absolute;left:24px;right:24px;top:18%;max-height:76vh;overflow:auto;background:#fff;border-radius:24px;padding:22px 22px 12px;box-shadow:0 10px 40px rgba(0,0,0,.25);animation:fin .2s}
 .dialog .st{font-size:18px;margin-bottom:12px}
 .dialog label{display:block;font-size:12.5px;color:#5f6368;margin:10px 0 4px}
 .dialog input,.dialog textarea{width:100%;border:1px solid #c4c7c5;border-radius:8px;padding:10px 12px;font-size:15px;outline:0;resize:none}

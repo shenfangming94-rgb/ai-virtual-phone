@@ -86,7 +86,25 @@
   async function dbDelete(c, id) { try { await api.db.delete(c, id); } catch (e) { console.warn(e); } }
   let metaTimer = null;
   function saveMeta() { clearTimeout(metaTimer); metaTimer = setTimeout(() => dbUpsert(COL.meta, S.meta).catch(e => console.warn(e)), 250); }
-  const saveMail = m => dbUpsert(COL.mails, m).catch(e => console.warn(e));
+  // 同一封信的保存排队：两次同时到的话宿主都以为没有这行，会各建一行（重复来信就是这么来的）
+  const mailQueue = new Map();
+  function saveMail(m) {
+    const next = (mailQueue.get(m.id) || Promise.resolve()).then(() => dbUpsert(COL.mails, m)).catch(e => console.warn(e));
+    mailQueue.set(m.id, next);
+    next.then(() => { if (mailQueue.get(m.id) === next) mailQueue.delete(m.id); });
+    return next;
+  }
+  /** 以前撞车存出来的重复行：同一个 id 只留最新的一份 */
+  async function dedupeMails(rows) {
+    const by = new Map(), dup = new Set();
+    for (const r of rows) {
+      const o = by.get(r.id);
+      if (o) dup.add(r.id);
+      if (!o || String(r.updatedAt || "") >= String(o.updatedAt || "")) by.set(r.id, r);
+    }
+    for (const id of dup) { await dbDelete(COL.mails, id); try { await api.db.create(COL.mails, by.get(id)); } catch (e) { console.warn(e); } }
+    return [...by.values()];
+  }
 
   async function loadAll() {
     const identity = await api.user.getProfile({}).catch(() => null);
@@ -96,7 +114,7 @@
     S.chars = chars.filter((c, i) => !owners[i] || !identity || owners[i].id === identity.id);
     const [mails, metas] = await Promise.all([dbList(COL.mails), dbList(COL.meta)]);
     const scope = S.identity.id;
-    S.mails = mails.filter(m => m.scope === scope).map(m => ({ ...m, att: m.att || [] }));
+    S.mails = (await dedupeMails(mails)).filter(m => m.scope === scope).map(m => ({ ...m, att: m.att || [] }));
     S.debug = (metas.find(m => m.id === "debug_log") || {}).entries || [];
     S.meta = metas.find(m => m.id === `meta_${scope}`) || { id: `meta_${scope}` };
     const d = { myName: S.identity.name || "我", myAddr: "", charAddrs: {}, excluded: [], quiet: [], freq: "sometimes", instant: false, promos: true, lastByChar: {}, npcs: [], cardsSeen: 0 };
@@ -164,6 +182,12 @@
     const head = m.from.kind === "char" ? `我给${her}发了一封邮件。` : `${her}给我发了一封邮件。`;
     const summary = `${head}\n主题：${m.subject || "（无主题）"}\n${m.body || ""}${attText(m.att) ? "\n" + attText(m.att) : ""}`;
     api.memory.addTimeline({ characterId: ch, appLabel: "邮箱", detail: "mail", summary, appEventId: m.id, createdAt: m.at }).catch(e => console.warn(e));
+  }
+  /** 永久删掉 / 改了内容：他记得的那封也删掉 */
+  function forget(m) {
+    const ch = m.from.kind === "char" ? m.from.charId : m.to && m.to.kind === "char" ? m.to.charId : null;
+    if (!ch || !m.memDone || !api.memory || !api.memory.deleteTimeline) return;
+    api.memory.deleteTimeline({ characterId: ch, appEventId: m.id }).catch(e => console.warn(e));
   }
 
   // ───────────────────────── 推广和更新（模板，不花 API） ─────────────────────────
@@ -544,7 +568,7 @@ ${ask ? "邮箱：你的邮箱地址（按你的人设、年代和习惯起一�
       const open = m === last || p.data.open[m.id];
       if (!open) return `<div class="msg fold" data-act="unfold" data-id="${m.id}">${avatarHtml(m.from)}<div class="mbd"><b>${esc(nameOf(m.from))}</b><span>${esc((m.body || "").replace(/\s+/g, " ").slice(0, 60))}</span></div><time>${esc(fmtList(m.at))}</time></div>`;
       const toLine = m.from.kind === "me" ? `发送至 ${esc(nameOf(m.to))}${m.to.addr ? ` &lt;${esc(m.to.addr)}&gt;` : ""}` : `发送至 我`;
-      return `<div class="msg"><div class="from">${avatarHtml(m.from)}<div class="mbd"><b>${esc(nameOf(m.from))}<small>${esc(fmtFull(m.at))}</small></b><div>${m.from.addr ? `&lt;${esc(m.from.addr)}&gt; · ` : ""}${toLine}</div></div>${m.from.kind !== "me" && m.from.kind !== "sys" ? `<button class="ib" data-act="reply" data-id="${m.id}">${I.reply}</button>` : ""}</div>
+      return `<div class="msg"><div class="from">${avatarHtml(m.from)}<div class="mbd"><b>${esc(nameOf(m.from))}<small>${esc(fmtFull(m.at))}</small></b><div>${m.from.addr ? `&lt;${esc(m.from.addr)}&gt; · ` : ""}${toLine}</div></div>${m.from.kind !== "me" && m.from.kind !== "sys" ? `<button class="ib" data-act="reply" data-id="${m.id}">${I.reply}</button>` : ""}${m.from.kind === "char" && !m.promo ? `<button class="ib" data-act="mail-more" data-id="${m.id}">${I.more}</button>` : ""}</div>
         ${m.status === "scheduled" ? `<div class="banner blue">${I.clock}将于 ${esc(fmtFull(m.at))} 发送<button data-act="unschedule" data-id="${m.id}">取消定时</button></div>` : ""}
         ${m.promo ? promoHtml(m) : `<div class="body">${esc(m.body || "")}</div>`}
         ${(m.att || []).length ? `<div class="att">${m.att.map((a, i) => attHtml(m, a, i)).join("")}</div>` : ""}</div>`;
@@ -700,7 +724,7 @@ ${ask ? "邮箱：你的邮箱地址（按你的人设、年代和习惯起一�
   function promptBox(title, fields) {
     return new Promise(res => {
       const el = document.createElement("div"); el.className = "sheet-wrap";
-      el.innerHTML = `<div class="dim"></div><div class="dialog"><div class="st">${esc(title)}</div>${fields.map((f, i) => `<label>${esc(f.label)}</label>${f.type === "textarea" ? `<textarea data-i="${i}" rows="3" placeholder="${esc(f.ph || "")}">${esc(f.value || "")}</textarea>` : `<input data-i="${i}" type="${f.type || "text"}" placeholder="${esc(f.ph || "")}" value="${esc(f.value || "")}">`}`).join("")}
+      el.innerHTML = `<div class="dim"></div><div class="dialog"><div class="st">${esc(title)}</div>${fields.map((f, i) => `<label>${esc(f.label)}</label>${f.type === "textarea" ? `<textarea data-i="${i}" rows="${f.rows || 3}" placeholder="${esc(f.ph || "")}">${esc(f.value || "")}</textarea>` : `<input data-i="${i}" type="${f.type || "text"}" placeholder="${esc(f.ph || "")}" value="${esc(f.value || "")}">`}`).join("")}
         <div class="dbtns"><button data-v="0">取消</button><button data-v="1" class="blue">确定</button></div></div>`;
       document.body.appendChild(el);
       el.onclick = e => { const b = e.target.closest("[data-v]"); if (!b && !e.target.classList.contains("dim")) return; const ok = b && b.dataset.v === "1"; const vals = fields.map((f, i) => el.querySelector(`[data-i="${i}"]`).value); el.remove(); res(ok ? vals : null); };
@@ -762,8 +786,29 @@ ${ask ? "邮箱：你的邮箱地址（按你的人设、年代和习惯起一�
       case "mark-unread": if (mail) { mail.read = false; saveMail(mail); pop(); } return;
       case "delete": { const all = mail.thread ? S.mails.filter(x => x.thread === mail.thread && x.folder !== "draft") : [mail]; for (const m of all) { m.prevFolder = m.folder; m.folder = "trash"; saveMail(m); } toast("已移到「已删除」"); pop(); return; }
       case "restore": { const all = mail.thread ? S.mails.filter(x => x.thread === mail.thread && x.folder === "trash") : [mail]; for (const m of all) { m.folder = m.prevFolder || (m.from.kind === "me" ? "sent" : "inbox"); saveMail(m); } toast("已移回"); pop(); return; }
-      case "purge": { const all = mail.thread ? S.mails.filter(x => x.thread === mail.thread && x.folder === "trash") : [mail]; for (const m of all) { S.mails = S.mails.filter(x => x !== m); dbDelete(COL.mails, m.id); } toast("已永久删除"); pop(); return; }
-      case "empty-trash": { const v = await sheet("清空「已删除」？删了就找不回来了", [{ label: "清空", value: "y", blue: true }, { label: "算了", value: null }]); if (v !== "y") return; for (const m of S.mails.filter(x => x.folder === "trash")) dbDelete(COL.mails, m.id); S.mails = S.mails.filter(x => x.folder !== "trash"); renderAll(); return; }
+      case "purge": { const all = mail.thread ? S.mails.filter(x => x.thread === mail.thread && x.folder === "trash") : [mail]; for (const m of all) { forget(m); S.mails = S.mails.filter(x => x !== m); dbDelete(COL.mails, m.id); } toast("已永久删除"); pop(); return; }
+      case "empty-trash": { const v = await sheet("清空「已删除」？删了就找不回来了", [{ label: "清空", value: "y", blue: true }, { label: "算了", value: null }]); if (v !== "y") return; for (const m of S.mails.filter(x => x.folder === "trash")) { forget(m); dbDelete(COL.mails, m.id); } S.mails = S.mails.filter(x => x.folder !== "trash"); renderAll(); return; }
+      case "mail-more": {
+        if (!mail) return;
+        const v = await sheet("", [{ label: "编辑这封", icon: "pen", value: "edit" }, { label: "删除这封", icon: "trash", value: "del", sub: "永久删除后他就不记得了" }]);
+        if (v === "edit") {
+          const vals = await promptBox("编辑邮件", [{ label: "主题", value: mail.subject }, { label: "正文", type: "textarea", rows: 14, value: mail.body }]);
+          if (!vals) return;
+          const [subject, body] = vals.map(x => x.trim());
+          if (!body) return toast("正文不能是空的，不要就删掉");
+          if (subject === mail.subject && body === mail.body) return;
+          mail.subject = subject || "（无主题）"; mail.body = body;
+          const had = mail.memDone; forget(mail); mail.memDone = false;
+          if (had) remember(mail); else saveMail(mail);
+          toast(had ? "改好了，他记得的也改了" : "改好了"); renderAll();
+        } else if (v === "del") {
+          mail.prevFolder = mail.folder; mail.folder = "trash"; saveMail(mail);
+          toast("已移到「已删除」");
+          const rest = mail.thread ? S.mails.filter(x => x.thread === mail.thread && x.folder !== "trash" && x.folder !== "draft" && visible(x)) : [];
+          if (rest.length) renderAll(); else pop();
+        }
+        return;
+      }
       case "not-spam": mail.folder = "inbox"; saveMail(mail); toast("已移到收件箱"); renderAll(); return;
       case "unschedule": { mail.status = "draft"; mail.folder = "draft"; mail.sendAt = null; saveMail(mail); toast("已取消定时，放进了草稿"); pop(); return; }
       case "promo-btn": toast("这只是一封广告邮件啦"); return;

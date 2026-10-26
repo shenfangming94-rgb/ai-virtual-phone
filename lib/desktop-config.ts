@@ -33,7 +33,8 @@ export type IconId =
   | "album"
   | "alipay"
   | "meituan"
-  | "clock";
+  | "clock"
+  | "contacts";
 
 // 桌面文件夹：以 folder: 前缀的 id 伪装成图标占一个格子参与拖拽/换页，
 // 内容（名字 + 成员图标）另存 DesktopFolderMap。文件夹不允许进 dock。
@@ -59,7 +60,7 @@ export type IconMeta = {
   path?: string;
 };
 
-export const PAGE_1_DEFAULT: IconId[] = ["chat", "diary", "music", "calendar", "checkphone", "shopping", "reading", "clock"];
+export const PAGE_1_DEFAULT: IconId[] = ["chat", "contacts", "diary", "music", "calendar", "checkphone", "shopping", "reading", "clock"];
 
 export const PAGE_2_DEFAULT: IconId[] = [
   "appmarket",
@@ -129,6 +130,7 @@ export const ICONS: Record<IconId, IconMeta> = {
   alipay: { id: "alipay", label: "支付宝", tone: "var(--c-icon-blue)", placeholder: false },
   meituan: { id: "meituan", label: "美团", tone: "var(--c-icon-amber)", placeholder: false },
   clock: { id: "clock", label: "时钟", tone: "var(--c-icon-slate)", placeholder: false },
+  contacts: { id: "contacts", label: "通讯录", tone: "var(--c-icon-slate)", placeholder: false },
 };
 
 // ── 爱豆小手机 ──

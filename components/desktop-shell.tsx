@@ -3,6 +3,7 @@
 import { GlobalCallHost } from "./chat/global-call-host";
 import { AlbumApp } from "./album/album-app";
 import { ClockApp } from "./clock-app";
+import { ContactsApp } from "./contacts/contacts-app";
 import { LockScreen } from "./lock-screen";
 import { useWorldAlarms } from "@/lib/world-alarms";
 import { startAlbumService } from "@/lib/album-engine";
@@ -4234,6 +4235,9 @@ html,body{margin:0;padding:0;width:100%;height:100%;background:#121110;color:rgb
 
     if (activeApp === "album") {
       return <AlbumApp onClose={() => setActiveApp(null)} onNotice={setNotice} />;
+    }
+    if (activeApp === "contacts") {
+      return <ContactsApp onClose={() => setActiveApp(null)} onNotice={setNotice} />;
     }
     if (activeApp === "clock") {
       return <ClockApp onClose={() => setActiveApp(null)} onNotice={setNotice} />;

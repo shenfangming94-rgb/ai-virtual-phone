@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, type CSSProperties, type PointerEvent as R
 
 import { LOCK_CHANGED_EVENT, LOCK_NOW_EVENT, loadLock, loadLockWallpaper, lunarLabel, saveLock } from "@/lib/lock-screen";
 import { subscribeWorldClock } from "@/lib/world-clock";
+import { loadTraineeCard } from "@/lib/trainee-card";
 
 const pad = (n: number) => String(n).padStart(2, "0");
 const WEEK = ["日", "一", "二", "三", "四", "五", "六"];
@@ -16,7 +17,8 @@ const KEYS: [string, string][] = [
 
 /** iOS 锁屏：时间是世界时间；上滑开锁，有密码就弹数字键盘 */
 export function LockScreen({ wallpaperStyle }: { wallpaperStyle?: CSSProperties }) {
-  const [locked, setLocked] = useState(true);
+  // 第一次打开、还没开局时不锁（开局页盖在最上面），盖完章直接进桌面
+  const [locked, setLocked] = useState(() => Boolean(loadTraineeCard()));
   const [leaving, setLeaving] = useState(false);
   const [pad6, setPad6] = useState(false);
   const [now, setNow] = useState(() => new Date());

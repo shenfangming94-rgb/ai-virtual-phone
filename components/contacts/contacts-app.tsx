@@ -30,6 +30,7 @@ import {
   type FaceRelation,
   type IdolProfile,
 } from "@/lib/idol-people";
+import { ageAtStart, clearTraineeCard, loadTraineeCard, talentLabels } from "@/lib/trainee-card";
 import { loadUserIdentities, resolveUserIdentity, saveUserIdentities, USER_IDENTITIES_UPDATED_EVENT } from "@/lib/settings-storage";
 
 type Notice = ((message: string) => void) | undefined;
@@ -680,10 +681,7 @@ function MeView({ onBack, onNotice }: { onBack: () => void; onNotice: Notice }) 
             <div className={`ct-v ${bio ? "" : "is-dim"}`} style={{ whiteSpace: "pre-wrap" }}>{bio || "还没写"}</div>
           )}
         </div>
-        <div className="ct-block">
-          <div className="ct-k">练习生证</div>
-          <div className="ct-v is-dim">开局页做好以后，你的练习生证会放在这里</div>
-        </div>
+        <TraineeCardBlock />
       </div>
     </div>
   );
@@ -771,6 +769,42 @@ function AddSheet({ onClose, onCreated, onNotice }: { onClose: () => void; onCre
           </>
         )}
       </div>
+    </div>
+  );
+}
+
+function TraineeCardBlock() {
+  const c = loadTraineeCard();
+  const [confirm, setConfirm] = useState(false);
+  if (!c) return null;
+  const age = ageAtStart(c);
+  return (
+    <div className="ct-block">
+      <div className="ct-k">练习生证</div>
+      <div className="op-id ct-mini-id">
+        <div className="op-id-top"><img src="/idol/crest.png" alt="" /><b>TRAINEE ID CARD</b><s>练习生证</s></div>
+        <div className="op-id-in">
+          <div className="op-id-pic">{c.photo ? <img src={c.photo} alt="" /> : <span>{c.name.slice(0, 1)}</span>}</div>
+          <div className="op-id-kv">
+            <div><em>姓名</em>{c.name}</div>
+            <div><em>生日</em>{c.birthday.replace(/-/g, ".")}{age != null ? `（${age}岁）` : ""}</div>
+            <div><em>国籍</em>{c.nationality || "—"}</div>
+            <div><em>特长</em>{talentLabels(c.talents).join(" · ") || "—"}</div>
+            <div><em>所属</em>{c.company || <span className="op-dim">— 还没有 —</span>}</div>
+          </div>
+        </div>
+        <div className="op-id-no">No. {c.no}</div>
+        {c.signature ? <img src={c.signature} alt="" className="ct-mini-sign" /> : null}
+      </div>
+      {confirm ? (
+        <div className="ct-reopen">
+          <span>重新填会回到开局页，聊天和别的东西都不动。</span>
+          <button type="button" onClick={() => setConfirm(false)}>算了</button>
+          <button type="button" className="is-strong" onClick={() => clearTraineeCard()}>重新填</button>
+        </div>
+      ) : (
+        <button type="button" className="ct-wide-dark" onClick={() => setConfirm(true)}>重新填写练习生证</button>
+      )}
     </div>
   );
 }

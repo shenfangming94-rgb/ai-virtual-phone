@@ -5,6 +5,8 @@ import { AlbumApp } from "./album/album-app";
 import { ClockApp } from "./clock-app";
 import { ContactsApp } from "./contacts/contacts-app";
 import { LockScreen } from "./lock-screen";
+import { TraineeOpening } from "./opening/trainee-opening";
+import { TRAINEE_CARD_EVENT, loadTraineeCard } from "@/lib/trainee-card";
 import { useWorldAlarms } from "@/lib/world-alarms";
 import { startAlbumService } from "@/lib/album-engine";
 import { AlipayApp } from "./alipay/alipay-app";
@@ -1083,6 +1085,13 @@ export function DesktopShell({ initialThemeProfile, initialThemeAssets }: Deskto
   const [glassPaintPass, setGlassPaintPass] = useState(0);
   const [notice, setNotice] = useState<string | null>(null);
   useWorldAlarms(setNotice);
+  // 爱豆小手机：还没有练习生证就先走开局
+  const [needOpening, setNeedOpening] = useState(() => !loadTraineeCard());
+  useEffect(() => {
+    const onCard = () => { if (!loadTraineeCard()) { setActiveApp(null); setNeedOpening(true); } };
+    window.addEventListener(TRAINEE_CARD_EVENT, onCard);
+    return () => window.removeEventListener(TRAINEE_CARD_EVENT, onCard);
+  }, []);
   const [activeApp, setActiveApp] = useState<DesktopIconId | null>(null);
   const [customApps, setCustomApps] = useState<InstalledCustomApp[]>([]);
   // 自定义 APP 桌面图标样式偏好（global = 忽略上传图标走全局效果）
@@ -4318,6 +4327,7 @@ html,body{margin:0;padding:0;width:100%;height:100%;background:#121110;color:rgb
             >
               <div className="phone-wallpaper" style={wallpaperStyle} />
               <LockScreen wallpaperStyle={wallpaperStyle} />
+              {needOpening ? <TraineeOpening onDone={() => setNeedOpening(false)} onNotice={setNotice} /> : null}
 
               <header className="phone-status-bar">
                 <StatusClock />

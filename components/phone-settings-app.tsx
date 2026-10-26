@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useLayoutEffect, useCallback, useRef, createContext, type CSSProperties, type ReactNode } from "react";
-import { Activity, Check, ChevronRight, Clock, Database, FileText, Fingerprint, Globe, HardDrive, Image, Info, KeyRound, Laptop, Layers, Link2, Loader2, LogOut, MessageSquare, Mic, SlidersHorizontal, UserCircle, Wrench, X, CloudUpload } from "lucide-react";
+import { Activity, Check, ChevronRight, Clock, Database, FileText, Fingerprint, Globe, HardDrive, Image, Info, KeyRound, Laptop, Lock, Layers, Link2, Loader2, LogOut, MessageSquare, Mic, SlidersHorizontal, UserCircle, Wrench, X, CloudUpload } from "lucide-react";
 import { ConfirmDialog } from "./ui/modal";
 import { useAccount } from "@/lib/account-context";
 import { isSelfHostedModeEnabled } from "@/lib/self-hosting";
@@ -22,6 +22,7 @@ import { ToolboxSettings } from "./settings/toolbox-settings";
 import { ModerationCenter } from "./settings/moderation-center";
 import { AgentComputerSettings } from "./settings/agent-computer-settings";
 import { WorldTimeSettings } from "./settings/world-time-settings";
+import { LockSettings } from "./settings/lock-settings";
 import { loadWorldClock, subscribeWorldClock } from "@/lib/world-clock";
 import { fetchIsAdmin } from "@/lib/moderation-client";
 import { PageShell } from "./ui/page-shell";
@@ -60,6 +61,7 @@ type SubPage =
     | "agentComputer"
     | "moderation"
     | "worldTime"
+    | "lock"
     | "about";
 
 const SETTINGS_MENU = [
@@ -187,6 +189,8 @@ export function PhoneSettingsApp({ onClose, onNotice }: SettingsPageProps) {
                 ? "管理中心"
                 : currentPage === "worldTime"
                 ? "世界时间"
+                : currentPage === "lock"
+                ? "锁屏"
                 : SETTINGS_MENU.find(m => m.id === currentPage)?.label || "设置";
     const title = subpageTitle || defaultTitle;
 
@@ -278,6 +282,14 @@ export function PhoneSettingsApp({ onClose, onNotice }: SettingsPageProps) {
         iconColor: BINDING_ACCENTS.memory,
         onClick: () => setCurrentPage("worldTime"),
     };
+    const lockFeaturedItem: FeaturedCardItem = {
+        id: "lock",
+        icon: Lock,
+        label: "锁屏",
+        desc: "壁纸、样式和密码",
+        iconColor: BINDING_ACCENTS.identity,
+        onClick: () => setCurrentPage("lock"),
+    };
 
     const imageGenerationItem = SETTINGS_MENU.find(i => i.id === "imageGeneration")!;
     const imageGenerationFeaturedItem: FeaturedCardItem = {
@@ -354,6 +366,8 @@ export function PhoneSettingsApp({ onClose, onNotice }: SettingsPageProps) {
                 return <UserIdentitySettings />;
             case "worldTime":
                 return <WorldTimeSettings onNotice={onNotice} />;
+            case "lock":
+                return <LockSettings onNotice={onNotice} />;
             case "about":
                 return <AboutDeclaration />;
             default:
@@ -426,6 +440,9 @@ export function PhoneSettingsApp({ onClose, onNotice }: SettingsPageProps) {
                             <h3 className="settings-menu-section-title">World</h3>
                             <div className="mt-[10px]">
                                 <FeaturedCard item={worldTimeFeaturedItem} />
+                            </div>
+                            <div className="mt-[10px]">
+                                <FeaturedCard item={lockFeaturedItem} />
                             </div>
                         </div>
                         <CardGrid

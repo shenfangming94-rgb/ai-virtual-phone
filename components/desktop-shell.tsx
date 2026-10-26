@@ -3,6 +3,7 @@
 import { GlobalCallHost } from "./chat/global-call-host";
 import { AlbumApp } from "./album/album-app";
 import { ClockApp } from "./clock-app";
+import { LockScreen } from "./lock-screen";
 import { useWorldAlarms } from "@/lib/world-alarms";
 import { startAlbumService } from "@/lib/album-engine";
 import { AlipayApp } from "./alipay/alipay-app";
@@ -4312,6 +4313,7 @@ html,body{margin:0;padding:0;width:100%;height:100%;background:#121110;color:rgb
               } as React.CSSProperties}
             >
               <div className="phone-wallpaper" style={wallpaperStyle} />
+              <LockScreen wallpaperStyle={wallpaperStyle} />
 
               <header className="phone-status-bar">
                 <StatusClock />

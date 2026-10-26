@@ -1,15 +1,12 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { ArrowRight } from "lucide-react";
 
 import { AccountGate } from "@/components/auth/account-gate";
 import { CloudBackupScheduler } from "@/components/cloud-backup-scheduler";
 import { RealityBridgeScheduler } from "@/components/reality-bridge-scheduler";
 import { MediaMaintenanceScheduler } from "@/components/media-maintenance-scheduler";
 import { DesktopShell } from "./desktop-shell";
-import { OfflinePushRevampAnnouncement } from "./offline-push-revamp-announcement";
-import { SplashAnimation } from "./splash-animation";
 import { MusicProvider } from "@/lib/music-context";
 import { hydrateKvDb, isKvHydrated } from "@/lib/kv-db";
 import { getThemeAssetMap, readThemeProfile } from "@/lib/theme-storage";
@@ -149,7 +146,7 @@ async function warmBuiltinFonts(shouldStop: () => boolean): Promise<void> {
   await Promise.all(BUILTIN_FONT_LOAD_SPECS.map((spec) => document.fonts.load(spec).catch(() => [])));
 }
 
-function SplashScreen({ ready = false, onEnter }: { ready?: boolean; onEnter?: () => void }) {
+function SplashScreen() {
   return (
     <main className="app-root splash-root">
       <section
@@ -158,17 +155,8 @@ function SplashScreen({ ready = false, onEnter }: { ready?: boolean; onEnter?: (
       >
         <div className="phone-case">
           <div className="phone-frame">
-            <div className="phone-shell splash-phone-screen">
-              <SplashAnimation />
-              <button
-                type="button"
-                className={ready ? "splash-enter-button splash-enter-button-show" : "splash-enter-button"}
-                onClick={onEnter}
-                disabled={!ready}
-                aria-label="Enter"
-              >
-                <ArrowRight size={18} strokeWidth={1.8} />
-              </button>
+            <div className="phone-shell splash-phone-screen" style={{ background: "#000" }}>
+
             </div>
           </div>
         </div>
@@ -308,8 +296,9 @@ export function MainApp() {
 
   return (
     <AccountGate>
-      {!splashDismissed ? (
-        <SplashScreen ready={hydrated} onEnter={() => setSplashDismissed(true)} />
+      {/* 爱豆小手机：不要开屏动画，数据读好就直接进（锁屏在桌面里） */}
+      {!splashDismissed && !hydrated ? (
+        <SplashScreen />
       ) : (
         <main className="app-root">
           <MusicProvider>
@@ -317,7 +306,6 @@ export function MainApp() {
               initialThemeProfile={preparedDesktopTheme?.profile}
               initialThemeAssets={preparedDesktopTheme?.assets}
             />
-            <OfflinePushRevampAnnouncement />
             <CloudBackupScheduler />
             <RealityBridgeScheduler />
             <MediaMaintenanceScheduler />

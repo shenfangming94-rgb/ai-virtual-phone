@@ -4,7 +4,6 @@ import { GlobalCallHost } from "./chat/global-call-host";
 import { AlbumApp } from "./album/album-app";
 import { ClockApp } from "./clock-app";
 import { ContactsApp } from "./contacts/contacts-app";
-import { SceneApp } from "./scene/scene-app";
 import { LockScreen } from "./lock-screen";
 import { TraineeOpening } from "./opening/trainee-opening";
 import { TRAINEE_CARD_EVENT, loadTraineeCard } from "@/lib/trainee-card";
@@ -4211,8 +4210,8 @@ html,body{margin:0;padding:0;width:100%;height:100%;background:#121110;color:rgb
     }
 
     if (activeApp === "story") {
-      // 爱豆小手机：剧情换成以她为主角的场景模式（原来的剧情 app 代码还在，只是不从这里打开）
-      return <SceneApp onClose={() => setActiveApp(null)} onNotice={setNotice} />;
+      // 先用回原来的剧情 app（界面、预设、文风、状态栏都在）；场景模式之后接进它里面（SceneApp 暂不打开）
+      return <StoryApp onClose={() => setActiveApp(null)} />;
     }
 
     if (activeApp === "vnmode") {

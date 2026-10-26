@@ -1,5 +1,7 @@
 "use client";
 
+import { crowdCount, isCrowdId, promoteCrowd, resolveSenderId } from "@/lib/idol-crowd";
+import { fleshOut, onKakaoAccepted } from "@/lib/idol-kakao";
 import { forwardRef, Fragment, memo, useCallback, useEffect, useImperativeHandle, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { ChatSession, ChatMessage, CHAT_APP_SETTINGS_UPDATED_EVENT, CHAT_INITIAL_VISIBLE_MESSAGE_COUNT, CHAT_LOAD_MORE_MESSAGE_COUNT, CHAT_REQUEST_REPLY_EVENT, loadChatAppSettings, loadChatMessages, loadChatContacts, loadChatSessions, saveChatSessions, pushChatMessage, updateChatMessage, deleteChatMessage, deleteChatMessagesFrom, deleteChatMessagesByIds, retractChatMessage, editChatMessage, updateMessageMediaData, replaceResponseBatchWithParts, replaceGroupResponseRound, isReadingDiscussMessage, isSystemInstructionMessage, getSystemInstructionDisplayContent, createResponseBatchId, createResponseRoundId, getLatestStateValues, getLatestCharacterStateValues, compareChatMessages, isSessionStreamingEnabled, resolveChatBackgroundImage, resolveChatUserAvatar } from "@/lib/chat-storage";
 import { cleanStreamText, splitStreamPreviewSegments, stripLiteralTexts, stripXmlTagBlocks } from "@/lib/stream-preview";
@@ -2467,7 +2469,8 @@ export function ChatRoom({ session, onBack, onDeleted }: ChatRoomProps) {
         for (const r of results) {
             throwIfGenerationStopped(guard);
             // 被踢出或禁言中的角色本轮不再发声
-            if (!(session.participantIds || []).includes(r.characterId)) continue;
+            // 路人（爱豆版大群）不在成员名单里，也能说话
+            if (!(session.participantIds || []).includes(r.characterId) && !isCrowdId(r.characterId)) continue;
             if (isGroupMuted(session, r.characterId)) continue;
             const responseBatchId = createResponseBatchId();
             const { parts: rawParts, stateValues, freshStateValues, statusPanel, innerMonologue } = parseAIResponse(r.responseText, getCurrentStateForCharacter(r.characterId));
@@ -5661,7 +5664,7 @@ export function ChatRoom({ session, onBack, onDeleted }: ChatRoomProps) {
                     <span className="page-title" style={{ position: 'relative' }}>
                         {offlineMode ? "线下 · " : ""}
                         {session.isGroup
-                            ? `${session.groupName || "群聊"}(${(session.participantIds?.length || 0) + (session.isSpectator ? 0 : 1)})`
+                            ? `${session.groupName || "群聊"}(${(session.participantIds?.length || 0) + crowdCount(session.id) + (session.isSpectator ? 0 : 1)})`
                             : (session.alias || character?.name || `User_${session.contactId.slice(-4)}`)}
                         {(isGenerating || isOfflineGenerating) && (
                             <span className="chat-typing-indicator">
@@ -6235,14 +6238,24 @@ export function ChatRoom({ session, onBack, onDeleted }: ChatRoomProps) {
                                             ) : (
                                                 <div className="chat-msg-avatar flex flex-col items-center gap-1 shrink-0">
                                                     {(() => {
-                                                        const senderChar = session.isGroup && msg.senderCharacterId
-                                                            ? groupCharMap.get(msg.senderCharacterId) || character
+                                                        const senderId = resolveSenderId(msg.senderCharacterId);
+                                                        const senderChar = session.isGroup && senderId
+                                                            ? groupCharMap.get(senderId) || (isCrowdId(senderId) ? null : character)
                                                             : character;
                                                         return (
                                                             <>
                                                     <div onClick={() => {
                                                         if (!session.isGroup || !msg.senderCharacterId) return;
-                                                        const strangerId = msg.senderCharacterId;
+                                                        let strangerId = resolveSenderId(msg.senderCharacterId)!;
+                                                        // 路人：点了就转正成背景人物、进群成员，再走陌生人名片（能加好友）
+                                                        if (isCrowdId(strangerId)) {
+                                                            const promoted = promoteCrowd(session.id, strangerId, session.groupName || "群聊");
+                                                            if (!promoted) return;
+                                                            strangerId = promoted;
+                                                            const fresh = loadChatSessions().find(x => x.id === session.id);
+                                                            if (fresh) Object.assign(session, { participantIds: fresh.participantIds });
+                                                            void fleshOut(promoted).catch(() => undefined);
+                                                        }
                                                         if (!(session.participantIds || []).includes(strangerId) || !isGroupStranger(strangerId)) return;
                                                         // 等一下看是不是双击（双击是拍一拍）
                                                         if (strangerCardTimerRef.current) clearTimeout(strangerCardTimerRef.current);
@@ -7102,13 +7115,14 @@ export function ChatRoom({ session, onBack, onDeleted }: ChatRoomProps) {
                                 disabled={added}
                                 onClick={() => {
                                     addFriendFromGroup(stranger.id, session.groupName || "群聊");
+                                    onKakaoAccepted(stranger.id);
                                     setStrangerCardId(null);
                                     clearTimeout(chatToastTimer.current);
-                                    setChatToast("已添加到通讯录");
+                                    setChatToast("加好友了");
                                     chatToastTimer.current = setTimeout(() => setChatToast(null), 2000);
                                 }}
                             >
-                                {added ? "已是好友" : "添加到通讯录"}
+                                {added ? "已是好友" : "加好友"}
                             </button>
                             <button className="ui-btn ui-btn-ghost w-full" onClick={() => setStrangerCardId(null)}>关闭</button>
                         </div>

@@ -18,6 +18,7 @@ import { createPerson, emptyProfile, fmtDay, getProfile, saveProfile, draftPerso
 import { companyOf, loadCareer, type CareerNode } from "./idol-career";
 import { simpleLLMCall } from "./api-helpers";
 import { loadTraineeCard } from "./trainee-card";
+import { seedCrowd } from "./idol-crowd";
 
 const KEY = "idol_kakao_v1";
 const MIN = 60e3;
@@ -238,6 +239,7 @@ export async function ensureTraineeGroup(present: Character[], notify?: (msg: st
     saveChatSessions(loadChatSessions().map(x => x.id === session.id ? { ...x, groupOwnerId: teacher.id } : x));
     const userName = resolveUserIdentity()?.name || "她";
     pushChatMessage({ sessionId: session.id, role: "system", content: `${teacher.name}邀请${userName}加入了群聊「${name}」`, status: "sent" });
+    seedCrowd(session.id, 30 + Math.floor(Math.random() * 30), [teacher.name, ...mates.map(m => m.name)]);
     save({ ...load(), groupId: session.id, teacherId: teacher.id });
     notify?.(`💬 KakaoTalk：${teacher.name} 把你拉进了群「${name}」`);
   } finally {

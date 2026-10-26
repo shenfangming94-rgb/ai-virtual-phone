@@ -1,6 +1,7 @@
 // lib/group-chat-engine.ts
 // Group chat engine: single API call for all characters.
 
+import { crowdIdByName, crowdPromptBlock } from "./idol-crowd";
 import { ChatSession, ChatMessage, loadChatAppSettings, createResponseBatchId, createResponseRoundId, createToolExecutionId, loadChatSessions, getLatestCharacterStateValues, isSessionStreamingEnabled, resolveVisionImagePromptLimit } from "./chat-storage";
 import { extractTextToolDirectiveText } from "./text-tool-protocol";
 import type { ApiConfig, PresetConfig, RegexConfig } from "./settings-types";
@@ -176,7 +177,8 @@ export function parseGroupChatResponse(
     for (const seg of segments) {
         const content = seg.lines.join("\n").trim();
         if (!content) continue;
-        const charId = nameToId.get(seg.name);
+        // 爱豆版：大群里的路人没有角色卡，按路人名册认
+        const charId = nameToId.get(seg.name) ?? crowdIdByName(seg.name);
         if (!charId) continue;
         rawResults.push({ characterId: charId, characterName: seg.name, responseText: content });
     }
@@ -506,6 +508,8 @@ async function buildGroupChatPromptMessages(
             content: "本次自定义 APP AI 任务只输出严格 JSON。不要输出 Markdown 代码块、解释文字或聊天富媒体指令。",
         });
     }
+    const crowdBlock = promptProfile?.output ? "" : crowdPromptBlock(session.id);
+    if (crowdBlock) llmMessages.push({ role: "system", content: crowdBlock });
     appendEmptyGenerateGuardMessage(llmMessages, config, history);
 
     return { llmMessages, config, preset, regexes, nameToId, memberNames, enabledTools, userName, appTags: activeAppTags };

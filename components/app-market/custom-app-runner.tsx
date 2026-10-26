@@ -4,6 +4,7 @@ import { useCallback, useMemo, useRef, useState, useEffect, useLayoutEffect } fr
 import { CheckCircle2, Circle, FileJson, Layers, LoaderCircle, MoreHorizontal, RefreshCw, Sparkles, Trash2, X } from "lucide-react";
 
 import type { InstalledCustomApp } from "@/lib/custom-app-types";
+import { worldClockFrameScript } from "@/lib/world-clock";
 import {
   readCustomAppCollection,
   uninstallCustomAppAsync,
@@ -155,6 +156,7 @@ ${body}
 html, body { min-height: 100%; }
 * { -webkit-tap-highlight-color: transparent; box-sizing: border-box; }
 </style>
+<script>${worldClockFrameScript()}</script>
 <script>
 (function(){
   var frameId = ${JSON.stringify(frameId)};

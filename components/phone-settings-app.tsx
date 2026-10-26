@@ -21,6 +21,8 @@ import { CloudServicesPage } from "./settings/cloud-services-setup";
 import { ToolboxSettings } from "./settings/toolbox-settings";
 import { ModerationCenter } from "./settings/moderation-center";
 import { AgentComputerSettings } from "./settings/agent-computer-settings";
+import { WorldTimeSettings } from "./settings/world-time-settings";
+import { loadWorldClock, subscribeWorldClock } from "@/lib/world-clock";
 import { fetchIsAdmin } from "@/lib/moderation-client";
 import { PageShell } from "./ui/page-shell";
 import { CardGrid, FeaturedCard, type CardItem, type FeaturedCardItem } from "./ui/card-grid";
@@ -57,6 +59,7 @@ type SubPage =
     | "toolbox"
     | "agentComputer"
     | "moderation"
+    | "worldTime"
     | "about";
 
 const SETTINGS_MENU = [
@@ -182,6 +185,8 @@ export function PhoneSettingsApp({ onClose, onNotice }: SettingsPageProps) {
             ? ""
             : currentPage === "moderation"
                 ? "管理中心"
+                : currentPage === "worldTime"
+                ? "世界时间"
                 : SETTINGS_MENU.find(m => m.id === currentPage)?.label || "设置";
     const title = subpageTitle || defaultTitle;
 
@@ -252,6 +257,27 @@ export function PhoneSettingsApp({ onClose, onNotice }: SettingsPageProps) {
         window.dispatchEvent(new CustomEvent("weixin-config-changed"));
         onNotice(next ? "已开启后台保活" : "已关闭后台保活");
     }, [onNotice]);
+
+    const [worldLabel, setWorldLabel] = useState("");
+    useEffect(() => {
+        const update = () => {
+            const d = new Date();
+            const p = (n: number) => String(n).padStart(2, "0");
+            setWorldLabel(loadWorldClock().real ? "跟现实时间一致" : `${d.getFullYear()} 年 ${d.getMonth() + 1} 月 ${d.getDate()} 日 ${p(d.getHours())}:${p(d.getMinutes())}`);
+        };
+        update();
+        const tick = window.setInterval(update, 15000);
+        const off = subscribeWorldClock(update);
+        return () => { window.clearInterval(tick); off(); };
+    }, []);
+    const worldTimeFeaturedItem: FeaturedCardItem = {
+        id: "worldTime",
+        icon: Clock,
+        label: "世界时间",
+        desc: worldLabel,
+        iconColor: BINDING_ACCENTS.memory,
+        onClick: () => setCurrentPage("worldTime"),
+    };
 
     const imageGenerationItem = SETTINGS_MENU.find(i => i.id === "imageGeneration")!;
     const imageGenerationFeaturedItem: FeaturedCardItem = {
@@ -326,6 +352,8 @@ export function PhoneSettingsApp({ onClose, onNotice }: SettingsPageProps) {
                 return <ModerationCenter onNotice={onNotice} />;
             case "identity":
                 return <UserIdentitySettings />;
+            case "worldTime":
+                return <WorldTimeSettings onNotice={onNotice} />;
             case "about":
                 return <AboutDeclaration />;
             default:
@@ -394,6 +422,12 @@ export function PhoneSettingsApp({ onClose, onNotice }: SettingsPageProps) {
                                 <ChevronRight size={18} className="settings-account-chevron" />
                             </button>
                         )}
+                        <div>
+                            <h3 className="settings-menu-section-title">World</h3>
+                            <div className="mt-[10px]">
+                                <FeaturedCard item={worldTimeFeaturedItem} />
+                            </div>
+                        </div>
                         <CardGrid
                             label="API Config"
                             labelClassName="settings-menu-section-title"

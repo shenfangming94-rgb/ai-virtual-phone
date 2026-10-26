@@ -6,6 +6,7 @@ import { ChatReasoningVisibilityController } from "@/components/chat-reasoning-v
 import { CSSImportEnhancer } from "@/components/css-import-enhancer";
 import { PWAManifestInjector } from "@/components/pwa-manifest-injector";
 import { PWARegistrar } from "@/components/pwa-registrar";
+import { WORLD_CLOCK_BOOT_SCRIPT } from "@/lib/world-clock";
 import "../styles/fonts.css";
 import "./globals.css";
 
@@ -30,6 +31,8 @@ export default function RootLayout({
   return (
     <html lang="zh-CN">
       <head>
+        {/* 世界时钟：必须最先跑，之后所有代码的「现在」都是世界时间 */}
+        <script dangerouslySetInnerHTML={{ __html: WORLD_CLOCK_BOOT_SCRIPT }} />
         <link rel="manifest" href="/manifest.webmanifest" crossOrigin="use-credentials" />
         <meta name="theme-color" content="#f8f7f2" />
         <link rel="apple-touch-icon" href="/icon-192.png" />

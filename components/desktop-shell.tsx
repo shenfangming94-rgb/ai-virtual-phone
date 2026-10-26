@@ -2,6 +2,7 @@
 
 import { GlobalCallHost } from "./chat/global-call-host";
 import { AlbumApp } from "./album/album-app";
+import { ClockApp } from "./clock-app";
 import { startAlbumService } from "@/lib/album-engine";
 import { AlipayApp } from "./alipay/alipay-app";
 import { startAlipayService } from "@/lib/alipay-engine";
@@ -4230,6 +4231,9 @@ html,body{margin:0;padding:0;width:100%;height:100%;background:#121110;color:rgb
 
     if (activeApp === "album") {
       return <AlbumApp onClose={() => setActiveApp(null)} onNotice={setNotice} />;
+    }
+    if (activeApp === "clock") {
+      return <ClockApp onClose={() => setActiveApp(null)} onNotice={setNotice} />;
     }
     if (activeApp === "alipay") {
       return <AlipayApp onClose={() => setActiveApp(null)} onNotice={setNotice} />;

@@ -32,7 +32,8 @@ export type IconId =
   | "mixology"
   | "album"
   | "alipay"
-  | "meituan";
+  | "meituan"
+  | "clock";
 
 // 桌面文件夹：以 folder: 前缀的 id 伪装成图标占一个格子参与拖拽/换页，
 // 内容（名字 + 成员图标）另存 DesktopFolderMap。文件夹不允许进 dock。
@@ -58,21 +59,17 @@ export type IconMeta = {
   path?: string;
 };
 
-export const PAGE_1_DEFAULT: IconId[] = ["chat", "diary", "music", "calendar", "checkphone", "shopping", "reading", "interview_magazine"];
+export const PAGE_1_DEFAULT: IconId[] = ["chat", "diary", "music", "calendar", "checkphone", "shopping", "reading", "clock"];
 
 export const PAGE_2_DEFAULT: IconId[] = [
-  "cocreate",
-  "game",
   "appmarket",
   "xiaohongshu",
   "dwelling",
   "story",
-  "vnmode",
-  "mapmode"
 ];
 
 // 第三页默认图标：右半边 2×2 排布（左半边留给日历组件），位置见 createDefaultDesktopIconLayout
-export const PAGE_3_DEFAULT: IconId[] = ["worldbuilder", "qa", "resource_hub", "realitybridge", "mixology"];
+export const PAGE_3_DEFAULT: IconId[] = ["resource_hub"];
 
 export const DOCK_DEFAULT: IconId[] = ["settings", "theme", "resources", "characters"];
 
@@ -131,4 +128,11 @@ export const ICONS: Record<IconId, IconMeta> = {
   album: { id: "album", label: "相册", tone: "var(--c-icon-amber)", placeholder: false },
   alipay: { id: "alipay", label: "支付宝", tone: "var(--c-icon-blue)", placeholder: false },
   meituan: { id: "meituan", label: "美团", tone: "var(--c-icon-amber)", placeholder: false },
+  clock: { id: "clock", label: "时钟", tone: "var(--c-icon-slate)", placeholder: false },
 };
+
+// ── 爱豆小手机 ──
+// 用不上的自带 app 从清单里拿掉：代码不删，桌面、dock、文件夹认不出它们就会自动跳过
+export const IDOL_HIDDEN_ICONS: IconId[] = ["vnmode", "mapmode", "worldbuilder", "mixology", "qa", "cocreate", "game", "interview_magazine", "realitybridge"];
+for (const id of IDOL_HIDDEN_ICONS) delete (ICONS as Partial<Record<IconId, IconMeta>>)[id];
+ICONS.chat.label = "KakaoTalk";

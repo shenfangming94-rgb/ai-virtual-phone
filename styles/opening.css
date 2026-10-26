@@ -5,7 +5,7 @@
   z-index: 300;
   overflow: hidden;
   color: #4a4560;
-  font-family: -apple-system, "Apple SD Gothic Neo", "PingFang SC", sans-serif;
+  font-family: "PingFang SC", "Hiragino Sans GB", "Apple SD Gothic Neo", sans-serif;
   background: #f7f5fc;
   background-image: radial-gradient(rgba(150, 130, 200, 0.18) 1.2px, transparent 1.4px);
   background-size: 16px 16px;
@@ -162,3 +162,8 @@
 .op-root .op-f em, .op-root .op-review em, .op-root .op-id-kv em { width: 84px; }
 .op-root .op-id-kv em, .ct-mini-id .op-id-kv em { width: 40px; }
 .op-root .op-sec, .op-root .op-final-title, .op-root .op-tap { letter-spacing: 3px; }
+
+/* 汉字一律用中文字体（韩文字体里带了一部分汉字，排前面会让一行字混两种字体、大小不一）；韩文只在中文字体没有时才用 */
+.op-root, .op-root *:not(.op-frame-btn):not(.op-text-btn), .ct-mini-id, .ct-mini-id * {
+  font-family: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans SC", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif !important;
+}

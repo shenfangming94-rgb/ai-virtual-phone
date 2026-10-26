@@ -1,0 +1,150 @@
+<!doctype html><html><head><meta charset="utf-8"><style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:#d9dce1;font-family:-apple-system,"Apple SD Gothic Neo","PingFang SC",sans-serif;display:flex;gap:26px;padding:26px;align-items:flex-start}
+.ph{width:390px;height:844px;border-radius:50px;overflow:hidden;position:relative;box-shadow:0 10px 40px rgba(0,0,0,.18);border:9px solid #111;color:#4a4560;
+background:#f7f5fc;background-image:radial-gradient(rgba(150,130,200,.18) 1.2px,transparent 1.4px);background-size:16px 16px}
+.cap{text-align:center;font-size:12px;color:#555;margin-top:10px;width:390px}
+.lav{background:#e9e3f7}
+.crest{display:block;margin:0 auto}
+.cover-band{position:absolute;left:0;right:0;top:250px;padding:26px 0 22px;text-align:center;background:#ebe5f8}
+.cover-band .ko{font-size:25px;font-weight:600;letter-spacing:1px;color:#5e5873;margin-top:10px}
+.cover-band .en{font-size:15px;letter-spacing:3px;color:#7a7390;margin-top:4px}
+.tap{position:absolute;left:0;right:0;bottom:76px;text-align:center;font-size:13px;letter-spacing:4px;color:#9a93b2}
+.paper{position:absolute;left:18px;right:18px;top:62px;background:#fff;border:1px solid #ddd6ee;box-shadow:0 6px 24px rgba(90,70,140,.1)}
+.ph-head{display:flex;align-items:center;gap:10px;padding:12px 14px;background:#ebe5f8;border-bottom:1px solid #ddd6ee}
+.ph-head .t1{font-size:15px;font-weight:600;color:#5e5873}.ph-head .t2{font-size:11px;letter-spacing:2px;color:#8a83a3}
+.step{font-size:11px;color:#a59fbd;letter-spacing:2px;text-align:right;padding:8px 14px 0}
+.body{padding:10px 18px 16px}
+.pr{display:flex;gap:16px}
+.photo{width:96px;height:120px;background:#ede8f8;border:1px dashed #c6bde0;display:flex;flex-direction:column;align-items:center;justify-content:center;color:#a59fbd;font-size:11px;gap:4px;flex:none}
+.fl{flex:1}
+.f{display:flex;align-items:flex-end;gap:8px;font-size:13px;padding:7px 0 4px;border-bottom:1px solid #d9d2ea}
+.f em{font-style:normal;color:#8a83a3;width:74px;font-size:12px;flex:none}
+.f b{font-weight:500;color:#3d3852}
+.f i{font-style:normal;color:#c2bbd6}
+.sec{font-size:12px;color:#8a83a3;text-align:center;margin:16px 0 8px;letter-spacing:2px}
+.grid{display:grid;grid-template-columns:repeat(4,1fr);border:1px solid #d9d2ea;border-radius:10px;overflow:hidden}
+.grid div{text-align:center;padding:8px 0;font-size:12px;border-right:1px solid #e6e0f3;border-bottom:1px solid #e6e0f3;color:#6f6888}
+.grid div:nth-child(4n){border-right:0}
+.grid .h{background:#f3effb;color:#8a83a3;font-size:11px}
+.grid .on{color:#7b5cd6;font-weight:700}
+.chk{display:flex;flex-direction:column;gap:7px}
+.chk div{display:flex;align-items:center;gap:10px;font-size:14px;padding:7px 12px;border:1px solid #e3dcf2;border-radius:10px}
+.chk span{width:16px;height:16px;border:1.5px solid #b9b0d6;border-radius:4px;flex:none;display:flex;align-items:center;justify-content:center;font-size:12px;color:#fff}
+.chk .on{border-color:#a48be6;background:#f4f0fd}
+.chk .on span{background:#8f74e0;border-color:#8f74e0}
+.chk small{margin-left:auto;font-size:11px;color:#a59fbd}
+.line-in{font-size:12px;color:#b4add0;border-bottom:1px solid #d9d2ea;padding:10px 0 6px;margin-top:6px}
+.foot{position:absolute;left:22px;right:22px;bottom:34px;display:flex;justify-content:space-between;align-items:center}
+.rnd{font-size:14px;color:#8a83a3;font-family:"Songti SC",serif;letter-spacing:2px}
+.next{padding:11px 34px;border:1px solid #6f6888;background:rgba(255,255,255,.6);color:#4a4560;font-family:"Songti SC",serif;font-size:15px;letter-spacing:6px;position:relative}.next::after{content:"";position:absolute;inset:3px;border:.5px solid #b9b0d6}
+/* 证件 */
+.idc{position:absolute;left:22px;right:22px;top:150px;height:222px;background:#fff;border-radius:14px;box-shadow:0 14px 36px rgba(90,70,140,.22);overflow:hidden;border:1px solid #e3dcf2}
+.idc .top{display:flex;align-items:center;gap:8px;background:#ebe5f8;padding:9px 14px}
+.idc .top b{font-size:16px;letter-spacing:2px;color:#5e5873;font-weight:600}
+.idc .top s{text-decoration:none;font-size:10px;color:#8a83a3;letter-spacing:1px;margin-left:auto}
+.idc .in{display:flex;gap:14px;padding:12px 14px}
+.idc .pic{width:82px;height:104px;background:linear-gradient(160deg,#efd8de,#cdb0d9);flex:none;display:flex;align-items:center;justify-content:center;color:#fff;font-size:28px;font-weight:600}
+.idc .kv{font-size:12.5px;line-height:1.85;color:#4a4560}
+.idc .kv em{font-style:normal;color:#9a93b2;display:inline-block;width:52px;font-size:11px}
+.idc .no{position:absolute;left:14px;bottom:8px;font-size:10px;color:#a59fbd;letter-spacing:1px}
+.idc .wm{position:absolute;right:-14px;bottom:-18px;opacity:.12}
+.sign{position:absolute;left:22px;right:22px;top:400px;height:120px;background:#fff;border:1px dashed #c6bde0;border-radius:14px}
+.sign em{position:absolute;left:14px;top:10px;font-style:normal;font-size:11px;color:#a59fbd;letter-spacing:2px}
+.sign svg{position:absolute;left:60px;top:28px}
+.sign .ln{position:absolute;left:14px;right:14px;bottom:26px;border-bottom:1px solid #d9d2ea}
+.sign small{position:absolute;right:14px;bottom:8px;font-size:10px;color:#b4add0}
+.hint{position:absolute;left:0;right:0;top:540px;text-align:center;font-size:12px;color:#9a93b2;line-height:1.7}
+.go{position:absolute;left:50%;bottom:44px;transform:translateX(-50%);padding:14px 48px;border:1px solid #4a4560;background:rgba(255,255,255,.7);color:#3d3852;font-family:"Songti SC",serif;font-size:16px;letter-spacing:8px;white-space:nowrap}.go::after{content:"";position:absolute;inset:4px;border:.5px solid #b9b0d6}
+</style></head><body>
+
+<svg width="0" height="0" style="position:absolute"><defs>
+<g id="crest">
+<circle cx="60" cy="60" r="56" fill="none" stroke="#8d86a6" stroke-width="2.2"/>
+<circle cx="60" cy="60" r="49" fill="none" stroke="#8d86a6" stroke-width="1"/>
+<path d="M60 8l2.4 5 5.4.6-4 3.7 1.1 5.3-4.9-2.7-4.9 2.7 1.1-5.3-4-3.7 5.4-.6z" fill="#8d86a6"/>
+<path d="M38 36h44v26c0 14-10 22-22 28-12-6-22-14-22-28z" fill="#fff" stroke="#8d86a6" stroke-width="2"/>
+<path d="M42 40c6 6 12 8 18 8s12-2 18-8" fill="none" stroke="#8d86a6" stroke-width="1.6"/>
+<path d="M60 52c-6 0-9 5-9 9 0 7 9 9 9 16M60 52c6 0 9 5 9 9" fill="none" stroke="#8d86a6" stroke-width="1.8"/>
+<circle cx="60" cy="68" r="2.6" fill="#8d86a6"/>
+<path d="M20 70c4 12 12 22 26 28M100 70c-4 12-12 22-26 28" fill="none" stroke="#8d86a6" stroke-width="1.6"/>
+<path d="M24 76l-5-2M28 84l-5-1M34 91l-4 1M96 76l5-2M92 84l5-1M86 91l4 1" stroke="#8d86a6" stroke-width="1.6"/>
+<path d="M36 98h48l-4 7H40z" fill="#fff" stroke="#8d86a6" stroke-width="1.6"/>
+</g></defs></svg>
+
+<!-- 1 封面 -->
+<div><div class="ph">
+<img src="crest.png" width="130" height="130" style="position:absolute;left:135px;top:150px;z-index:2;left:130px;top:140px">
+<div class="cover-band" style="padding-top:100px;top:200px">
+<div class="ko">연습생 등록증</div><div style="font-size:13px;color:#8a83a3;margin-top:4px;letter-spacing:4px">练习生登记证</div>
+<div class="en">TRAINEE ID CARD</div>
+</div>
+<div class="tap">轻 点 开 始 填 写</div>
+</div><div class="cap">① 封面：淡紫色加圆点底，校徽换成我们自己画的</div></div>
+
+<!-- 2 基本 -->
+<div><div class="ph">
+<div class="paper">
+<div class="ph-head"><img src="crest.png" width="38" height="38"><div><div class="t1">지원서 · 申请表</div><div class="t2">APPLICATION</div></div></div>
+<div class="step">01 / 05</div>
+<div class="body">
+<div class="pr"><div class="photo"><span style="font-size:20px">＋</span>贴照片</div>
+<div class="fl">
+<div class="f"><em>성명 姓名</em><b>Flora</b></div>
+<div class="f"><em>생년월일 生日</em><b>1998.04.11</b></div>
+<div class="f"><em>국적 国籍</em><b>中国</b></div>
+<div class="f"><em>MBTI</em><i>可不填</i></div>
+</div></div>
+<div class="sec">外 貌</div>
+<div class="line-in" style="color:#3d3852;font-size:13px">眼睛很圆，笑起来有梨涡，163cm</div>
+<div class="sec">起 点</div>
+<div class="f"><em>등록일 起点</em><b>2015 . 03 . 01</b></div>
+<div class="f"><em>练多久</em><b>一年半</b></div>
+</div></div>
+<div class="foot"><span class="rnd">🎲 随便</span><span class="next">下一页</span></div>
+</div><div class="cap">② 申请表：像成绩单那页一样一栏一栏填</div></div>
+
+<!-- 3 家境+擅长 -->
+<div><div class="ph">
+<div class="paper">
+<div class="ph-head"><img src="crest.png" width="38" height="38"><div><div class="t1">지원서 · 申请表</div><div class="t2">APPLICATION</div></div></div>
+<div class="step">03 / 05</div>
+<div class="body">
+<div class="sec" style="margin-top:4px">家 境</div>
+<div class="chk">
+<div><span></span>普通家庭<small>一封一封投出去</small></div>
+<div class="on"><span>✓</span>星二代<small>还没进公司就有人认识你</small></div>
+<div><span></span>富二代<small>不缺钱，缺人信你认真</small></div>
+<div><span></span>财阀家<small>公司对你客气得有点怪</small></div>
+<div><span></span>童星<small>大家记得你小时候的样子</small></div>
+<div><span></span>自己写</div>
+</div>
+<div class="sec">特 长（可多选）</div>
+<div class="grid">
+<div class="h">노래 唱</div><div class="h">댄스 跳</div><div class="h">랩 Rap</div><div class="h">작곡 写歌</div>
+<div class="on">★</div><div>　</div><div>　</div><div class="on">★</div>
+<div class="h">연기 演技</div><div class="h">예능 综艺</div><div class="h">외국어 语言</div><div class="h">비주얼 颜值</div>
+<div>　</div><div>　</div><div class="on">★</div><div>　</div>
+</div>
+</div></div>
+<div class="foot"><span class="rnd">🎲 随便</span><span class="next">下一页</span></div>
+</div><div class="cap">③ 家境打勾，特长像成绩表格那样点星星</div></div>
+
+<!-- 4 证件 -->
+<div><div class="ph">
+<div style="text-align:center;padding-top:82px;font-size:13px;letter-spacing:3px;color:#8a83a3">你 的 练 习 生 证</div>
+<div class="idc">
+<div class="top"><img src="crest.png" width="26" height="26"><b>TRAINEE ID CARD</b><s>练习生证</s></div>
+<div class="in"><div class="pic">F</div>
+<div class="kv"><div><em>姓名</em>Flora</div><div><em>生日</em>1998.04.11</div><div><em>国籍</em>中国</div><div><em>特长</em>唱歌 · 写歌 · 语言</div><div><em>所属</em><span style="color:#b4add0">— 还没有 —</span></div></div></div>
+<div class="no">No. 2015.03.01-0001</div>
+<img class="wm" src="crest.png" width="110" height="110">
+</div>
+<div class="sign"><em>签名 서명</em>
+<svg width="200" height="60" viewBox="0 0 200 60"><path d="M6 40c10-24 20-30 22-18s-8 26-2 22 16-30 22-24-4 22 2 20 10-16 16-14 0 12 6 12 12-10 18-8 4 8 10 8 16-6 30-10" fill="none" stroke="#5e5873" stroke-width="2.2" stroke-linecap="round"/></svg>
+<div class="ln"></div><small>用手指签</small></div>
+<div class="hint">「所属」那一栏空着<br>等你进了哪家公司，这里会盖上公司的章</div>
+<div class="go">盖章 · 开始</div>
+</div><div class="cap">④ 最后生成练习生证，手指签名，点了就开始</div></div>
+
+</body></html>

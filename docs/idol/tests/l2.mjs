@@ -1,0 +1,16 @@
+import puppeteer from "puppeteer-core";
+const b=await puppeteer.launch({executablePath:"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",headless:"new"});
+const p=await b.newPage(); await p.setViewport({width:430,height:900,deviceScaleFactor:2});
+const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+await p.goto("http://localhost:3031/",{waitUntil:"networkidle2",timeout:180000}); await sleep(3000);
+await p.screenshot({path:"m_big.png"});
+await p.evaluate(()=>document.querySelector(".lock-swipe").click()); await sleep(900);
+await p.evaluate(()=>window.postMessage({type:"OS_CMD",action:"open_app",appId:"settings"},"*")); await sleep(1800);
+await p.evaluate(()=>{const e=[...document.querySelectorAll(".card-featured-label")].find(x=>x.textContent==="锁屏");let el=e;while(el&&el.tagName!=="BUTTON"&&!el.getAttribute("role"))el=el.parentElement;(el||e).click();}); await sleep(1000);
+const clickT=async t=>{await p.evaluate(t=>{const e=[...document.querySelectorAll("button")].find(x=>x.textContent.trim()===t); e&&e.click();},t); await sleep(400);};
+await clickT("小时间 + 日历"); await clickT("深色（浅色壁纸用）");
+const inp=await p.$('input[type=file]'); await inp.uploadFile("wall.jpg"); await sleep(1500);
+await p.evaluate(()=>{const i=[...document.querySelectorAll("input")].find(x=>x.placeholder?.startsWith("不写就是")); const set=Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,"value").set; set.call(i,"₊˚ candyfloss ˚₊"); i.dispatchEvent(new Event("input",{bubbles:true}));}); await sleep(300);
+await p.screenshot({path:"m_settings.png"});
+await clickT("锁屏看看"); await sleep(700); await p.screenshot({path:"m_widget.png"});
+await b.close();

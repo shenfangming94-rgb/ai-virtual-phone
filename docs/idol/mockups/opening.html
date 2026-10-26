@@ -1,0 +1,103 @@
+<!doctype html><html><head><meta charset="utf-8"><style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:#d9dce1;font-family:-apple-system,"PingFang SC",sans-serif;display:flex;gap:26px;padding:26px;align-items:flex-start}
+.ph{width:390px;height:844px;border-radius:50px;overflow:hidden;position:relative;box-shadow:0 10px 40px rgba(0,0,0,.18);border:9px solid #111;background:#06060c;color:#fff}
+.cap{text-align:center;font-size:12px;color:#555;margin-top:10px;width:390px}
+.sb{height:50px;display:flex;justify-content:space-between;align-items:center;padding:6px 34px 0;font-size:16px;font-weight:600;position:relative;z-index:3}
+.spot{position:absolute;left:50%;top:-120px;width:520px;height:900px;transform:translateX(-50%);background:radial-gradient(ellipse 50% 60% at 50% 0%,rgba(255,240,220,.38),rgba(255,230,210,.08) 55%,transparent 75%);pointer-events:none}
+.floor{position:absolute;left:50%;bottom:150px;width:300px;height:60px;transform:translateX(-50%);background:radial-gradient(ellipse at center,rgba(255,236,214,.35),transparent 70%)}
+.dust{position:absolute;inset:0;background-image:radial-gradient(1px 1px at 40% 30%,rgba(255,255,255,.6),transparent),radial-gradient(1px 1px at 55% 45%,rgba(255,255,255,.4),transparent),radial-gradient(1.5px 1.5px at 48% 20%,rgba(255,255,255,.5),transparent),radial-gradient(1px 1px at 60% 60%,rgba(255,255,255,.35),transparent),radial-gradient(1px 1px at 43% 55%,rgba(255,255,255,.4),transparent)}
+.mid{position:absolute;left:0;right:0;top:330px;text-align:center}
+.en{font-size:11px;letter-spacing:6px;color:rgba(255,255,255,.55)}
+.zh{font-size:26px;font-weight:300;letter-spacing:8px;margin-top:14px}
+.tap{position:absolute;left:0;right:0;bottom:70px;text-align:center;font-size:12px;letter-spacing:4px;color:rgba(255,255,255,.45)}
+.dots{display:flex;gap:7px;justify-content:center;margin:18px 0 0}
+.dots i{width:7px;height:7px;border-radius:50%;background:rgba(255,255,255,.18)}
+.dots i.on{background:#ffe7c7;box-shadow:0 0 10px #ffd9a8}
+.q{padding:46px 30px 0;position:relative;z-index:2}
+.q .no{font-size:11px;letter-spacing:5px;color:rgba(255,231,199,.7)}
+.q h2{font-size:28px;font-weight:600;margin-top:12px;line-height:1.35}
+.q p{font-size:14px;color:rgba(255,255,255,.5);margin-top:8px}
+.opts{padding:26px 22px 0;display:flex;flex-direction:column;gap:10px;position:relative;z-index:2}
+.opt{border-radius:20px;padding:15px 18px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);display:flex;justify-content:space-between;align-items:center}
+.opt b{font-size:17px;font-weight:500}.opt span{font-size:12px;color:rgba(255,255,255,.45);display:block;margin-top:3px}
+.opt.sel{background:rgba(255,231,199,.14);border-color:rgba(255,231,199,.65);box-shadow:0 0 22px rgba(255,214,170,.18)}
+.opt .ck{width:22px;height:22px;border-radius:50%;border:1.5px solid rgba(255,255,255,.3)}
+.opt.sel .ck{background:#ffe7c7;border-color:#ffe7c7}
+.chips{padding:26px 22px 0;display:flex;flex-wrap:wrap;gap:10px;position:relative;z-index:2}
+.chip{padding:12px 18px;border-radius:24px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);font-size:16px}
+.chip.sel{background:rgba(255,231,199,.16);border-color:rgba(255,231,199,.7);color:#ffe7c7}
+.txt{margin:16px 22px 0;border-radius:18px;padding:14px 16px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);font-size:14px;color:rgba(255,255,255,.4);position:relative;z-index:2}
+.foot{position:absolute;left:22px;right:22px;bottom:40px;display:flex;justify-content:space-between;align-items:center;z-index:2}
+.rnd{font-size:14px;color:rgba(255,255,255,.55)}
+.next{padding:14px 30px;border-radius:26px;background:#ffe7c7;color:#1a1208;font-weight:600;font-size:16px}
+/* 档案 */
+.paper{margin:26px 20px 0;background:#f6f1e7;color:#2a241c;border-radius:6px;padding:20px 20px 18px;position:relative;box-shadow:0 20px 50px rgba(0,0,0,.5);transform:rotate(-1.2deg);z-index:2}
+.paper .hd{display:flex;justify-content:space-between;font-size:10px;letter-spacing:3px;color:#8a7f6e;border-bottom:1px solid #d8cfbf;padding-bottom:8px}
+.paper .tt{font-size:20px;font-weight:700;letter-spacing:4px;margin:12px 0 14px}
+.pr{display:flex;gap:14px}
+.photo{width:96px;height:124px;background:linear-gradient(160deg,#e9c9c1,#c99a9a);border:4px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,.15);flex:none;display:flex;align-items:center;justify-content:center;color:#fff;font-size:30px;font-weight:600}
+.kv{font-size:13px;line-height:1.95}.kv em{font-style:normal;color:#8a7f6e;display:inline-block;width:42px;font-size:11px}
+.line{border-top:1px dashed #d8cfbf;margin:12px 0 10px}
+.tags span{display:inline-block;font-size:12px;padding:3px 9px;border:1px solid #b9ad99;border-radius:12px;margin:0 5px 5px 0}
+.note{font-size:12.5px;line-height:1.6;color:#5a5044;margin-top:6px}
+.stamp{position:absolute;right:16px;bottom:56px;width:84px;height:84px;border-radius:50%;border:2.5px solid rgba(196,52,52,.75);color:rgba(196,52,52,.8);display:flex;flex-direction:column;align-items:center;justify-content:center;transform:rotate(-14deg);font-size:10px;letter-spacing:1px;font-weight:600}
+.stamp b{font-size:15px;letter-spacing:3px}
+.ticket{margin:28px 30px 0;display:flex;justify-content:space-between;align-items:center;font-size:12px;color:rgba(255,255,255,.55);letter-spacing:2px;position:relative;z-index:2}
+.ticket b{color:#ffe7c7;font-size:16px;letter-spacing:3px;font-weight:500}
+.hold{position:absolute;left:50%;bottom:44px;transform:translateX(-50%);width:84px;height:84px;border-radius:50%;display:flex;align-items:center;justify-content:center;z-index:2}
+.hold::before{content:"";position:absolute;inset:0;border-radius:50%;background:conic-gradient(#ffe7c7 0 120deg,rgba(255,255,255,.12) 120deg)}
+.hold::after{content:"";position:absolute;inset:4px;border-radius:50%;background:#0b0b12}
+.hold span{position:relative;z-index:1;font-size:13px;letter-spacing:2px;color:#ffe7c7}
+.holdtip{position:absolute;left:0;right:0;bottom:16px;text-align:center;font-size:11px;color:rgba(255,255,255,.4);letter-spacing:3px;z-index:2}
+</style></head><body>
+
+<div><div class="ph"><div class="spot"></div><div class="dust"></div><div class="floor"></div>
+<div class="sb"><span></span><span></span></div>
+<div class="mid"><div class="en">PROFILE</div><div class="zh">先说说你自己</div></div>
+<div class="tap">轻点舞台</div>
+</div><div class="cap">① 打开：一片黑，只有一束追光照着空舞台</div></div>
+
+<div><div class="ph"><div class="spot" style="opacity:.55"></div>
+<div class="sb"><span></span><span></span></div>
+<div class="dots"><i class="on"></i><i class="on"></i><i class="on"></i><i></i><i></i><i></i></div>
+<div class="q"><div class="no">03 · FAMILY</div><h2>你是在什么样的家里长大的？</h2><p>不会写进分数里，只会写进别人看你的眼光里</p></div>
+<div class="opts">
+<div class="opt"><div><b>普通家庭</b><span>一封一封投出去</span></div><i class="ck"></i></div>
+<div class="opt sel"><div><b>星二代</b><span>还没进公司，就有人认识你</span></div><i class="ck"></i></div>
+<div class="opt"><div><b>富二代</b><span>不缺钱，缺的是别人信你是认真的</span></div><i class="ck"></i></div>
+<div class="opt"><div><b>财阀家</b><span>公司对你客气得有点奇怪</span></div><i class="ck"></i></div>
+<div class="opt"><div><b>自己写</b><span>&nbsp;</span></div><i class="ck"></i></div>
+</div>
+<div class="foot"><span class="rnd">🎲 随便</span><span class="next">下一步</span></div>
+</div><div class="cap">② 一题一页，上面的小灯一盏盏亮；每题都能「随便」</div></div>
+
+<div><div class="ph"><div class="spot" style="opacity:.55"></div>
+<div class="sb"><span></span><span></span></div>
+<div class="dots"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i></i><i></i></div>
+<div class="q"><div class="no">04 · TALENT</div><h2>你最拿得出手的是？</h2><p>可以选好几个</p></div>
+<div class="chips">
+<span class="chip sel">唱歌</span><span class="chip">跳舞</span><span class="chip">Rap</span><span class="chip sel">写歌</span><span class="chip">演技</span><span class="chip">综艺感</span><span class="chip">语言</span><span class="chip">长得好看</span>
+</div>
+<div class="txt">短板（不写也行）：比如「一跳舞就同手同脚」</div>
+<div class="foot"><span class="rnd">🎲 随便</span><span class="next">下一步</span></div>
+</div><div class="cap">③ 擅长什么，多选</div></div>
+
+<div><div class="ph"><div class="spot" style="opacity:.7"></div>
+<div class="sb"><span></span><span></span></div>
+<div class="paper">
+<div class="hd"><span>APPLICANT PROFILE</span><span>No. 0001</span></div>
+<div class="tt">个 人 档 案</div>
+<div class="pr"><div class="photo">F</div>
+<div class="kv"><div><em>姓名</em>Flora</div><div><em>年龄</em>17 岁</div><div><em>国籍</em>中国</div><div><em>家境</em>星二代</div><div><em>练习</em>一年半</div></div></div>
+<div class="line"></div>
+<div class="tags"><span>唱歌</span><span>写歌</span></div>
+<div class="note">短板：一跳舞就同手同脚<br>妈妈是九十年代的歌手，现在偶尔上综艺</div>
+<div class="stamp"><span>2015.03.01</span><b>START</b><span>SEOUL</span></div>
+</div>
+<div class="ticket"><span>起点</span><b>2015 . 03 . 01</b></div>
+<div class="hold"><span>按住</span></div>
+<div class="holdtip">按住，灯会亮起来</div>
+</div><div class="cap">④ 最后：一张练习生档案，按住圆圈，灯亮了就开始</div></div>
+
+</body></html>

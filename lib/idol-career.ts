@@ -332,7 +332,17 @@ export function careerPromptBlock(): string {
     career.facts.length ? `【戏里已经定下来的公司细节】\n${career.facts.slice(-30).map(f => `- ${f}`).join("\n")}` : "",
     next.length ? `【接下来的日程】${next.join("；")}` : "",
     recentResults(career),
+    lastRankLine(),
   ].filter(Boolean).join("\n\n");
+}
+
+/** 上次月末排名（直接读账本，免得互相引用） */
+function lastRankLine(): string {
+  try {
+    const months = (JSON.parse(kvGet("idol_ledger_v1") || "null") as { months?: { month: string; rank: number; total: number; prevRank?: number }[] } | null)?.months ?? [];
+    const m = months[months.length - 1];
+    return m ? `【上次月末排名】${+m.month.split("-")[1]}月 第 ${m.rank} 名（共 ${m.total} 人）${m.prevRank ? `，再上次第 ${m.prevRank} 名` : ""}` : "";
+  } catch { return ""; }
 }
 
 /** 最近过去的日程怎么样了（演了、打勾写的、请假、缺席），世界要知道 */

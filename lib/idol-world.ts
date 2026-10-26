@@ -20,6 +20,7 @@ import { createOrGetStorySession, createStoryGroup, loadStoryGroups, loadStoryMe
 import { simpleLLMCall } from "./api-helpers";
 import { addCompanyFacts, careerPromptBlock, completeNode, nodeById } from "./idol-career";
 import { addFame, eventsPromptBlock } from "./idol-events";
+import { recordPerformance } from "./idol-ledger";
 import { KAKAO_TAG_RULES, afterNodeScene, applyKakaoTags, extractKakaoTags, genKakaoId, kakaoPromptLine, type KakaoTags } from "./idol-kakao";
 import { loadApiConfigs, loadBindingConfig, resolveBinding } from "./settings-storage";
 import { saveMemoryEntry } from "./memory-storage";
@@ -243,16 +244,18 @@ export async function closeWorldScene(groupId: string, sessionId: string): Promi
     .join("\n\n")
     .slice(-12000);
   const firstMeet = present.filter(c => !getProfile(c.id).withYou).map(c => c.name);
+  const examNode = meta.nodeId ? nodeById(meta.nodeId) : undefined;
   const recorded: string[] = [];
   let summary = "";
   if (present.length && transcript) {
     const res = await simpleLLMCall(chatConfig(), [
-      { role: "system", content: `把这场戏记下来。只输出 JSON：{"summary":"这场戏两三句","people":[{"name":"","event":"站在这个人的角度，这场里他和她之间发生了什么，一句话；没交集就写空","impression":"只给第一次见她的人写：他对她的第一印象，一两句；其他人写空","relation":"up/down/same","heart":"up/down/same","secretLearned":"她这场知道了他的秘密就写她是怎么知道的，一句话；没有就写空","status":"这场之后他最近在忙什么，世界视角一句；没变就写空","kakao":"他会写在 KakaoTalk 状态消息里的短句；没变就写空"}]}\n关系和心动只按这场里真的发生的事判断，一场最多动一格，没发生什么就写 same；没有心动线的人 heart 写 same。\n第一次见她的人：${firstMeet.join("、") || "无"}` },
+      { role: "system", content: `把这场戏记下来。只输出 JSON：{"summary":"这场戏两三句",${examNode ? `"performance":"good/ok/bad：这场${examNode.title}她表现得怎么样，按她在戏里实际做了什么、准备得怎么样判断，她认真准备了不能硬说不好","performanceWhy":"一句话原因",` : ""}"people":[{"name":"","event":"站在这个人的角度，这场里他和她之间发生了什么，一句话；没交集就写空","impression":"只给第一次见她的人写：他对她的第一印象，一两句；其他人写空","relation":"up/down/same","heart":"up/down/same","secretLearned":"她这场知道了他的秘密就写她是怎么知道的，一句话；没有就写空","status":"这场之后他最近在忙什么，世界视角一句；没变就写空","kakao":"他会写在 KakaoTalk 状态消息里的短句；没变就写空"}]}\n关系和心动只按这场里真的发生的事判断，一场最多动一格，没发生什么就写 same；没有心动线的人 heart 写 same。\n第一次见她的人：${firstMeet.join("、") || "无"}` },
       { role: "user", content: `地点：${meta.place}\n在场：\n${present.map(c => { const pp = getProfile(c.id); return `- ${c.name}：关系 ${relationOf(pp)}${pp.canCrush && pp.heart ? `，心动 ${pp.heart}` : "，没有心动线"}${pp.secret && pp.secret.kind !== "none" && pp.secret.text && !pp.secret.revealed ? `，秘密：${pp.secret.text}` : ""}`; }).join("\n")}\n\n${transcript}` },
     ], { temperature: 0.4, label: "剧情记账" });
     if (!res.content) throw new Error(res.error || "AI 没回");
-    const j = JSON.parse(res.content.match(/\{[\s\S]*\}/)?.[0] ?? "{}") as { summary?: string; people?: { name?: string; event?: string; impression?: string; relation?: string; heart?: string; secretLearned?: string; status?: string; kakao?: string }[] };
+    const j = JSON.parse(res.content.match(/\{[\s\S]*\}/)?.[0] ?? "{}") as { summary?: string; performance?: string; performanceWhy?: string; people?: { name?: string; event?: string; impression?: string; relation?: string; heart?: string; secretLearned?: string; status?: string; kakao?: string }[] };
     summary = String(j.summary ?? "");
+    if (examNode && j.performance) recordPerformance(examNode, String(j.performance), String(j.performanceWhy ?? ""));
     for (const item of j.people ?? []) {
       const c = present.find(x => x.name === item.name);
       if (!c) continue;

@@ -20,6 +20,7 @@ import {
 import { afterNodeScene } from "./idol-kakao";
 import { setWorldTime } from "./world-clock";
 import { addFame, plannedStops } from "./idol-events";
+import { recordAbsent, recordNodeDone } from "./idol-ledger";
 import { getProfile, saveProfile } from "./idol-people";
 
 const KEY = "idol_reminders_v1";
@@ -78,6 +79,7 @@ export async function checkNode(id: string, result: string): Promise<void> {
   if (node.kind !== "custom" && node.kind !== "date") noteToPerson(teacher?.id, `她${node.title}：${text || "照常完成"}`, node.dueAt, node.place);
   if (node.kind === "date") noteToPerson(node.fromId, `一起去了「${node.title}」${text ? `：${text}` : ""}`, node.dueAt, node.place);
   if (node.kind === "chance") addFame(5);
+  recordNodeDone(node, text);
   await completeNode(id);
   await afterNodeScene(loadCareer().nodes.find(n => n.id === id), [], node.place).catch(() => undefined);
 }
@@ -200,6 +202,7 @@ async function sendAs(charId: string, instruction: string): Promise<string | nul
 
 /** 缺席的后果：公司的事老师来问，第二次起叫去办公室；约好的事那个人来问 */
 function onAbsent(node: CareerNode) {
+  recordAbsent(node);
   const teacher = teacherOf();
   if (node.kind === "custom") return;
   if (node.kind === "date") {

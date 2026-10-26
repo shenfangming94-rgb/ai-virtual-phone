@@ -9,6 +9,8 @@ import { careerTick } from "@/lib/idol-career";
 import { kakaoTick } from "@/lib/idol-kakao";
 import { installIdolChatHooks, reminderTick } from "@/lib/idol-reminders";
 import { eventsTick } from "@/lib/idol-events";
+import { rankTick } from "@/lib/idol-ledger";
+import { isChatStorageHydrated } from "@/lib/chat-storage";
 import { LockScreen } from "./lock-screen";
 import { TraineeOpening } from "./opening/trainee-opening";
 import { TRAINEE_CARD_EVENT, loadTraineeCard } from "@/lib/trainee-card";
@@ -1094,10 +1096,13 @@ export function DesktopShell({ initialThemeProfile, initialThemeAssets }: Deskto
   useEffect(() => {
     installIdolChatHooks(setNotice);
     const run = () => {
+      // 聊天存储还没读完就写消息会被盖掉：先等它读完
+      if (!isChatStorageHydrated()) { void hydrateChatStorage(); return; }
       try { careerTick(setNotice); } catch { /* 发动机出错不挡着用手机 */ }
       try { kakaoTick(setNotice); } catch { /* 同上 */ }
       try { reminderTick(setNotice); } catch { /* 同上 */ }
       try { eventsTick(setNotice); } catch { /* 同上 */ }
+      try { rankTick(setNotice); } catch { /* 同上 */ }
     };
     run();
     const timer = window.setInterval(run, 5000);

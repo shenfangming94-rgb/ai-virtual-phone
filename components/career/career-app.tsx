@@ -18,6 +18,7 @@ import {
 import {
   acceptInvite, addMine, checkNode, declineInvite, deleteNode, isNightNow, leaveNode, setNote, setWish, teacherOf, uncheckNode,
 } from "@/lib/idol-reminders";
+import { loadMonths, overrideMyRank, RANK_EVENT } from "@/lib/idol-ledger";
 
 const WEEK = ["日", "一", "二", "三", "四", "五", "六"];
 const DAY = 864e5;
@@ -229,13 +230,7 @@ export function CareerApp({ onClose, onNotice }: { onClose: () => void; onNotice
   } else if (page.p === "company") {
     body = <CompanyPage onBack={() => setPage({ p: "home" })} onNotice={onNotice} />;
   } else if (page.p === "rank") {
-    body = (
-      <div className="rm-page">
-        <div className="rm-top"><button type="button" className="rm-circle" onClick={() => setPage({ p: "home" })} aria-label="返回"><ChevronLeft size={22} /></button><span /></div>
-        <h1 style={{ color: "#ff375f" }}>月末排名</h1>
-        <p className="rm-empty">第一次月末评价之后，每个月的名次和老师的评语会记在这里。</p>
-      </div>
-    );
+    body = <RankPage onBack={() => setPage({ p: "home" })} onNotice={onNotice} />;
   } else {
     const card = (key: ListKey, icon: React.ReactNode, cls: string) => (
       <button type="button" className={`rm-card ${cls}`} onClick={() => setPage({ p: "list", key })}>
@@ -276,7 +271,7 @@ export function CareerApp({ onClose, onNotice }: { onClose: () => void; onNotice
           </button>
           <button type="button" className="rm-lrow" onClick={() => setPage({ p: "rank" })}>
             <span className="rm-dot" style={{ background: "#ff375f" }}><BarChart3 size={19} /></span>
-            <span className="rm-lt">月末排名<small>还没有</small></span>
+            <span className="rm-lt">月末排名<small>{rankSummary()}</small></span>
             <span className="rm-lc"><ChevronRight size={18} /></span>
           </button>
         </div>
@@ -292,6 +287,54 @@ export function CareerApp({ onClose, onNotice }: { onClose: () => void; onNotice
       {checking ? <CheckSheet item={checking} onClose={() => setCheckId(null)} onDone={async text => { setCheckId(null); await checkNode(checking.id, text); onNotice?.(`${checking.title}：完成`); }} /> : null}
       {leaving ? <LeaveSheet item={leaving} onClose={() => setLeaveId(null)} onDone={reason => { setLeaveId(null); leaveNode(leaving.id, reason); onNotice?.(`${leaving.title}：请好假了`); }} /> : null}
       {adding ? <AddSheet onClose={() => setAdding(false)} onDone={(t, at, note) => { setAdding(false); addMine(t, at, note); onNotice?.("记好了"); }} /> : null}
+    </div>
+  );
+}
+
+function rankSummary(): string {
+  const months = loadMonths();
+  if (!months.length) return "还没有";
+  return months.slice(-2).map(m => `${+m.month.split("-")[1]}月 第 ${m.rank} 名`).join(" · ");
+}
+
+function RankPage({ onBack, onNotice }: { onBack: () => void; onNotice?: (m: string) => void }) {
+  const [, setTick] = useState(0);
+  const [view, setView] = useState<string | null>(null);
+  const [editing, setEditing] = useState<string | null>(null);
+  const [want, setWant] = useState("");
+  useEffect(() => {
+    const bump = () => setTick(t => t + 1);
+    window.addEventListener(RANK_EVENT, bump);
+    return () => window.removeEventListener(RANK_EVENT, bump);
+  }, []);
+  const months = [...loadMonths()].reverse();
+  return (
+    <div className="rm-page">
+      <div className="rm-top"><button type="button" className="rm-circle" onClick={onBack} aria-label="返回"><ChevronLeft size={22} /></button><span /></div>
+      <h1 style={{ color: "#ff375f" }}>月末排名</h1>
+      {months.length ? months.map(m => {
+        const diff = m.prevRank ? m.prevRank - m.rank : 0;
+        return (
+          <div key={m.month} className="rm-group rm-pad rm-rank">
+            <div className="rm-rank-h">
+              <span>{+m.month.split("-")[1]}月</span>
+              <b>第 {m.rank} 名</b>
+              <small>共 {m.total} 人{m.prevRank ? (diff > 0 ? ` · ↑${diff}` : diff < 0 ? ` · ↓${-diff}` : " · 没变") : " · 第一次"}</small>
+            </div>
+            {m.comment ? <div className="rm-txt">老师：{m.comment}</div> : null}
+            <button type="button" className="rm-rank-img" onClick={() => setView(m.image)}><img src={m.image} alt="月末评价结果" /></button>
+            {editing === m.month ? (
+              <div className="rm-rank-edit">
+                <input className="rm-in" inputMode="numeric" autoFocus value={want} onChange={e => setWant(e.target.value.replace(/\D/g, ""))} placeholder={`1～${m.total}`} />
+                <button type="button" onClick={() => setEditing(null)}>取消</button>
+                <button type="button" className="p" disabled={!want} onClick={() => { overrideMyRank(m.month, Number(want)); setEditing(null); onNotice?.(`改成第 ${want} 名了`); }}>改</button>
+              </div>
+            ) : <button type="button" className="rm-link" onClick={() => { setEditing(m.month); setWant(String(m.rank)); }}>改我的名次</button>}
+          </div>
+        );
+      }) : <p className="rm-empty">第一次月末评价之后，每个月的名次、老师的评语和那张表会记在这里。</p>}
+      <div style={{ height: 40 }} />
+      {view ? <div className="rm-viewer" onClick={() => setView(null)}><img src={view} alt="月末评价结果" /></div> : null}
     </div>
   );
 }

@@ -19,6 +19,7 @@ import {
 } from "./idol-career";
 import { afterNodeScene } from "./idol-kakao";
 import { setWorldTime } from "./world-clock";
+import { addFame, plannedStops } from "./idol-events";
 import { getProfile, saveProfile } from "./idol-people";
 
 const KEY = "idol_reminders_v1";
@@ -76,6 +77,7 @@ export async function checkNode(id: string, result: string): Promise<void> {
   const teacher = teacherOf();
   if (node.kind !== "custom" && node.kind !== "date") noteToPerson(teacher?.id, `她${node.title}：${text || "照常完成"}`, node.dueAt, node.place);
   if (node.kind === "date") noteToPerson(node.fromId, `一起去了「${node.title}」${text ? `：${text}` : ""}`, node.dueAt, node.place);
+  if (node.kind === "chance") addFame(5);
   await completeNode(id);
   await afterNodeScene(loadCareer().nodes.find(n => n.id === id), [], node.place).catch(() => undefined);
 }
@@ -160,6 +162,7 @@ export function capJump(target: number): { target: number; stoppedBy?: string } 
     if (n.status === "invite" && n.dueAt > now) stops.push({ at: Math.max(now + MIN, n.dueAt - 7 * DAY), title: `待回复：${n.title}` });
   }
   for (const o of career.offers) if (o.status === "new" && !o.notified && o.at > now) stops.push({ at: o.at, title: `${companyOf(o.companyId)?.name} 来找你了` });
+  for (const p of plannedStops()) if (p.at > now) stops.push(p);
   const first = stops.filter(s => s.at < target).sort((a, b) => a.at - b.at)[0];
   return first ? { target: first.at, stoppedBy: first.title } : { target };
 }
@@ -264,19 +267,24 @@ export function reminderTick(notify: (msg: string) => void): void {
 /** 私聊老师时给他的提示：她请假你决定批不批，批了写记号 */
 export function buildIdolChatHint(characterId: string, isGroup: boolean): string {
   if (isGroup || typeof window === "undefined") return "";
-  const teacher = teacherOf();
-  if (!teacher || teacher.id !== characterId) return "";
+  const out: string[] = [];
   const now = Date.now();
-  const upcoming = loadCareer().nodes.filter(n => n.status === "pending" && n.dueAt > now - ABSENT_AFTER && n.kind !== "custom" && n.kind !== "date").slice(0, 6);
-  if (!upcoming.length) return "";
-  return [
-    "",
-    "",
-    "### 请假",
-    `她接下来的日程：${upcoming.map(n => `「${n.title}」${new Date(n.dueAt).getMonth() + 1}月${new Date(n.dueAt).getDate()}日`).join("、")}`,
-    "【规则】她找你请假时，按你的性格、她的理由和她最近的表现决定批不批。批了就在回复末尾另起一行写 [准假:日程名]（日程名照上面写），没批就正常回她，不写记号。",
-    "",
-  ].join("\n");
+  const teacher = teacherOf();
+  if (teacher && teacher.id === characterId) {
+    const upcoming = loadCareer().nodes.filter(n => n.status === "pending" && n.dueAt > now - ABSENT_AFTER && n.kind !== "custom" && n.kind !== "date").slice(0, 6);
+    if (upcoming.length) out.push(
+      "### 请假",
+      `她接下来的日程：${upcoming.map(n => `「${n.title}」${new Date(n.dueAt).getMonth() + 1}月${new Date(n.dueAt).getDate()}日`).join("、")}`,
+      "【规则】她找你请假时，按你的性格、她的理由和她最近的表现决定批不批。批了就在回复末尾另起一行写 [准假:日程名]（日程名照上面写），没批就正常回她，不写记号。",
+    );
+  }
+  const asked = loadCareer().nodes.filter(n => n.status === "invite" && n.fromId === characterId);
+  if (asked.length) out.push(
+    "### 等她回复的事",
+    `你问过她：${asked.map(n => `「${n.title}」`).join("、")}`,
+    "【规则】她在聊天里明确答应了，就在回复末尾另起一行写 [答应:事情名]；明确说不去，就写 [不去:事情名]；没说清楚就不写。",
+  );
+  return out.length ? ["", "", ...out, ""].join("\n") : "";
 }
 
 let hooked = false;
@@ -288,10 +296,19 @@ export function installIdolChatHooks(notify: (msg: string) => void): void {
   getChatPluginHookBus().registerTransform("idol-reminders", "message.beforePersist", (raw: unknown) => {
     const payload = raw as { message: { role: string; content: string } };
     const msg = payload.message;
-    if (msg.role !== "assistant" || !msg.content?.includes("准假")) return payload;
+    if (msg.role !== "assistant" || !/准假|答应|不去/.test(msg.content || "")) return payload;
     const titles: string[] = [];
-    const content = msg.content.replace(/\[准假[:：]\s*([^\]]+)\]/g, (_, t: string) => { titles.push(t.trim()); return ""; }).trim();
-    if (!titles.length) return payload;
+    const yes: string[] = [];
+    const no: string[] = [];
+    const content = msg.content
+      .replace(/\[准假[:：]\s*([^\]]+)\]/g, (_, t: string) => { titles.push(t.trim()); return ""; })
+      .replace(/\[答应[:：]\s*([^\]]+)\]/g, (_, t: string) => { yes.push(t.trim()); return ""; })
+      .replace(/\[不去[:：]\s*([^\]]+)\]/g, (_, t: string) => { no.push(t.trim()); return ""; })
+      .trim();
+    if (!titles.length && !yes.length && !no.length) return payload;
+    const match = (t: string) => loadCareer().nodes.find(n => n.status === "invite" && (n.title === t || t.includes(n.title) || n.title.includes(t)));
+    for (const t of yes) { const n = match(t); if (n) { acceptInvite(n.id); notify(`📅 ${n.title}：答应了，写进日程`); } }
+    for (const t of no) { const n = match(t); if (n) { declineInvite(n.id); notify(`${n.title}：回了不去`); } }
     const teacher = teacherOf();
     for (const t of titles) {
       const node = loadCareer().nodes.find(n => n.status === "pending" && (n.title === t || t.includes(n.title) || n.title.includes(t)));

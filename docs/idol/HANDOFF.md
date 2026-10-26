@@ -149,11 +149,21 @@ Flora 要一个专门玩「爱豆模拟器」的小手机：她是想当爱豆�
 - 室友：第一天拉群时 `ensureRoommates`（在场同龄女练习生优先，不够捏，1～2 个，career.roommates，世界提示里有）
 - 开局页「练多久」→「多久出道」，随便年龄 16～19；路人带年龄（多数 15～19，少数 12～14 小练习生，偶尔 20、21）
 
+### 2.14 事情发动机（10-28，`lib/idol-events.ts`）
+- kv `idol_events_v1`：plannedUntil、events（排好的）、posts、feed（发生过的，世界提示「最近正在发生的事」）、setbacks（挫折记账）、lastBig/lastSick、health（她生病）、fame（关注度，开局按家境：童星 50/星二代 40/富二代财阀 30/其他 5；完成机会 +5）
+- `eventsTick`（练习生阶段才跑）：排到的不足一天就 `plan(from, now+3天)`——一次 AI 调用（PLAN_RULES）排三天的事：events（at、kind small/big/setback/sick/chance/date、about、people、lines 群里或私聊的话、invite）、newPeople、status（近况要更新的人）、posts（动态）
+- 代码管频率：挫折约两个月一次（间隔 50 天、45% 概率）、一年最多六、同种不重复、按家境和关注度挑类型；生病 90 天以上、12%；大事 8 天一件
+- 执行：群里的话按原来时间补；私聊过了 2 小时就用落地时间（不像没回）；没加过的人只有老师能私聊；invite → 提醒事项待回复；sick → health 3 天；相关的人记一笔；跳过的日子下次排时一起补（最多回补 10 天）
+- 跳时间停：`plannedStops()` 进 capJump
+- 近况：IdolProfile.status {text, kakao, at}；排事情时更新、结束这场记账时更新；KakaoTalk 好友列表名字下面显示 kakao 状态消息，通讯录名片「最近」，composePersona 带【最近】
+- 动态：moments-engine 的定时自动发帖关掉（pollScheduledPosts 直接 return），发动机 posts 发帖（只发 KakaoTalk 好友的）；「让他立刻发一条」照旧
+- 聊天里答应/拒绝：`buildIdolChatHint` 给发出邀请的人列出等她回的事，回复里 `[答应:…]`/`[不去:…]` 自动更新待回复
+
 ---
 
 ## 3. 定下来但还没做的（按她的意愿排）
 
-**10-28 进度**：第 1、2 块（提醒事项、人物）做完了。下一块是 3 事情发动机（三类事、挫折、关注度、生病、近况 + KakaoTalk 状态消息、动态改造），然后 4 账/排名/出道判定、5 大事记日历、6 锁屏通知和调用开关。完整设计在 `docs/idol/events.md`。
+**10-28 进度**：第 1、2、3 块（提醒事项、人物、事情发动机）做完了。下一块 4 账/排名/出道判定，然后 5 大事记日历、6 锁屏通知（她嫌现在桌面提示条丑，要 iOS 横幅）和调用开关。完整设计在 `docs/idol/events.md`。
 
 ### 2.10 去哪儿（10-27，`lib/idol-places.ts`）
 - 剧情右上 + =「去哪儿」：类别（公司/宿舍/附近/出去玩/生活/自己写，出道后那类藏着）点地点，公司宿舍前面自动带公司名，没进公司锁着

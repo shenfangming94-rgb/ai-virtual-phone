@@ -8,6 +8,7 @@ import { CareerApp } from "./career/career-app";
 import { careerTick } from "@/lib/idol-career";
 import { kakaoTick } from "@/lib/idol-kakao";
 import { installIdolChatHooks, reminderTick } from "@/lib/idol-reminders";
+import { eventsTick } from "@/lib/idol-events";
 import { LockScreen } from "./lock-screen";
 import { TraineeOpening } from "./opening/trainee-opening";
 import { TRAINEE_CARD_EVENT, loadTraineeCard } from "@/lib/trainee-card";
@@ -1096,6 +1097,7 @@ export function DesktopShell({ initialThemeProfile, initialThemeAssets }: Deskto
       try { careerTick(setNotice); } catch { /* 发动机出错不挡着用手机 */ }
       try { kakaoTick(setNotice); } catch { /* 同上 */ }
       try { reminderTick(setNotice); } catch { /* 同上 */ }
+      try { eventsTick(setNotice); } catch { /* 同上 */ }
     };
     run();
     const timer = window.setInterval(run, 5000);

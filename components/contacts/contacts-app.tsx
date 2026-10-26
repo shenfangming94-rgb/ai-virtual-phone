@@ -482,6 +482,14 @@ function CardView({ data, id, onBack, onEdit, onNotice }: { data: Data; id: stri
           {p.birthday ? <><hr /><div className="ct-k">生日</div><div className="ct-v">{p.birthday.split("-").map(x => String(parseInt(x, 10) || x)).join("月")}日</div></> : null}
         </div>
 
+        {p.status?.text ? (
+          <div className="ct-block">
+            <div className="ct-k">最近</div>
+            <div className="ct-v">{p.status.text}</div>
+            <div className="ct-v is-dim">{fmtDay(p.status.at)}{p.status.kakao ? ` · 状态消息：${p.status.kakao}` : ""}</div>
+          </div>
+        ) : null}
+
         {p.secret?.revealed && p.secret.text ? (
           <div className="ct-block">
             <div className="ct-k">你知道的秘密</div>

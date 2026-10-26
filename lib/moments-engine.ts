@@ -111,6 +111,8 @@ function staggerOverduePosts() {
 
 /** Called by pollPendingReactions every 5s — check if any post is due. */
 function pollScheduledPosts() {
+    // 爱豆小手机：动态不按时自动发，由事情发动机跟着近况发（lib/idol-events.ts）；「让他立刻发一条」照常
+    return;
     if (isGenerating) return;
     const now = Date.now();
     const contacts = loadChatContacts();

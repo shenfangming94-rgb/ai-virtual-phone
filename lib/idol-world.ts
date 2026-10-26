@@ -19,6 +19,7 @@ import { fmtWorld, parseReply } from "./idol-scenes";
 import { createOrGetStorySession, createStoryGroup, loadStoryGroups, loadStoryMessages, updateStoryGroup, updateStorySession, type StorySession } from "./story-storage";
 import { simpleLLMCall } from "./api-helpers";
 import { addCompanyFacts, careerPromptBlock, completeNode, nodeById } from "./idol-career";
+import { addFame, eventsPromptBlock } from "./idol-events";
 import { KAKAO_TAG_RULES, afterNodeScene, applyKakaoTags, extractKakaoTags, genKakaoId, kakaoPromptLine, type KakaoTags } from "./idol-kakao";
 import { loadApiConfigs, loadBindingConfig, resolveBinding } from "./settings-storage";
 import { saveMemoryEntry } from "./memory-storage";
@@ -114,6 +115,7 @@ export function buildWorldScenePrompt(groupId: string | undefined, participantId
     "这是一出以韩国娱乐圈为背景的戏，主角是「她」（用户）。你是「世界」：写旁白和除她以外所有人的言行。",
     `【她是谁】\n${whoIsShe()}\n${kakaoPromptLine()}`,
     careerPromptBlock(),
+    eventsPromptBlock(),
     `【时间和地点】\n现在：${fmtWorld(Date.now())}\n地点：${meta?.place || group?.name || "某个地方"}${meta?.premise ? `\n开头：${meta.premise}` : ""}`,
     `【在场的人】${people.length ? people.map(c => c.name).join("、") : "暂时只有她"}${peopleBlock ? `\n\n${peopleBlock}` : ""}`,
     meta?.open ? mightMeetBlock(participantIds, meta.place) : "",
@@ -245,11 +247,11 @@ export async function closeWorldScene(groupId: string, sessionId: string): Promi
   let summary = "";
   if (present.length && transcript) {
     const res = await simpleLLMCall(chatConfig(), [
-      { role: "system", content: `把这场戏记下来。只输出 JSON：{"summary":"这场戏两三句","people":[{"name":"","event":"站在这个人的角度，这场里他和她之间发生了什么，一句话；没交集就写空","impression":"只给第一次见她的人写：他对她的第一印象，一两句；其他人写空","relation":"up/down/same","heart":"up/down/same","secretLearned":"她这场知道了他的秘密就写她是怎么知道的，一句话；没有就写空"}]}\n关系和心动只按这场里真的发生的事判断，一场最多动一格，没发生什么就写 same；没有心动线的人 heart 写 same。\n第一次见她的人：${firstMeet.join("、") || "无"}` },
+      { role: "system", content: `把这场戏记下来。只输出 JSON：{"summary":"这场戏两三句","people":[{"name":"","event":"站在这个人的角度，这场里他和她之间发生了什么，一句话；没交集就写空","impression":"只给第一次见她的人写：他对她的第一印象，一两句；其他人写空","relation":"up/down/same","heart":"up/down/same","secretLearned":"她这场知道了他的秘密就写她是怎么知道的，一句话；没有就写空","status":"这场之后他最近在忙什么，世界视角一句；没变就写空","kakao":"他会写在 KakaoTalk 状态消息里的短句；没变就写空"}]}\n关系和心动只按这场里真的发生的事判断，一场最多动一格，没发生什么就写 same；没有心动线的人 heart 写 same。\n第一次见她的人：${firstMeet.join("、") || "无"}` },
       { role: "user", content: `地点：${meta.place}\n在场：\n${present.map(c => { const pp = getProfile(c.id); return `- ${c.name}：关系 ${relationOf(pp)}${pp.canCrush && pp.heart ? `，心动 ${pp.heart}` : "，没有心动线"}${pp.secret && pp.secret.kind !== "none" && pp.secret.text && !pp.secret.revealed ? `，秘密：${pp.secret.text}` : ""}`; }).join("\n")}\n\n${transcript}` },
     ], { temperature: 0.4, label: "剧情记账" });
     if (!res.content) throw new Error(res.error || "AI 没回");
-    const j = JSON.parse(res.content.match(/\{[\s\S]*\}/)?.[0] ?? "{}") as { summary?: string; people?: { name?: string; event?: string; impression?: string; relation?: string; heart?: string; secretLearned?: string }[] };
+    const j = JSON.parse(res.content.match(/\{[\s\S]*\}/)?.[0] ?? "{}") as { summary?: string; people?: { name?: string; event?: string; impression?: string; relation?: string; heart?: string; secretLearned?: string; status?: string; kakao?: string }[] };
     summary = String(j.summary ?? "");
     for (const item of j.people ?? []) {
       const c = present.find(x => x.name === item.name);
@@ -259,8 +261,10 @@ export async function closeWorldScene(groupId: string, sessionId: string): Promi
       const dir = (v?: string) => (v === "up" || v === "down" ? v : "same") as "up" | "down" | "same";
       const stepped = stepRelation({ ...p, relation: relationOf({ ...p, met: true }) }, dir(item.relation), dir(item.heart));
       const learned = String(item.secretLearned ?? "").trim();
+      const st = String(item.status ?? "").trim();
       const next = {
-        ...stepped, met: true, metAt: p.metAt ?? { at: meta.startAt, place: meta.place },
+        ...stepped, met: true,
+        ...(st ? { status: { text: st, kakao: String(item.kakao ?? "").trim() || p.status?.kakao || "", at: Date.now() } } : {}), metAt: p.metAt ?? { at: meta.startAt, place: meta.place },
         ...(learned && p.secret && p.secret.kind !== "none" && !p.secret.revealed ? { secret: { ...p.secret, revealed: { at: meta.startAt, how: learned } } } : {}),
       };
       if (event) { next.events = [...p.events, { id: uid("ev"), at: meta.startAt, place: meta.place, text: event }]; recorded.push(c.name); }
@@ -284,6 +288,7 @@ export async function closeWorldScene(groupId: string, sessionId: string): Promi
   }
   saveSceneMeta(groupId, { ...meta, ended: true, summary });
   const node = meta.nodeId ? nodeById(meta.nodeId) : undefined;
+  if (node?.kind === "chance") addFame(5);
   const milestone = meta.nodeId ? await completeNode(meta.nodeId) : null;
   await afterNodeScene(node, present.map(c => c.id), meta.place).catch(() => undefined);
   return { summary, recorded, firstMeet: firstMeet.filter(n => recorded.includes(n)), ...(milestone ? { milestone } : {}) };

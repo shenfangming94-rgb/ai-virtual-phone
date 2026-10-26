@@ -17,6 +17,7 @@ import {
 } from "@/lib/friend-request-storage";
 import { handleAcceptFriendRequest, triggerRejectReaction } from "@/lib/friend-request-engine";
 import { addByKakaoId, findByKakaoId, fleshOut, needsFleshOut } from "@/lib/idol-kakao";
+import { getProfile } from "@/lib/idol-people";
 import { PageShell } from "@/components/ui/page-shell";
 import { pinyin } from "pinyin-pro";
 import { kvSet } from "@/lib/kv-db";
@@ -299,7 +300,7 @@ export function ChatContactsList({ onCloseApp, onSelectSession, onSelectMascot, 
                                                     {char.name || "UNNAMED"}
                                                 </div>
                                                 <div className="ts-13 text-[var(--c-text)] opacity-80 truncate font-normal">
-                                                    {latestPost[char.id] || "暂无动态"}
+                                                    {getProfile(char.id).status?.kakao || ""}
                                                 </div>
                                             </div>
                                         </div>

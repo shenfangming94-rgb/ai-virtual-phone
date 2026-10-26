@@ -76,6 +76,8 @@ export type IdolProfile = {
   secret?: Secret;
   /** 开局骰子掷过了（心动线、起点） */
   rolled?: boolean;
+  /** 最近在忙什么：text 世界视角一句（名片「最近」），kakao 他自己写的 KakaoTalk 状态消息 */
+  status?: { text: string; kakao: string; at: number };
 };
 
 export type ContactList = { id: string; name: string; memberIds: string[] };
@@ -142,6 +144,7 @@ export function composePersona(p: IdolProfile): string {
   }
   if (p.speech) out.push(`【说话】${p.speech}`);
   if (p.taboo) out.push(`【雷区】${p.taboo}`);
+  if (p.status?.text) out.push(`【最近】${p.status.text}`);
   if (p.met && p.withYou) out.push(`【对她的印象】${p.withYou}`);
   const rel = relationOf(p);
   out.push(`【你对她的态度】关系：${rel}${p.canCrush && p.heart ? `；心动：${p.heart}` : ""}。照这个态度说话做事，不要比它更热情或更冷淡；心动到哪一步就表现到哪一步，要不要表白、什么时候表白看你的性格和处境。`);

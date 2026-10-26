@@ -55,6 +55,7 @@ import { comparePinyin, loadProfiles } from "@/lib/idol-people";
 import { fmtWorld, runTimeCommand } from "@/lib/idol-scenes";
 import { setWorldTime, shiftWorldTime } from "@/lib/world-clock";
 import { OPEN_SCENE_EVENT, takePendingScene } from "@/lib/idol-career";
+import { PLACE_GROUPS, fullPlaceName, placeGroupLocked } from "@/lib/idol-places";
 import { maybeRunSummarization } from "@/lib/memory-summarizer";
 import { incrementEventCounter } from "@/lib/memory-storage";
 import { loadBindingConfig, loadPresets, resolveBinding, resolveUserIdentity } from "@/lib/settings-storage";
@@ -2546,29 +2547,58 @@ export function StoryApp({ onClose }: StoryAppProps) {
   );
 }
 
-/** 开一场戏：地点、开头、在场的人（从通讯录挑） */
+/** 开一场戏：像出门打卡一样点一个地方；谁在场默认交给世界，也可以自己叫人 */
 function StorySceneNewDialog({ onClose, onStart }: { onClose: () => void; onStart: (place: string, premise: string, ids: string[]) => void }) {
-  const [place, setPlace] = useState("");
+  const [groupId, setGroupId] = useState(() => PLACE_GROUPS.find((g) => !placeGroupLocked(g))?.id ?? "near");
+  const [spot, setSpot] = useState("");
+  const [custom, setCustom] = useState(false);
+  const [customText, setCustomText] = useState("");
   const [premise, setPremise] = useState("");
+  const [callPeople, setCallPeople] = useState(false);
   const [picked, setPicked] = useState<string[]>([]);
   const profiles = loadProfiles();
   const people = loadAllCharacters().filter((c) => profiles[c.id]).sort((a, b) => comparePinyin(a.name, b.name));
+  const group = PLACE_GROUPS.find((g) => g.id === groupId) ?? PLACE_GROUPS[0];
+  const locked = placeGroupLocked(group);
+  const place = custom ? customText.trim() : spot ? fullPlaceName(groupId, spot) : "";
   return (
     <div className="story-dialog-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
       <section className="story-dialog story-idol-dialog" role="dialog" aria-modal="true" aria-label="开一场戏">
-        <header><strong>开一场戏</strong><button type="button" onClick={onClose}><XMarkIcon width={16} /></button></header>
+        <header><strong>去哪儿</strong><button type="button" onClick={onClose}><XMarkIcon width={16} /></button></header>
         <p className="story-idol-sub">现在是 {fmtWorld(Date.now())}</p>
-        <label className="story-idol-field"><span>地点</span><input value={place} onChange={(e) => setPlace(e.target.value)} placeholder="比如：公司地下二层练习室" /></label>
-        <label className="story-idol-field"><span>开头（可以不写）</span><textarea rows={2} value={premise} onChange={(e) => setPremise(e.target.value)} placeholder="比如：月考前一晚，大家都在加练" /></label>
-        <div className="story-idol-field"><span>在场的人（可以不选，戏里再进来）</span>
-          <div className="story-idol-picks">
-            {people.length ? people.map((c) => {
-              const on = picked.includes(c.id);
-              return <button key={c.id} type="button" className={on ? "on" : ""} onClick={() => setPicked(on ? picked.filter((x) => x !== c.id) : [...picked, c.id])}>{c.name}</button>;
-            }) : <small>通讯录里还没有人</small>}
-          </div>
+        <div className="story-place-tabs">
+          {PLACE_GROUPS.filter((g) => !g.afterDebut).map((g) => (
+            <button key={g.id} type="button" className={g.id === groupId && !custom ? "on" : ""} onClick={() => { setGroupId(g.id); setCustom(false); setSpot(""); }}>{g.label}</button>
+          ))}
+          <button type="button" className={custom ? "on" : ""} onClick={() => { setCustom(true); setSpot(""); }}>自己写</button>
         </div>
-        <footer><button type="button" onClick={onClose}>取消</button><button type="button" className="story-settings-primary" onClick={() => onStart(place, premise, picked)}>开始</button></footer>
+        {custom ? (
+          <label className="story-idol-field"><input autoFocus value={customText} onChange={(e) => setCustomText(e.target.value)} placeholder="想去哪儿" /></label>
+        ) : locked ? (
+          <p className="story-place-locked">{locked}</p>
+        ) : (
+          <div className="story-place-grid">
+            {group.places.map((x) => (
+              <button key={x} type="button" className={spot === x ? "on" : ""} onClick={() => setSpot(spot === x ? "" : x)}>{x}</button>
+            ))}
+          </div>
+        )}
+        <label className="story-idol-field"><span>去做什么（可以不写）</span><textarea rows={2} value={premise} onChange={(e) => setPremise(e.target.value)} placeholder="比如：月考前一晚，想去加练" /></label>
+        <div className="story-idol-field"><span>谁在</span>
+          <div className="story-place-seg">
+            <button type="button" className={!callPeople ? "on" : ""} onClick={() => setCallPeople(false)}>交给世界</button>
+            <button type="button" className={callPeople ? "on" : ""} onClick={() => setCallPeople(true)}>我叫上人</button>
+          </div>
+          {callPeople ? (
+            <div className="story-idol-picks">
+              {people.length ? people.map((c) => {
+                const on = picked.includes(c.id);
+                return <button key={c.id} type="button" className={on ? "on" : ""} onClick={() => setPicked(on ? picked.filter((x) => x !== c.id) : [...picked, c.id])}>{c.name}</button>;
+              }) : <small>通讯录里还没有人</small>}
+            </div>
+          ) : <small className="story-place-hint">看现在几点、这里平时有谁，碰上谁算谁</small>}
+        </div>
+        <footer><button type="button" onClick={onClose}>取消</button><button type="button" className="story-settings-primary" disabled={!place} onClick={() => onStart(place, premise, callPeople ? picked : [])}>出发</button></footer>
       </section>
     </div>
   );

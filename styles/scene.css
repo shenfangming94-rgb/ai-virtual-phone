@@ -163,3 +163,17 @@
 .cr-fact { display: flex; justify-content: space-between; gap: 8px; font-size: 15px; line-height: 1.6; padding: 4px 0; }
 .cr-fact + .cr-fact { border-top: 0.5px solid #e5e5ea; }
 .cr-fact button { border: none; background: none; color: #ff3b30; }
+
+/* 开一场戏：点地点出门 */
+.story-place-tabs { display: grid; grid-template-columns: repeat(6, 1fr); gap: 5px; margin-bottom: 10px; }
+.story-place-tabs button { border: 0; border-radius: 999px; background: rgba(148, 163, 184, 0.12); padding: 6px 0; white-space: nowrap; font-family: inherit; font-size: calc(13px * var(--app-text-scale, 1)); color: var(--c-story-sub, #64748b); }
+.story-place-tabs button.on { background: var(--c-story-heading, #1e293b); color: #fff; }
+.story-place-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-bottom: 14px; }
+.story-place-grid button { border: 1px solid var(--c-story-border, #e2e8f0); border-radius: 12px; background: var(--c-story-card, #fff); padding: 10px 4px; font-family: inherit; font-size: calc(13px * var(--app-text-scale, 1)); color: var(--c-story-heading, #1e293b); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.story-place-grid button.on { background: var(--c-story-heading, #1e293b); color: #fff; border-color: var(--c-story-heading, #1e293b); }
+.story-place-locked { font-size: calc(13px * var(--app-text-scale, 1)); color: var(--c-story-sub, #94a3b8); text-align: center; padding: 18px 0; margin: 0 0 14px; border: 1px dashed var(--c-story-border, #e2e8f0); border-radius: 12px; }
+.story-place-seg { display: grid; grid-template-columns: 1fr 1fr; gap: 0; padding: 3px; border-radius: 12px; background: rgba(148, 163, 184, 0.12); margin-bottom: 8px; }
+.story-place-seg button { border: 0; border-radius: 10px; background: transparent; padding: 7px 0; font-family: inherit; font-size: calc(13px * var(--app-text-scale, 1)); color: var(--c-story-sub, #64748b); }
+.story-place-seg button.on { background: var(--c-story-card, #fff); color: var(--c-story-heading, #1e293b); box-shadow: 0 1px 4px rgba(15, 23, 42, 0.08); }
+.story-place-hint { display: block; font-size: calc(12px * var(--app-text-scale, 1)); color: var(--c-story-sub, #94a3b8); }
+.story-idol-dialog footer button:disabled { opacity: 0.4; }

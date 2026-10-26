@@ -8,7 +8,7 @@
 
 import { kvGet, kvSet } from "./kv-db";
 import { loadCharacters } from "./character-storage";
-import { loadChatSessions, pushChatMessage, updateMessageMediaUrl } from "./chat-storage";
+import { createOrGetSession, loadChatContacts, loadChatSessions, pushChatMessage, updateMessageMediaUrl } from "./chat-storage";
 import { simpleLLMCall } from "./api-helpers";
 import { loadApiConfigs, loadBindingConfig, resolveBinding } from "./settings-storage";
 import { companyOf, loadCareer, type CareerNode } from "./idol-career";
@@ -194,20 +194,21 @@ function chatConfig() {
 }
 
 /** 老师的话、给她的评语、同期的反应（一次调用；失败就用平平的说法） */
-async function words(r: MonthRank, teacherName: string, mates: string[]): Promise<{ announce: string; comment: string; reactions: { who: string; text: string }[] }> {
+async function words(r: MonthRank, teacherName: string, mates: string[], friends: string[]): Promise<{ announce: string; comment: string; reactions: { who: string; text: string }[]; dms: { who: string; text: string }[] }> {
   const me = loadTraineeCard()?.name || "她";
-  const fallback = { announce: `${+r.month.split("-")[1]}月月末评价结果出来了，名单在下面。`, comment: "继续努力。", reactions: [] };
+  const fallback = { announce: `${+r.month.split("-")[1]}月月末评价结果出来了，名单在下面。`, comment: "继续努力。", reactions: [], dms: [] };
   try {
     const recent = load().entries.filter(e => e.at >= (load().months.slice(-2)[0]?.at ?? 0)).slice(-6).map(e => e.why).join("；");
     const res = await simpleLLMCall(chatConfig(), [
-      { role: "system", content: `你在写韩国练习生公司月末评价出结果那天，KakaoTalk 练习生群里的几句话。只输出 JSON：{"announce":"管理老师${teacherName}在群里发结果时说的话，一两句","comment":"${teacherName}私下给${me}的一句评语，照她这个月的表现说","reactions":[{"who":"","text":""}]}。reactions 是群里两三个人看到结果的反应，只用给定的名字，口语、短，提到${me}的名次要对得上；第一次排名没有升降可说。` },
-      { role: "user", content: `${me}这次第 ${r.rank} 名（共 ${r.total} 人）${r.prevRank ? `，上次第 ${r.prevRank} 名` : "，第一次排名"}。她这个月：${recent || "照常训练"}。前三名：${r.rows.slice(0, 3).map(x => x.name).join("、")}。可以说话的人：${mates.join("、") || "群里的路人"}` },
+      { role: "system", content: `你在写韩国练习生公司月末评价出结果那天，KakaoTalk 练习生群里的几句话。只输出 JSON：{"announce":"管理老师${teacherName}在群里发结果时说的话，一两句","comment":"${teacherName}私下给${me}的一句评语，照她这个月的表现说","reactions":[{"who":"","text":""}],"dms":[{"who":"","text":""}]}。reactions 是群里两三个人看到结果的反应，只说自己的名次或泛泛的话，不在群里点评别人；dms 是跟${me}要好的人私聊她说的话（只用「她的朋友」里的名字，可以没有），提到她的名次要对得上。都要口语、短；第一次排名没有升降可说。` },
+      { role: "user", content: `${me}这次第 ${r.rank} 名（共 ${r.total} 人）${r.prevRank ? `，上次第 ${r.prevRank} 名` : "，第一次排名"}。她这个月：${recent || "照常训练"}。前三名：${r.rows.slice(0, 3).map(x => x.name).join("、")}。群里可以说话的人：${mates.join("、") || "群里的路人"}。她的朋友：${friends.join("、") || "没有"}` },
     ], { temperature: 0.85, label: "月末排名" });
-    const j = JSON.parse(res.content?.match(/\{[\s\S]*\}/)?.[0] ?? "{}") as { announce?: string; comment?: string; reactions?: { who?: string; text?: string }[] };
+    const j = JSON.parse(res.content?.match(/\{[\s\S]*\}/)?.[0] ?? "{}") as { announce?: string; comment?: string; reactions?: { who?: string; text?: string }[]; dms?: { who?: string; text?: string }[] };
     return {
       announce: String(j.announce || fallback.announce),
       comment: String(j.comment || fallback.comment),
       reactions: (j.reactions ?? []).filter(x => x.who && x.text).map(x => ({ who: String(x.who), text: String(x.text) })).slice(0, 3),
+      dms: (j.dms ?? []).filter(x => x.who && x.text && friends.includes(String(x.who))).map(x => ({ who: String(x.who), text: String(x.text) })).slice(0, 2),
     };
   } catch {
     return fallback;
@@ -242,7 +243,9 @@ async function publish(node: CareerNode, at: number, notify: (m: string) => void
   const teacher = kakao?.teacherId ? loadCharacters().find(c => c.id === kakao.teacherId) : undefined;
   const gid = kakao?.groupId && loadChatSessions().some(x => x.id === kakao.groupId) ? kakao.groupId : undefined;
   const mates = r.rows.filter(x => x.id !== ME).slice(0, 12).map(x => x.name);
-  const w = await words(r, teacher?.name ?? "管理老师", mates);
+  const contacts = new Set(loadChatContacts().map(c => c.characterId));
+  const friendChars = loadCharacters().filter(c => contacts.has(c.id) && c.id !== teacher?.id && ["朋友", "好朋友", "暧昧", "恋人"].includes(relationOf(getProfile(c.id))));
+  const w = await words(r, teacher?.name ?? "管理老师", mates, friendChars.map(c => c.name));
   r.comment = w.comment;
   if (gid && teacher) {
     const iso = (ms: number) => new Date(ms).toISOString();
@@ -257,6 +260,12 @@ async function publish(node: CareerNode, at: number, notify: (m: string) => void
       if (sender) pushChatMessage({ sessionId: gid, role: "assistant", content: x.text, senderCharacterId: sender, senderName: x.who, status: "sent", createdAt: iso(at + (i + 1) * 90e3) });
     });
   }
+  w.dms.forEach((x, i) => {
+    const c = friendChars.find(f => f.name === x.who);
+    if (!c) return;
+    const session = createOrGetSession(c.id);
+    pushChatMessage({ sessionId: session.id, role: "assistant", content: x.text, status: "sent", createdAt: new Date(Math.max(at, Date.now() - 60e3) + (i + 3) * 60e3).toISOString() });
+  });
   const s = load();
   save({ ...s, months: [...s.months, r] });
   if (typeof window !== "undefined") window.dispatchEvent(new Event(RANK_EVENT));

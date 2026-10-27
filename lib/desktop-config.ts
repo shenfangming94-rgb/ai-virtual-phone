@@ -37,7 +37,8 @@ export type IconId =
   | "contacts"
   | "career"
   | "idolsearch"
-  | "ins";
+  | "ins"
+  | "youtube";
 
 // 桌面文件夹：以 folder: 前缀的 id 伪装成图标占一个格子参与拖拽/换页，
 // 内容（名字 + 成员图标）另存 DesktopFolderMap。文件夹不允许进 dock。
@@ -63,7 +64,7 @@ export type IconMeta = {
   path?: string;
 };
 
-export const PAGE_1_DEFAULT: IconId[] = ["chat", "contacts", "career", "idolsearch", "ins", "diary", "music", "calendar", "checkphone", "shopping", "reading", "clock"];
+export const PAGE_1_DEFAULT: IconId[] = ["chat", "contacts", "career", "idolsearch", "ins", "youtube", "diary", "music", "calendar", "checkphone", "shopping", "reading", "clock"];
 
 export const PAGE_2_DEFAULT: IconId[] = [
   "appmarket",
@@ -137,6 +138,7 @@ export const ICONS: Record<IconId, IconMeta> = {
   career: { id: "career", label: "提醒事项", tone: "var(--c-icon-violet)", placeholder: false },
   idolsearch: { id: "idolsearch", label: "IdolSearch", tone: "var(--c-icon-green)", placeholder: false },
   ins: { id: "ins", label: "Instagram", tone: "var(--c-icon-violet)", placeholder: false },
+  youtube: { id: "youtube", label: "YouTube", tone: "var(--c-icon-rose, #e5383b)", placeholder: false },
 };
 
 // ── 爱豆小手机 ──

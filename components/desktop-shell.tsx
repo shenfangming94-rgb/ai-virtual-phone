@@ -8,6 +8,8 @@ import { CareerApp } from "./career/career-app";
 import { IdolSearchApp } from "./idolsearch/idol-search-app";
 import { InsApp } from "./ins/ins-app";
 import { insTick } from "@/lib/idol-ins";
+import { YoutubeApp } from "./youtube/youtube-app";
+import { ytTick } from "@/lib/idol-youtube";
 import { socialTick } from "@/lib/idol-social";
 import { careerTick } from "@/lib/idol-career";
 import { mailAppIcon, mailAppTick, searchTick } from "@/lib/idol-search";
@@ -1130,6 +1132,7 @@ export function DesktopShell({ initialThemeProfile, initialThemeAssets }: Deskto
       try { searchTick(idolNotify); } catch { /* 同上 */ }
       try { mailAppTick(idolNotify); } catch { /* 同上 */ }
       try { insTick(idolNotify); } catch { /* 同上 */ }
+      try { ytTick(idolNotify); } catch { /* 同上 */ }
       try { socialTick(); } catch { /* 同上 */ }
       try { syncIdolWorldBook(); } catch { /* 同上 */ }
     };
@@ -4302,6 +4305,9 @@ html,body{margin:0;padding:0;width:100%;height:100%;background:#121110;color:rgb
 
     if (activeApp === "album") {
       return <AlbumApp onClose={() => setActiveApp(null)} onNotice={setNotice} />;
+    }
+    if (activeApp === "youtube") {
+      return <YoutubeApp onClose={() => setActiveApp(null)} onNotice={setNotice} />;
     }
     if (activeApp === "ins") {
       return <InsApp onClose={() => setActiveApp(null)} onNotice={setNotice} />;

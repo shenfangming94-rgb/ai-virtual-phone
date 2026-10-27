@@ -416,3 +416,8 @@ Flora 要一个专门玩「爱豆模拟器」的小手机：她是想当爱豆�
 - 新的一天 15%：见过面、没加好友、熟人以上的人来加她（`queueFriendRequest`，idol-kakao 新加）
 - 测试 `tests/cs1.mjs`
 - 10-27 晚她提：跳时间不能算「没联系」。所以 `decayRelations` 跳过 KakaoTalk 好友和室友（只有戏里见过、没加好友的人三周没交集才淡）；跳过的日子当作照常相处
+
+### 2.32 主动消息走聊天引擎 + 预设要适配（10-28 凌晨）
+- `sendAs`（queueMessage 落地）改成：设 `proactive` 悄悄话 → `requestBackgroundChatReply` 走正常 KakaoTalk 聊天引擎；`buildIdolChatHint` 里输出「### 这一条是你主动发的」后清掉。失败退回 simpleLLMCall
+- **重要**：`buildIdolChatHint`（请假批假、等她回复的事、主动发的理由）和别的 app 指令都靠预设里的 `{{customAppRichMediaDirectives}}` 宏进提示词。外面找来的酒馆预设没有这些 float 宏，导进来功能会悄悄失效。她要换文风：以 float 自带预设为底，把外部预设的文风条目加进去
+- 文风测试见记忆 project_virtual_time（先中后韩不要；韩国人说话规矩方向对；要带她的预设测）

@@ -19,6 +19,7 @@ import { fameEvent, fameTier } from "./idol-fame";
 import { COMPANIES, companyOf, loadCareer } from "./idol-career";
 import { findGroup, groupLine, loadGroups, rosterPrompt, upsertGroups, companyIdByName } from "./idol-groups";
 import { LOOKS } from "./idol-search";
+import { channelSubs, groupInText, myVideoViews, videoViews, TIER_HINT } from "./idol-scale";
 import { generateImageFromConfiguredApi, SELF_REFERENCE_ID } from "./image-generation-service";
 
 const KEY = "idol_youtube_v1";
@@ -43,12 +44,14 @@ export type Cmt = { id: string; by: string; text: string; zh?: string; at: numbe
 export type Channel = {
   id: string; name: string; handle: string; kind: "company" | "group" | "person";
   companyId?: string; group?: string; subs: number; desc?: string; descZh?: string; written?: boolean;
+  /** 她换过的头像 */
+  avatar?: string;
 };
 export type Video = {
   id: string; ch: string; title: string; titleZh?: string; kind: string; at: number; dur: string;
   img: Img; cast?: CastRow[]; target: number; likes: number; cmts: Cmt[]; mine?: boolean; liked?: boolean; announced?: boolean;
 };
-type State = { channels: Record<string, Channel>; videos: Video[]; subs: string[]; feedAt?: number; me: { handle: string } };
+type State = { channels: Record<string, Channel>; videos: Video[]; subs: string[]; feedAt?: number; me: { handle: string; avatar?: string } };
 
 // ── 存取 ──
 
@@ -89,7 +92,7 @@ function companyChannel(s: State, companyId: string): Channel {
   const id = `co_${companyId}`;
   if (s.channels[id]) return s.channels[id];
   const name = COMPANY_CHANNEL[companyId] ?? `${companyOf(companyId)?.name ?? companyId} Entertainment`;
-  const ch: Channel = { id, name, handle: `@${name.replace(/\s+/g, "")}`, kind: "company", companyId, subs: companyId === "hybe" || companyId === "sm" ? 3.2e7 : companyId === "jyp" || companyId === "yg" ? 2.8e7 : 4e6 };
+  const ch: Channel = { id, name, handle: `@${name.replace(/\s+/g, "")}`, kind: "company", companyId, subs: channelSubs(id, "company", companyId) };
   s.channels[id] = ch;
   return ch;
 }
@@ -105,8 +108,9 @@ function ensureChannel(s: State, name: string, kind?: string, company?: string):
   const ch: Channel = {
     id: uid("ch"), name: g?.name ?? n, handle: `@${(g?.name ?? n).replace(/\s+/g, "")}`,
     kind: kind === "person" ? "person" : "group", companyId: g?.companyId ?? companyIdByName(company), group: g?.name,
-    subs: Math.round(rnd(2e5, 6e6)),
+    subs: 0,
   };
+  ch.subs = channelSubs(ch.name, ch.kind, ch.companyId, ch.group);
   s.channels[ch.id] = ch;
   return ch;
 }
@@ -135,10 +139,9 @@ export function recordSceneVideo(v: SceneVideo, sceneAt: number): void {
   if (!companyId || !v.title || !v.img) return;
   const me = loadTraineeCard()?.name ?? "";
   const chars = loadCharacters();
-  const tier = fameTier().name;
-  const target = tier === "公众人物" ? rnd(2e5, 9e5) : tier === "小有人知" ? rnd(3e4, 1.5e5) : rnd(6e3, 3e4);
   patch(s => {
     const ch = companyChannel(s, companyId);
+    const target = myVideoViews(`${v.title}${sceneAt}`, ch.subs);
     const cast: CastRow[] = (v.cast ?? []).filter(c => c?.name).map(c => {
       const name = String(c.name).trim();
       const isMe = name === me || name === "你" || name === "她";
@@ -149,7 +152,7 @@ export function recordSceneVideo(v: SceneVideo, sceneAt: number): void {
       at: sceneAt + rnd(2, 6) * DAY, dur: /^\d{1,2}:\d{2}$/.test(String(v.dur ?? "")) ? String(v.dur) : `${Math.floor(rnd(2, 4))}:${pad(Math.floor(rnd(0, 59)))}`,
       img: { desc: String(v.img) }, cast, target: Math.round(target), likes: 0, cmts: [], mine: true,
     };
-    video.likes = Math.round(target * rnd(0.04, 0.08));
+    video.likes = Math.round(target * rnd(0.05, 0.09));
     return { ...s, videos: [...s.videos, video] };
   });
 }
@@ -173,7 +176,7 @@ export const needsFeed = () => { const s = loadYt(); return !s.feedAt || Date.no
 let feedBusy = false;
 export const feedLoading = () => feedBusy;
 
-type RawVideo = { channel?: string; channelKind?: string; company?: string; at?: string; title?: string; titleZh?: string; kind?: string; dur?: string; img?: string; views?: number; comments?: { handle?: string; text?: string; zh?: string }[] };
+type RawVideo = { channel?: string; channelKind?: string; company?: string; at?: string; title?: string; titleZh?: string; kind?: string; dur?: string; img?: string; comments?: { handle?: string; text?: string; zh?: string }[] };
 function addRaw(s: State, list: RawVideo[], from: number, to: number, forCh?: Channel): Video[] {
   const out: Video[] = [];
   for (const r of list) {
@@ -182,12 +185,12 @@ function addRaw(s: State, list: RawVideo[], from: number, to: number, forCh?: Ch
     if (!ch) continue;
     let at = parseAt(r.at) ?? rnd(from, to);
     if (at > to) at = rnd(from, to);
-    const views = Math.max(100, Number(r.views) || rnd(2e4, 8e5));
+    const views = ch.kind === "company" && /练习生/.test(String(r.kind ?? "")) ? Math.round(ch.subs * rnd(0.003, 0.008)) : videoViews(`${ch.name}${r.title}`, ch.group ?? groupInText(String(r.title))?.name ?? ch.name, String(r.kind ?? ""), at);
     out.push({
       id: uid("v"), ch: ch.id, title: String(r.title), titleZh: r.titleZh ? String(r.titleZh) : undefined, kind: String(r.kind ?? ""),
       at, dur: /^\d{1,2}:\d{2}(:\d{2})?$/.test(String(r.dur ?? "")) ? String(r.dur) : `${Math.floor(rnd(2, 12))}:${pad(Math.floor(rnd(0, 59)))}`,
       img: { desc: String(r.img) }, target: Math.round(views), likes: Math.round(views * rnd(0.03, 0.07)),
-      cmts: (r.comments ?? []).filter(c => c?.text).slice(0, 3).map(c => ({ id: uid("c"), by: String(c.handle || "user"), text: String(c.text), zh: c.zh ? String(c.zh) : undefined, at: at + rnd(10 * MIN, 2 * DAY), likes: Math.round(rnd(5, views / 400)) })),
+      cmts: (r.comments ?? []).filter(c => c?.text).slice(0, 3).map(c => ({ id: uid("c"), by: String(c.handle || "user"), text: String(c.text), zh: c.zh ? String(c.zh) : undefined, at: at + rnd(10 * MIN, 2 * DAY), likes: Math.round(rnd(0.0002, 0.002) * views) })),
     });
   }
   return out;
@@ -210,13 +213,13 @@ export async function fillFeed(): Promise<number> {
     const subs = s0.subs.map(id => s0.channels[id]?.name).filter(Boolean);
     const res = await simpleLLMCall(config(), [
       { role: "system", content: `你在给一出韩国娱乐圈的戏写 YouTube 首页这段时间新上传的视频。只输出 JSON：
-{"videos":[{"channel":"频道名（团名、公司频道名或艺人名）","channelKind":"group/company/person","company":"所属公司","at":"YYYY-MM-DD HH:mm","title":"真 YouTube 那样的标题，韩国频道用韩文或英文","titleZh":"中文翻译","kind":"MV/练习室/直拍/团综/vlog/练习生/预告/直播回放/舞台","dur":"m:ss","img":"画面一句话，写清楚谁在干什么","views":数字,"comments":[{"handle":"","text":"","zh":""}]}],"groups":[{"name":"","company":"","kind":"男团/女团/solo","debut":年份,"members":[""]}]}
-写 5～8 条，上传时间在 ${fmt(from)} 到 ${fmt(now)} 之间分散。频道只能是下面名册里的团和艺人、或六家公司（${COMPANIES.map(c => COMPANY_CHANNEL[c.id]).join("、")}）；名册里的团名、公司、成员不能改。名册不够时可以给六家公司补新团，补的写进 groups。跟着世界走：哪个团在回归期就有 MV、练习室、打歌直拍；年末有颁奖礼和演唱会；她订阅的频道优先；不要写她本人出镜的视频。每条带 1～3 条评论。${LANG}${NO_EMOJI_FACE}` },
+{"videos":[{"channel":"频道名（团名、公司频道名或艺人名）","channelKind":"group/company/person","company":"所属公司","at":"YYYY-MM-DD HH:mm","title":"真 YouTube 那样的标题，韩国频道用韩文或英文","titleZh":"中文翻译","kind":"MV/练习室/直拍/团综/vlog/练习生/预告/直播回放/舞台","dur":"m:ss","img":"画面一句话，写清楚谁在干什么","comments":[{"handle":"","text":"","zh":""}]}],"groups":[{"name":"","company":"","kind":"男团/女团/solo","debut":年份,"members":[""],"tier":"top/mid/small/rookie"}]}
+写 5～8 条，上传时间在 ${fmt(from)} 到 ${fmt(now)} 之间分散。频道只能是下面名册里的团和艺人、或六家公司（${COMPANIES.map(c => COMPANY_CHANNEL[c.id]).join("、")}）；名册里的团名、公司、成员不能改。名册不够时可以给六家公司补新团，补的写进 groups，${TIER_HINT}。不写播放量、订阅数这些数字。跟着世界走：哪个团在回归期就有 MV、练习室、打歌直拍；年末有颁奖礼和演唱会；她订阅的频道优先；不要写她本人出镜的视频。每条带 1～3 条评论。${LANG}${NO_EMOJI_FACE}` },
       { role: "user", content: `现在：${fmt(now)}\n${myCompanyLine()}\n她订阅的频道：${subs.join("、") || "还没有"}\n\n${worldCtx()}\n\n${rosterPrompt(40) || "名册还是空的"}` },
     ], { temperature: 0.8, label: "YouTube 首页" });
     if (!res.content) throw new Error(res.error || "AI 没回");
-    const j = pickJson<{ videos?: RawVideo[]; groups?: { name?: string; company?: string; kind?: string; debut?: number; members?: string[] }[] }>(res.content);
-    for (const g of j.groups ?? []) if (g?.name) upsertGroups([{ name: g.name, kind: g.kind, debut: g.debut, members: g.members }], "search", companyIdByName(g.company));
+    const j = pickJson<{ videos?: RawVideo[]; groups?: { name?: string; company?: string; kind?: string; debut?: number; members?: string[]; tier?: string }[] }>(res.content);
+    for (const g of j.groups ?? []) if (g?.name) upsertGroups([{ name: g.name, kind: g.kind, debut: g.debut, members: g.members, ...(g.tier && ["top", "mid", "small", "rookie"].includes(g.tier) ? { tier: g.tier as "top" } : {}) }], "search", companyIdByName(g.company));
     let n = 0;
     patch(s => { const add = addRaw(s, j.videos ?? [], from, now); n = add.length; return { ...s, videos: [...s.videos, ...add], feedAt: now }; });
     return n;
@@ -271,17 +274,18 @@ export async function writeChannel(id: string): Promise<void> {
     const have = loadYt().videos.filter(v => v.ch === id).length;
     const res = await simpleLLMCall(config(), [
       { role: "system", content: `你在给一出韩国娱乐圈的戏写一个 YouTube 频道的页面。只输出 JSON：
-{"desc":"频道简介，韩文，一两句","descZh":"中文","subs":订阅数,"videos":[{"at":"YYYY-MM-DD HH:mm","title":"","titleZh":"","kind":"MV/练习室/直拍/团综/vlog/练习生/预告/舞台","dur":"m:ss","img":"画面一句话","views":数字,"comments":[{"handle":"","text":"","zh":""}]}]}
-${have >= 4 ? "videos 写空数组。" : `videos 写 ${co && ch.kind === "company" ? "6～8" : "4～6"} 条这个频道以前的视频，上传时间都在 ${fmt(now)} 之前，越近的越多。`}团名、成员、出道年份照名册，不许改；公司频道里放旗下团的内容，练习生视频不由你写。订阅数按名气给。${LANG}${NO_EMOJI_FACE}` },
+{"desc":"频道简介，韩文，一两句","descZh":"中文","tier":"这个团还没有名气档位时写 top/mid/small/rookie，否则空","videos":[{"at":"YYYY-MM-DD HH:mm","title":"","titleZh":"","kind":"MV/练习室/直拍/团综/vlog/练习生/预告/舞台","dur":"m:ss","img":"画面一句话","comments":[{"handle":"","text":"","zh":""}]}]}
+${have >= 4 ? "videos 写空数组。" : `videos 写 ${co && ch.kind === "company" ? "6～8" : "4～6"} 条这个频道以前的视频，上传时间都在 ${fmt(now)} 之前，越近的越多。`}团名、成员、出道年份照名册，不许改；公司频道里放旗下团的内容，练习生视频不由你写。不写播放量、订阅数这些数字。${LANG}${NO_EMOJI_FACE}` },
       { role: "user", content: `频道：${ch.name}（${ch.kind === "company" ? "公司官方频道" : ch.kind === "group" ? "团体频道" : "个人频道"}）\n${co ? `公司：${co.name}（${co.scale}；${co.style}）` : ""}\n${g ? `名册：${groupLine(g)}；最近：${g.recent ?? ""}` : ""}\n现在：${fmt(now)}\n\n${worldCtx()}\n\n${rosterPrompt(40)}` },
     ], { temperature: 0.7, label: "YouTube 频道" });
     if (!res.content) throw new Error(res.error || "AI 没回");
-    const j = pickJson<{ desc?: string; descZh?: string; subs?: number; videos?: RawVideo[] }>(res.content);
+    const j = pickJson<{ desc?: string; descZh?: string; tier?: string; videos?: RawVideo[] }>(res.content);
+    if (g && !g.tier && j.tier && ["top", "mid", "small", "rookie"].includes(j.tier)) upsertGroups([{ name: g.name, tier: j.tier as "top" }], "search");
     patch(s => {
       const c = s.channels[id];
       if (!c) return s;
       const add = addRaw(s, j.videos ?? [], now - 400 * DAY, now - HOUR, c);
-      s.channels[id] = { ...c, desc: j.desc ? String(j.desc) : c.desc, descZh: j.descZh ? String(j.descZh) : c.descZh, subs: Number(j.subs) > 0 ? Number(j.subs) : c.subs, written: true };
+      s.channels[id] = { ...c, desc: j.desc ? String(j.desc) : c.desc, descZh: j.descZh ? String(j.descZh) : c.descZh, subs: channelSubs(c.kind === "company" ? c.id : c.name, c.kind, c.companyId, c.group), written: true };
       return { ...s, videos: [...s.videos, ...add] };
     });
   } finally {
@@ -316,7 +320,7 @@ export async function moreComments(videoId: string, parentId?: string): Promise<
     const old = (parent ? [parent, ...(parent.replies ?? [])] : v.cmts).slice(-12).map(c => `${c.me ? "她（匿名）" : c.by}：${c.text}`).join("\n");
     const mineUnanswered = parent ? parent.me || (parent.replies ?? []).some(r => r.me) : false;
     const res = await simpleLLMCall(config(), [
-      { role: "system", content: `你在写一条 YouTube 视频${parent ? "某条评论下面的回复" : "评论区新冒出来的评论"}。只输出 JSON：{"comments":[{"handle":"网名","text":"","zh":"","likes":数字,"char":"如果是下面认识她的人用小号来评论，写他的名字；否则空"}]}
+      { role: "system", content: `你在写一条 YouTube 视频${parent ? "某条评论下面的回复" : "评论区新冒出来的评论"}。只输出 JSON：{"comments":[{"handle":"网名","text":"","zh":"","char":"如果是下面认识她的人用小号来评论，写他的名字；否则空"}]}
 写 ${parent ? "3～5" : "5～8"} 条，按时间顺序。${v.mine ? `这是她出镜的练习生视频，她现在是「${tier}」：普通人时大多数人在问左右某个位置是谁、夸整体，偶尔一两个人注意到她；小有人知时有人专门来找她、叫得出她名字；公众人物时很多人是冲她来的。认识她的人偶尔会用看不出是谁的小号来留一句，不暴露身份，大多数时候没有。` : "评论跟这个团和视频内容走。"}${mineUnanswered ? "她在这条下面说过话，这批里一定有人回她。" : ""}${LANG}${NO_EMOJI_FACE}只写跟视频里真实发生的事有关的话，不编画面里没有的。` },
       { role: "user", content: `频道：${ch?.name ?? ""}\n视频：${v.title}${v.titleZh ? `（${v.titleZh}）` : ""}\n画面：${v.img.desc}\n${castLine}\n上传：${fmt(v.at)}，现在：${fmt(now)}\n${v.mine && knowHer.length ? `认识她的人：\n${knowHer.map(x => `- ${x.c!.name}：${x.p.role}`).join("\n")}` : ""}\n\n${parent ? "这条评论和已有回复" : "已经有的评论"}：\n${old || "还没有"}` },
     ], { temperature: 0.85, label: "YouTube 评论" });
@@ -325,7 +329,7 @@ export async function moreComments(videoId: string, parentId?: string): Promise<
     const base = Math.max(v.at, parent?.at ?? v.at, ...((parent?.replies ?? v.cmts).map(c => c.at)));
     const add: Cmt[] = (j.comments ?? []).filter(c => c?.text).map((c, i) => {
       const charId = c.char ? chars.find(x => x.name === String(c.char).trim())?.id : undefined;
-      return { id: uid("c"), by: String(c.handle || "user"), text: String(c.text), zh: c.zh ? String(c.zh) : undefined, at: Math.min(now, base + (i + 1) * rnd(5 * MIN, 3 * HOUR)), likes: Math.max(0, Math.round(Number(c.likes) || rnd(0, 60))), ...(charId ? { charId } : {}) };
+      return { id: uid("c"), by: String(c.handle || "user"), text: String(c.text), zh: c.zh ? String(c.zh) : undefined, at: Math.min(now, base + (i + 1) * rnd(5 * MIN, 3 * HOUR)), likes: Math.round(viewsOf(v, now) * rnd(0, 0.002)), ...(charId ? { charId } : {}) };
     });
     patch(x => ({ ...x, videos: x.videos.map(q => q.id !== videoId ? q : parent
       ? { ...q, cmts: q.cmts.map(c => c.id === parentId ? { ...c, replies: [...(c.replies ?? []), ...add] } : c) }
@@ -365,4 +369,14 @@ export async function generateVideoImg(id: string): Promise<void> {
     set({ ...v.img, busy: false });
     throw e;
   }
+}
+
+// ── 头像 ──
+
+export function setChannelAvatar(id: string, src?: string) { patch(s => s.channels[id] ? { ...s, channels: { ...s.channels, [id]: { ...s.channels[id], avatar: src } } } : s); }
+export function setMyAvatar(src?: string) { patch(s => ({ ...s, me: { ...s.me, avatar: src } })); }
+export async function genAvatar(name: string, kind: "company" | "group" | "person" | "me"): Promise<string | undefined> {
+  const what = kind === "company" ? `娱乐公司「${name}」的 YouTube 官方频道头像，干净的 logo` : kind === "group" ? `K-pop 团体「${name}」的 YouTube 频道头像，团的 logo 或概念照` : kind === "person" ? `艺人「${name}」的 YouTube 频道头像` : "一个普通网友的 YouTube 头像，随手拍的风景或小物件，看不出是谁";
+  const r = await generateImageFromConfiguredApi({ description: `${what}，正方形，适合裁成圆形`, appId: "youtube", useReferenceImage: false });
+  return r?.mediaRef;
 }

@@ -88,5 +88,8 @@ await p.screenshot({ path: OUT + "/y7_channel.png" });
 await p.evaluate(() => document.querySelector(".yt-bar button").click()); await sleep(400);
 await p.evaluate(() => document.querySelectorAll(".yt-tab button")[3].click()); await sleep(500);
 await p.screenshot({ path: OUT + "/y8_subs.png" });
+await p.evaluate(() => document.querySelectorAll(".yt-tab button")[4].click()); await sleep(500);
+await p.evaluate(() => [...document.querySelectorAll(".yt-pill")].find(x => x.textContent.includes("换头像")).click()); await sleep(400);
+await p.screenshot({ path: OUT + "/y9_me.png" });
 console.log("ai calls", log, "errs", errs);
 await b.close();

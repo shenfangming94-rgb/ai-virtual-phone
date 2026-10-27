@@ -4,7 +4,12 @@
 .yt-app input, .yt-app textarea { font-family: inherit; }
 .yt-page { position: absolute; inset: 0; display: flex; flex-direction: column; background: #fff; }
 .yt-scroll { flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch; }
-.yt-av { display: block; flex: none; border-radius: 50%; }
+.yt-av { display: block; flex: none; border-radius: 50%; font-style: normal; }
+.yt-av-t { display: flex; align-items: center; justify-content: center; color: #fff; font-weight: 700; line-height: 1; font-family: -apple-system, "Helvetica Neue", "PingFang SC", "Apple SD Gothic Neo", sans-serif; overflow: hidden; }
+.yt-me-btns { display: flex; gap: 8px; }
+.yt-msheet-h { text-align: center; font-size: 15px; font-weight: 700; padding: 8px 0 12px; }
+.yt-msheet > button:disabled { opacity: 0.5; }
+.yt-avgrid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; padding: 4px 16px 12px; justify-items: center; max-height: 300px; overflow-y: auto; }
 .yt-empty { padding: 60px 24px; text-align: center; color: #606060; font-size: 14px; display: flex; flex-direction: column; align-items: center; gap: 8px; }
 .yt-empty small { font-size: 12.5px; color: #909090; }
 .yt-hint { padding: 4px 12px 8px; font-size: 13px; color: #909090; }

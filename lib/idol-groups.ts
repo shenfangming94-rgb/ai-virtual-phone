@@ -19,6 +19,8 @@ export type Group = {
   fandom?: string;
   recent?: string;
   members?: string[];
+  /** 名气档位：第一次出现时 AI 说一句，之后定死（数字的规矩在 idol-scale.ts） */
+  tier?: "top" | "mid" | "small" | "rookie";
   songs?: { title: string; year?: number; note?: string }[];
   /** 第一次是在哪写出来的 */
   from?: "site" | "almanac" | "search";
@@ -63,7 +65,7 @@ export function upsertGroups(list: Partial<Group>[], from: Group["from"], compan
     if (!old) { all[k] = { ...incoming, from, at: Date.now() }; changed = true; continue; }
     if (old.companyId && incoming.companyId && old.companyId !== incoming.companyId) continue;
     const next: Group = { ...old };
-    for (const f of ["companyId", "kind", "size", "debut", "style", "fandom", "members"] as const) {
+    for (const f of ["companyId", "kind", "size", "debut", "style", "fandom", "members", "tier"] as const) {
       if (blank(old[f]) && !blank(incoming[f])) { (next as Record<string, unknown>)[f] = incoming[f]; changed = true; }
     }
     if (incoming.recent && incoming.recent !== old.recent) { next.recent = incoming.recent; changed = true; }

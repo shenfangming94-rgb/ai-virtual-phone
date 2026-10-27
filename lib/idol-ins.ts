@@ -21,6 +21,7 @@ import { isKakaoFriend } from "./idol-kakao";
 import { loadCareer } from "./idol-career";
 import { queueMessage, teacherOf } from "./idol-reminders";
 import { loadGroups } from "./idol-groups";
+import { groupInText, insFollowers, insLikes, yearFactor } from "./idol-scale";
 import { generateImageFromConfiguredApi, SELF_REFERENCE_ID } from "./image-generation-service";
 
 const KEY = "idol_ins_v1";
@@ -135,7 +136,7 @@ export async function ensureAccounts(): Promise<void> {
   const officials = groups.filter(g => !Object.values(s0.accs).some(a => a.kind === "official" && a.name === g.name));
   if (officials.length) patch(s => {
     const accs = { ...s.accs };
-    for (const g of officials) { const id = uid("acc"); accs[id] = { id, handle: `${g.name.replace(/\s+/g, "").toLowerCase()}_official`, name: g.name, private: false, verified: true, followers: Math.round(rnd(3e5, 6e6)), bio: g.fandom ? `${g.name} · ${g.fandom}` : g.name, hue: hueOf(g.name), kind: "official" }; }
+    for (const g of officials) { const id = uid("acc"); accs[id] = { id, handle: `${g.name.replace(/\s+/g, "").toLowerCase()}_official`, name: g.name, private: false, verified: true, followers: insFollowers(`ofc${g.name}`, "official", g), bio: g.fandom ? `${g.name} · ${g.fandom}` : g.name, hue: hueOf(g.name), kind: "official" }; }
     return { ...s, accs };
   });
   if (!todo.length) return;
@@ -156,11 +157,11 @@ export async function ensureAccounts(): Promise<void> {
         const handle = (a?.handle || `${c.name}`).replace(/[^a-zA-Z0-9._]/g, "").toLowerCase() || `user${Math.floor(rnd(1000, 9999))}`;
         const pub = isPublicIdol(p);
         const id = uid("acc");
-        accs[id] = { id, handle, name: c.name, charId: c.id, private: pub ? false : isTrainee(p) ? true : a?.private !== false, verified: pub, followers: pub ? Math.round(rnd(2e5, 3e6)) : Math.round(rnd(40, 400)), bio: a?.bio ?? "", hue: hueOf(c.name), kind: "char" };
+        accs[id] = { id, handle, name: c.name, charId: c.id, private: pub ? false : isTrainee(p) ? true : a?.private !== false, verified: pub, followers: pub ? insFollowers(c.name, "idol", groupInText(`${p.role} ${p.group}`)) : insFollowers(c.name, isTrainee(p) ? "trainee" : "npc"), bio: a?.bio ?? "", hue: hueOf(c.name), kind: "char" };
         if (pub) {
           const aid = uid("acc");
           const alt = (a?.alt || `${handle.slice(0, 3)}_${Math.floor(rnd(100, 999))}`).replace(/[^a-zA-Z0-9._]/g, "").toLowerCase();
-          accs[aid] = { id: aid, handle: alt, name: alt, charId: c.id, alt: true, private: true, followers: Math.round(rnd(8, 60)), bio: "", hue: hueOf(alt), kind: "char" };
+          accs[aid] = { id: aid, handle: alt, name: alt, charId: c.id, alt: true, private: true, followers: insFollowers(alt, "alt"), bio: "", hue: hueOf(alt), kind: "char" };
         }
       }
       return { ...s, accs };
@@ -295,8 +296,8 @@ export async function fillFeed(): Promise<number> {
     const lastDm = (a: InsAcc) => { const m = s.dms[a.id]?.msgs.slice(-3) ?? []; return m.length ? `（最近私信：${m.map(x => `${x.me ? "她" : "他"}：${x.text}`).join(" / ")}）` : ""; };
     const res = await simpleLLMCall(config(), [
       { role: "system", content: `你在给一出韩国娱乐圈的戏补「她」ins 上这段时间的新内容。只输出 JSON：
-{"posts":[{"handle":"","at":"YYYY-MM-DD HH:mm","imgs":[{"desc":"画面一句话","who":["照片里有谁的 handle，自己就写自己的"]}],"cap":"配文","capZh":"","likes":数字,"comments":[{"handle":"","text":"","zh":""}]}],"stories":[{"handle":"","at":"","text":"快拍上的字（可空）","img":"画面一句话（可空）"}],"dms":[{"handle":"","name":"","stranger":true,"at":"","lines":[{"text":"","zh":""}]}]}
-一、posts 和 stories：只写「她关注的号」。帖子必须有图，一条 1～5 张；配文多数十五个字以内，可以空、可以只有 emoji；想说一段话的人发快拍。${LANG}配文不是中文的给 capZh。帖子和快拍照这个人的性格、身份和最近在忙的事，有的人几天不发。练习生发得少、多是练习室、吃的、天空；出道爱豆的大号是营业的样子，小号才是私下。评论来自他的熟人或粉丝，公开号点赞多。一共写三到八条帖子、两到六条快拍；没有关注的号就都空着。
+{"posts":[{"handle":"","at":"YYYY-MM-DD HH:mm","imgs":[{"desc":"画面一句话","who":["照片里有谁的 handle，自己就写自己的"]}],"cap":"配文","capZh":"","comments":[{"handle":"","text":"","zh":""}]}],"stories":[{"handle":"","at":"","text":"快拍上的字（可空）","img":"画面一句话（可空）"}],"dms":[{"handle":"","name":"","stranger":true,"at":"","lines":[{"text":"","zh":""}]}]}
+一、posts 和 stories：只写「她关注的号」。帖子必须有图，一条 1～5 张；配文多数十五个字以内，可以空、可以只有 emoji；想说一段话的人发快拍。${LANG}配文不是中文的给 capZh。帖子和快拍照这个人的性格、身份和最近在忙的事，有的人几天不发。练习生发得少、多是练习室、吃的、天空；出道爱豆的大号是营业的样子，小号才是私下。评论来自他的熟人或粉丝，一共写三到八条帖子、两到六条快拍；没有关注的号就都空着。
 二、dms：有人主动给她发 ins 私信。陌生人（stranger:true，自己起 handle 和 name）最多 ${strangerMax} 个：她现在是「${tier}」${s.me.private ? "，号锁着" : "，号公开"}，陌生人是刷到她的帖子来搭话、问歌问地点、粉丝打招呼、偶尔奇怪的人；熟人只能是下面「可能主动来找她的人」里的，要有合情合理的事才来，大多数时候一个都不来。一个人一到三句。` },
       { role: "user", content: `时间段：${fmt(from)} 到 ${fmt(now)}\n\n她关注的号：\n${seen.map(desc).join("\n") || "（还没有）"}\n\n可能主动来找她的人：\n${knownDm.map(a => desc(a) + lastDm(a)).join("\n") || "（没有）"}\n\n${idolWorldPrompt()}` },
     ], { temperature: 0.9, label: "ins 刷新首页" });
@@ -333,7 +334,7 @@ export async function fillFeed(): Promise<number> {
         const at = Math.min(now, Math.max(from, parseAt(p.at) ?? rnd(from, now)));
         const imgs = (p.imgs ?? []).filter(i => i?.desc).slice(0, 5).map(i => ({ desc: String(i.desc), who: whoIds(i.who, acc) }));
         if (!imgs.length) continue;
-        posts.push({ id: uid("post"), by: acc.id, at, imgs, cap: String(p.cap ?? ""), capZh: p.capZh ? String(p.capZh) : undefined, likes: Math.max(0, Math.round(Number(p.likes) || rnd(8, 60))), comments: (p.comments ?? []).filter(c => c?.text).slice(0, 8).map(c => ({ by: String(c.handle || "user").replace(/^@/, ""), text: String(c.text), zh: c.zh ? String(c.zh) : undefined, at: at + rnd(5, 300) * MIN })) });
+        posts.push({ id: uid("post"), by: acc.id, at, imgs, cap: String(p.cap ?? ""), capZh: p.capZh ? String(p.capZh) : undefined, likes: insLikes(`${acc.handle}${at}`, acc.followers, !acc.private), comments: (p.comments ?? []).filter(c => c?.text).slice(0, 8).map(c => ({ by: String(c.handle || "user").replace(/^@/, ""), text: String(c.text), zh: c.zh ? String(c.zh) : undefined, at: at + rnd(5, 300) * MIN })) });
         n++;
       }
       for (const st of j.stories ?? []) {
@@ -352,7 +353,7 @@ const W1 = ["sunny", "moon", "daily", "cozy", "mint", "peach", "blue", "soft", "
 const W2 = ["log", "days", "_lover", ".film", "_zip", "bunny", "_diary", "holic", "_note", "room", "walk", "_fan", "box", "mood"];
 function strangerAcc(): InsAcc {
   const handle = `${W1[Math.floor(Math.random() * W1.length)]}${W2[Math.floor(Math.random() * W2.length)]}${Math.random() < 0.6 ? Math.floor(rnd(1, 999)) : ""}`;
-  return { id: uid("acc"), handle, name: handle, private: Math.random() < 0.3, followers: Math.round(rnd(20, 900)), bio: "", hue: hueOf(handle), kind: "npc" };
+  return { id: uid("acc"), handle, name: handle, private: Math.random() < 0.3, followers: insFollowers(handle, "npc"), bio: "", hue: hueOf(handle), kind: "npc" };
 }
 
 /** 陌生人关注她：看号公不公开、她在哪一档（私密号的话变成关注申请） */
@@ -446,7 +447,7 @@ async function reactToMine(postId: string): Promise<void> {
   const imgs = post.imgs.map((i, n) => `第${n + 1}张：${i.desc}${i.who?.length ? `（照片里有：${i.who.map(w => w === SELF_REFERENCE_ID ? "她自己" : loadCharacters().find(c => c.id === w)?.name).filter(Boolean).join("、")}）` : ""}`).join("\n");
   const res = await simpleLLMCall(config(), [
     { role: "system", content: `她刚在 ins 上发了一条帖子。你要做两件事，只输出 JSON：
-{"likes":数字,"likers":["点赞的 handle"],"comments":[{"handle":"","text":"","zh":"不是中文时的翻译"}],"risk":{"level":"none / low / mid / high","why":"给她看的一句：会不会被认出来、能认出谁、哪里露馅","love":true或false}}
+{"likers":["点赞的 handle"],"comments":[{"handle":"","text":"","zh":"不是中文时的翻译"}],"risk":{"level":"none / low / mid / high","why":"给她看的一句：会不会被认出来、能认出谁、哪里露馅","love":true或false}}
 一、点赞和评论：${post.wasPublic ? `她的号是公开的，陌生人也看得到。她现在是「${tier.name}」：普通人就只有零星陌生人路过；小有人知会有人认出她；公众人物满屏粉丝。` : "她的号锁着，只有关注她的人看得到。"}关注她的人：${fl || "还没有"}。评论照每个人的身份和跟她的关系。${LANG}${post.noComments ? "她关了评论，comments 空着。" : ""}
 二、风险：照这条帖子判断会不会被扒。吃的、风景、碎碎念 none；露脸自拍、练习室日常看她多出名，普通人基本 low；透露公司内部的事（排名、名单、吐槽公司）mid 以上；秀恩爱看对方能不能被认出来（露脸、他的手表戒指纹身衣服、能对上的时间地点），认不出 low，能认出 high，love 写 true。why 要具体。` },
     { role: "user", content: `帖子：\n${imgs}\n配文：${post.cap || "（没写）"}${post.place ? `\n地点：${post.place}` : ""}\n\n${idolWorldPrompt()}` },
@@ -465,7 +466,7 @@ async function reactToMine(postId: string): Promise<void> {
   patch(x => ({
     ...x,
     posts: x.posts.map(p => p.id !== postId ? p : {
-      ...p, risk, likes: Math.max(0, Math.round(Number(j.likes) || 0)), likers: (j.likers ?? []).map(String),
+      ...p, risk, likes: myLikes(postId, x.followers.length, post.wasPublic !== false && Boolean(post.wasPublic), tier.name), likers: (j.likers ?? []).map(String),
       comments: post.noComments ? [] : (j.comments ?? []).filter(c => c?.text).slice(0, 10).map((c, i) => ({ by: String(c.handle || "user").replace(/^@/, ""), text: String(c.text), zh: c.zh ? String(c.zh) : undefined, at: now + (i + 1) * rnd(3, 40) * MIN })),
     }),
     notes: [...x.notes, ...(j.likers ?? []).slice(0, 3).map(h => ({ id: uid("n"), at: now + rnd(2, 60) * MIN, kind: "like" as const, from: accByHandle(String(h))?.id ?? String(h), postId })),
@@ -492,6 +493,14 @@ export function unarchive(id: string) { patch(s => ({ ...s, posts: s.posts.map(p
 /** 切私密：之前公开时发的帖子，陌生人那边算「藏起来了」 */
 export function setPrivate(on: boolean) {
   patch(s => ({ ...s, me: { ...s.me, private: on }, posts: on ? s.posts.map(p => p.by === ME && p.wasPublic && !p.hiddenAt ? { ...p, hiddenAt: Date.now() } : p) : s.posts }));
+}
+
+/** 她的帖子点赞：锁着的号只有关注她的人点；公开号按关注度多一些陌生人 */
+function myLikes(key: string, followers: number, isPublic: boolean, tier: string): number {
+  const mine = insLikes(key, followers, false);
+  if (!isPublic) return Math.min(followers, mine);
+  const extra = tier === "公众人物" ? insLikes(key, insFollowers(key, "idol"), true) : tier === "小有人知" ? Math.round((200 + Math.random() * 1800) * yearFactor()) : Math.round(Math.random() * 20);
+  return mine + extra;
 }
 
 // ── 生图 ──
@@ -549,7 +558,7 @@ export async function refreshExplore(): Promise<void> {
   exploreBusy = true;
   try {
     const res = await simpleLLMCall(config(), [
-      { role: "system", content: `写 ins「探索」页上的十二条公开帖子：首尔陌生人、博主、前辈团的官方号、粉丝站，照这个世界今天的样子。只输出 JSON：{"posts":[{"handle":"","name":"","official":false,"img":"画面一句话","cap":"","capZh":"","likes":数字}]}。团只用名册里有的；配文短，韩国人用韩语。` },
+      { role: "system", content: `写 ins「探索」页上的十二条公开帖子：首尔陌生人、博主、前辈团的官方号、粉丝站，照这个世界今天的样子。只输出 JSON：{"posts":[{"handle":"","name":"","official":false,"img":"画面一句话","cap":"","capZh":""}]}。团只用名册里有的；配文短，韩国人用韩语。` },
       { role: "user", content: idolWorldPrompt() },
     ], { temperature: 0.95, label: "ins 探索" });
     const j = pickJson<{ posts?: { handle?: string; name?: string; official?: boolean; img?: string; cap?: string; capZh?: string; likes?: number }[] }>(res.content);
@@ -561,8 +570,8 @@ export async function refreshExplore(): Promise<void> {
         if (!p.img) continue;
         const handle = String(p.handle || `user${Math.floor(rnd(100, 999))}`).replace(/[^a-zA-Z0-9._]/g, "").toLowerCase();
         let acc = Object.values(accs).find(a => a.handle === handle);
-        if (!acc) { const id = uid("acc"); acc = { id, handle, name: String(p.name || handle), private: false, verified: Boolean(p.official), followers: Math.round(p.official ? rnd(2e5, 5e6) : rnd(300, 50000)), bio: "", hue: hueOf(handle), kind: p.official ? "official" : "npc" }; accs[id] = acc; }
-        const post: Post = { id: uid("post"), by: acc.id, at: Date.now() - rnd(1, 30) * HOUR, imgs: [{ desc: String(p.img) }], cap: String(p.cap ?? ""), capZh: p.capZh ? String(p.capZh) : undefined, likes: Math.round(Number(p.likes) || rnd(50, 5000)), comments: [] };
+        if (!acc) { const id = uid("acc"); acc = { id, handle, name: String(p.name || handle), private: false, verified: Boolean(p.official), followers: p.official ? insFollowers(`ofc${p.name || handle}`, "official", groupInText(String(p.name || handle))) : Math.round(rnd(300, 50000) * yearFactor()), bio: "", hue: hueOf(handle), kind: p.official ? "official" : "npc" }; accs[id] = acc; }
+        const post: Post = { id: uid("post"), by: acc.id, at: Date.now() - rnd(1, 30) * HOUR, imgs: [{ desc: String(p.img) }], cap: String(p.cap ?? ""), capZh: p.capZh ? String(p.capZh) : undefined, likes: insLikes(`${handle}${p.img}`, acc.followers, true), comments: [] };
         posts.push(post); ids.push(post.id);
       }
       return { ...x, accs, posts, explore: { day, ids } };

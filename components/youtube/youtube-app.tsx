@@ -13,10 +13,12 @@ import {
 
 import {
   YT_EVENT, channelOf, channelWriting, cmtCountOf, commentsBusy, feedLoading, fillFeed, generateVideoImg, editVideoDesc, loadYt, moreComments, myComment,
-  needsFeed, openHit, purgeVideo, searchYt, setMyHandle, themeOf, toggleLike, toggleSub, viewsOf, visibleVideos, writeChannel,
+  needsFeed, openHit, purgeVideo, searchYt, setMyHandle, setChannelAvatar, setMyAvatar, genAvatar, themeOf, toggleLike, toggleSub, viewsOf, visibleVideos, writeChannel,
   type Channel, type Cmt, type Hit, type Img, type Video,
 } from "@/lib/idol-youtube";
-import { loadMediaObjectUrl, isMediaStoreRef } from "@/lib/media-cache-storage";
+import { loadMediaObjectUrl, isMediaStoreRef, storeMediaBlob } from "@/lib/media-cache-storage";
+import { loadPhotos } from "@/lib/album-store";
+import { LOOKS } from "@/lib/idol-search";
 
 type Notice = ((m: string) => void) | undefined;
 type Tab = "home" | "shorts" | "subs" | "me";
@@ -61,13 +63,60 @@ function ago(at: number): string {
 }
 const hue = (s: string) => { let h = 0; for (const ch of s) h = (h * 31 + ch.codePointAt(0)!) >>> 0; return h % 360; };
 
-function ChAvatar({ ch, size = 36 }: { ch?: Channel; size?: number }) {
-  const t = themeOf(ch);
-  return <i className="yt-av" style={{ width: size, height: size, background: `linear-gradient(135deg, ${t.c}, ${t.y})` }} />;
+function AvImg({ src, size }: { src: string; size: number }) {
+  const url = useMedia(src);
+  return <i className="yt-av" style={{ width: size, height: size, backgroundImage: url ? `url(${url})` : undefined, backgroundColor: "#eee", backgroundSize: "cover", backgroundPosition: "center" }} />;
 }
-function UserAvatar({ name, size = 32 }: { name: string; size?: number }) {
+/** 频道头像：她换过的图 > 公司 logo 字（主题色）> 团/艺人首字母（各自的颜色） */
+function ChAvatar({ ch, size = 36 }: { ch?: Partial<Channel>; size?: number }) {
+  if (ch?.avatar) return <AvImg src={ch.avatar} size={size} />;
+  const look = ch?.kind === "company" && ch.companyId ? LOOKS[ch.companyId] : undefined;
+  if (look) { const fs = size * (look.logo.length > 3 ? 0.26 : 0.32); return <i className="yt-av yt-av-t" style={{ width: size, height: size, background: look.c, color: look.c === "#151515" || look.c === "#222222" ? "#fff" : "#fff", fontSize: fs, letterSpacing: -0.3 }}>{look.logo}</i>; }
+  const name = ch?.name ?? "?";
   const h = hue(name);
-  return <i className="yt-av" style={{ width: size, height: size, background: `linear-gradient(135deg, hsl(${h} 70% 78%), hsl(${(h + 50) % 360} 60% 62%))` }} />;
+  return <i className="yt-av yt-av-t" style={{ width: size, height: size, background: `hsl(${h} 42% 46%)`, fontSize: size * 0.42 }}>{firstChar(name)}</i>;
+}
+/** 路人：照真 YouTube 默认头像，彩色圆里一个首字 */
+function UserAvatar({ name, size = 32, src }: { name: string; size?: number; src?: string }) {
+  if (src) return <AvImg src={src} size={size} />;
+  const h = hue(name);
+  return <i className="yt-av yt-av-t" style={{ width: size, height: size, background: `hsl(${h} 55% 52%)`, fontSize: size * 0.45 }}>{firstChar(name)}</i>;
+}
+function firstChar(name: string): string {
+  const c = [...name.replace(/^[@_\-.\d]+/, "")][0] ?? "?";
+  return /[a-z]/.test(c) ? c.toUpperCase() : c;
+}
+
+/** 换头像：上传 / 相册 / 生图 / 换回默认 */
+function AvatarSheet({ name, kind, onPick, onClose, onNotice }: { name: string; kind: "company" | "group" | "person" | "me"; onPick: (src?: string) => void; onClose: () => void; onNotice: Notice }) {
+  const [pick, setPick] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const file = useRef<HTMLInputElement>(null);
+  const photos = loadPhotos().filter(p => p.inLibrary && p.src).slice(-30).reverse();
+  return (
+    <div className="yt-sheet-bk" onClick={onClose}>
+      <div className="yt-msheet" onClick={e => e.stopPropagation()}>
+        {pick ? (
+          <>
+            <div className="yt-msheet-h">从相册选</div>
+            <div className="yt-avgrid">{photos.map(p => <button type="button" key={p.id} onClick={() => { onPick(p.src); onClose(); }}><AvImg src={p.src!} size={72} /></button>)}</div>
+            {!photos.length ? <div className="yt-hint">相册里还没有照片</div> : null}
+            <button type="button" onClick={() => setPick(false)}>返回</button>
+          </>
+        ) : (
+          <>
+            <div className="yt-msheet-h">换头像</div>
+            <button type="button" onClick={() => file.current?.click()}>从手机里上传</button>
+            <button type="button" onClick={() => setPick(true)}>从相册选</button>
+            <button type="button" disabled={busy} onClick={async () => { setBusy(true); try { const src = await genAvatar(name, kind); if (src) { onPick(src); onClose(); } } catch (e) { onNotice?.(e instanceof Error ? e.message : "生图失败"); } setBusy(false); }}>{busy ? "生成中…" : "生图"}</button>
+            <button type="button" onClick={() => { onPick(undefined); onClose(); }}>换回默认</button>
+            <button type="button" onClick={onClose}>取消</button>
+          </>
+        )}
+        <input ref={file} type="file" accept="image/*" hidden onChange={async e => { const f = e.target.files?.[0]; e.target.value = ""; if (!f) return; onPick(await storeMediaBlob(f, f.type || "image/jpeg", "image")); onClose(); }} />
+      </div>
+    </div>
+  );
 }
 
 function Thumb({ v, big }: { v: Video; big?: boolean }) {
@@ -170,7 +219,7 @@ export function YoutubeApp({ onClose, onNotice }: { onClose: () => void; onNotic
   if (view.v === "home") body = <Home onWatch={watch} onChannel={channel} onSearch={() => go({ v: "search" })} onExit={onClose} onRefresh={refresh} />;
   else if (view.v === "shorts") body = <div className="yt-page"><Bar onBack={back} title="Shorts" /><div className="yt-empty">Shorts 还没开放</div></div>;
   else if (view.v === "subs") body = <Subs onWatch={watch} onChannel={channel} onBack={back} />;
-  else if (view.v === "me") body = <Me onWatch={watch} onChannel={channel} onBack={back} />;
+  else if (view.v === "me") body = <Me onWatch={watch} onChannel={channel} onBack={back} onNotice={onNotice} />;
   else if (view.v === "search") body = <SearchPage onBack={back} onChannel={id => setStack(x => [...x.slice(0, -1), { v: "channel", id }])} />;
   else if (view.v === "channel") body = <ChannelPage id={view.id} onBack={back} onWatch={watch} onNotice={onNotice} />;
   else if (view.v === "watch") body = <Watch key={view.id} id={view.id} onBack={back} onChannel={channel} onNotice={onNotice} />;
@@ -185,7 +234,7 @@ export function YoutubeApp({ onClose, onNotice }: { onClose: () => void; onNotic
           <button type="button" className={view.v === "shorts" ? "on" : ""} onClick={() => tab("shorts")}><ShortsIcon />Shorts</button>
           <button type="button" className="plus" onClick={() => onNotice?.("练习生不能开自己的频道")}><CirclePlus size={36} strokeWidth={1.2} /></button>
           <button type="button" className={view.v === "subs" ? "on" : ""} onClick={() => tab("subs")}><SubsIcon />订阅</button>
-          <button type="button" className={view.v === "me" ? "on" : ""} onClick={() => tab("me")}><UserAvatar name={s.me.handle} size={24} />我</button>
+          <button type="button" className={view.v === "me" ? "on" : ""} onClick={() => tab("me")}><UserAvatar name={s.me.handle} src={s.me.avatar} size={24} />我</button>
         </nav>
       ) : null}
     </div>
@@ -250,16 +299,17 @@ function Subs({ onWatch, onChannel, onBack }: { onWatch: (id: string) => void; o
   );
 }
 
-function Me({ onWatch, onChannel, onBack }: { onWatch: (id: string) => void; onChannel: (id: string) => void; onBack: () => void }) {
+function Me({ onWatch, onChannel, onBack, onNotice }: { onWatch: (id: string) => void; onChannel: (id: string) => void; onBack: () => void; onNotice: Notice }) {
   const s = useYt();
   const [edit, setEdit] = useState<string | null>(null);
+  const [av, setAv] = useState(false);
   const liked = visibleVideos().filter(v => v.liked).sort((a, b) => b.at - a.at);
   const chs = s.subs.map(id => s.channels[id]).filter((c): c is Channel => Boolean(c));
   return (
     <div className="yt-page">
       <div className="yt-top"><Logo onClick={onBack} /></div>
       <div className="yt-scroll">
-        <div className="yt-me"><UserAvatar name={s.me.handle} size={64} /><div><b>@{s.me.handle}</b><small>评论用这个名字，别人看不出是你</small><button type="button" className="yt-pill" onClick={() => setEdit(s.me.handle)}>改名字</button></div></div>
+        <div className="yt-me"><button type="button" onClick={() => setAv(true)}><UserAvatar name={s.me.handle} src={s.me.avatar} size={64} /></button><div><b>@{s.me.handle}</b><small>评论用这个名字和头像，别人看不出是你</small><div className="yt-me-btns"><button type="button" className="yt-pill" onClick={() => setEdit(s.me.handle)}>改名字</button><button type="button" className="yt-pill" onClick={() => setAv(true)}>换头像</button></div></div></div>
         {edit !== null ? <div className="yt-me-edit"><input value={edit} onChange={e => setEdit(e.target.value)} /><button type="button" className="yt-pill dark" onClick={() => { setMyHandle(edit); setEdit(null); }}>保存</button></div> : null}
         <div className="yt-sec"><b>赞过的视频</b><span>{liked.length}</span></div>
         <div className="yt-hrow">{liked.slice(0, 10).map(v => <SmallCard key={v.id} v={v} onWatch={onWatch} />)}</div>
@@ -268,6 +318,7 @@ function Me({ onWatch, onChannel, onBack }: { onWatch: (id: string) => void; onC
         {chs.map(c => <button type="button" key={c.id} className="yt-chrow" onClick={() => onChannel(c.id)}><ChAvatar ch={c} size={40} /><div><b>{c.name}</b><small>{num(c.subs)} 位订阅者</small></div></button>)}
         <div style={{ height: 90 }} />
       </div>
+      {av ? <AvatarSheet name={s.me.handle} kind="me" onPick={setMyAvatar} onClose={() => setAv(false)} onNotice={onNotice} /> : null}
     </div>
   );
 }
@@ -286,7 +337,7 @@ function SearchPage({ onBack, onChannel }: { onBack: () => void; onChannel: (id:
       <div className="yt-scroll">
         {hits.map(h => (
           <button type="button" key={h.name + h.sub} className="yt-chrow" onClick={() => onChannel(openHit(h))}>
-            <ChAvatar ch={h.ch ?? ({ name: h.name, companyId: h.companyId } as Channel)} size={52} />
+            <ChAvatar ch={h.ch ?? { name: h.name, companyId: h.companyId, kind: h.kind }} size={52} />
             <div><b>{h.name}</b><small>{h.sub}</small></div>
           </button>
         ))}
@@ -300,6 +351,8 @@ function ChannelPage({ id, onBack, onWatch, onNotice }: { id: string; onBack: ()
   const s = useYt();
   const ch = s.channels[id];
   const [tabK, setTabK] = useState<"home" | "videos">("home");
+  const [menu, setMenu] = useState(false);
+  const [av, setAv] = useState(false);
   useEffect(() => { if (ch && !ch.written) void writeChannel(id).catch(e => onNotice?.(e instanceof Error ? e.message : "频道没打开")); }, [id]); // eslint-disable-line react-hooks/exhaustive-deps
   if (!ch) return <div className="yt-page"><Bar onBack={onBack} /><div className="yt-empty">频道不见了</div></div>;
   const t = themeOf(ch);
@@ -309,10 +362,10 @@ function ChannelPage({ id, onBack, onWatch, onNotice }: { id: string; onBack: ()
   const subbed = s.subs.includes(id);
   return (
     <div className="yt-page">
-      <Bar onBack={onBack} right={<Search size={22} />} />
+      <Bar onBack={onBack} right={<button type="button" onClick={() => setMenu(true)}><Ellipsis size={22} /></button>} />
       <div className="yt-scroll">
         <div className="yt-banner" style={{ background: `linear-gradient(120deg, ${t.c} 0 55%, ${t.y} 55%)` }}><span>{ch.name}</span></div>
-        <div className="yt-cinfo"><ChAvatar ch={ch} size={72} /><div><h2>{ch.name}{ch.kind !== "person" ? <em>✓</em> : null}</h2><div className="yt-sub">{ch.handle}<br />{num(ch.subs)}位订阅者 · {vids.length} 个视频</div></div></div>
+        <div className="yt-cinfo"><button type="button" onClick={() => setAv(true)}><ChAvatar ch={ch} size={72} /></button><div><h2>{ch.name}{ch.kind !== "person" ? <em>✓</em> : null}</h2><div className="yt-sub">{ch.handle}<br />{num(ch.subs)}位订阅者 · {vids.length} 个视频</div></div></div>
         {ch.desc ? <div className="yt-cdesc">{ch.desc}{ch.descZh ? <><br /><span>{ch.descZh}</span></> : null}</div> : channelWriting(id) ? <div className="yt-cdesc">正在打开频道…</div> : null}
         <button type="button" className={`yt-wide${subbed ? "" : " dark"}`} onClick={() => toggleSub(id)}>{subbed ? "已订阅" : "订阅"}</button>
         <div className="yt-ctabs"><button type="button" className={tabK === "home" ? "on" : ""} onClick={() => setTabK("home")}>首页</button><button type="button" className={tabK === "videos" ? "on" : ""} onClick={() => setTabK("videos")}>视频</button></div>
@@ -327,6 +380,15 @@ function ChannelPage({ id, onBack, onWatch, onNotice }: { id: string; onBack: ()
         {!vids.length && !channelWriting(id) ? <div className="yt-empty">这个频道还没有视频</div> : null}
         <div style={{ height: 40 }} />
       </div>
+      {menu ? (
+        <div className="yt-sheet-bk" onClick={() => setMenu(false)}>
+          <div className="yt-msheet" onClick={e => e.stopPropagation()}>
+            <button type="button" onClick={() => { setMenu(false); setAv(true); }}>换头像</button>
+            <button type="button" onClick={() => setMenu(false)}>取消</button>
+          </div>
+        </div>
+      ) : null}
+      {av ? <AvatarSheet name={ch.name} kind={ch.kind} onPick={src => setChannelAvatar(id, src)} onClose={() => setAv(false)} onNotice={onNotice} /> : null}
     </div>
   );
 }
@@ -433,14 +495,14 @@ function Comments({ v, onClose, onNotice }: { v: Video; onClose: () => void; onN
           const rb = commentsBusy(`${v.id}:${c.id}`);
           return (
             <div key={c.id} className="yt-cm">
-              <UserAvatar name={c.by} />
+              <UserAvatar name={c.by} src={c.me ? s.me.avatar : undefined} />
               <div className="yt-cm-main">
                 <CmtBody c={c} />
                 <div className="yt-ops"><span><ThumbsUp size={15} />{c.likes || ""}</span><ThumbsDown size={15} /><button type="button" onClick={() => setReplyTo(c)}>回复</button></div>
                 {c.replies?.length && !opened ? <button type="button" className="yt-more" onClick={() => setOpenR(x => [...x, c.id])}><ChevronDown size={16} />{c.replies.length} 条回复</button> : null}
                 {opened ? (
                   <div className="yt-reps">
-                    {(c.replies ?? []).map(r => <div key={r.id} className="yt-cm sm"><UserAvatar name={r.by} size={24} /><div className="yt-cm-main"><CmtBody c={r} /><div className="yt-ops"><span><ThumbsUp size={14} />{r.likes || ""}</span><button type="button" onClick={() => setReplyTo(c)}>回复</button></div></div></div>)}
+                    {(c.replies ?? []).map(r => <div key={r.id} className="yt-cm sm"><UserAvatar name={r.by} size={24} src={r.me ? s.me.avatar : undefined} /><div className="yt-cm-main"><CmtBody c={r} /><div className="yt-ops"><span><ThumbsUp size={14} />{r.likes || ""}</span><button type="button" onClick={() => setReplyTo(c)}>回复</button></div></div></div>)}
                   </div>
                 ) : null}
                 {opened || (c.me && !c.replies?.length) ? <button type="button" className="yt-more" disabled={rb} onClick={() => { setOpenR(x => [...new Set([...x, c.id])]); void moreComments(v.id, c.id).catch(err); }}><ChevronDown size={16} />{rb ? "加载中…" : c.replies?.length ? "加载更多回复" : "看看有没有人回复"}</button> : null}
@@ -453,7 +515,7 @@ function Comments({ v, onClose, onNotice }: { v: Video; onClose: () => void; onN
         <div style={{ height: 20 }} />
       </div>
       <div className="yt-input">
-        <UserAvatar name={s.me.handle} size={28} />
+        <UserAvatar name={s.me.handle} src={s.me.avatar} size={28} />
         <div>
           {replyTo ? <small>回复 @{replyTo.by}<button type="button" onClick={() => setReplyTo(null)}><X size={12} /></button></small> : <small>以 @{s.me.handle} 发出，别人看不出是你</small>}
           <input value={draft} onChange={e => setDraft(e.target.value)} onKeyDown={e => { if (e.key === "Enter") send(); }} placeholder="添加评论…" />

@@ -1,0 +1,122 @@
+<!doctype html><html><head><meta charset="utf-8"><style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:#d9dce1;font-family:"PingFang SC","Hiragino Sans GB","Apple SD Gothic Neo",-apple-system,sans-serif;display:flex;gap:26px;padding:26px;align-items:flex-start}
+.ph{width:390px;height:844px;border-radius:50px;overflow:hidden;position:relative;box-shadow:0 10px 40px rgba(0,0,0,.18);border:9px solid #111}
+.cap{text-align:center;font-size:12px;color:#555;margin-top:10px;width:390px;line-height:1.6}
+.glassbg{position:absolute;inset:0;background:linear-gradient(170deg,#ffd9e4 0%,#f3a9c0 30%,#c97a9a 62%,#7b4a6a 100%)}
+.in{position:relative;padding:52px 0 0;color:#fff}
+.gd{background:rgba(255,255,255,.18);backdrop-filter:blur(20px);border:1px solid rgba(255,255,255,.28)}
+.top{display:flex;align-items:center;justify-content:space-between;padding:0 16px 6px}
+.circ{width:44px;height:44px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:22px}
+.av{width:78px;height:78px;border-radius:50%;margin:0 auto 6px;background:linear-gradient(160deg,#ffe3ec,#e59ab4);border:2px solid rgba(255,255,255,.6)}
+.name{text-align:center;font-size:24px;font-weight:700}
+.role{text-align:center;font-size:13px;color:rgba(255,255,255,.8);margin-bottom:12px}
+.cd{margin:0 14px 10px;border-radius:24px;padding:12px 14px}
+.k{font-size:13px;color:rgba(255,255,255,.72);margin-bottom:8px;display:flex;justify-content:space-between}
+/* 证件（练习生证同款） */
+.idc{position:relative;background:#fff;border-radius:12px;overflow:hidden;border:1px solid var(--line);color:#4a4560;box-shadow:0 8px 20px rgba(60,40,90,.15)}
+.idc .t{display:flex;align-items:center;gap:8px;background:var(--band);padding:8px 12px}
+.idc .t b{font-size:14px;letter-spacing:2px;color:var(--ink);font-weight:600}
+.idc .t s{text-decoration:none;font-size:9.5px;color:var(--sub);letter-spacing:1px;margin-left:auto}
+.lav{--band:#ebe5f8;--line:#e3dcf2;--ink:#5e5873;--sub:#8a83a3}
+.mint{--band:#dff1ea;--line:#cfe6dc;--ink:#3f6b5d;--sub:#6f9486;--acc:#3f9b80;--dot:rgba(80,160,130,.16)}
+.idc .row{display:flex;gap:12px;padding:10px 12px 26px}
+.idc .pic{width:62px;height:78px;background:linear-gradient(160deg,#efd8de,#cdb0d9);flex:none}
+.idc .kv{font-size:11.5px;line-height:1.8}
+.idc .kv em{font-style:normal;color:#9a93b2;display:inline-block;width:44px;font-size:10.5px}
+.idc .no{position:absolute;left:12px;bottom:6px;font-size:9.5px;color:#a59fbd;letter-spacing:1px}
+/* 关注度证 */
+.fm{padding:10px 12px 26px;background-color:#fbfefd;background-image:radial-gradient(var(--dot) 1.1px,transparent 1.3px);background-size:14px 14px}
+.fm .n{display:flex;align-items:baseline;gap:8px;font-family:"Songti SC","STSong",serif}
+.fm .n b{font-size:38px;line-height:1;color:var(--ink);font-weight:600}
+.fm .n span{font-size:14px;letter-spacing:3px;color:var(--ink)}
+.fm .n i{font-style:normal;font-size:10.5px;color:var(--sub);margin-left:auto;font-family:"PingFang SC",sans-serif}
+.scale{display:flex;margin-top:10px;border:1px solid var(--line);border-radius:6px;overflow:hidden;font-size:10px;text-align:center;color:var(--sub)}
+.scale div{padding:5px 0;border-right:1px solid var(--line);position:relative}
+.scale div:last-child{border-right:0}
+.scale .on{background:var(--band);color:var(--ink);font-weight:600}
+.meter{position:relative;height:5px;margin:8px 0 4px;border-radius:3px;background:#e8f2ee}
+.meter .b{position:absolute;left:0;top:0;bottom:0;border-radius:3px;background:var(--acc)}
+.meter .h{position:absolute;top:0;bottom:0;background:repeating-linear-gradient(45deg,#f2c14e 0 3px,#f7d885 3px 6px)}
+.meter .tk{position:absolute;top:-3px;width:1px;height:11px;background:#9cc4b6}
+.legend{display:flex;gap:12px;font-size:10.5px;color:var(--sub)}
+.legend i{display:inline-block;width:8px;height:8px;border-radius:2px;margin-right:4px;vertical-align:0}
+.stamp{position:absolute;right:14px;top:44px;width:50px;height:50px;border-radius:50%;border:1.5px solid rgba(63,155,128,.55);color:rgba(63,155,128,.75);font-size:9px;display:flex;flex-direction:column;align-items:center;justify-content:center;transform:rotate(-12deg);letter-spacing:1px;font-family:"Songti SC",serif}
+.stamp b{font-size:12px}
+/* 详情页：纸 */
+.paperbg{position:absolute;inset:0;background:#f5fbf8;background-image:radial-gradient(rgba(80,160,130,.16) 1.2px,transparent 1.4px);background-size:16px 16px}
+.pin{position:relative;padding:52px 0 0;color:#4a4560}
+.ptop{display:flex;align-items:center;justify-content:space-between;padding:0 16px 8px}
+.ptop .circ{background:rgba(255,255,255,.8);border:1px solid #cfe6dc;color:#3f6b5d}
+.ptop b{font-family:"Songti SC",serif;font-size:17px;letter-spacing:4px;color:#3f6b5d}
+.sheet{margin:0 16px 12px;background:#fff;border:1px solid #cfe6dc}
+.sh{display:flex;align-items:center;gap:8px;padding:8px 12px;background:#dff1ea;border-bottom:1px solid #cfe6dc}
+.sh b{font-size:13px;letter-spacing:2px;color:#3f6b5d;font-weight:600}
+.sh s{text-decoration:none;margin-left:auto;font-size:9.5px;letter-spacing:2px;color:#6f9486}
+.tr{display:flex;gap:10px;font-size:12.5px;line-height:1.55;padding:8px 12px;border-top:1px solid #e3efe9;color:#8aa59b}
+.tr:first-child{border-top:0}
+.tr b{flex:none;width:124px;font-weight:600;white-space:nowrap}
+.tr.on{color:#3d5a50;background:#f3faf7}
+.lg{display:flex;justify-content:space-between;gap:10px;font-size:12.5px;padding:8px 12px;border-top:1px solid #e3efe9;color:#3d5a50}
+.lg:first-child{border-top:0}
+.lg small{display:block;font-size:10.5px;color:#93ada4;margin-top:2px}
+.lg b{white-space:nowrap;font-weight:600;color:#3f9b80}
+.lg b.dn{color:#c47a7a}
+.sl{padding:14px 12px 12px}
+.rail{position:relative;height:5px;border-radius:3px;background:#e3efe9}
+.rail .f{position:absolute;left:0;top:0;bottom:0;border-radius:3px;background:#3f9b80}
+.rail .kn{position:absolute;top:-8px;width:20px;height:20px;border-radius:50%;background:#fff;border:1.5px solid #3f9b80}
+.go{display:block;margin:14px auto 0;width:170px;text-align:center;padding:10px 0;border:1px solid #3f6b5d;color:#3f6b5d;font-family:"Songti SC",serif;font-size:14px;letter-spacing:6px;position:relative;background:#fff}
+.go::after{content:"";position:absolute;inset:3px;border:.5px solid #a9cfc1}
+</style></head><body>
+
+<!-- 1 名片上：练习生证 + 关注度证 -->
+<div><div class="ph"><div class="glassbg"></div><div class="in">
+<div class="top"><div class="circ gd">‹</div><div class="circ gd" style="font-size:14px">编辑</div></div>
+<div class="av"></div>
+<div class="name">Flora</div>
+<div class="role">BLUE 娱乐 练习生 · 第 46 天</div>
+<div class="cd gd"><div class="k">练习生证</div>
+<div class="idc lav"><div class="t"><b>연습생 등록증</b><s>TRAINEE ID CARD</s></div>
+<div class="row"><div class="pic"></div><div class="kv"><em>姓名</em>Flora<br><em>所属</em>BLUE 娱乐<br><em>出生</em>1999.04.12<br><em>国籍</em>中国</div></div><div class="no">No. 2015-0312</div></div>
+</div>
+<div class="cd gd"><div class="k">关注度<span>›</span></div>
+<div class="idc mint"><div class="t"><b>인지도</b><s>关注度 · RECOGNITION</s></div>
+<div class="fm">
+<div class="n"><b>18</b><span>普通人</span></div>
+<div class="scale"><div class="on" style="width:20%">普通人<br>0～19</div><div style="width:30%">小有人知<br>20～49</div><div style="width:50%">公众人物<br>50＋</div></div>
+<div class="meter"><div class="b" style="width:9%"></div><div class="h" style="left:9%;width:9%"></div><div class="tk" style="left:20%"></div><div class="tk" style="left:50%"></div></div>
+<div class="legend"><span><i style="background:#3f9b80"></i>人气 9</span><span><i style="background:#f2c14e"></i>热度 9（会退）</span><span style="margin-left:auto">差 2 分到「小有人知」</span></div>
+</div>
+<div class="stamp"><b>確認</b>03.28</div>
+</div>
+</div>
+</div></div><div class="cap">① 我的名片：练习生证下面一张同款的「关注度证」<br>薄荷绿，盖个「确认」小章写最后更新的日子</div></div>
+
+<!-- 2 点开详情：纸张风 -->
+<div><div class="ph"><div class="paperbg"></div><div class="pin">
+<div class="ptop"><div class="circ">‹</div><b>关注度</b><div style="width:44px"></div></div>
+<div class="sheet"><div class="sh"><b>현재 · 现在</b><s>NOW</s></div>
+<div class="fm mint" style="padding:12px 12px 14px">
+<div class="n"><b>18</b><span>普通人</span><i>人气 9 · 热度 9</i></div>
+<div class="meter"><div class="b" style="width:9%"></div><div class="h" style="left:9%;width:9%"></div><div class="tk" style="left:20%"></div><div class="tk" style="left:50%"></div></div>
+<div class="legend"><span>热度两周后约剩 4</span></div>
+</div></div>
+<div class="sheet"><div class="sh"><b>등급 · 三档</b><s>LEVEL</s></div>
+<div class="tr on"><b>0～19　普通人</b>评论区都是陌生人，没人认识你</div>
+<div class="tr"><b>20～49　小有人知</b>偶尔有路透粉、考古粉认出你，有一小撮人在关注</div>
+<div class="tr"><b>50＋　公众人物</b>出道了也算。评论区多是粉丝，有人开帖讨论你</div>
+</div>
+<div class="sheet"><div class="sh"><b>기록 · 最近的变化</b><s>LOG</s></div>
+<div class="lg"><span>伴舞视频被转了几百次<small>3月28日 · 中事</small></span><b>热度 +5 · 人气 +1</b></div>
+<div class="lg"><span>公司频道上传了练习生舞蹈视频<small>3月20日 · 中事</small></span><b>热度 +5 · 人气 +1</b></div>
+<div class="lg"><span>热度慢慢退了<small>3月14日～27日</small></span><b class="dn">热度 −3</b></div>
+<div class="lg"><span>开局 · 普通家庭<small>3月1日</small></span><b>人气 5</b></div>
+</div>
+<div class="sheet"><div class="sh"><b>수정 · 自己改</b><s>EDIT</s></div>
+<div class="sl"><div class="rail"><div class="f" style="width:18%"></div><div class="kn" style="left:calc(18% - 10px)"></div></div>
+<span class="go">改 成 18</span></div>
+</div>
+</div></div><div class="cap">② 点开：跟开局页一样的圆点纸、细线框、宋体按钮，<br>换成薄荷绿</div></div>
+
+</body></html>

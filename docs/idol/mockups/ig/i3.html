@@ -1,0 +1,219 @@
+<!doctype html><html><head><meta charset="utf-8">
+<link rel="stylesheet" href="cp-ig.css">
+<style>
+:root{--cp-appbar-safe-top:44px;--app-text-scale:1}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:#d9dce1;font-family:-apple-system,"PingFang SC","Apple SD Gothic Neo",sans-serif;display:flex;gap:24px;padding:26px;align-items:flex-start}
+.ph{width:390px;height:844px;border-radius:50px;overflow:hidden;position:relative;box-shadow:0 10px 40px rgba(0,0,0,.18);border:9px solid #111;background:#fff}
+.cap{text-align:center;font-size:12px;color:#555;margin-top:10px;width:390px;line-height:1.6}
+button{font-family:inherit;background:none;border:0}
+svg.i{width:24px;height:24px;stroke:#111;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+/* 首页 */
+.top{display:flex;align-items:center;gap:16px;padding:52px 14px 6px}
+.wm{font-family:"Snell Roundhand","Brush Script MT",cursive;font-size:30px;font-weight:700;margin-right:auto;letter-spacing:.3px}
+.dot{position:relative}.dot::after{content:"";position:absolute;right:-1px;top:-1px;width:8px;height:8px;border-radius:50%;background:#ff3040}
+.badge{position:absolute;right:-7px;top:-6px;background:#ff3040;color:#fff;font-size:10px;font-weight:700;border-radius:9px;padding:1px 5px}
+.stories{display:flex;gap:12px;padding:8px 12px 12px;overflow:hidden;border-bottom:.5px solid #eee}
+.st{width:68px;flex:none;text-align:center;font-size:11.5px;color:#262626}
+.ring{width:66px;height:66px;border-radius:50%;padding:2.5px;background:conic-gradient(#feda75,#fa7e1e,#d62976,#962fbf,#4f5bd5,#feda75);margin-bottom:4px}
+.ring.seen{background:#dbdbdb}
+.ring.close{background:#1fc955}
+.ring i{display:block;width:100%;height:100%;border-radius:50%;border:2.5px solid #fff}
+.st.me .ring{background:none;position:relative}
+.st.me .ring::after{content:"+";position:absolute;right:0;bottom:2px;width:20px;height:20px;border-radius:50%;background:#0095f6;color:#fff;border:2px solid #fff;font-size:15px;line-height:15px;font-weight:700}
+.vf{display:inline-block;width:13px;height:13px;border-radius:50%;background:#0095f6;color:#fff;font-size:9px;line-height:13px;text-align:center;vertical-align:1px;margin-left:3px}
+.desc{position:relative;aspect-ratio:1/1;background:#111;color:#f3f3f3;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:30px;text-align:center;font-family:"Songti SC","STSong",serif;font-size:16px;line-height:1.8;letter-spacing:1px}
+.desc small{position:absolute;left:12px;top:10px;font-family:-apple-system,sans-serif;font-size:10.5px;letter-spacing:0;color:rgba(255,255,255,.55)}
+.gen{position:absolute;right:12px;bottom:12px;font-family:-apple-system,"PingFang SC",sans-serif;font-size:12px;letter-spacing:0;background:rgba(255,255,255,.92);color:#111;border-radius:16px;padding:6px 12px;font-weight:600}
+.photo{aspect-ratio:1/1;background:linear-gradient(160deg,#cfe0f2,#8aa8cf 55%,#3e5a86)}
+.tr{font-size:12.5px;color:#8e8e8e;margin-top:3px}
+.tabbar{position:absolute;left:0;right:0;bottom:0;height:74px;border-top:.5px solid #dbdbdb;background:#fff;display:flex;justify-content:space-around;padding-top:12px}
+.tabbar .me{width:26px;height:26px;border-radius:50%;background:linear-gradient(160deg,#ffe3ec,#e59ab4);border:1.5px solid #111}
+/* 主页补充 */
+.lock{display:inline-flex;align-items:center;gap:4px}
+.req{display:flex;align-items:center;gap:10px;margin:8px 14px 0;padding:10px 12px;border-radius:12px;background:#f5f5f5;font-size:13px}
+.req b{font-weight:600}.req em{font-style:normal;margin-left:auto;color:#0095f6;font-weight:600}
+.av3{display:flex}.av3 i{width:26px;height:26px;border-radius:50%;border:2px solid #f5f5f5;margin-left:-8px}.av3 i:first-child{margin-left:0}
+.pv{display:flex;align-items:center;justify-content:space-between;margin:10px 14px 0;font-size:13px;color:#262626}
+.sw{width:44px;height:26px;border-radius:13px;background:#34c759;position:relative}.sw::after{content:"";position:absolute;right:2px;top:2px;width:22px;height:22px;border-radius:50%;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.2)}
+.sw.off{background:#e5e5ea}.sw.off::after{right:auto;left:2px}
+.grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:1.5px;margin-top:8px}
+.grid3 div{aspect-ratio:3/4}
+.gt{background:#111;color:#eee;font-family:"Songti SC",serif;font-size:10.5px;display:flex;align-items:center;justify-content:center;text-align:center;padding:10px;line-height:1.6}
+/* 发帖 */
+.ph-top{display:flex;align-items:center;justify-content:space-between;padding:52px 14px 10px;border-bottom:.5px solid #eee;font-size:16px}
+.ph-top b{font-weight:700}.ph-top em{font-style:normal;color:#0095f6;font-weight:600}
+.pick{display:flex;gap:8px;padding:12px 14px}
+.pick div{flex:1;border:1px solid #dbdbdb;border-radius:12px;padding:10px;text-align:center;font-size:13px;color:#262626}
+.pick .on{border-color:#111;background:#fafafa;font-weight:600}
+.ta{margin:0 14px;border:1px solid #dbdbdb;border-radius:12px;padding:12px;font-size:14px;line-height:1.6;color:#262626;min-height:84px}
+.ta small{display:block;color:#8e8e8e;font-size:12px;margin-bottom:4px}
+.opt{display:flex;justify-content:space-between;align-items:center;padding:13px 14px;border-bottom:.5px solid #efefef;font-size:14.5px}
+.opt span{color:#8e8e8e;font-size:13px}
+.share{position:absolute;left:14px;right:14px;bottom:30px;background:#0095f6;color:#fff;text-align:center;border-radius:10px;padding:13px;font-weight:600;font-size:15px}
+.risk{margin:14px;padding:10px 12px;border-radius:12px;background:#fff6e5;color:#8a5a00;font-size:12.5px;line-height:1.6}
+/* 限时动态 */
+.story{position:absolute;inset:0;background:linear-gradient(170deg,#3a3a52,#7a6a8e 50%,#d7a6b8)}
+.sp{position:absolute;left:10px;right:10px;top:50px;height:2.5px;background:rgba(255,255,255,.35);border-radius:2px}.sp i{display:block;width:60%;height:100%;background:#fff;border-radius:2px}
+.sh{position:absolute;left:12px;right:12px;top:60px;display:flex;align-items:center;gap:8px;color:#fff;font-size:13.5px;font-weight:600}
+.sh i{width:32px;height:32px;border-radius:50%;background:linear-gradient(160deg,#ffe3ec,#e59ab4)}
+.sh span{font-weight:400;opacity:.75}
+.stext{position:absolute;left:0;right:0;top:300px;text-align:center;color:#fff;font-family:"Songti SC",serif;font-size:19px;line-height:1.8;letter-spacing:2px}
+.seen{position:absolute;left:0;right:0;bottom:0;background:#fff;border-radius:18px 18px 0 0;padding:10px 0 26px}
+.seen .hd{display:flex;justify-content:center;font-size:14px;font-weight:700;padding:6px 0 10px;border-bottom:.5px solid #efefef}
+.vw{display:flex;align-items:center;gap:12px;padding:9px 16px;font-size:14px}
+.vw i{width:40px;height:40px;border-radius:50%;flex:none}
+.vw b{font-weight:600;display:block}.vw small{color:#8e8e8e;font-size:12px}
+.vw em{margin-left:auto;font-style:normal;font-size:12px;color:#8e8e8e}
+.vw.hot em{color:#d62976;font-weight:600}
+/* 搜索 */
+.sbar{margin:52px 14px 8px;background:#efefef;border-radius:10px;padding:9px 12px;font-size:15px;color:#262626}
+.ac{display:flex;align-items:center;gap:12px;padding:10px 16px}
+.ac i{width:52px;height:52px;border-radius:50%;flex:none}
+.ac div{flex:1;min-width:0;font-size:14px}
+.ac b{font-weight:600}.ac small{display:block;color:#8e8e8e;font-size:12.5px;margin-top:1px}
+.ac .tag{display:inline-block;font-size:10.5px;color:#d62976;background:#fde8f1;border-radius:6px;padding:1px 6px;margin-left:6px;font-weight:600}
+.fb{background:#0095f6;color:#fff;font-size:13px;font-weight:600;border-radius:8px;padding:7px 14px;flex:none}
+.fb.ghost{background:#efefef;color:#111}
+.sec{font-size:15px;font-weight:700;padding:14px 16px 4px}
+
+.vfb{display:inline-block;width:14px;height:14px;vertical-align:-2px;margin-left:3px}
+.ic{width:24px;height:24px;stroke:#111;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;flex:none}
+.np-top{display:flex;align-items:center;justify-content:center;position:relative;padding:52px 14px 12px;border-bottom:.5px solid #dbdbdb;font-size:17px;font-weight:700}
+.np-top .bk{position:absolute;left:12px;bottom:10px}
+.np-img{width:62%;margin:14px auto 0;aspect-ratio:3/4;border-radius:10px;background:#111;color:#f3f3f3;display:flex;align-items:center;justify-content:center;text-align:center;font-family:"Songti SC",serif;font-size:14px;line-height:1.8;padding:18px;position:relative}
+.np-img .gen{font-size:11px;padding:5px 10px;bottom:10px;right:10px}
+.np-cap{padding:16px 18px 10px;font-size:15px;color:#999;min-height:70px}
+.np-row{display:flex;align-items:center;gap:14px;padding:13px 18px;font-size:15.5px;color:#111}
+.np-row span{flex:1}
+.np-row em{font-style:normal;color:#8e8e8e;font-size:14px}
+.np-row .chev{width:16px;height:16px;stroke:#8e8e8e;fill:none;stroke-width:2}
+.np-sep{height:6px;background:#f2f2f2;margin:4px 0}
+.np-btn{position:absolute;left:16px;right:16px;bottom:28px;background:#4a5df9;color:#fff;text-align:center;border-radius:12px;padding:13px;font-size:16px;font-weight:600}
+.np-row small{display:block;font-size:12.5px;color:#8e8e8e;margin-top:2px;line-height:1.5}
+.tg{width:46px;height:28px;border-radius:14px;background:#4a5df9;position:relative;flex:none}.tg::after{content:"";position:absolute;right:2px;top:2px;width:24px;height:24px;border-radius:50%;background:#fff}
+.np-row .tg{flex:none;width:46px}
+.tg.off{background:#e5e5ea}.tg.off::after{right:auto;left:2px}
+.note{font-size:12.5px;color:#8e8e8e;padding:4px 12px 0;line-height:1.5}
+
+.exp{display:grid;grid-template-columns:repeat(3,1fr);gap:1.5px;margin-top:6px}
+.exp div{aspect-ratio:3/4}
+.exp .tall{grid-row:span 2;aspect-ratio:auto}
+.chips{display:flex;gap:8px;padding:4px 14px 8px}
+.chips span{font-size:13px;padding:6px 12px;border-radius:8px;background:#efefef;color:#262626}
+.nt{display:flex;align-items:center;gap:12px;padding:9px 16px;font-size:13.5px;line-height:1.45}
+.nt i{width:44px;height:44px;border-radius:50%;flex:none}
+.nt div{flex:1}.nt b{font-weight:600}.nt small{color:#8e8e8e}
+.nt .th{width:44px;height:44px;border-radius:4px;background:#111;flex:none}
+.dmtop{display:flex;align-items:center;gap:10px;padding:52px 14px 8px;font-size:20px;font-weight:700}
+.dmtop .r{margin-left:auto}
+.dmtabs{display:flex;gap:18px;padding:6px 16px 8px;font-size:15px;font-weight:600}
+.dmtabs span{color:#8e8e8e}.dmtabs .on{color:#111}
+.dmtabs em{font-style:normal;color:#0095f6;font-size:13px;font-weight:600;margin-left:auto}
+.th1{display:flex;align-items:center;gap:12px;padding:9px 16px}
+.th1 i{width:54px;height:54px;border-radius:50%;flex:none}
+.th1 div{flex:1;min-width:0;font-size:14px}.th1 b{font-weight:600;display:block}
+.th1 small{display:block;color:#8e8e8e;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.th1.un b,.th1.un small{color:#111;font-weight:600}
+.th1 .bd{width:8px;height:8px;border-radius:50%;background:#0095f6;flex:none}
+.req2{margin:6px 16px 4px;padding:10px 12px;border-radius:12px;background:#f5f5f5;font-size:13px;color:#262626;display:flex;justify-content:space-between}
+.req2 em{font-style:normal;color:#0095f6;font-weight:600}
+.chtop{display:flex;align-items:center;gap:10px;padding:50px 12px 10px;border-bottom:.5px solid #efefef}
+.chtop i{width:32px;height:32px;border-radius:50%}
+.chtop b{font-size:15px;display:block}.chtop small{font-size:12px;color:#8e8e8e}
+.msgs{padding:12px 12px;display:flex;flex-direction:column;gap:6px}
+.m{max-width:72%;padding:9px 13px;border-radius:20px;font-size:14.5px;line-height:1.4}
+.m.l{background:#efefef;color:#111;align-self:flex-start}
+.m.r{background:linear-gradient(135deg,#7b3fe4,#3d6cff);color:#fff;align-self:flex-end}
+.m small{display:block;font-size:12px;opacity:.7;margin-top:2px}
+.tm{align-self:center;font-size:11.5px;color:#8e8e8e;margin:6px 0}
+.shared{align-self:flex-start;width:180px;border-radius:14px;overflow:hidden;border:1px solid #efefef}
+.shared .im{height:150px;background:#111;color:#eee;font-family:"Songti SC",serif;font-size:12px;display:flex;align-items:center;justify-content:center;text-align:center;padding:10px}
+.shared .ft{font-size:12px;padding:6px 10px;color:#262626}
+.acts{position:absolute;left:12px;right:12px;bottom:82px;display:flex;gap:8px}.acts span{border:1px solid #dbdbdb;border-radius:16px;padding:6px 14px;font-size:13px;color:#262626;background:#fff}.acts .pri{background:#efefef;font-weight:600}
+.lp{position:absolute;inset:0;background:rgba(0,0,0,.28)}
+.lpm{position:absolute;left:50%;transform:translateX(-50%);width:230px;background:#fff;border-radius:14px;overflow:hidden;font-size:15px}
+.lpm div{padding:12px 16px;border-top:.5px solid #efefef;display:flex;justify-content:space-between}.lpm div:first-child{border-top:0}.lpm .red{color:#ed4956}
+.set{position:absolute;left:0;right:0;bottom:0;background:#fff;border-radius:18px 18px 0 0;padding:8px 0 30px}
+.set .hd{text-align:center;font-weight:700;font-size:15px;padding:8px 0 12px;border-bottom:.5px solid #efefef}
+.plus{flex:none;width:26px;height:26px;border-radius:50%;background:#4a5df9;color:#fff !important;display:flex;align-items:center;justify-content:center;font-size:20px;line-height:1}
+.panel{position:absolute;left:0;right:0;bottom:0;height:180px;background:#f7f7f7;border-top:.5px solid #e5e5e5;display:grid;grid-template-columns:repeat(4,1fr);padding:18px 10px 0;row-gap:14px}
+.panel div{display:flex;flex-direction:column;align-items:center;gap:6px;font-size:12px;color:#262626}
+.panel i{width:52px;height:52px;border-radius:14px;background:#fff;display:flex;align-items:center;justify-content:center;box-shadow:0 1px 3px rgba(0,0,0,.06)}
+.inp{position:absolute;left:12px;right:12px;bottom:26px;border:1px solid #dbdbdb;border-radius:22px;padding:10px 16px;font-size:14px;color:#8e8e8e;display:flex;justify-content:space-between}
+.reqbar{margin:8px 12px;padding:10px 12px;border-radius:12px;background:#f5f5f5;font-size:12.5px;color:#555;line-height:1.5}
+.reqbtn{display:flex;gap:8px;margin-top:8px}.reqbtn span{flex:1;text-align:center;padding:7px;border-radius:8px;background:#fff;font-weight:600;font-size:13px}.reqbtn .b{background:#0095f6;color:#fff}
+</style></head><body>
+<!-- 1 搜索/探索 -->
+<div><div class="ph">
+<div class="sbar" style="display:flex;align-items:center;gap:8px"><svg class="ic" viewBox="0 0 24 24" style="width:16px;height:16px;stroke:#8e8e8e"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg><span style="color:#8e8e8e">搜索</span></div>
+<div class="chips"><span>练习室</span><span>首尔美食</span><span>回归</span><span>穿搭</span></div>
+<div class="exp">
+<div style="background:linear-gradient(160deg,#f3d9e3,#c98aa6)"></div><div class="gt">弘大街头<br>有人在路演</div><div style="background:linear-gradient(160deg,#dfe7f5,#8aa1c9)"></div>
+<div style="background:linear-gradient(160deg,#f5e6d6,#cfae86)"></div><div class="gt">咖啡拉花</div>
+<div class="gt">某团打歌直拍<br>的截图</div><div style="background:linear-gradient(160deg,#dbeee3,#8fbf9f)"></div><div style="background:linear-gradient(160deg,#e6e0f5,#9a8bc4)"></div>
+<div style="background:linear-gradient(160deg,#ffe9d6,#e9a77f)"></div><div class="gt">汉南洞的<br>夕阳</div><div style="background:linear-gradient(160deg,#e3eaf5,#a3b5d6)"></div><div class="gt">练习生的<br>午饭</div>
+</div>
+<div class="tabbar"><svg class="i" viewBox="0 0 24 24"><path d="M3 11l9-8 9 8v10h-6v-6H9v6H3z"/></svg><svg class="i" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg><svg class="i" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="5"/><path d="M12 8v8M8 12h8"/></svg><svg class="i" viewBox="0 0 24 24"><path d="M21 3 3 10.5l7 2.5 2.5 7z"/><path d="M10 13l5-5"/></svg><span class="me"></span></div>
+</div><div class="cap">① 搜索：点进去就是搜人（上一版第⑥张）<br>没输字时下面是「探索」：陌生人的公开帖、前辈团，每个世界日刷一次</div></div>
+
+<!-- 2 通知 -->
+<div><div class="ph">
+<div class="np-top"><span class="bk"><svg class="ic" viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></span>通知</div>
+<div class="nt"><i style="background:linear-gradient(160deg,#c9b4e0,#9a85c4)"></i><div><b>关注申请</b><br><small>sy_park 等 3 人</small></div></div>
+<div style="font-size:15px;font-weight:700;padding:12px 16px 4px">今天</div>
+<div class="nt"><i style="background:linear-gradient(160deg,#e6e0f5,#a99bc4)"></i><div><b>jiwon.h</b> 赞了你的帖子。<small>2小时</small></div><div class="th"></div></div>
+<div class="nt"><i style="background:linear-gradient(160deg,#dfe7f5,#9db0d6)"></i><div><b>dawn_0712</b> 评论了：下次叫上我！<small>3小时</small></div><div class="th"></div></div>
+<div style="font-size:15px;font-weight:700;padding:12px 16px 4px">本周</div>
+<div class="nt"><i style="background:linear-gradient(160deg,#f5e6d6,#cfae86)"></i><div><b>yuna.k</b> 开始关注你了。<small>2天</small></div><span class="fb">回关</span></div>
+<div class="nt"><i style="background:linear-gradient(160deg,#e0e0e0,#9e9e9e)"></i><div><b>sleepy__0901</b> 赞了你的快拍。<small>4天</small></div></div>
+</div><div class="cap">② 右上角爱心 = 通知：关注申请、赞、评论、新粉丝<br>（谁的小号来赞了你，你一看就知道是谁）</div></div>
+
+<!-- 3 私信列表 -->
+<div><div class="ph">
+<div class="dmtop"><svg class="ic" viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg>flo_0412<span class="r"><svg class="ic" viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16z"/></svg></span></div>
+<div class="sbar" style="margin:4px 14px 8px;display:flex;align-items:center;gap:8px"><svg class="ic" viewBox="0 0 24 24" style="width:16px;height:16px;stroke:#8e8e8e"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg><span style="color:#8e8e8e">搜索</span></div>
+<div class="dmtabs"><span class="on">消息</span><em>请求 (2)</em></div>
+<div class="th1 un"><i style="background:linear-gradient(160deg,#c9d6ea,#7d93b8)"></i><div><b>seojun_vtx</b><small>上次伴舞那个是你吧 · 1小时</small></div><span class="bd"></span></div>
+<div class="th1"><i style="background:linear-gradient(160deg,#ffd9c9,#e39b84)"></i><div><b>mina.dance</b><small>你：谢谢你喜欢！· 昨天</small></div></div>
+<div class="th1"><i style="background:linear-gradient(160deg,#dbeee3,#9cc9ae)"></i><div><b>hongdae_busk</b><small>看到你的快拍了，那首歌叫什么 · 3天</small></div></div>
+<div class="req2"><span>只有还没加 KakaoTalk 的人会在这里找你</span></div>
+<div class="tabbar"><svg class="i" viewBox="0 0 24 24"><path d="M3 11l9-8 9 8v10h-6v-6H9v6H3z"/></svg><svg class="i" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg><svg class="i" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="5"/><path d="M12 8v8M8 12h8"/></svg><svg class="i" viewBox="0 0 24 24"><path d="M21 3 3 10.5l7 2.5 2.5 7z"/><path d="M10 13l5-5"/></svg><span class="me"></span></div>
+</div><div class="cap">③ 私信：底栏原来 Reels 那格换成私信（我们不做短视频）<br>陌生人第一次来先进「请求」，你接受了才进消息</div></div>
+
+<!-- 4 私信对话 -->
+<div><div class="ph">
+<div class="chtop" style="position:relative"><svg class="ic" viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg><i style="background:linear-gradient(160deg,#c9d6ea,#7d93b8)"></i><div><b>seojun_vtx</b><small>Vertex 韩书俊</small></div></div>
+<div class="msgs">
+<div class="tm">今天 14:02</div>
+<div class="shared"><div class="im">年末演唱会后台<br>一排伴舞的背影</div><div class="ft">yeonhwa_fan 的帖子</div></div>
+<div class="m l">上次伴舞那个是你吧<small>지난번 백댄서 너 맞지?</small></div>
+<div class="m l">中间那个</div>
+<div class="m r">……被认出来了</div>
+<div class="m r">前辈怎么会看到这个</div>
+</div>
+<div class="inp" style="bottom:196px;left:12px;right:12px;padding:8px 14px 8px 8px;gap:10px;justify-content:flex-start;align-items:center"><span class="plus"><svg viewBox="0 0 24 24" width="16" height="16" stroke="#fff" stroke-width="2.6" stroke-linecap="round" fill="none"><path d="M12 5v14M5 12h14"/></svg></span><span style="flex:1;line-height:26px">发消息…</span></div><div class="panel">
+<div><i><svg class="ic" viewBox="0 0 24 24"><path d="M4 5h16v11H9l-5 4z"/><path d="M9 10h6"/></svg></i>让他回</div>
+<div><i><svg class="ic" viewBox="0 0 24 24"><path d="M4 5h16v11H9l-5 4z"/><path d="M12 8v5M9.5 10.5h5"/></svg></i>他先说一句</div>
+<div><i><svg class="ic" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="9" cy="10" r="1.5"/><path d="M21 16l-5-5-8 8"/></svg></i>照片</div>
+<div><i><svg class="ic" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M5 5l2 2M17 17l2 2M5 19l2-2M17 7l2-2"/></svg></i>聊天设置</div>
+</div>
+</div><div class="cap">④ 对话：ins 那种紫蓝渐变气泡，能分享帖子过来<br>输入框左边的 + 点开：让他回 / 他先说一句 / 照片 / 聊天设置<br>键盘上面不放东西了</div></div>
+
+<!-- 5 长按 + 设置 -->
+<div><div class="ph">
+<div class="chtop"><svg class="ic" viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg><i style="background:linear-gradient(160deg,#c9d6ea,#7d93b8)"></i><div><b>seojun_vtx</b><small>Vertex 韩书俊</small></div></div>
+<div class="msgs">
+<div class="m l">上次伴舞那个是你吧<small>지난번 백댄서 너 맞지?</small></div>
+<div class="m l">中间那个</div>
+<div class="m r">……被认出来了</div>
+</div>
+<div class="lp"></div>
+<div class="lpm" style="top:200px"><div>换一条<span><svg class="ic" viewBox="0 0 24 24"><path d="M4 12a8 8 0 0 1 14-5.3L20 9M20 4v5h-5M20 12a8 8 0 0 1-14 5.3L4 15M4 20v-5h5"/></svg></span></div><div>编辑<span><svg class="ic" viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16z"/></svg></span></div><div>复制<span><svg class="ic" viewBox="0 0 24 24"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V4H4v12h4"/></svg></span></div><div class="red">删除<span><svg class="ic" viewBox="0 0 24 24"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/></svg></span></div></div>
+<div class="set">
+<div class="hd">聊天设置</div>
+<div class="np-row"><span>自动回复<small>开着的话你发完消息，他过一会儿自己回；<br>关着就等你点「让他回」</small></span><span class="tg off"></span></div>
+<div class="np-row"><span>他会主动来找你<small>世界里有事时他自己发私信过来</small></span><span class="tg"></span></div>
+</div>
+</div><div class="cap">⑤ 长按他的消息：换一条 / 编辑 / 复制 / 删除<br>+ 里的「聊天设置」：自动回复开关（默认关）</div></div>
+</body></html>

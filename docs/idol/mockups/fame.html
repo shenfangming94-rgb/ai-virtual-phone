@@ -1,0 +1,120 @@
+<!doctype html><html><head><meta charset="utf-8"><style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:#d9dce1;font-family:"PingFang SC","Hiragino Sans GB","Apple SD Gothic Neo",-apple-system,sans-serif;display:flex;gap:26px;padding:26px;align-items:flex-start}
+.ph{width:390px;height:844px;border-radius:50px;overflow:hidden;position:relative;box-shadow:0 10px 40px rgba(0,0,0,.18);border:9px solid #111}
+.cap{text-align:center;font-size:12px;color:#555;margin-top:10px;width:390px;line-height:1.6}
+.bg{position:absolute;inset:0;background:linear-gradient(170deg,#ffd9e4 0%,#f3a9c0 30%,#c97a9a 62%,#7b4a6a 100%)}
+.in{position:relative;padding:52px 0 0;color:#fff}
+.gd{background:rgba(255,255,255,.18);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);border:1px solid rgba(255,255,255,.28)}
+.top{display:flex;align-items:center;justify-content:space-between;padding:0 16px 6px}
+.circ{width:44px;height:44px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:22px}
+.cd{margin:0 14px 10px;border-radius:24px;padding:12px 18px}
+.k{font-size:13px;color:rgba(255,255,255,.72);margin-bottom:6px;display:flex;justify-content:space-between;align-items:center}
+.k em{font-style:normal;font-size:12px;color:rgba(255,255,255,.8)}
+.idc{height:110px;border-radius:14px;background:linear-gradient(135deg,#f5f0ff,#e4dcf7);color:#5b4f7a;display:flex;align-items:center;gap:12px;padding:12px;font-size:12px}
+.idc i{width:62px;height:80px;border-radius:6px;background:linear-gradient(160deg,#e8d3e0,#c8a6bd)}
+.big{display:flex;align-items:baseline;gap:8px}
+.big b{font-size:40px;font-weight:700;line-height:1}
+.big span{font-size:15px;font-weight:600}
+.tier{display:inline-block;font-size:12px;padding:3px 10px;border-radius:20px;background:rgba(255,255,255,.28);margin-left:auto}
+.bar{position:relative;height:8px;border-radius:4px;margin:14px 0 6px;background:linear-gradient(90deg,rgba(255,255,255,.35) 0 20%,rgba(255,255,255,.55) 20% 50%,rgba(255,255,255,.8) 50%)}
+.bar .base{position:absolute;left:0;top:0;bottom:0;border-radius:4px;background:#fff}
+.bar .heat{position:absolute;top:0;bottom:0;border-radius:0 4px 4px 0;background:repeating-linear-gradient(45deg,#ffe066 0 4px,#ffc94d 4px 8px)}
+.bar .tick{position:absolute;top:-4px;width:1.5px;height:16px;background:rgba(255,255,255,.9)}
+.lbl{display:flex;font-size:10.5px;color:rgba(255,255,255,.75)}
+.lbl span{position:relative}
+.sub{display:flex;gap:14px;font-size:12.5px;margin-top:8px;color:rgba(255,255,255,.9)}
+.sub i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:5px;vertical-align:-1px}
+.more{font-size:12.5px;color:rgba(255,255,255,.8);margin-top:10px}
+.row{display:flex;justify-content:space-between;font-size:13.5px;padding:8px 0;border-top:.5px solid rgba(255,255,255,.25)}
+.row:first-of-type{border-top:0}
+.row small{display:block;font-size:11.5px;color:rgba(255,255,255,.65);margin-top:2px}
+.row b{font-weight:600;white-space:nowrap}
+.up{color:#fff3a6}.dn{color:#ffd0d6}
+.tr{font-size:13px;line-height:1.6;padding:6px 0;border-top:.5px solid rgba(255,255,255,.25)}
+.tr:first-of-type{border-top:0}
+.tr b{display:inline-block;width:82px}
+.tr.on{color:#fff}.tr:not(.on){color:rgba(255,255,255,.62)}
+.sl{margin-top:8px}
+.sl .rail{position:relative;height:6px;border-radius:3px;background:rgba(255,255,255,.35)}
+.sl .fill{position:absolute;left:0;top:0;bottom:0;border-radius:3px;background:#fff}
+.sl .kn{position:absolute;top:-8px;width:22px;height:22px;border-radius:50%;background:#fff;box-shadow:0 2px 6px rgba(0,0,0,.2)}
+.btn{margin-top:12px;text-align:center;border-radius:20px;padding:10px;font-size:14px;background:rgba(255,255,255,.28)}
+.name{text-align:center;font-size:26px;font-weight:700;margin:2px 0}
+.role{text-align:center;font-size:13px;color:rgba(255,255,255,.8);margin-bottom:12px}
+.av{width:88px;height:88px;border-radius:50%;margin:0 auto 8px;background:linear-gradient(160deg,#ffe3ec,#e59ab4);border:2px solid rgba(255,255,255,.6)}
+</style></head><body>
+
+<!-- 1 我的名片上的卡 -->
+<div><div class="ph"><div class="bg"></div><div class="in">
+<div class="top"><div class="circ gd">‹</div><div class="circ gd" style="font-size:15px">编辑</div></div>
+<div class="av"></div>
+<div class="name">Flora</div>
+<div class="role">BLUE 娱乐 练习生 · 第 46 天</div>
+<div class="cd gd"><div class="k">练习生证</div><div class="idc"><i></i><div>연습생 등록증<br>练习生登记证<br><br>No. 2015-0312</div></div></div>
+<div class="cd gd">
+<div class="k">关注度<em>›</em></div>
+<div class="big"><b>18</b><span>普通人</span><span class="tier">差 2 分到「小有人知」</span></div>
+<div class="bar"><div class="base" style="width:9%"></div><div class="heat" style="left:9%;width:9%"></div><div class="tick" style="left:20%"></div><div class="tick" style="left:50%"></div></div>
+<div class="lbl"><span style="width:20%">普通人</span><span style="width:30%">小有人知</span><span>公众人物</span></div>
+<div class="sub"><span><i style="background:#fff"></i>底子 9</span><span><i style="background:#ffd34d"></i>热度 9 · 两周后约剩 4</span></div>
+<div class="more">最近：伴舞视频被转了几百次</div>
+</div>
+</div></div><div class="cap">① 通讯录「我的名片」里，练习生证下面多一张关注度卡<br>白色是底子，黄色斜纹是热度（会退）</div></div>
+
+<!-- 2 点开详情 -->
+<div><div class="ph"><div class="bg"></div><div class="in">
+<div class="top"><div class="circ gd">‹</div><b style="font-size:17px">关注度</b><div style="width:44px"></div></div>
+<div class="cd gd">
+<div class="big"><b>18</b><span>普通人</span></div>
+<div class="sub"><span><i style="background:#fff"></i>底子 9</span><span><i style="background:#ffd34d"></i>热度 9</span></div>
+</div>
+<div class="cd gd">
+<div class="k">三档是什么样</div>
+<div class="tr on"><b>0～19 普通人</b>评论区都是陌生人，没人认识你</div>
+<div class="tr"><b>20～49 小有人知</b>偶尔有路透粉、考古粉认出你，有一小撮人在关注</div>
+<div class="tr"><b>50+ 公众人物</b>出道了也算。评论区多是粉丝，有人开帖讨论你</div>
+</div>
+<div class="cd gd">
+<div class="k">最近的变化</div>
+<div class="row"><span>伴舞视频被转了几百次<small>3月28日 · 中事</small></span><b class="up">热度 +5 · 底子 +1</b></div>
+<div class="row"><span>公司频道上传了练习生舞蹈视频<small>3月20日 · 中事</small></span><b class="up">热度 +5 · 底子 +1</b></div>
+<div class="row"><span>热度慢慢退了<small>3月14日～27日</small></span><b class="dn">热度 −3</b></div>
+<div class="row"><span>开局 · 普通家庭<small>3月1日</small></span><b>底子 5</b></div>
+</div>
+<div class="cd gd">
+<div class="k">自己改<em>世界算得不对就拖一下</em></div>
+<div class="sl"><div class="rail"><div class="fill" style="width:18%"></div><div class="kn" style="left:calc(18% - 11px)"></div></div></div>
+<div class="btn">改成 18</div>
+</div>
+</div></div><div class="cap">② 点开：三档说明、每次涨跌记一行（几月几号、大事中事小事）、<br>可以自己拖着改</div></div>
+
+<!-- 3 童星开局 -->
+<div><div class="ph"><div class="bg" style="background:linear-gradient(170deg,#d9e6ff 0%,#9fb8ef 30%,#6d7fc4 62%,#3d3f7a 100%)"></div><div class="in">
+<div class="top"><div class="circ gd">‹</div><b style="font-size:17px">关注度</b><div style="width:44px"></div></div>
+<div class="cd gd">
+<div class="big"><b>55</b><span>公众人物</span></div>
+<div class="bar"><div class="base" style="width:55%"></div><div class="tick" style="left:20%"></div><div class="tick" style="left:50%"></div></div>
+<div class="lbl"><span style="width:20%">普通人</span><span style="width:30%">小有人知</span><span>公众人物</span></div>
+<div class="sub"><span><i style="background:#fff"></i>底子 55</span><span><i style="background:#ffd34d"></i>热度 0</span></div>
+</div>
+<div class="cd gd">
+<div class="k">三档是什么样</div>
+<div class="tr"><b>0～19 普通人</b>评论区都是陌生人，没人认识你</div>
+<div class="tr"><b>20～49 小有人知</b>偶尔有路透粉、考古粉认出你，有一小撮人在关注</div>
+<div class="tr on"><b>50+ 公众人物</b>出道了也算。评论区多是粉丝，有人开帖讨论你</div>
+</div>
+<div class="cd gd">
+<div class="k">最近的变化</div>
+<div class="row"><span>开局 · 童星<small>大家记得你小时候的样子</small></span><b>底子 55</b></div>
+</div>
+<div class="cd gd">
+<div class="k">开局底子</div>
+<div class="tr on" style="color:#fff"><b>童星</b>55</div>
+<div class="tr on" style="color:#fff"><b>星二代</b>50</div>
+<div class="tr on" style="color:#fff"><b>富二代 / 财阀</b>30</div>
+<div class="tr on" style="color:#fff"><b>普通 / 自己写</b>5</div>
+</div>
+</div></div><div class="cap">③ 童星开局：一上来就是公众人物<br>（最后那块「开局底子」只是给你看分数用的，做的时候不放）</div></div>
+
+</body></html>

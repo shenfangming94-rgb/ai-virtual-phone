@@ -16,7 +16,9 @@ import { loadCharacters } from "./character-storage";
 import { getProfile, loadProfiles, relationOf, saveProfile, type IdolProfile, type LeaveInfo } from "./idol-people";
 import { loadCareer, saveCareer, type CareerNode } from "./idol-career";
 import { loadChatSessions, saveChatSessions, pushChatMessage, loadChatContacts } from "./chat-storage";
-import { crowdOf, removeCrowd } from "./idol-crowd";
+import { crowdOf, removeCrowd, promoteCrowd } from "./idol-crowd";
+import { fleshOut } from "./idol-kakao";
+import { addWorldFeed } from "./idol-events";
 import { queueMessage } from "./idol-reminders";
 import { kvGet, kvSet } from "./kv-db";
 
@@ -177,7 +179,12 @@ function leaveNow(charId: string, notifyGroup = true): void {
     }
   }
   const career = loadCareer();
-  if (career.roommates?.includes(charId)) saveCareer({ ...career, roommates: career.roommates.filter(id => id !== charId) });
+  if (career.roommates?.includes(charId)) {
+    saveCareer({ ...career, roommates: career.roommates.filter(id => id !== charId) });
+    // 床位空出来：两到四周后公司安排人搬进来，提前几天老师说一声
+    const at = now + rnd(14, 28) * DAY;
+    kvSet(ROOM_KEY, JSON.stringify([...loadRefills(), { at, noticeAt: at - rnd(3, 6) * DAY, noticed: false, leftName: c.name }]));
+  }
   const wasRole = p.role;
   saveProfile({
     ...p,
@@ -193,6 +200,48 @@ function leaveNow(charId: string, notifyGroup = true): void {
   if (friend && ["熟人", ...CLOSE].includes(rel) && !(CLOSE.includes(rel) || isCrush(p))) {
     queueMessage(charId, `你今天离开公司了（${dec.why}）。给她发最后一条消息，一两句，按你的性格。`, rnd(1, 5) * HOUR);
   }
+}
+
+// ── 新室友 ──
+
+const ROOM_KEY = "idol_roommate_refill_v1";
+type Refill = { at: number; noticeAt: number; noticed: boolean; leftName: string };
+function loadRefills(): Refill[] { try { return JSON.parse(kvGet(ROOM_KEY) || "[]") as Refill[]; } catch { return []; } }
+
+/** 到日子：从练习生群里挑一个人搬进来（别的宿舍调过来的同期，或者刚进公司的） */
+function moveIn(r: Refill): void {
+  const { groupId } = kakao();
+  const session = groupId ? loadChatSessions().find(x => x.id === groupId) : undefined;
+  if (!groupId || !session) return;
+  const pool = crowdOf(groupId).filter(m => !m.promotedTo);
+  const m = pool[Math.floor(Math.random() * pool.length)];
+  if (!m) return;
+  const id = promoteCrowd(groupId, m.id, session.groupName ?? "练习生群");
+  if (!id) return;
+  const p = getProfile(id);
+  const now = Date.now();
+  saveProfile({ ...p, layer: "main", role: p.role ? `${p.role}，她的新室友` : "同期练习生，她的新室友", met: true, metAt: { at: now, place: "宿舍" }, relation: p.relation ?? "认识" });
+  const career = loadCareer();
+  saveCareer({ ...career, roommates: [...new Set([...(career.roommates ?? []), id])] });
+  addWorldFeed(`${m.name}搬进了她的宿舍，睡${r.leftName}以前那张床`, now);
+  void fleshOut(id).catch(() => undefined);
+}
+
+function refillTick(now: number): void {
+  const list = loadRefills();
+  if (!list.length) return;
+  let changed = false;
+  const keep: Refill[] = [];
+  for (const r of list) {
+    if (!r.noticed && now >= r.noticeAt) {
+      const t = kakao().teacherId;
+      if (t) queueMessage(t, `过几天（${new Date(r.at).getMonth() + 1}月${new Date(r.at).getDate()}日左右）会有一个练习生搬进她的宿舍，睡${r.leftName}走后空出来的床。私聊通知她一声，按你的性格，一两句。`, rnd(0.5, 3) * HOUR);
+      r.noticed = true; changed = true;
+    }
+    if (now >= r.at) { moveIn(r); changed = true; continue; }
+    keep.push(r);
+  }
+  if (changed) kvSet(ROOM_KEY, JSON.stringify(keep));
 }
 
 /** 每 5 秒：看谁该动摇、该决定、该走了 */
@@ -218,6 +267,7 @@ export function leaveTick(): void {
       if (now >= l.decided.leaveAt) leaveNow(p.charId);
     }
   }
+  refillTick(now);
   // 路人退群
   const pend = loadPending();
   const due = pend.filter(x => now >= x.at);

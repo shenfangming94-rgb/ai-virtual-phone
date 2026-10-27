@@ -35,6 +35,15 @@ await p.evaluate(async (now) => {
   await new Promise(r => tx.oncomplete = r);
 }, now);
 await p.reload({ waitUntil: "networkidle2" }); await sleep(5000);
+const gid = await p.evaluate(() => window.__idolLeave.group("JYP 新人练习生", ["t1", "c2"])); await sleep(1500);
+await p.evaluate(async gid => {
+  const db = await new Promise(res => { const r = indexedDB.open("AiPhoneKvDB"); r.onsuccess = () => res(r.result); });
+  const tx = db.transaction("entries", "readwrite"); const st = tx.objectStore("entries");
+  st.put({ key: "idol_kakao_v1", value: JSON.stringify({ incoming: [], noticed: [], teacherId: "t1", groupId: gid }) });
+  st.put({ key: "idol_group_crowd_v1", value: JSON.stringify({ [gid]: [{ id: "crowd_a", name: "韩夏恩", role: "同期练习生" }, { id: "crowd_b", name: "吴智秀", role: "同期练习生" }] }) });
+  await new Promise(r => tx.oncomplete = r);
+}, gid);
+await p.reload({ waitUntil: "networkidle2" }); await sleep(5000);
 const setT = iso => p.evaluate(iso => { const wc = window.__worldClock; wc.offset = new Date(iso).getTime() - wc.RealDate.now(); }, iso);
 await setT("2015-06-01T10:00:00");
 await p.evaluate(() => { const L = window.__idolLeave; L.dm("c2"); L.nudge("c2", 1.5, "月末评价排到第 38 名"); L.tick(); }); await sleep(2500);
@@ -49,6 +58,12 @@ let car = await kv("idol_career_v1"); console.log("   invite", car.nodes.filter(
 await p.evaluate(at => { const wc = window.__worldClock; wc.offset = at + 3600e3 - wc.RealDate.now(); window.__idolLeave.tick(); }, dec.leaveAt); await sleep(1500);
 pp = await kv("idol_people_v1"); car = await kv("idol_career_v1");
 console.log("3 phase", pp.c2.leave.phase, "| role", pp.c2.role, "| group", pp.c2.group, "| roommates", car.roommates);
+// 新室友：跳到通知、搬进来
+const rf = await kv("idol_roommate_refill_v1"); console.log("4 refill", rf.map(r => new Date(r.at).toISOString()));
+await p.evaluate(at => { const wc = window.__worldClock; wc.offset = at + 3600e3 - wc.RealDate.now(); window.__idolLeave.tick(); }, rf[0].noticeAt); await sleep(800);
+rem = await kv("idol_reminders_v1"); console.log("   teacher note", (rem?.outbox ?? []).filter(o => o.charId === "t1").map(o => o.instruction.slice(0, 40)));
+await p.evaluate(at => { const wc = window.__worldClock; wc.offset = at + 3600e3 - wc.RealDate.now(); window.__idolLeave.tick(); }, rf[0].at); await sleep(1500);
+car = await kv("idol_career_v1"); pp = await kv("idol_people_v1"); console.log("5 roommates", car.roommates, car.roommates.map(id => pp[id]?.role));
 // 名片
 await p.evaluate(() => document.querySelector(".lock-swipe")?.click()); await sleep(800);
 await p.evaluate(() => window.postMessage({ type: "OS_CMD", action: "open_app", appId: "contacts" }, "*")); await sleep(2500);

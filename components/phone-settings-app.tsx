@@ -458,6 +458,8 @@ export function PhoneSettingsApp({ onClose, onNotice }: SettingsPageProps) {
                             </div>
                             <div className="mt-[10px]">
                                 <FeaturedCard item={lockFeaturedItem} />
+                            </div>
+                            <div className="mt-[10px]">
                                 <FeaturedCard item={savesFeaturedItem} />
                             </div>
                         </div>

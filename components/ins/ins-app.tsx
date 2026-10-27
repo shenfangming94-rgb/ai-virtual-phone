@@ -138,6 +138,13 @@ function Carousel({ post, onNotice }: { post: Post; onNotice: Notice }) {
   );
 }
 
+/** 图标旁的数：真 ins 那样 1,234 / 4.8万 */
+function count(n: number): string {
+  if (n >= 1e8) return `${+(n / 1e8).toFixed(1)}亿`;
+  if (n >= 1e4) return `${+(n / 1e4).toFixed(1)}万`;
+  return n.toLocaleString();
+}
+
 function PostCard({ post, onOpen, onNotice, mine }: { post: Post; onOpen: (id: string) => void; onNotice: Notice; mine?: boolean }) {
   const a = accOf(post.by);
   const s = loadIns();
@@ -153,13 +160,12 @@ function PostCard({ post, onOpen, onNotice, mine }: { post: Post; onOpen: (id: s
       </div>
       <Carousel post={post} onNotice={onNotice} />
       <div className="cp-instagram-post-actions">
-        <button type="button" onClick={() => toggleLike(post.id)}><Heart size={23} strokeWidth={2.1} fill={post.liked ? "#ff3040" : "none"} color={post.liked ? "#ff3040" : "currentColor"} /></button>
-        <button type="button" onClick={() => setCm(true)}><MessageCircle size={23} strokeWidth={2.1} /></button>
+        <button type="button" onClick={() => toggleLike(post.id)}><Heart size={23} strokeWidth={2.1} fill={post.liked ? "#ff3040" : "none"} color={post.liked ? "#ff3040" : "currentColor"} />{!post.hideLikes && post.likes > 0 ? <span>{count(post.likes)}</span> : null}</button>
+        <button type="button" onClick={() => setCm(true)}><MessageCircle size={23} strokeWidth={2.1} />{post.comments.length ? <span>{count(post.comments.length)}</span> : null}</button>
         <button type="button"><Send size={22} strokeWidth={2.1} /></button>
         <button type="button"><Bookmark size={23} strokeWidth={2.1} /></button>
       </div>
       <div className="cp-instagram-post-copy">
-        {!post.hideLikes ? <strong>{post.likes.toLocaleString()} 次赞</strong> : null}
         {post.cap ? <p><b>{a?.handle}</b> {post.cap}</p> : null}
         {post.capZh ? <div className="ig-tr">{post.capZh}</div> : null}
         {post.comments.length ? <button type="button" onClick={() => setCm(true)}>查看全部 {post.comments.length} 条评论</button> : null}

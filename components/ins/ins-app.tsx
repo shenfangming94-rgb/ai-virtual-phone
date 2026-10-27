@@ -13,7 +13,7 @@ import {
 import {
   BGS, INS_EVENT, ME, accOf, activeStories, answerIncoming, canSee, charAvatar, dmAllowed, dmOf, dmReplying, deleteDm, editDm, fillFeed, follow, generateImg, hidePost,
   loadIns, markNotesSeen, maybeKnow, myPost, myStory, needsFill, ownerName, refreshExplore, relationTo, replyDm, searchAccs, sendDm, setDmFlags, setMe, setPrivate,
-  unfollow, unarchive, unseenNotes, type Img, type InsAcc, type Post, type Story,
+  unfollow, unarchive, unseenNotes, toggleLike, myComment, moreComments, commentsBusy, sendDmImg, type Img, type InsAcc, type Post, type Story,
 } from "@/lib/idol-ins";
 import { loadCharacters } from "@/lib/character-storage";
 import { loadProfiles } from "@/lib/idol-people";
@@ -104,6 +104,7 @@ function PostCard({ post, onOpen, onNotice, mine }: { post: Post; onOpen: (id: s
   const s = loadIns();
   const [cm, setCm] = useState(false);
   const [menu, setMenu] = useState(false);
+  const [draft, setDraft] = useState("");
   const gen = (i: number) => void generateImg(post.id, i).catch(e => onNotice?.(e instanceof Error ? e.message : "生图失败"));
   return (
     <article className="cp-instagram-feed-post">
@@ -114,7 +115,7 @@ function PostCard({ post, onOpen, onNotice, mine }: { post: Post; onOpen: (id: s
       </div>
       <Carousel post={post} onGen={gen} />
       <div className="cp-instagram-post-actions">
-        <button type="button"><Heart size={23} strokeWidth={2.1} /></button>
+        <button type="button" onClick={() => toggleLike(post.id)}><Heart size={23} strokeWidth={2.1} fill={post.liked ? "#ff3040" : "none"} color={post.liked ? "#ff3040" : "currentColor"} /></button>
         <button type="button" onClick={() => setCm(true)}><MessageCircle size={23} strokeWidth={2.1} /></button>
         <button type="button"><Send size={22} strokeWidth={2.1} /></button>
         <button type="button"><Bookmark size={23} strokeWidth={2.1} /></button>
@@ -150,7 +151,19 @@ function PostCard({ post, onOpen, onNotice, mine }: { post: Post; onOpen: (id: s
                 );
               })}
               {!post.comments.length ? <div className="ig-empty">{post.noComments ? "评论已关闭" : "还没有评论"}</div> : null}
+              {!post.noComments ? (
+                <div className="ig-cm-acts">
+                  <button type="button" disabled={commentsBusy(post.id)} onClick={() => void moreComments(post.id, "more").catch(e => onNotice?.(e instanceof Error ? e.message : "没加载出来"))}>{commentsBusy(post.id) ? "加载中…" : "加载更多评论"}</button>
+                </div>
+              ) : null}
             </div>
+            {!post.noComments ? (
+              <div className="cp-instagram-comment-input">
+                <Avatar acc={accOf(ME)} size={30} />
+                <input value={draft} onChange={e => setDraft(e.target.value)} onKeyDown={e => { if (e.key === "Enter" && draft.trim()) { myComment(post.id, draft.trim()); setDraft(""); } }} placeholder={`给 ${a?.handle} 留言…`} />
+                <button type="button" className="ig-link" disabled={!draft.trim()} onClick={() => { myComment(post.id, draft.trim()); setDraft(""); }}>发布</button>
+              </div>
+            ) : null}
           </section>
         </div>
       ) : null}
@@ -550,7 +563,7 @@ function DmList({ req, onChat, onReq, tabbar, onBack }: { req?: boolean; onChat:
       <div className="ig-scroll">
         {!req ? <div className="ig-dmtabs"><span className="on">消息</span>{reqN ? <button type="button" onClick={onReq}>请求（{reqN}）</button> : null}</div> : null}
         {all.map(([id, d]) => { const a = accOf(id); const last = d.msgs[d.msgs.length - 1]; const un = !last.me && last.at > (d.lastMine ?? 0); return (
-          <button type="button" className={`ig-th${un ? " un" : ""}`} key={id} onClick={() => onChat(id)}><Avatar acc={a} size={54} /><div><b>{a?.handle}</b><small>{last.me ? "你：" : ""}{last.postId ? "分享了一条帖子" : last.text} · {ago(last.at)}</small></div></button>
+          <button type="button" className={`ig-th${un ? " un" : ""}`} key={id} onClick={() => onChat(id)}><Avatar acc={a} size={54} /><div><b>{a?.handle}</b><small>{last.me ? "你：" : ""}{last.postId ? "分享了一条帖子" : last.img && !last.text ? "发了一张照片" : last.text} · {ago(last.at)}</small></div></button>
         ); })}
         {!all.length ? <div className="ig-empty">{req ? "没有消息请求" : "还没有私信。去别人主页点「发消息」"}</div> : null}
         {!req ? <div className="ig-note">只有还没加 KakaoTalk 的人会在这里找你</div> : null}
@@ -569,6 +582,9 @@ function Chat({ id, onBack, onNotice }: { id: string; onBack: () => void; onNoti
   const [sett, setSett] = useState(false);
   const [menu, setMenu] = useState<string | null>(null);
   const [edit, setEdit] = useState<{ id: string; text: string } | null>(null);
+  const [pick, setPick] = useState(false);
+  const [pdesc, setPdesc] = useState("");
+  const pfile = useRef<HTMLInputElement>(null);
   const end = useRef<HTMLDivElement>(null);
   const press = useRef<number | null>(null);
   useEffect(() => { end.current?.scrollIntoView({ block: "end" }); }, [d.msgs.length]);
@@ -591,7 +607,8 @@ function Chat({ id, onBack, onNotice }: { id: string; onBack: () => void; onNoti
           return (
             <div key={x.id} className="ig-mrow">
               {showT ? <div className="ig-tm">{new Date(x.at).getMonth() + 1}月{new Date(x.at).getDate()}日 {String(new Date(x.at).getHours()).padStart(2, "0")}:{String(new Date(x.at).getMinutes()).padStart(2, "0")}</div> : null}
-              <div className={`ig-m ${x.me ? "r" : "l"}`} {...hold(x.id)}>{x.text}{x.zh ? <small>{x.zh}</small> : null}</div>
+              {x.img ? <div className={`ig-mimg ${x.me ? "r" : "l"}`} {...hold(x.id)}><Pic img={x.img} ratio="3/4" small /></div> : null}
+              {x.text ? <div className={`ig-m ${x.me ? "r" : "l"}`} {...hold(x.id)}>{x.text}{x.zh ? <small>{x.zh}</small> : null}</div> : null}
             </div>
           );
         })}
@@ -603,7 +620,7 @@ function Chat({ id, onBack, onNotice }: { id: string; onBack: () => void; onNoti
         <div className="ig-panel">
           <button type="button" onClick={() => { setPanel(false); reply(); }}><i><MessageCircle size={22} /></i>让他回</button>
           <button type="button" onClick={() => { setPanel(false); reply({ first: true }); }}><i><Plus size={22} /></i>他先说一句</button>
-          <button type="button" onClick={() => onNotice?.("私信发照片下一版做")}><i><ImageIcon size={22} /></i>照片</button>
+          <button type="button" onClick={() => { setPanel(false); setPick(true); }}><i><ImageIcon size={22} /></i>照片</button>
           <button type="button" onClick={() => { setPanel(false); setSett(true); }}><i><Settings size={22} /></i>聊天设置</button>
         </div>
       ) : null}
@@ -622,6 +639,19 @@ function Chat({ id, onBack, onNotice }: { id: string; onBack: () => void; onNoti
           <div className="ig-sheet ig-edit" onClick={e => e.stopPropagation()}>
             <textarea rows={3} value={edit.text} onChange={e => setEdit({ ...edit, text: e.target.value })} />
             <button type="button" className="ig-blue-btn" onClick={() => { editDm(id, edit.id, edit.text); setEdit(null); }}>改好了</button>
+          </div>
+        </div>
+      ) : null}
+      {pick ? (
+        <div className="ig-sheet-bk" onClick={() => setPick(false)}>
+          <div className="ig-sheet ig-edit" onClick={e => e.stopPropagation()}>
+            <div className="ig-edit-h"><b>发照片</b></div>
+            <textarea rows={2} value={pdesc} onChange={e => setPdesc(e.target.value)} placeholder="写画面：比如「便利店的三角饭团」" />
+            <button type="button" className="ig-blue-btn" disabled={!pdesc.trim()} onClick={() => { sendDmImg(id, { desc: pdesc.trim(), who: [] }); setPdesc(""); setPick(false); }}>发这张描述卡</button>
+            <button type="button" className="ig-blue-btn ghost" onClick={() => pfile.current?.click()}>从手机里上传</button>
+            <input ref={pfile} type="file" accept="image/*" hidden onChange={async e => { const f = e.target.files?.[0]; e.target.value = ""; if (!f) return; const ref = await storeMediaBlob(f, f.type || "image/jpeg", "image"); sendDmImg(id, { desc: pdesc.trim() || "（她发来一张照片）", src: ref }); setPdesc(""); setPick(false); }} />
+            <div className="ig-hint">相册里的照片：</div>
+            <div className="ig-grid">{loadPhotos().filter(p => p.inLibrary).slice(-12).reverse().map(p => <button type="button" key={p.id} onClick={() => { sendDmImg(id, { desc: p.desc || "一张照片", src: p.src }); setPick(false); }}><Pic img={{ desc: p.desc, src: p.src }} ratio="1/1" small /></button>)}</div>
           </div>
         </div>
       ) : null}

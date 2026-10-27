@@ -151,6 +151,15 @@
 .ig-reqbar button { flex: 1; text-align: center; padding: 7px !important; border-radius: 8px; background: #fff !important; font-weight: 600; font-size: 13px; }
 .ig-reqbar button:first-child { background: #0095f6 !important; color: #fff !important; }
 
+.ig-mimg { width: 150px; border-radius: 16px; overflow: hidden; }
+.ig-mimg.l { align-self: flex-start; } .ig-mimg.r { align-self: flex-end; }
+.ig-cm-acts { display: flex; justify-content: center; gap: 10px; padding: 12px 0 4px; }
+.ig-cm-acts button { font-size: 13px; color: #555 !important; border: 1px solid #dbdbdb !important; border-radius: 16px; padding: 6px 14px !important; }
+.ig-cm-acts button:disabled { opacity: 0.5; }
+.ig-app .cp-instagram-comment-input input { flex: 1; border: 0; outline: 0; background: transparent; font-size: 14px; }
+.ig-blue-btn.ghost { background: #efefef !important; color: #111 !important; margin-top: 8px; }
+.ig-blue-btn:disabled { opacity: 0.5; }
+
 /* 弹层 */
 .ig-sheet-bk { position: absolute; inset: 0; z-index: 60; background: rgba(0, 0, 0, 0.3); display: flex; align-items: flex-end; }
 .ig-sheet { width: 100%; background: #fff; border-radius: 18px 18px 0 0; padding: 8px 0 calc(24px + env(safe-area-inset-bottom, 0px)); }

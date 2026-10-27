@@ -46,6 +46,7 @@ import {
 import { ageAtStart, loadTraineeCard, talentLabels } from "@/lib/trainee-card";
 import { SavesPanel } from "@/components/settings/saves-settings";
 import { TraineeIdMini } from "@/components/opening/trainee-id-mini";
+import { FameCardBlock } from "./fame-card";
 import { loadUserIdentities, resolveUserIdentity, saveUserIdentities, USER_IDENTITIES_UPDATED_EVENT } from "@/lib/settings-storage";
 
 type Notice = ((message: string) => void) | undefined;
@@ -806,6 +807,7 @@ function MeView({ onBack, onNotice }: { onBack: () => void; onNotice: Notice }) 
           )}
         </div>
         <TraineeCardBlock />
+        <FameCardBlock />
       </div>
     </div>
   );

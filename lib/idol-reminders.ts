@@ -80,7 +80,7 @@ export async function checkNode(id: string, result: string): Promise<void> {
   const teacher = teacherOf();
   if (node.kind !== "custom" && node.kind !== "date") noteToPerson(teacher?.id, `她${node.title}：${text || "照常完成"}`, node.dueAt, node.place);
   if (node.kind === "date") noteToPerson(node.fromId, `一起去了「${node.title}」${text ? `：${text}` : ""}`, node.dueAt, node.place);
-  if (node.kind === "chance") addFame(5);
+  if (node.kind === "chance") addFame(5, node.title);
   recordNodeDone(node, text);
   await completeNode(id);
   await afterNodeScene(loadCareer().nodes.find(n => n.id === id), [], node.place).catch(() => undefined);

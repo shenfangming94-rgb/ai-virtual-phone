@@ -7,6 +7,7 @@
  * 跳过的日子里：不用她回的（群里、八卦、动态）按原来的时间补上；要她回的私聊在她落地时才发过来。
  */
 
+import { fameEvent, fameTotal, fameWordNow } from "./idol-fame";
 import { kvGet, kvSet } from "./kv-db";
 import { loadCharacters } from "./character-storage";
 import type { Character } from "./character-types";
@@ -35,6 +36,8 @@ export type PlannedEvent = {
   people: string[];
   lines: Line[];
   invite?: { title: string; at: number; place: string; replyBy?: number; from: string };
+  /** 这件事让她的关注度动了多少（只有外界看得到、跟她有关的事才有） */
+  fame?: "small" | "medium" | "big";
   done?: boolean;
 };
 type Post = { who: string; text: string; at: number; done?: boolean };
@@ -79,11 +82,10 @@ function parseAt(v: unknown): number | null {
 
 // ── 关注度、身体 ──
 
-export function fameNow(): number { return load().fame; }
-export function addFame(n: number): void { const s = load(); save({ ...s, fame: Math.max(0, Math.min(100, s.fame + n)) }); }
-export function fameWord(f: number): string {
-  return f >= 60 ? "已经小有名气，公开视频和路透常有人讨论" : f >= 30 ? "有一小撮固定粉丝，偶尔被路人认出来" : f >= 10 ? "公开视频底下有零星的人记得她" : "几乎没人知道她";
-}
+/** 关注度现在在 idol-fame.ts（人气 + 热度），这几个留着给旧代码用 */
+export function fameNow(): number { return fameTotal(); }
+export function addFame(n: number, text = "完成了一次机会"): void { fameEvent(n >= 5 ? "medium" : "small", text); }
+export function fameWord(_f?: number): string { return fameWordNow(); }
 
 // ── 给世界的提示：最近正在发生的事、她的身体 ──
 
@@ -159,9 +161,10 @@ const PLAN_RULES = `你在给一出韩国娱乐圈练习生的戏排接下来几
 - 机会和约要她回复的写 invite（title、at 开始时间、place、replyBy 回复截止、from 谁通知或谁约的），kind 写 chance 或 date；同时写一条通知她的消息。
 - 有人「【近况要更新】」的，在 status 里给他写新的近况：status 世界视角一句他最近在忙什么，kakao 他自己会写在 KakaoTalk 状态消息里的短句。有事发生在谁身上，也更新他的近况。
 - posts：偶尔有一两个人发 KakaoTalk 动态（练习生手机管得严，一周一两条），写他自己口吻的一两句。
+- fame：这件事让外界更多人知道她了才写，按动静写 small（路透、小帖子）/ medium（公开视频上传、给前辈伴舞、上杂志）/ big（上热搜、出了大事，好事坏事都算）；跟外界无关、别人身上的事不写。
 - 时间都写成 YYYY-MM-DD HH:mm，必须在给定的时间段里。
 JSON 格式：
-{"events":[{"at":"","kind":"small/big/setback/sick/chance/date","about":"世界视角一句话：发生了什么","people":["相关的人"],"lines":[{"where":"group/private","who":"","text":""}],"invite":null}],"newPeople":[{"name":"","role":"","gender":"男/女","age":""}],"status":[{"name":"","status":"","kakao":""}],"posts":[{"who":"","text":"","at":""}]}`;
+{"events":[{"at":"","kind":"small/big/setback/sick/chance/date","about":"世界视角一句话：发生了什么","people":["相关的人"],"lines":[{"where":"group/private","who":"","text":""}],"invite":null,"fame":null}],"newPeople":[{"name":"","role":"","gender":"男/女","age":""}],"status":[{"name":"","status":"","kakao":""}],"posts":[{"who":"","text":"","at":""}]}`;
 
 async function plan(from: number, to: number): Promise<void> {
   const s = load();
@@ -219,6 +222,7 @@ async function plan(from: number, to: number): Promise<void> {
     const ev: PlannedEvent = {
       id: uid("evt"), at: Math.max(from, Math.min(to, at)), kind, about: String(e.about ?? ""), people: (e.people ?? []).map(String),
       lines: (e.lines ?? []).filter(l => l && l.who && l.text).map(l => ({ where: l.where === "group" ? "group" : "private", who: String(l.who), text: String(l.text) })),
+      ...(["small", "medium", "big"].includes(String((e as { fame?: string }).fame)) ? { fame: (e as { fame?: string }).fame as PlannedEvent["fame"] } : {}),
       ...(e.invite && invAt ? { invite: { title: String(e.invite.title ?? "邀请"), at: invAt, place: String(e.invite.place ?? ""), replyBy: parseAt(e.invite.replyBy) ?? undefined, from: String(e.invite.from ?? "") } } : {}),
     };
     return ev;
@@ -278,6 +282,7 @@ function sayPrivate(who: string, text: string, at: number) {
 
 function runEvent(e: PlannedEvent, notify: (m: string) => void) {
   const now = Date.now();
+  if (e.fame) fameEvent(e.fame, e.about, e.at);
   const late = now - e.at > 2 * HOUR;
   // 要她回的（私聊）落地时才发，时间是现在；不用回的（群、八卦）按原来的时间
   for (const l of e.lines) {

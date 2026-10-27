@@ -1,0 +1,54 @@
+/* 关注度：名片上的证（练习生证同款，薄荷绿）+ 点开的液态玻璃详情 */
+.fm-id { display: block; width: 100%; text-align: left; position: relative; background: #fff; border-radius: 14px; overflow: hidden; border: 1px solid #cfe6dc; box-shadow: 0 10px 26px rgba(40, 90, 70, 0.18); color: #3d5a50; margin: 6px 0 4px; padding: 0 !important; font-family: "PingFang SC", "Hiragino Sans GB", "Apple SD Gothic Neo", sans-serif; }
+.fm-id-top { display: flex; align-items: center; gap: 8px; background: #dff1ea; padding: 9px 14px; }
+.fm-id-top b { font-size: 15px; letter-spacing: 2px; color: #3f6b5d; font-weight: 600; }
+.fm-id-top s { text-decoration: none; margin-left: auto; font-size: 10px; color: #6f9486; letter-spacing: 1px; }
+.fm-id-in { position: relative; padding: 12px 14px 14px; background-color: #fbfefd; background-image: radial-gradient(rgba(80, 160, 130, 0.16) 1.1px, transparent 1.3px); background-size: 14px 14px; }
+.fm-n { display: flex; align-items: baseline; gap: 8px; font-family: "Songti SC", "STSong", serif; }
+.fm-n b { font-size: 38px; line-height: 1; color: #3f6b5d; font-weight: 600; }
+.fm-n span { font-size: 14px; letter-spacing: 3px; color: #3f6b5d; }
+.fm-scale { display: flex; margin-top: 10px; border: 1px solid #cfe6dc; border-radius: 6px; overflow: hidden; font-size: 10px; text-align: center; color: #6f9486; line-height: 1.4; }
+.fm-scale div { padding: 5px 0; border-right: 1px solid #cfe6dc; }
+.fm-scale div:last-child { border-right: 0; }
+.fm-scale .on { background: #dff1ea; color: #3f6b5d; font-weight: 600; }
+.fm-meter { position: relative; height: 5px; margin: 9px 0 5px; border-radius: 3px; background: #e8f2ee; }
+.fm-meter .b { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 3px; background: #3f9b80; }
+.fm-meter .h { position: absolute; top: 0; bottom: 0; background: repeating-linear-gradient(45deg, #f2c14e 0 3px, #f7d885 3px 6px); }
+.fm-meter .tk { position: absolute; top: -3px; width: 1px; height: 11px; background: #9cc4b6; }
+.fm-legend { display: flex; gap: 12px; font-size: 10.5px; color: #6f9486; }
+.fm-legend .r { margin-left: auto; }
+.fm-legend i, .fm-sub i { display: inline-block; width: 8px; height: 8px; border-radius: 2px; margin-right: 4px; }
+.fm-legend i.p { background: #3f9b80; } .fm-legend i.h { background: #f2c14e; }
+.fm-stamp { position: absolute; right: 14px; top: 8px; width: 50px; height: 50px; border-radius: 50%; border: 1.5px solid rgba(63, 155, 128, 0.55); color: rgba(63, 155, 128, 0.75); font-size: 9px; display: flex; flex-direction: column; align-items: center; justify-content: center; transform: rotate(-12deg); letter-spacing: 1px; font-family: "Songti SC", "STSong", serif; }
+.fm-stamp b { font-size: 12px; }
+
+.fm-full { position: absolute; inset: 0; z-index: 60; background: linear-gradient(170deg, #ffd9e4 0%, #f3a9c0 30%, #c97a9a 62%, #7b4a6a 100%); color: #fff; overflow-y: auto; }
+.fm-full-in { padding: calc(var(--page-header-safe-top, 44px) + 4px) 0 40px; }
+.fm-top { display: flex; align-items: center; justify-content: space-between; padding: 0 16px 10px; }
+.fm-top b { font-size: 17px; }
+.fm-circ, .fm-cd { background: rgba(255, 255, 255, 0.18); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); border: 1px solid rgba(255, 255, 255, 0.28); }
+.fm-circ { width: 44px; height: 44px; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: #fff !important; }
+.fm-cd { margin: 0 14px 10px; border-radius: 24px; padding: 12px 18px; }
+.fm-big { display: flex; align-items: baseline; gap: 8px; }
+.fm-big b { font-size: 40px; font-weight: 700; line-height: 1; }
+.fm-big span { font-size: 15px; font-weight: 600; }
+.fm-cd .fm-meter { background: rgba(255, 255, 255, 0.35); margin-top: 12px; }
+.fm-cd .fm-meter .b { background: #fff; }
+.fm-cd .fm-meter .tk { background: rgba(255, 255, 255, 0.9); }
+.fm-sub { display: flex; gap: 14px; font-size: 12.5px; margin-top: 8px; color: rgba(255, 255, 255, 0.92); }
+.fm-sub i.p { background: #fff; } .fm-sub i.h { background: #ffd34d; }
+.fm-k { display: flex; justify-content: space-between; font-size: 13px; color: rgba(255, 255, 255, 0.72); margin-bottom: 4px; }
+.fm-k em { font-style: normal; font-size: 12px; }
+.fm-tr { display: flex; gap: 14px; font-size: 14px; padding: 8px 0; border-top: 0.5px solid rgba(255, 255, 255, 0.25); color: rgba(255, 255, 255, 0.6); }
+.fm-tr:first-of-type { border-top: 0; }
+.fm-tr b { width: 56px; font-weight: 600; }
+.fm-tr.on { color: #fff; }
+.fm-row { display: flex; justify-content: space-between; gap: 10px; font-size: 13.5px; padding: 8px 0; border-top: 0.5px solid rgba(255, 255, 255, 0.25); }
+.fm-row small { display: block; font-size: 11.5px; color: rgba(255, 255, 255, 0.65); margin-top: 2px; }
+.fm-row b { font-weight: 600; white-space: nowrap; color: #fff3a6; }
+.fm-row b.dn { color: #ffd0d6; }
+.fm-none { font-size: 13px; color: rgba(255, 255, 255, 0.7); padding: 6px 0; }
+.fm-more { display: block; width: 100%; text-align: center; font-size: 13px; padding: 8px 0 !important; color: #fff !important; opacity: 0.85; }
+.fm-range { width: 100%; margin: 10px 0 4px; accent-color: #fff; }
+.fm-btn { display: block; width: 100%; margin-top: 8px; text-align: center; border-radius: 20px; padding: 10px !important; font-size: 14px; background: rgba(255, 255, 255, 0.28) !important; color: #fff !important; }
+.fm-btn:disabled { opacity: 0.5; }

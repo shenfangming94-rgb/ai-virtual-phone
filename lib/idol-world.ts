@@ -291,7 +291,7 @@ export async function closeWorldScene(groupId: string, sessionId: string): Promi
   }
   saveSceneMeta(groupId, { ...meta, ended: true, summary });
   const node = meta.nodeId ? nodeById(meta.nodeId) : undefined;
-  if (node?.kind === "chance") addFame(5);
+  if (node?.kind === "chance") addFame(5, node.title);
   const milestone = meta.nodeId ? await completeNode(meta.nodeId) : null;
   await afterNodeScene(node, present.map(c => c.id), meta.place).catch(() => undefined);
   return { summary, recorded, firstMeet: firstMeet.filter(n => recorded.includes(n)), ...(milestone ? { milestone } : {}) };

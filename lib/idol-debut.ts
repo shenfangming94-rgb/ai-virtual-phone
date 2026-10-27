@@ -10,6 +10,7 @@
  * 一次 AI 调用把队名、定位、大家的话都定好（之后照着发，不会前后对不上）。
  */
 
+import { fameEvent } from "./idol-fame";
 import { kvGet } from "./kv-db";
 import { loadCharacters } from "./character-storage";
 import type { Character } from "./character-types";
@@ -398,6 +399,7 @@ function sendDday(d: Debut, when: number) {
   const company = companyOf(loadCareer().companyId)?.name ?? "";
   const team = d.team?.en.toUpperCase() ?? "";
   saveCareer({ ...loadCareer(), stage: "idol" });
+  fameEvent("debut", `${d.team?.en ?? "出道"} 出道`, when);
   saveDebut({ ...loadDebut()!, status: "debuted" });
   const show = loadCareer().nodes.find(n => n.kind === "debut" && n.step === "showcase");
   // 出道当天早上：之前没看的通知收起来，锁屏只留这一串

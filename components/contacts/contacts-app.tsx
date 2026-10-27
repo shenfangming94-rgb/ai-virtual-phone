@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { ChevronLeft, ChevronRight, Mail, MessageCircle, Phone, Plus, Search, Sparkles, Trash2, Video, X } from "lucide-react";
 import { fleshOut, myKakaoId, setMyKakaoId } from "@/lib/idol-kakao";
 
@@ -42,7 +43,9 @@ import {
   type FaceRelation,
   type IdolProfile,
 } from "@/lib/idol-people";
-import { ageAtStart, clearTraineeCard, loadTraineeCard, talentLabels } from "@/lib/trainee-card";
+import { ageAtStart, loadTraineeCard, talentLabels } from "@/lib/trainee-card";
+import { SavesPanel } from "@/components/settings/saves-settings";
+import { TraineeIdMini } from "@/components/opening/trainee-id-mini";
 import { loadUserIdentities, resolveUserIdentity, saveUserIdentities, USER_IDENTITIES_UPDATED_EVENT } from "@/lib/settings-storage";
 
 type Notice = ((message: string) => void) | undefined;
@@ -902,30 +905,17 @@ function TraineeCardBlock() {
   return (
     <div className="ct-block">
       <div className="ct-k">练习生证</div>
-      <div className="op-id ct-mini-id">
-        <div className="op-id-top"><img src="/idol/crest.png" alt="" /><b>TRAINEE ID CARD</b><s>练习生证</s></div>
-        <div className="op-id-in">
-          <div className="op-id-pic">{c.photo ? <img src={c.photo} alt="" /> : <span>{c.name.slice(0, 1)}</span>}</div>
-          <div className="op-id-kv">
-            <div><em>姓名</em>{c.name}</div>
-            <div><em>生日</em>{c.birthday.replace(/-/g, ".")}{age != null ? `（${age}岁）` : ""}</div>
-            <div><em>国籍</em>{c.nationality || "—"}</div>
-            <div><em>特长</em>{talentLabels(c.talents).join(" · ") || "—"}</div>
-            <div><em>所属</em>{c.company || <span className="op-dim">— 还没有 —</span>}</div>
+      <TraineeIdMini c={c} />
+      <button type="button" className="ct-wide-dark" onClick={() => setConfirm(true)}>存档 · 开新档</button>
+      {confirm && typeof document !== "undefined" && document.querySelector(".ct-app") ? createPortal(
+        <div className="sv-full" onClick={() => setConfirm(false)}>
+          <div className="sv-full-in" onClick={e => e.stopPropagation()}>
+            <div className="sv-full-head"><b>存档</b><button type="button" onClick={() => setConfirm(false)}>完成</button></div>
+            <SavesPanel />
           </div>
-        </div>
-        <div className="op-id-no">No. {c.no}</div>
-        {c.signature ? <img src={c.signature} alt="" className="ct-mini-sign" /> : null}
-      </div>
-      {confirm ? (
-        <div className="ct-reopen">
-          <span>重新填会回到开局页，聊天和别的东西都不动。</span>
-          <button type="button" onClick={() => setConfirm(false)}>算了</button>
-          <button type="button" className="is-strong" onClick={() => clearTraineeCard()}>重新填</button>
-        </div>
-      ) : (
-        <button type="button" className="ct-wide-dark" onClick={() => setConfirm(true)}>重新填写练习生证</button>
-      )}
+        </div>,
+        document.querySelector(".ct-app")!,
+      ) : null}
     </div>
   );
 }

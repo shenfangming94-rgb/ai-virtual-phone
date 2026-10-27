@@ -1112,6 +1112,8 @@ export function DesktopShell({ initialThemeProfile, initialThemeAssets }: Deskto
     const run = () => {
       // 聊天存储还没读完就写消息会被盖掉：先等它读完
       if (!isChatStorageHydrated()) { void hydrateChatStorage(); return; }
+      // 正在切档/开新档：别往里写东西
+      if ((window as unknown as { __idolSwitching?: boolean }).__idolSwitching) return;
       try { careerTick(idolNotify); } catch { /* 发动机出错不挡着用手机 */ }
       try { kakaoTick(idolNotify); } catch { /* 同上 */ }
       try { reminderTick(idolNotify); } catch { /* 同上 */ }

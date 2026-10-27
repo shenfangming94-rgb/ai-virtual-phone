@@ -196,7 +196,15 @@ Flora 要一个专门玩「爱豆模拟器」的小手机：她是想当爱豆�
 - 用户身份只留一个（练习生档案那个）：`ensureSingleIdentity` 开机跑，去掉宿主示例身份和它的设定；盖章不再替她加设定；设置里不能新增、不能删除（`IDOL_SINGLE`）
 - 通知：横幅完整弹完/点了算看过，被下一条顶掉的才留到锁屏；出道当天那串 `pin` 置顶
 - 测试 `tests/wb1.mjs`
-- **存档（多档切换）还没做**，方案在等她点头
+
+### 2.20 存档（10-27 晚，`lib/idol-saves.ts`、`components/settings/saves-settings.tsx`）
+- 一个档 = 世界里的一切：聊天/媒体/记忆/动态/剧情/查手机/住宅几个库 + kv 里除了「共用」以外的全部 + localStorage 的世界时钟
+- 共用不跟档：settings 模块的 kv（除了用户身份、角色聊天设置）、桌面美化、装好的 app 列表和图标、音乐阅读、资源集市、锁屏设置和壁纸、云备份凭证；AiPhoneSettingsDB（预设/世界书/正则）整个不动
+- 档存在单独的 IndexedDB `IdolSavesDB`（meta/data 两张表），当前档 id 在 localStorage `idol_current_save_id`
+- 开新档 `startNewSave`：存当前 → 清世界（连 localStorage 里的旧副本）→ 新 id → 钉住世界时钟 → 刷新（没证就进开局页）；切换 `switchToSave`：存当前 → 清 → 导入目标 → 钉时钟为目标的 → 刷新。切的时候 `window.__idolSwitching` 让发动机别写
+- 入口：设置「存档」卡片；通讯录我的名片「存档 · 开新档」（面板 portal 到 .ct-app）。每个档照练习生证画（`components/opening/trainee-id-mini.tsx`，名片也用它）
+- 「重新填写练习生证」按钮去掉了（换人走开新档）
+- 测试 `tests/sv1.mjs`（A→开新档→B→切回 A，人、证、世界时间、API 都对）
 
 ---
 

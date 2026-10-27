@@ -269,3 +269,36 @@
   animation: idol-banner-in 0.42s cubic-bezier(0.2, 0.9, 0.25, 1.15);
 }
 @keyframes idol-banner-in { from { transform: translateY(-120%); opacity: 0; } to { transform: none; opacity: 1; } }
+
+/* ── 存档（设置页 + 我的名片里打开） ── */
+.sv-wrap { display: flex; flex-direction: column; gap: 12px; font-family: "PingFang SC", "Hiragino Sans GB", "Apple SD Gothic Neo", sans-serif; }
+.sv-hint { font-size: 13px; line-height: 1.6; color: var(--c-text-sub, #8a8a8e); margin: 0 4px; }
+.sv-sec { font-size: 13px; color: var(--c-text-sub, #8a8a8e); margin: 8px 4px 0; }
+.sv-card { border-radius: 18px; padding: 14px 14px 12px; background: #fff; border: 0.5px solid rgba(120, 100, 180, 0.16); color: #2d2546; }
+.sv-card.is-current { border: 1.5px solid #b9a8f0; }
+.sv-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 10px; }
+.sv-head b { font-size: 15px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sv-tag { font-style: normal; font-size: 12px; color: #fff; background: #7a5cf0; border-radius: 10px; padding: 2px 8px; flex: none; }
+.sv-idcard { margin: 0 !important; }
+.sv-empty { font-size: 13px; color: #8a83a8; padding: 18px 0; text-align: center; background: #f6f4fb; border-radius: 12px; }
+.sv-world { font-size: 13px; color: #6f6890; margin-top: 10px; }
+.sv-note { font-size: 12px; color: #8a83a8; margin-top: 8px; }
+.sv-btns { display: flex; gap: 8px; justify-content: flex-end; margin-top: 12px; }
+.sv-btns button { min-width: 64px; height: 34px; padding: 0 14px; border-radius: 17px; border: 0; background: #f2f0f7; color: #2d2546; font-size: 14px; font-family: inherit; }
+.sv-btns button:disabled { opacity: 0.4; }
+.sv-btns .is-strong { background: #2d2546; color: #fff; }
+.sv-btns .is-danger { color: #e0475b; }
+.sv-sheet, .sv-working { position: fixed; inset: 0; z-index: 400; background: rgba(0, 0, 0, 0.35); display: flex; align-items: center; justify-content: center; padding: 24px; }
+.sv-sheet-in { width: 100%; max-width: 320px; background: #fff; border-radius: 20px; padding: 18px; display: flex; flex-direction: column; gap: 8px; color: #1c1c1e; }
+.sv-sheet-in b { font-size: 16px; }
+.sv-sheet-in p { font-size: 14px; line-height: 1.6; color: #555; margin: 0; }
+.sv-sheet-in input { height: 38px; border-radius: 10px; border: 0; background: #f2f2f6; padding: 0 12px; font-size: 15px; font-family: inherit; }
+.sv-sheet-in .sv-btns button { background: #f2f2f6; }
+.sv-sheet-in .sv-btns .is-strong { background: #2d2546; color: #fff; }
+.sv-working { color: #fff; font-size: 15px; }
+
+.sv-full { position: absolute; inset: 0; z-index: 60; color: #1c1c1e; text-shadow: none; background: rgba(0, 0, 0, 0.3); display: flex; align-items: flex-end; }
+.sv-full-in { width: 100%; max-height: 88%; overflow-y: auto; background: #f7f6fb; border-radius: 22px 22px 0 0; padding: 16px 16px calc(24px + env(safe-area-inset-bottom, 0px)); }
+.sv-full-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+.sv-full-head b { font-size: 17px; }
+.sv-full-head button { border: 0; background: none; color: #7a5cf0; font-size: 15px; font-family: inherit; }

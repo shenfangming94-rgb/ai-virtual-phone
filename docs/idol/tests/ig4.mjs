@@ -24,15 +24,19 @@ await p.evaluate(() => window.postMessage({ type: "OS_CMD", action: "open_app", 
 // 别人的快拍
 await p.evaluate(() => [...document.querySelectorAll(".ig-st")].find(x => x.textContent.includes("jiwon"))?.click()); await sleep(600);
 await p.screenshot({ path: OUT + "/s1_view.png" });
+await p.evaluate(() => { const i = document.querySelector(".ig-sv-reply input"); const set = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value").set; set.call(i, "加油！"); i.dispatchEvent(new Event("input", { bubbles: true })); });
+await p.evaluate(() => document.querySelectorAll(".ig-sv-reply button")[0].click()); await sleep(300);
+await p.screenshot({ path: OUT + "/s1b_reply.png" });
+await p.evaluate(() => document.querySelectorAll(".ig-sv-reply button")[1].click()); await sleep(300);
 await p.evaluate(() => document.querySelectorAll(".ig-sv-btns button")[1].click()); await sleep(400);
 // 发快拍
 await p.evaluate(() => document.querySelector(".ig-st.me").click()); await sleep(600);
 await p.screenshot({ path: OUT + "/s2_new.png" });
 const [fc] = await Promise.all([p.waitForFileChooser(), p.evaluate(() => [...document.querySelectorAll(".ig-stn-add button")].find(x => x.textContent.includes("上传")).click())]);
 await fc.accept([process.argv[3]]); await sleep(1200);
-await p.evaluate(() => { const t = document.querySelector(".ig-st-text"); const set = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value").set; set.call(t, "今天也辛苦了"); t.dispatchEvent(new Event("input", { bubbles: true })); }); await sleep(200);
+await p.evaluate(() => { const t = document.querySelector(".ig-sv-card textarea"); const set = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value").set; set.call(t, "今天也辛苦了"); t.dispatchEvent(new Event("input", { bubbles: true })); }); await sleep(200);
 await p.screenshot({ path: OUT + "/s3_up.png" });
-await p.evaluate(() => [...document.querySelectorAll(".ig-bar.dark button")].find(x => x.textContent.includes("发布")).click()); await sleep(600);
+await p.evaluate(() => document.querySelector(".ig-stn-post").click()); await sleep(600);
 await p.evaluate(() => document.querySelector(".ig-st.me").click()); await sleep(800);
 await p.screenshot({ path: OUT + "/s4_mine.png" });
 await p.evaluate(() => document.querySelectorAll(".ig-sv-btns button")[1].click()); await sleep(400);

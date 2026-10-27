@@ -54,7 +54,7 @@ export type Post = {
   wasPublic?: boolean;
   liked?: boolean;
 };
-export type Story = { id: string; by: string; at: number; text?: string; img?: Img; bg: string; viewers: { id: string; at: number }[] };
+export type Story = { id: string; by: string; at: number; text?: string; img?: Img; bg: string; viewers: { id: string; at: number }[]; liked?: boolean };
 export type Note = { id: string; at: number; kind: "like" | "comment" | "follow" | "request" | "accept" | "story"; from: string; text?: string; postId?: string };
 export type Msg = { id: string; me: boolean; text: string; zh?: string; at: number; postId?: string; img?: Img };
 export type Dm = { msgs: Msg[]; status: "request" | "open"; auto: boolean; proactive: boolean; lastMine?: number };
@@ -531,6 +531,12 @@ export function myStory(input: { text?: string; img?: Img; bg: string }) {
     return { id, at };
   });
   patch(x => ({ ...x, stories: [...x.stories, { id: uid("st"), by: ME, at: now, text: input.text, img: input.img, bg: input.bg, viewers }] }));
+}
+export function likeStory(id: string) { patch(x => ({ ...x, stories: x.stories.map(st => st.id === id ? { ...st, liked: !st.liked } : st) })); }
+/** 回复快拍：发进私信，带上那张图（没图就带上快拍上的字） */
+export function replyStory(st: Story, text: string) {
+  if (st.img) sendDmImg(st.by, st.img, text);
+  else sendDm(st.by, st.text ? `回复了你的快拍「${st.text}」：${text}` : text);
 }
 export const activeStories = () => loadIns().stories.filter(st => Date.now() - st.at < DAY && st.at <= Date.now());
 

@@ -14,7 +14,7 @@ import {
 import {
   BGS, INS_EVENT, ME, accOf, activeStories, answerIncoming, canSee, charAvatar, dmAllowed, dmOf, dmReplying, deleteDm, editDm, fillFeed, follow, generateImg, hidePost,
   loadIns, markNotesSeen, maybeKnow, myPost, myStory, needsFill, ownerName, refreshExplore, relationTo, replyDm, searchAccs, sendDm, setDmFlags, setMe, setPrivate,
-  unfollow, unarchive, purgePost, purgeStory, editImgDesc, unseenNotes, toggleLike, myComment, moreComments, commentsBusy, sendDmImg, type Img, type InsAcc, type Post, type Story,
+  unfollow, unarchive, purgePost, purgeStory, editImgDesc, likeStory, replyStory, unseenNotes, toggleLike, myComment, moreComments, commentsBusy, sendDmImg, type Img, type InsAcc, type Post, type Story,
 } from "@/lib/idol-ins";
 import { loadCharacters } from "@/lib/character-storage";
 import { loadProfiles } from "@/lib/idol-people";
@@ -603,6 +603,13 @@ function Compose({ onBack, onDone, onNotice }: { onBack: () => void; onDone: () 
 
 // ── 快拍 ──
 
+/** 快拍铺满的图：有真图就盖满，没有就黑底描述 */
+function StoryPic({ img }: { img: Img }) {
+  const url = useMedia(img.src);
+  if (url) return <img className="ig-sv-photo" src={url} alt="" />;
+  return <div className="ig-sv-desc"><small>画面</small><span>{img.desc}</span>{img.busy ? <em className="ig-busy">生成中…</em> : null}</div>;
+}
+
 function StoryNew({ onBack, onNotice }: { onBack: () => void; onNotice: Notice }) {
   const [text, setText] = useState("");
   const [bg, setBg] = useState(BGS[0]);
@@ -618,27 +625,30 @@ function StoryNew({ onBack, onNotice }: { onBack: () => void; onNotice: Notice }
     onBack();
   };
   return (
-    <div className="ig-page ig-story-new" style={{ background: bg }}>
-      <div className="ig-bar dark"><button type="button" onClick={onBack}><X size={24} /></button><b>快拍</b><button type="button" className="ig-link w" disabled={!text.trim() && !img} onClick={post}>发布</button></div>
-      <div className="ig-stn-body">
-        {img ? (
-          <div className="ig-stn-img"><Pic img={img} ratio="3/4" /><button type="button" onClick={() => setImg(null)}><X size={14} /></button></div>
-        ) : mode === "write" ? (
+    <div className="ig-sv">
+      <div className="ig-sv-card" style={{ background: bg }}>
+        {img ? <StoryPic img={img} /> : null}
+        <div className="ig-stn-top"><button type="button" onClick={onBack}><X size={26} /></button>{img ? <button type="button" className="ig-stn-chip" onClick={() => setImg(null)}>换一张</button> : null}<button type="button" className="ig-stn-post" disabled={!text.trim() && !img} onClick={post}>发布</button></div>
+        <textarea className={img ? "ig-sv-cap ig-stn-cap" : "ig-sv-text ig-stn-big"} rows={img ? 2 : 4} value={text} onChange={e => setText(e.target.value)} placeholder={img ? "写点什么（可以不写）" : "写点什么"} />
+      </div>
+      <div className="ig-sv-bottom">
+        {img ? null : mode === "write" ? (
           <div className="ig-stn-write">
-            <textarea className="ig-st-desc" rows={3} value={desc} onChange={e => setDesc(e.target.value)} placeholder="这张图拍的是什么" autoFocus />
+            <textarea className="ig-st-desc" rows={2} value={desc} onChange={e => setDesc(e.target.value)} placeholder="这张图拍的是什么" autoFocus />
             <div className="ig-stn-row"><button type="button" onClick={() => setMode("none")}>取消</button><button type="button" className="on" disabled={!desc.trim()} onClick={() => { setImg({ desc: desc.trim(), who: [SELF_REFERENCE_ID] }); setMode("none"); }}>好了</button></div>
           </div>
         ) : (
-          <div className="ig-stn-add">
-            <button type="button" onClick={() => setMode("pick")}><ImageIcon size={22} />相册</button>
-            <button type="button" onClick={() => file.current?.click()}><SquarePlus size={22} />上传</button>
-            <button type="button" onClick={() => { setDesc(""); setMode("write"); }}><PencilLine size={22} />写画面</button>
-          </div>
+          <>
+            <div className="ig-bgs">{BGS.map(b => <button type="button" key={b} className={b === bg ? "on" : ""} style={{ background: b }} onClick={() => setBg(b)} />)}</div>
+            <div className="ig-stn-add">
+              <button type="button" onClick={() => setMode("pick")}><ImageIcon size={20} />相册</button>
+              <button type="button" onClick={() => file.current?.click()}><SquarePlus size={20} />上传</button>
+              <button type="button" onClick={() => { setDesc(""); setMode("write"); }}><PencilLine size={20} />写画面</button>
+            </div>
+          </>
         )}
-        <input ref={file} type="file" accept="image/*" hidden onChange={async e => { const f = e.target.files?.[0]; e.target.value = ""; if (!f) return; const ref = await storeMediaBlob(f, f.type || "image/jpeg", "image"); setImg({ desc: "（上传的照片）", src: ref, who: [] }); }} />
-        <textarea className="ig-st-text" value={text} onChange={e => setText(e.target.value)} placeholder="写点什么" />
       </div>
-      <div className="ig-bgs">{BGS.map(b => <button type="button" key={b} className={b === bg ? "on" : ""} style={{ background: b }} onClick={() => setBg(b)} />)}</div>
+      <input ref={file} type="file" accept="image/*" hidden onChange={async e => { const f = e.target.files?.[0]; e.target.value = ""; if (!f) return; const ref = await storeMediaBlob(f, f.type || "image/jpeg", "image"); setImg({ desc: "（上传的照片）", src: ref, who: [] }); }} />
       {mode === "pick" ? (
         <div className="ig-sheet-bk" onClick={() => setMode("none")}>
           <div className="ig-sheet ig-stn-pick" onClick={e => e.stopPropagation()}>
@@ -657,20 +667,40 @@ function StoryViewer({ list, start, onClose, onNotice }: { list: Story[]; start:
   const [seen, setSeen] = useState(false);
   const [open, setOpen] = useState(false);
   const [menu, setMenu] = useState(false);
-  const st = list[i];
+  const [draft, setDraft] = useState("");
+  useIns();
+  const st = loadIns().stories.find(x => x.id === list[i]?.id) ?? list[i];
+  if (!st) return null;
   const a = accOf(st.by);
   const mine = st.by === ME;
   const next = () => (i < list.length - 1 ? setI(i + 1) : onClose());
+  const prev = () => (i > 0 ? setI(i - 1) : undefined);
+  const tap = (e: React.MouseEvent<HTMLDivElement>) => { const r = e.currentTarget.getBoundingClientRect(); if (e.clientX - r.left < r.width / 3) prev(); else next(); };
   const viewers = st.viewers.filter(v => v.at <= Date.now()).sort((x, y) => y.at - x.at);
+  const send = () => { if (!draft.trim()) return; replyStory(st, draft.trim()); setDraft(""); onNotice?.("发到私信里了"); };
+  const stop = (e: React.SyntheticEvent) => e.stopPropagation();
   return (
-    <div className="ig-sv" style={{ background: st.bg }} onClick={next}>
-      <div className="ig-sv-prog">{list.map((_, k) => <i key={k} className={k <= i ? "on" : ""} />)}</div>
-      <div className="ig-sv-h"><Avatar acc={a} size={32} /><b>{mine ? "你的快拍" : a?.handle}</b><span>{ago(st.at)}</span><div className="ig-sv-btns"><button type="button" onClick={e => { e.stopPropagation(); setMenu(true); }}><Ellipsis size={22} /></button><button type="button" onClick={e => { e.stopPropagation(); onClose(); }}><X size={24} /></button></div></div>
-      {st.img ? <div className="ig-sv-img" onClick={e => e.stopPropagation()}><Pic img={st.img} ratio="3/4" onOpen={() => setOpen(true)} /></div> : null}
-      {st.text ? <div className="ig-sv-text">{st.text}</div> : null}
-      {mine ? <button type="button" className="ig-sv-seen" onClick={e => { e.stopPropagation(); setSeen(true); }}><Eye size={16} />{viewers.length} 位看过</button> : null}
+    <div className="ig-sv">
+      <div className="ig-sv-card" style={{ background: st.bg }} onClick={tap}>
+        {st.img ? <StoryPic img={st.img} /> : null}
+        <div className="ig-sv-shade" />
+        <div className="ig-sv-prog">{list.map((_, k) => <i key={k} className={k <= i ? "on" : ""} />)}</div>
+        <div className="ig-sv-h"><Avatar acc={a} size={32} /><b>{mine ? "你的快拍" : a?.handle}</b><span>{ago(st.at)}</span><div className="ig-sv-btns"><button type="button" onClick={e => { stop(e); setMenu(true); }}><Ellipsis size={22} /></button><button type="button" onClick={e => { stop(e); onClose(); }}><X size={26} /></button></div></div>
+        {st.text ? <div className={st.img ? "ig-sv-cap" : "ig-sv-text"}>{st.text}</div> : null}
+      </div>
+      <div className="ig-sv-bottom">
+        {mine ? (
+          <button type="button" className="ig-sv-seen" onClick={() => setSeen(true)}><Eye size={18} />{viewers.length} 位看过</button>
+        ) : (
+          <div className="ig-sv-reply">
+            <input value={draft} onChange={e => setDraft(e.target.value)} onKeyDown={e => { if (e.key === "Enter") send(); }} placeholder="发消息…" />
+            <button type="button" onClick={() => likeStory(st.id)}><Heart size={26} strokeWidth={1.9} fill={st.liked ? "#ff3040" : "none"} color={st.liked ? "#ff3040" : "#fff"} /></button>
+            <button type="button" onClick={send}><Send size={25} strokeWidth={1.9} /></button>
+          </div>
+        )}
+      </div>
       {seen ? (
-        <div className="ig-seen" onClick={e => e.stopPropagation()}>
+        <div className="ig-seen" onClick={stop}>
           <div className="hd"><span />{viewers.length} 位看过<button type="button" onClick={() => setSeen(false)}><X size={18} /></button></div>
           {viewers.map(v => { const va = accOf(v.id); const late = new Date(v.at).getHours() < 5; return <div className="ig-vw" key={v.id}><Avatar acc={va} size={40} /><div><b>{va?.handle}</b><small>{va ? ownerName(va) : ""}</small></div><em className={late ? "late" : ""}>{String(new Date(v.at).getHours()).padStart(2, "0")}:{String(new Date(v.at).getMinutes()).padStart(2, "0")}</em></div>; })}
           {!viewers.length ? <div className="ig-empty">还没有人看过</div> : null}
@@ -680,8 +710,9 @@ function StoryViewer({ list, start, onClose, onNotice }: { list: Story[]; start:
         onGen={() => void generateImg(st.id, 0, "story").catch(err => onNotice?.(err instanceof Error ? err.message : "生图失败"))}
         onSave={d => editImgDesc(st.id, 0, d, "story")} /> : null}
       {menu ? (
-        <div className="ig-sheet-bk" onClick={e => { e.stopPropagation(); setMenu(false); }}>
-          <div className="ig-sheet" onClick={e => e.stopPropagation()}>
+        <div className="ig-sheet-bk" onClick={() => setMenu(false)}>
+          <div className="ig-sheet" onClick={stop}>
+            {st.img ? <button type="button" onClick={() => { setMenu(false); setOpen(true); }}>看大图<small>在里面生成图片、编辑文字</small></button> : null}
             <button type="button" className="red" onClick={() => { purgeStory(st.id); setMenu(false); onNotice?.("彻底删掉了，当它没发生过"); onClose(); }}>彻底删除<small>当它没发生过，记忆里也不留</small></button>
             <button type="button" onClick={() => setMenu(false)}>取消</button>
           </div>

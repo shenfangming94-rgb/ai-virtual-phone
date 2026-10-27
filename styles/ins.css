@@ -136,12 +136,6 @@
 .ig-who button.on { background: #111 !important; color: #fff !important; border-color: #111 !important; }
 
 /* 快拍 */
-.ig-stn-body { flex: 1; overflow-y: auto; padding-top: 16px; }
-.ig-stn-add { display: flex; gap: 10px; padding: 0 24px; }
-.ig-stn-add button { flex: 1; height: 72px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; border-radius: 14px; background: rgba(255, 255, 255, 0.16) !important; color: #fff !important; font-size: 13px; font-weight: 600; }
-.ig-stn-img { position: relative; width: 62%; margin: 0 auto; border-radius: 12px; overflow: hidden; }
-.ig-stn-img > button { position: absolute; right: 8px; top: 8px; width: 24px; height: 24px; border-radius: 50%; background: rgba(0, 0, 0, 0.55) !important; color: #fff !important; display: flex; align-items: center; justify-content: center; }
-.ig-stn-write { padding: 0 24px; }
 .ig-stn-row { display: flex; gap: 10px; margin-top: 10px; }
 .ig-stn-row button { flex: 1; height: 40px; border-radius: 10px; background: rgba(255, 255, 255, 0.16) !important; color: #fff !important; font-size: 14px; font-weight: 600; }
 .ig-stn-row button.on { background: #fff !important; color: #111 !important; } .ig-stn-row button:disabled { opacity: 0.5; }
@@ -150,21 +144,13 @@
 .ig-st-text { display: block; width: calc(100% - 48px); margin: 24px 24px 0; background: transparent; border: 0; outline: 0; color: #fff; font-family: "Songti SC", "STSong", serif; font-size: 22px; line-height: 1.8; text-align: center; resize: none; min-height: 200px; }
 .ig-st-text::placeholder, .ig-st-desc::placeholder { color: rgba(255, 255, 255, 0.6); }
 .ig-st-desc { display: block; width: 100%; box-sizing: border-box; resize: none; font-family: inherit; line-height: 1.6; margin: 0; background: rgba(255, 255, 255, 0.15); border: 1px solid rgba(255, 255, 255, 0.35); border-radius: 12px; padding: 10px 12px; color: #fff; outline: 0; font-size: 14px; }
-.ig-bgs { display: flex; gap: 10px; justify-content: center; padding: 16px 0 calc(32px + env(safe-area-inset-bottom, 0px)); }
 .ig-bgs button { width: 32px; height: 32px; border-radius: 50%; border: 2px solid rgba(255, 255, 255, 0.5) !important; }
 .ig-bgs button.on { border-color: #fff !important; transform: scale(1.12); }
-.ig-sv { position: absolute; inset: 0; z-index: 50; color: #fff; }
-.ig-sv-prog { position: absolute; left: 12px; right: 12px; top: calc(var(--page-header-safe-top, 44px) + 2px); display: flex; gap: 3px; }
 .ig-sv-prog i { flex: 1; height: 2.5px; border-radius: 2px; background: rgba(255, 255, 255, 0.35); } .ig-sv-prog i.on { background: #fff; }
-.ig-sv-h { position: absolute; left: 12px; right: 8px; top: calc(var(--page-header-safe-top, 44px) + 12px); display: flex; align-items: center; gap: 8px; font-size: 13.5px; }
 .ig-sv-h b { font-weight: 600; } .ig-sv-h span { opacity: 0.75; }
 .ig-sv-btns { margin-left: auto; display: flex; align-items: center; gap: 4px; }
 .ig-sv-btns button { width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; color: #fff !important; }
-.ig-sv-img { position: absolute; left: 30px; right: 30px; top: 140px; border-radius: 12px; overflow: hidden; }
-.ig-sv-text { position: absolute; left: 24px; right: 24px; top: 46%; transform: translateY(-50%); text-align: center; font-family: "Songti SC", "STSong", serif; font-size: 20px; line-height: 1.8; letter-spacing: 2px; white-space: pre-wrap; }
-.ig-sv-img + .ig-sv-text { top: auto; bottom: 120px; transform: none; font-size: 16px; }
-.ig-sv-seen { position: absolute; left: 50%; bottom: calc(30px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); display: flex; align-items: center; gap: 6px; font-size: 13px; color: #fff !important; background: rgba(0, 0, 0, 0.25) !important; border-radius: 16px; padding: 6px 14px !important; }
-.ig-seen { position: absolute; left: 0; right: 0; bottom: 0; max-height: 60%; overflow-y: auto; background: #fff; color: #111; border-radius: 18px 18px 0 0; padding: 6px 0 30px; }
+.ig-sv-img + .ig-seen { position: absolute; left: 0; right: 0; bottom: 0; max-height: 60%; overflow-y: auto; background: #fff; color: #111; border-radius: 18px 18px 0 0; padding: 6px 0 30px; }
 .ig-seen .hd { display: flex; justify-content: space-between; align-items: center; font-size: 14px; font-weight: 700; padding: 10px 16px; border-bottom: 0.5px solid #efefef; }
 .ig-vw { display: flex; align-items: center; gap: 12px; padding: 9px 16px; font-size: 14px; }
 .ig-vw > div { flex: 1; } .ig-vw b { display: block; font-weight: 600; } .ig-vw small { color: #8e8e8e; font-size: 12px; }
@@ -223,3 +209,37 @@
 .ig-lpm { margin: auto auto 40%; width: 230px; background: #fff; border-radius: 14px; overflow: hidden; }
 .ig-lpm button { display: block; width: 100%; text-align: left; padding: 12px 16px !important; font-size: 15px; border-top: 0.5px solid #efefef !important; }
 .ig-lpm button:first-child { border-top: 0 !important; }
+
+/* 快拍：像真 ins，图铺满圆角卡片，字压在图上，下面发消息 */
+.ig-sv { position: absolute; inset: 0; z-index: 50; background: #000; color: #fff; display: flex; flex-direction: column; }
+.ig-sv-card { position: relative; flex: 1; margin-top: var(--page-header-safe-top, 44px); border-radius: 10px; overflow: hidden; }
+.ig-sv-photo { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.ig-sv-desc { position: absolute; inset: 0; background: #111; display: flex; align-items: center; justify-content: center; text-align: center; padding: 40px 32px; font-family: "Songti SC", "STSong", serif; font-size: 17px; line-height: 1.8; letter-spacing: 1px; color: #f3f3f3; }
+.ig-sv-desc small { position: absolute; left: 14px; top: 64px; font-family: -apple-system, sans-serif; font-size: 10.5px; color: rgba(255, 255, 255, 0.5); letter-spacing: 0; }
+.ig-sv-shade { position: absolute; left: 0; right: 0; top: 0; height: 90px; background: linear-gradient(rgba(0, 0, 0, 0.35), transparent); pointer-events: none; }
+.ig-sv-prog { position: absolute; left: 8px; right: 8px; top: 8px; display: flex; gap: 3px; }
+.ig-sv-h { position: absolute; left: 12px; right: 6px; top: 18px; display: flex; align-items: center; gap: 8px; font-size: 14px; text-shadow: 0 1px 2px rgba(0, 0, 0, 0.25); }
+.ig-sv-text { position: absolute; left: 24px; right: 24px; top: 46%; transform: translateY(-50%); text-align: center; font-family: "Songti SC", "STSong", serif; font-size: 22px; line-height: 1.8; letter-spacing: 2px; white-space: pre-wrap; color: #fff; }
+.ig-sv-cap { position: absolute; left: 28px; right: 28px; top: 54%; text-align: center; font-size: 15px; line-height: 1.5; white-space: pre-wrap; color: #fff; text-shadow: 0 1px 3px rgba(0, 0, 0, 0.55); }
+.ig-sv-bottom { flex: none; min-height: calc(64px + env(safe-area-inset-bottom, 0px)); padding: 10px 12px calc(10px + env(safe-area-inset-bottom, 0px)); box-sizing: border-box; display: flex; flex-direction: column; justify-content: center; }
+.ig-sv-reply { display: flex; align-items: center; gap: 16px; }
+.ig-sv-reply input { flex: 1; min-width: 0; height: 44px; border-radius: 22px; border: 1px solid rgba(255, 255, 255, 0.55); background: transparent; color: #fff; padding: 0 18px; font-size: 15px; outline: 0; }
+.ig-sv-reply input::placeholder { color: rgba(255, 255, 255, 0.85); }
+.ig-sv-reply button { display: flex; color: #fff !important; }
+.ig-sv-seen { align-self: flex-start; display: flex; align-items: center; gap: 6px; font-size: 13.5px; color: #fff !important; }
+/* 发快拍 */
+.ig-stn-top { position: absolute; left: 12px; right: 12px; top: 14px; display: flex; align-items: center; gap: 10px; z-index: 2; }
+.ig-stn-top > button { display: flex; color: #fff !important; }
+.ig-stn-chip { margin-left: auto; font-size: 13px; font-weight: 600; background: rgba(0, 0, 0, 0.35) !important; border-radius: 14px; padding: 5px 12px !important; }
+.ig-stn-post { margin-left: auto; font-size: 15px; font-weight: 700; background: #fff !important; color: #111 !important; border-radius: 16px; padding: 6px 16px !important; }
+.ig-stn-chip + .ig-stn-post { margin-left: 0; }
+.ig-stn-post:disabled { opacity: 0.5; }
+textarea.ig-sv-text, textarea.ig-sv-cap { background: transparent; border: 0; outline: 0; resize: none; font-family: inherit; }
+textarea.ig-sv-text { font-family: "Songti SC", "STSong", serif; }
+textarea.ig-sv-text::placeholder, textarea.ig-sv-cap::placeholder { color: rgba(255, 255, 255, 0.65); }
+.ig-bgs { display: flex; gap: 10px; justify-content: center; margin-bottom: 12px; }
+.ig-stn-add { display: flex; gap: 10px; }
+.ig-stn-add button { flex: 1; height: 44px; display: flex; align-items: center; justify-content: center; gap: 6px; border-radius: 12px; background: rgba(255, 255, 255, 0.14) !important; color: #fff !important; font-size: 14px; font-weight: 600; }
+.ig-stn-write { width: 100%; }
+.ig-stn-top > .ig-stn-post { color: #111 !important; }
+.ig-stn-top > button:first-child svg, .ig-sv-btns svg { filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.45)); }

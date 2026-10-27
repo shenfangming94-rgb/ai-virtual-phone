@@ -12,7 +12,7 @@ import { kvGet, kvSet } from "./kv-db";
 import { simpleLLMCall } from "./api-helpers";
 import { loadApiConfigs, loadBindingConfig, resolveBinding } from "./settings-storage";
 import { getLunarInfo } from "./lunar";
-import { careerPromptBlock, companyOf, loadCareer } from "./idol-career";
+import { COMPANIES, careerPromptBlock, companyOf, loadCareer } from "./idol-career";
 import { loadTraineeCard, describeTrainee } from "./trainee-card";
 import { loadCharacters } from "./character-storage";
 import { loadProfiles } from "./idol-people";
@@ -21,7 +21,7 @@ import { getWeekDates, getWeekStartIso, getWeekdayLabel, parseIsoDate } from "./
 import { parseScheduleLines } from "./calendar-engine";
 
 export type AlmanacKind = "fixed" | "career" | "world" | "mine";
-export type AlmanacItem = { id: string; date: string; title: string; note?: string; kind: AlmanacKind };
+export type AlmanacItem = { id: string; date: string; title: string; note?: string; kind: AlmanacKind; /** 圈内大事是哪家公司的 */ company?: string };
 type State = { mine: AlmanacItem[]; world: Record<string, AlmanacItem[]> };
 
 const KEY = "idol_almanac_v1";
@@ -162,17 +162,21 @@ export async function generateWorldMonth(ym: string, force = false): Promise<num
     const days = new Date(y, m, 0).getDate();
     const profiles = loadProfiles();
     const idols = loadCharacters().filter(c => profiles[c.id]?.isIdol).map(c => `${c.name}（${profiles[c.id].role}）`).slice(0, 12);
+    // 以前写过的团接着用，剧情好接
+    const seen = [...new Set(Object.values(load().world).flat().map(i => `${i.title.split(/\s/)[0]}（${i.company ?? "?"}）`))].slice(-20);
+    const names = COMPANIES.map(c => c.name).join("、");
     const res = await simpleLLMCall(config(), [
       {
         role: "system",
-        content: `你在给一出韩国娱乐圈的戏写某个月的「圈内大事记」，放进她的日历。只输出 JSON：{"items":[{"day":数字,"title":"十五字以内","note":"一句话"}]}
-写四到七件：前辈团回归、演唱会和巡演、粉丝见面会、综艺播出、同公司前辈的活动、新团出道、颁奖礼。团和人全部虚构（可以用下面已有的爱豆），不写真实艺人；公司用她所在公司和别的公司都行。照这个年份当时的样子写。`,
+        content: `你在给一出韩国娱乐圈的戏写某个月的「圈内大事记」，放进她的日历。只输出 JSON：{"items":[{"day":数字,"company":"公司名或空","title":"十五字以内，带团名或人名","note":"一句话"}]}
+写四到七件：前辈团回归、演唱会和巡演、粉丝见面会、综艺播出、同公司前辈的活动、新团出道、颁奖礼。团和人全部虚构（可以用下面已有的爱豆、以前出现过的团），不写真实艺人。跟某个团或艺人有关的才写 company（从这六家里挑：${names}），跟团无关的（颁奖礼、节目本身这类）company 写空。她所在的公司多写一两件。照这个年份当时的样子写。`,
       },
-      { role: "user", content: `${y}年${m}月（共${days}天）\n\n${careerPromptBlock()}\n\n已有的爱豆：${idols.join("、") || "还没有"}` },
+      { role: "user", content: `${y}年${m}月（共${days}天）\n\n${careerPromptBlock()}\n\n已有的爱豆：${idols.join("、") || "还没有"}\n以前出现过的团：${seen.join("、") || "还没有"}` },
     ], { temperature: 0.9, label: "圈内大事" });
-    const j = JSON.parse(res.content?.match(/\{[\s\S]*\}/)?.[0] ?? "{}") as { items?: { day?: number; title?: string; note?: string }[] };
+    const j = JSON.parse(res.content?.match(/\{[\s\S]*\}/)?.[0] ?? "{}") as { items?: { day?: number; company?: string; title?: string; note?: string }[] };
     const items = (j.items ?? []).filter(i => i.title && i.day && i.day >= 1 && i.day <= days).map(i => ({
       id: uid("world"), date: `${y}-${pad(m)}-${pad(Number(i.day))}`, title: String(i.title), note: i.note ? String(i.note) : undefined, kind: "world" as const,
+      company: i.company && i.company.trim() && i.company !== "圈内" ? String(i.company).trim() : undefined,
     }));
     if (!items.length) throw new Error(res.error || "AI 没写出来");
     const s = load();

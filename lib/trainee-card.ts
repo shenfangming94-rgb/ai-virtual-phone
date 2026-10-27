@@ -122,8 +122,8 @@ export function stampTraineeCard(c: TraineeCard): void {
     occupation: c.company ? `${c.company} 练习生` : "想当爱豆，还没进公司",
     bio: describeTrainee(c),
   };
-  if (all.length) saveUserIdentities(all.map((i, idx) => (idx === 0 ? { ...i, ...patch } : i)));
-  else saveUserIdentities([{ id: "identity-1", customSettings: "", ...patch }]);
+  // 爱豆小手机只有一个「你」：练习生档案里的这个（她没写的不替她加）
+  saveUserIdentities([{ ...(all[0] ?? {}), id: all[0]?.id ?? "identity-1", customSettings: "", ...patch }]);
   const start = new Date(`${c.start}T09:00:00`);
   if (!Number.isNaN(start.getTime())) setWorldTime(start.getTime());
 }
@@ -164,4 +164,23 @@ export const randomFamily = () => pick(FAMILY_OPTIONS.filter(f => f.id !== "cust
 export function randomTalents(): string[] {
   const ids = TALENT_OPTIONS.map(t => t.id).sort(() => Math.random() - 0.5);
   return ids.slice(0, 1 + Math.floor(Math.random() * 3));
+}
+
+/** 宿主原来自带的示例身份（李斯特、匿名用户）留下的设定 */
+const HOST_DEFAULT_SETTINGS = ["性格温和，说话带有一点理性逻辑。", "说话简短，带有神秘色彩。"];
+
+/** 开机跑一次：用户身份只留一个（练习生档案那个），去掉宿主示例身份和它塞进来的设定 */
+export function ensureSingleIdentity(): void {
+  const card = loadTraineeCard();
+  if (!card) return;
+  const all = loadUserIdentities();
+  const me = all.find(i => i.name === card.name) ?? all[0];
+  if (!me) { stampIdentityOnly(card); return; }
+  const clean = { ...me, customSettings: HOST_DEFAULT_SETTINGS.includes(me.customSettings) ? "" : me.customSettings };
+  if (all.length !== 1 || clean.customSettings !== me.customSettings) saveUserIdentities([clean]);
+}
+
+function stampIdentityOnly(c: TraineeCard) {
+  const age = ageAtStart(c);
+  saveUserIdentities([{ id: "identity-1", name: c.name, avatarUrl: c.photo ?? undefined, gender: "女", age: age != null ? String(age) : "", occupation: c.company ? `${c.company} 练习生` : "想当爱豆，还没进公司", bio: describeTrainee(c), customSettings: "" }]);
 }

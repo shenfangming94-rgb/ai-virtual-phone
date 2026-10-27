@@ -34,6 +34,12 @@ export function pushLockNote(n: Omit<LockNote, "id">): LockNote {
   return note;
 }
 
+/** 横幅完整弹完了 = 看过了 */
+export function markNoteSeen(id: string): void {
+  const list = loadNotes();
+  if (list.some(n => n.id === id && !n.seen)) save(list.map(n => (n.id === id ? { ...n, seen: true } : n)));
+}
+
 /** 开锁 = 看过了 */
 export function markNotesSeen(): void {
   const list = loadNotes();

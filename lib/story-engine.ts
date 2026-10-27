@@ -180,6 +180,8 @@ function resolveStoryConfigs(characterId: string): {
 
   const allWorldBooks = loadWorldBooks();
   const worldBooks = (activeSlot.worldBookIds || [])
+    // 「世界」开的戏自己会写她是谁和最近的事，不重复带自动世界书
+    .filter((id) => !(characterId === WORLD_CHAR_ID && id === "wb_idol_world_auto"))
     .map((id) => allWorldBooks.find((worldBook) => worldBook.id === id))
     .filter(Boolean) as WorldBookConfig[];
   const summaryTag = preset?.story_summary_tag?.trim() || "summary";

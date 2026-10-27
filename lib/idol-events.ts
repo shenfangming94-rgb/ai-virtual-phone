@@ -81,11 +81,17 @@ function parseAt(v: unknown): number | null {
 
 export function fameNow(): number { return load().fame; }
 export function addFame(n: number): void { const s = load(); save({ ...s, fame: Math.max(0, Math.min(100, s.fame + n)) }); }
-function fameWord(f: number): string {
+export function fameWord(f: number): string {
   return f >= 60 ? "已经小有名气，公开视频和路透常有人讨论" : f >= 30 ? "有一小撮固定粉丝，偶尔被路人认出来" : f >= 10 ? "公开视频底下有零星的人记得她" : "几乎没人知道她";
 }
 
 // ── 给世界的提示：最近正在发生的事、她的身体 ──
+
+/** 最近两周身边发生的事（世界书用） */
+export function eventsPlainFeed(): string[] {
+  const now = Date.now();
+  return load().feed.filter(f => now - f.at < 14 * DAY).slice(-8).map(f => `- ${new Date(f.at).getMonth() + 1}月${new Date(f.at).getDate()}日：${f.text}`);
+}
 
 export function eventsPromptBlock(): string {
   const s = load();

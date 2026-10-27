@@ -11,7 +11,9 @@ import { installIdolChatHooks, reminderTick } from "@/lib/idol-reminders";
 import { eventsTick } from "@/lib/idol-events";
 import { rankTick } from "@/lib/idol-ledger";
 import { debutTick } from "@/lib/idol-debut";
-import { APP_LOOK, markNotesSeen, noteFromNotice, type LockNote } from "@/lib/idol-notes";
+import { syncIdolWorldBook } from "@/lib/idol-worldbook";
+import { ensureSingleIdentity } from "@/lib/trainee-card";
+import { APP_LOOK, markNoteSeen, noteFromNotice, type LockNote } from "@/lib/idol-notes";
 import { isChatStorageHydrated } from "@/lib/chat-storage";
 import { LockScreen } from "./lock-screen";
 import { TraineeOpening } from "./opening/trainee-opening";
@@ -1098,13 +1100,15 @@ export function DesktopShell({ initialThemeProfile, initialThemeAssets }: Deskto
   const idolNotify = useCallback((msg: string) => { setBanner(noteFromNotice(msg)); }, []);
   useEffect(() => {
     if (!banner) return;
-    const t = window.setTimeout(() => setBanner(null), 4200);
+    // 完整弹完算看过；被下一条顶掉的留到锁屏上
+    const t = window.setTimeout(() => { markNoteSeen(banner.id); setBanner(null); }, 4200);
     return () => window.clearTimeout(t);
   }, [banner]);
   useWorldAlarms(idolNotify);
   // 发动机：每隔几秒看一眼世界时间，该来的邀请、该提醒的日程到了就提醒
   useEffect(() => {
     installIdolChatHooks(idolNotify);
+    try { ensureSingleIdentity(); } catch { /* 不挡着 */ }
     const run = () => {
       // 聊天存储还没读完就写消息会被盖掉：先等它读完
       if (!isChatStorageHydrated()) { void hydrateChatStorage(); return; }
@@ -1114,6 +1118,7 @@ export function DesktopShell({ initialThemeProfile, initialThemeAssets }: Deskto
       try { eventsTick(idolNotify); } catch { /* 同上 */ }
       try { rankTick(idolNotify); } catch { /* 同上 */ }
       try { debutTick(idolNotify); } catch { /* 同上 */ }
+      try { syncIdolWorldBook(); } catch { /* 同上 */ }
     };
     run();
     // 开发时给测试脚本用（线上没有）
@@ -4407,8 +4412,8 @@ html,body{margin:0;padding:0;width:100%;height:100%;background:#121110;color:rgb
                   className="idol-banner"
                   onClick={() => {
                     const app = banner.app;
+                    markNoteSeen(banner.id);
                     setBanner(null);
-                    markNotesSeen();
                     if (app === "kakao") setActiveApp("chat" as IconId);
                     else if (app === "reminders") setActiveApp("career" as IconId);
                     else if (app === "clock") setActiveApp("clock" as IconId);

@@ -61,6 +61,8 @@ function fileToDataUrl(file: File, maxSize = 400, quality = 0.8): Promise<string
     });
 }
 
+const IDOL_SINGLE = true;
+
 export function UserIdentitySettings() {
     const { setSubpageRightAction } = useContext(SettingsContext);
     const [identities, setIdentitiesRaw] = useState<UserIdentity[]>([]);
@@ -70,7 +72,9 @@ export function UserIdentitySettings() {
 
     useEffect(() => {
         const saved = loadUserIdentities();
-        if (saved.length > 0) {
+        if (IDOL_SINGLE) {
+            setIdentitiesRaw(saved.slice(0, 1));
+        } else if (saved.length > 0) {
             setIdentitiesRaw(saved);
         } else {
             setIdentitiesRaw(DEFAULT_IDENTITIES);
@@ -100,6 +104,8 @@ export function UserIdentitySettings() {
     }, [identities, setIdentities]);
 
     useEffect(() => {
+        // 爱豆小手机：只有练习生档案那一个身份，不能新增
+        if (IDOL_SINGLE) { setSubpageRightAction("identity", null); return; }
         setSubpageRightAction("identity",
             <button
                 onClick={addIdentity}
@@ -130,6 +136,10 @@ export function UserIdentitySettings() {
             <div className="flex items-center">
                 <h2 className="m-0 mx-2 ts-28 font-bold italic leading-none text-black">User Identity</h2>
             </div>
+
+            {IDOL_SINGLE ? (
+                <p className="menu-desc mx-2 -mt-3">这里就是你练习生档案里的你。想换一个人玩，去通讯录「我的名片」开新档。</p>
+            ) : null}
 
             {identities.length === 0 ? (
                 <div className="ui-empty">
@@ -187,7 +197,7 @@ export function UserIdentitySettings() {
                                     >
                                         <FileEdit size={18} />
                                     </button>
-                                    <button
+                                    {IDOL_SINGLE ? null : <button
                                         type="button"
                                         onClick={(event) => {
                                             event.stopPropagation();
@@ -197,7 +207,7 @@ export function UserIdentitySettings() {
                                         data-variant="danger"
                                     >
                                         <Trash2 size={18} />
-                                    </button>
+                                    </button>}
                                 </div>
                             </div>
                         </div>

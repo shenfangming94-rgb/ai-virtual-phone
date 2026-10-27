@@ -1037,7 +1037,21 @@ export function setCharacterBinding(config: BindingConfig, binding: CharacterBin
  * Effective priority: character binding > APP binding > global binding.
  * undefined/empty fields mean "inherit from parent level".
  */
+/** 爱豆小手机：自动更新的世界书（lib/idol-worldbook.ts）不用勾，所有 app 都带上 */
+const IDOL_WORLD_BOOK_ID = "wb_idol_world_auto";
 export function resolveBinding(
+    config: BindingConfig,
+    characterId?: string,
+    appId?: string
+): BindingSlot {
+    const slot = resolveBindingBase(config, characterId, appId);
+    if (typeof window !== "undefined" && !slot.worldBookIds?.includes(IDOL_WORLD_BOOK_ID) && readWorldBooksCache().some(b => b.id === IDOL_WORLD_BOOK_ID)) {
+        slot.worldBookIds = [...(slot.worldBookIds ?? []), IDOL_WORLD_BOOK_ID];
+    }
+    return slot;
+}
+
+function resolveBindingBase(
     config: BindingConfig,
     characterId?: string,
     appId?: string

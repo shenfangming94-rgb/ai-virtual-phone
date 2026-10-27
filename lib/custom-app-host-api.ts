@@ -41,6 +41,7 @@ import {
 import type { CalendarOwnerType, CalendarScheduleItem } from "./calendar-types";
 import { formatIsoDate, getWeekStartIso, normalizeTime } from "./calendar-utils";
 import { simpleLLMCall } from "./api-helpers";
+import { idolWorldPrompt } from "./idol-worldbook";
 import { generateEmbedding } from "./memory-embedding";
 import { loadMemoryConfig, loadMemoryEntriesByType, saveMemoryEntry } from "./memory-storage";
 import { formatCoreMemories, formatLongTermMemories } from "./memory-injector";
@@ -1327,6 +1328,11 @@ export async function runCustomAppAiChat(app: InstalledCustomApp, record: Record
       String(record.system ?? "").trim() ? { role: "system", content: String(record.system ?? "") } : null,
       { role: "user", content: String(record.prompt ?? record.input ?? record.content ?? "").trim() || "请继续。" },
     ].filter(Boolean) as { role: string; content: string }[];
+  // 爱豆小手机：自定义 app 调 AI 时自动垫上「这个世界」（她是谁、圈内最近），app 传 world:false 可以不要
+  if (record.world !== false) {
+    const world = idolWorldPrompt();
+    if (world) messages.unshift({ role: "system", content: world });
+  }
   const timeoutMs = optionalCustomAppTimeoutMs(record.timeoutMs);
   const result = await withOptionalCustomAppTimeout(timeoutMs, "ai.chat", signal => (
     simpleLLMCall(config, messages, {

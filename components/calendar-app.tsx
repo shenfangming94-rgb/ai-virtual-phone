@@ -48,8 +48,7 @@ import { CalendarMonthPage } from "./calendar/month-page";
 import { CalendarDetailPage } from "./calendar/detail-page";
 import { CalendarEventEditModal, type CalendarEventDraft } from "./calendar/event-edit-modal";
 import { AlmanacBar, AlmanacDayPanel, AlmanacEdit, AlmanacSheet, PlanSheet, useAlmanacVersion } from "./calendar/idol-almanac";
-import { almanacByDate, generateWorldMonth, type AlmanacItem } from "@/lib/idol-calendar";
-import { loadCareer } from "@/lib/idol-career";
+import { almanacByDate, type AlmanacItem } from "@/lib/idol-calendar";
 
 type OwnerOption = {
   key: string;
@@ -166,11 +165,6 @@ export function PhoneCalendarApp({
     return almanacByDate(formatIsoDate(new Date(t.getFullYear() - 1, t.getMonth(), 1)), formatIsoDate(new Date(t.getFullYear() + 1, t.getMonth() + 1, 0)));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [todayIso, almanacVersion]);
-  // 打开日历时补这个月的圈内大事（一个月只写一次）
-  useEffect(() => {
-    if (loadCareer().stage === "pre") return;
-    void generateWorldMonth(todayIso.slice(0, 7)).catch(() => undefined);
-  }, [todayIso]);
 
   const [menstrualDraft, setMenstrualDraft] = useState<{
     cycleLength: string;

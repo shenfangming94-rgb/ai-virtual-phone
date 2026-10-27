@@ -42,7 +42,7 @@ export function AlmanacDayPanel({ date, onOpen }: { date: string; onOpen: (item:
         <button key={i.id} type="button" className="idol-cal-day-item" data-kind={i.kind} onClick={() => onOpen(i, date)}>
           <i />
           <span>{i.title}</span>
-          <small>{KIND_LABEL[i.kind]}</small>
+          <small>{i.company ?? KIND_LABEL[i.kind]}</small>
         </button>
       ))}
       <button type="button" className="idol-cal-day-add" onClick={() => onOpen(null, date)}>＋ 记一笔大事</button>
@@ -79,7 +79,7 @@ export function AlmanacSheet({ ym, onClose, onNotice, onOpen }: { ym: string; on
             <button key={i.id} type="button" className="idol-cal-row" data-kind={i.kind} onClick={() => onOpen(i, i.date)}>
               <span className="idol-cal-row-d">{md(i.date)}</span>
               <span className="idol-cal-row-t"><b>{i.title}</b>{i.note ? <small>{i.note}</small> : null}</span>
-              <span className="idol-cal-row-k">{KIND_LABEL[i.kind]}</span>
+              <span className="idol-cal-row-k">{i.company ?? KIND_LABEL[i.kind]}</span>
             </button>
           )) : <div className="idol-cal-empty">这个月还没有大事</div>}
         </div>
@@ -121,6 +121,7 @@ export function AlmanacEdit({ item, date, onClose, onNotice }: { item: AlmanacIt
         </div>
         {editable ? (
           <>
+            {item?.company ? <div className="idol-cal-hint">{item.company}</div> : null}
             <label className="idol-cal-field"><span>日期</span><input type="date" value={d} onChange={e => setD(e.target.value)} /></label>
             <label className="idol-cal-field"><span>标题</span><input value={title} onChange={e => setTitle(e.target.value)} placeholder="比如：第一次进练习室通宵" /></label>
             <label className="idol-cal-field"><span>备注</span><textarea value={note} onChange={e => setNote(e.target.value)} rows={3} placeholder="可以不写" /></label>
@@ -132,7 +133,7 @@ export function AlmanacEdit({ item, date, onClose, onNotice }: { item: AlmanacIt
           </>
         ) : (
           <div className="idol-cal-view">
-            <div>{md(item!.date)} · {KIND_LABEL[item!.kind]}</div>
+            <div>{md(item!.date)} · {item!.company ?? KIND_LABEL[item!.kind]}</div>
             {item!.note ? <p>{item!.note}</p> : null}
           </div>
         )}

@@ -163,7 +163,7 @@ export async function buildSite(companyId: string, force = false): Promise<void>
     const res = await simpleLLMCall(config(), [
       {
         role: "system",
-        content: `你在给一出韩国娱乐圈的戏写「${c.name}」${year}年的官网。照这家公司在${year}年当时的样子写：当时叫什么名字、总部在哪、规模多大（如果那年公司叫别的名字，nameNote 写一句说明）。旗下艺人和年表里的团、人全部虚构，不写真实艺人。这家已经有的团必须全部写进 artists，团名、男团女团、出道年份、成员、粉丝名照抄不能改，只能补没写到的和更新「最近」；可以再加新团，一共三到五个，新团出道年份要早于${year}年，不能跟别家已有的团重名。韩文要地道，中文是它的翻译。只输出 JSON：
+        content: `你在给一出韩国娱乐圈的戏写「${c.name}」${year}年的官网。照这家公司在${year}年当时的样子写：当时叫什么名字、总部在哪、规模多大（如果那年公司叫别的名字，nameNote 写一句说明）。旗下艺人和年表里的团、人全部虚构，不写真实艺人。这家已经有的团必须全部写进 artists，团名、男团女团、出道年份、成员、粉丝名照抄不能改，只能补没写到的和更新「最近」；可以再加新团，一共三到五个，不能跟别家已有的团重名。出道年份照这个比例（算上已有的）：至少两个是${year - 4}～${year - 1}年出道的新团，一个${year - 8}～${year - 5}年出道，最多一个更早的老前辈；${year}年当年出道的只能写还没出道或刚出道。韩文要地道，中文是它的翻译。只输出 JSON：
 {"motto_ko":"社训或口号","motto_zh":"","founded":"成立年份","hq_ko":"本社地址（到洞）","hq_zh":"","nameNote":"","about":[{"h_ko":"小标题","h_zh":"","ko":"两三句","zh":""}],"history":[{"year":"1997","ko":"","zh":""}],"artists":[{"name":"团名或艺名","kind":"女团/男团/Solo","size":5,"debut":2012,"style":"一句话风格","fandom":"粉丝名","recent":"最近在做什么","members":["成员中文名"],"songs":[{"title":"","year":2012,"note":"出道曲 / 一位 这种"}]}],"notices":[{"tag":"오디션 或 공지","ko":"","zh":"","date":"MM.DD"}]}
 about 写四段：我们是谁、我们怎样培养练习生、我们的音乐、在${year}年想做什么。history 五到七条，最后一条在${year}年。notices 三条，日期在${year}年最近一个月内，一条是开试镜。`,
       },
@@ -171,7 +171,7 @@ about 写四段：我们是谁、我们怎样培养练习生、我们的音乐�
     ], { temperature: 0.8, label: `${c.name} 官网`, max_tokens: 3500 });
     const j = pickJson<Partial<Site> & { artists?: Artist[] }>(res.content);
     if (!j.about?.length) throw new Error(res.error || "AI 没写出来");
-    upsertGroups((j.artists ?? []).map(a => ({ ...a, companyId })), "site", companyId);
+    upsertGroups((j.artists ?? []).map(a => ({ ...a, companyId, debut: a.debut && a.debut > year ? year : a.debut })), "site", companyId);
     const s = load();
     const site: Site = {
       year, at: Date.now(),

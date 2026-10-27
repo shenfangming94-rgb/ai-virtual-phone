@@ -6,6 +6,7 @@
  * 改档案时自动拼成角色的 persona，AI 读的就是拼好的那份。
  */
 
+import { rosterPrompt } from "./idol-groups";
 import { kvGet, kvSet } from "./kv-db";
 import { loadCharacters, saveCharacters, createCharacter } from "./character-storage";
 import type { Character } from "./character-types";
@@ -401,7 +402,9 @@ function rosterLine(exceptId?: string): string {
   const lines = chars
     .filter(c => c.id !== exceptId && all[c.id])
     .map(c => `${c.name}（${all[c.id].role || all[c.id].group || "未写身份"}）`);
-  return lines.length ? `已有的人：${lines.join("、")}` : "现在还没有别的人。";
+  const circle = rosterPrompt(40);
+  const people = lines.length ? `已有的人：${lines.join("、")}` : "现在还没有别的人。";
+  return circle ? `${people}\n${circle}\n她要的人如果是上面某个团的成员：团名、公司、出道年份、同团成员照抄，年龄要跟出道年份对得上（出道时一般十六到二十二岁）；上面没有的人别编成这些团的成员。` : people;
 }
 
 function parseDraft(text: string): CardDraft {

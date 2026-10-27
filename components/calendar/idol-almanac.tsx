@@ -8,7 +8,7 @@ import {
 } from "@/lib/idol-calendar";
 import { getWeekDates } from "@/lib/calendar-utils";
 
-const KIND_LABEL: Record<AlmanacItem["kind"], string> = { fixed: "节日", career: "我的大事", world: "圈内", mine: "我记的" };
+const KIND_LABEL: Record<AlmanacItem["kind"], string> = { fixed: "节日", career: "我的大事", world: "圈内", mine: "我记的", birthday: "生日" };
 const md = (iso: string) => `${+iso.slice(5, 7)}月${+iso.slice(8, 10)}日`;
 
 export function useAlmanacVersion(): number {

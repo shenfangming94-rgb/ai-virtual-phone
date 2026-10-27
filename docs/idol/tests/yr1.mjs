@@ -1,0 +1,46 @@
+// 每年一定来的事：年末演唱会伴舞 → 春节放假 → 生日；日历标主要人物生日
+import puppeteer from "puppeteer-core";
+const OUT = process.argv[2] || ".";
+const b = await puppeteer.launch({ executablePath: "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome", headless: "new" });
+const p = await b.newPage(); await p.setViewport({ width: 430, height: 900, deviceScaleFactor: 2 });
+const errs = []; p.on("pageerror", e => errs.push(e.message));
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+const CORS = { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers": "*", "Access-Control-Allow-Methods": "POST, OPTIONS" };
+await p.setRequestInterception(true);
+p.on("request", r => { if (r.url().includes("mock.test")) { if (r.method() === "OPTIONS") return r.respond({ status: 204, headers: CORS }); return r.respond({ status: 200, headers: CORS, contentType: "application/json", body: JSON.stringify({ choices: [{ message: { role: "assistant", content: "收到～" }, finish_reason: "stop" }] }) }); } r.continue(); });
+const kv = k => p.evaluate(k => new Promise(res => { const r = indexedDB.open("AiPhoneKvDB"); r.onsuccess = () => { const g = r.result.transaction("entries").objectStore("entries").get(k); g.onsuccess = () => res(g.result?.value); }; }), k);
+const now = new Date().toISOString();
+await p.goto("http://localhost:3031/", { waitUntil: "domcontentloaded", timeout: 120000 });
+await p.waitForFunction(() => new Promise(res => { const r = indexedDB.open("AiPhoneKvDB"); r.onsuccess = () => { const ok = r.result.objectStoreNames.contains("entries"); r.result.close(); res(ok); }; r.onerror = () => res(false); }), { timeout: 120000, polling: 1000 });
+await p.evaluate(async (now) => {
+  const mk = (id, name) => ({ id, name, avatar: null, persona: "", wechatID: id, tags: [], createdAt: now, updatedAt: now });
+  const base = { layer: "main", group: "同期练习生", role: "同期练习生", age: "17", gender: "女", isIdol: false, publicLabels: [], publicText: "", face: "mixed", privateLines: [], speech: "", taboo: "", withYou: "", met: true, events: [], note: "", relation: "好朋友" };
+  const db = await new Promise(res => { const r = indexedDB.open("AiPhoneKvDB"); r.onsuccess = () => res(r.result); });
+  const tx = db.transaction("entries", "readwrite"); const st = tx.objectStore("entries");
+  st.put({ key: "ai_phone_characters_v1", value: JSON.stringify([mk("t1", "朴珍熙"), mk("c2", "申多恩"), mk("c3", "李瑞妍")]) });
+  st.put({ key: "idol_people_v1", value: JSON.stringify({ t1: { ...base, charId: "t1", role: "练习生管理老师", group: "公司", birthday: "08-30" }, c2: { ...base, charId: "c2", birthday: "12-03" }, c3: { ...base, charId: "c3", birthday: "11-28" } }) });
+  st.put({ key: "ai_phone_api_configs_v1", value: JSON.stringify([{ id: "m1", name: "mock", provider: "openai", apiKey: "x", baseUrl: "https://mock.test/v1", defaultModel: "m" }]) });
+  st.put({ key: "idol_trainee_card_v1", value: JSON.stringify({ name: "Flora", photo: null, birthday: "1998-06-17", nationality: "中国", mbti: "", looks: "", start: "2015-03-01", trainLength: "三年", family: "normal", familyCustom: "", familyNote: "", talents: ["vocal"], talentNote: "", weakness: "", other: "", signature: null, company: "JYP", no: "x", createdAt: 1 }) });
+  st.put({ key: "idol_kakao_v1", value: JSON.stringify({ incoming: [], noticed: [], teacherId: "t1" }) });
+  st.put({ key: "idol_ledger_v1", value: JSON.stringify({ entries: [], levels: {}, months: [{ month: "2015-10", rank: 6, total: 40, rows: [], image: "", comment: "", nodeId: "x", at: 1 }], ranked: [] }) });
+  st.put({ key: "idol_career_v1", value: JSON.stringify({ stage: "trainee", companyId: "jyp", signedAt: new Date("2015-03-02T09:00:00").getTime(), roommates: ["c2"], facts: [], offers: [], offersMadeAt: 1, nodes: [] }) });
+  await new Promise(r => tx.oncomplete = r);
+}, now);
+await p.reload({ waitUntil: "domcontentloaded", timeout: 120000 }); await sleep(8000);
+const step = async (iso, tag) => {
+  await p.evaluate(iso => { const wc = window.__worldClock; wc.offset = new Date(iso).getTime() - wc.RealDate.now(); }, iso);
+  await p.evaluate(() => window.__idol?.run()); await sleep(2500);
+  const c = JSON.parse(await kv("idol_career_v1"));
+  const out = JSON.parse(await kv("idol_reminders_v1") || "{}").outbox ?? [];
+  console.log(tag, "|", c.nodes.filter(n => ["event", "chance", "date"].includes(n.kind)).map(n => `${n.status}:${n.title}@${new Date(n.dueAt).toLocaleString("zh-CN")}`).join(" ; "), "| 排队消息", out.length);
+};
+await step("2015-11-21T10:05:00", "演唱会");
+await step("2016-01-31T10:05:00", "春节");
+await step("2016-06-17T08:05:00", "生日");
+console.log("done", await kv("idol_yearly_v1"));
+await p.evaluate(() => { const wc = window.__worldClock; wc.offset = new Date("2015-11-25T10:00:00").getTime() - wc.RealDate.now(); });
+await p.evaluate(() => document.querySelector(".lock-swipe")?.click()); await sleep(800);
+await p.evaluate(() => window.postMessage({ type: "OS_CMD", action: "open_app", appId: "calendar" }, "*")); await sleep(4000);
+await p.screenshot({ path: OUT + "/yr_cal.png" });
+console.log("errs", errs.slice(0, 3));
+await b.close();

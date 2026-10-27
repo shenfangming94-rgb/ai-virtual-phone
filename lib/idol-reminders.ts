@@ -23,6 +23,7 @@ import { addFame, plannedStops } from "./idol-events";
 import { recordAbsent, recordNodeDone } from "./idol-ledger";
 import { getProfile, saveProfile } from "./idol-people";
 import { onSelection, revealName } from "./idol-debut";
+import { yearlyStops } from "./idol-yearly";
 
 const KEY = "idol_reminders_v1";
 const MIN = 60e3;
@@ -176,6 +177,7 @@ export function capJump(target: number): { target: number; stoppedBy?: string } 
   }
   for (const o of career.offers) if (o.status === "new" && !o.notified && o.at > now) stops.push({ at: o.at, title: `${companyOf(o.companyId)?.name} 来找你了` });
   for (const p of plannedStops()) if (p.at > now) stops.push(p);
+  for (const p of yearlyStops()) if (p.at > now) stops.push(p);
   const first = stops.filter(s => s.at < target).sort((a, b) => a.at - b.at)[0];
   return first ? { target: first.at, stoppedBy: first.title } : { target };
 }

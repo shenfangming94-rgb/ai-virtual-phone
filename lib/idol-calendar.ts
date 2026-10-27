@@ -20,7 +20,7 @@ import { deleteCalendarScheduleItem, loadOwnerCalendarPlans, upsertCalendarSched
 import { getWeekDates, getWeekStartIso, getWeekdayLabel, parseIsoDate } from "./calendar-utils";
 import { parseScheduleLines } from "./calendar-engine";
 
-export type AlmanacKind = "fixed" | "career" | "world" | "mine";
+export type AlmanacKind = "fixed" | "career" | "world" | "mine" | "birthday";
 export type AlmanacItem = { id: string; date: string; title: string; note?: string; kind: AlmanacKind; /** 圈内大事是哪家公司的 */ company?: string };
 type State = { mine: AlmanacItem[]; world: Record<string, AlmanacItem[]> };
 
@@ -52,7 +52,7 @@ function config() {
 
 // ── 写死的 ──
 
-function findLunar(year: number, month: string, day: string, from: [number, number], to: [number, number]): string | null {
+export function findLunar(year: number, month: string, day: string, from: [number, number], to: [number, number]): string | null {
   const d = new Date(year, from[0], from[1]);
   const end = new Date(year, to[0], to[1]);
   while (d <= end) {
@@ -63,7 +63,7 @@ function findLunar(year: number, month: string, day: string, from: [number, numb
   return null;
 }
 
-function nthWeekday(year: number, month: number, weekday: number, n: number): string {
+export function nthWeekday(year: number, month: number, weekday: number, n: number): string {
   const d = new Date(year, month, 1);
   while (d.getDay() !== weekday) d.setDate(d.getDate() + 1);
   d.setDate(d.getDate() + 7 * (n - 1));
@@ -105,13 +105,25 @@ function careerItems(): AlmanacItem[] {
   return out;
 }
 
+/** 主要人物的生日（只标注） */
+function birthdays(y0: number, y1: number): AlmanacItem[] {
+  const profiles = loadProfiles();
+  const out: AlmanacItem[] = [];
+  for (const c of loadCharacters()) {
+    const p = profiles[c.id];
+    if (!p || p.layer !== "main" || !p.birthday || !/^\d{2}-\d{2}$/.test(p.birthday)) continue;
+    for (let y = y0; y <= y1; y++) out.push({ id: `bday_${c.id}_${y}`, date: `${y}-${p.birthday}`, title: `🎂${c.name}`, kind: "birthday" });
+  }
+  return out;
+}
+
 /** 某段日子里的所有大事记（按日期排） */
 export function almanacBetween(fromIso: string, toIso: string): AlmanacItem[] {
   const s = load();
   const y0 = +fromIso.slice(0, 4), y1 = +toIso.slice(0, 4);
   const fixed: AlmanacItem[] = [];
   for (let y = y0; y <= y1; y++) fixed.push(...fixedFor(y));
-  const all = [...fixed, ...careerItems(), ...Object.values(s.world).flat(), ...s.mine];
+  const all = [...fixed, ...careerItems(), ...birthdays(y0, y1), ...Object.values(s.world).flat(), ...s.mine];
   return all.filter(i => i.date >= fromIso && i.date <= toIso).sort((a, b) => a.date.localeCompare(b.date) || a.kind.localeCompare(b.kind));
 }
 

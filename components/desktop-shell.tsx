@@ -11,6 +11,7 @@ import { installIdolChatHooks, reminderTick } from "@/lib/idol-reminders";
 import { eventsTick } from "@/lib/idol-events";
 import { rankTick } from "@/lib/idol-ledger";
 import { debutTick } from "@/lib/idol-debut";
+import { yearlyTick } from "@/lib/idol-yearly";
 import { syncIdolWorldBook } from "@/lib/idol-worldbook";
 import { ensureSingleIdentity } from "@/lib/trainee-card";
 import { APP_LOOK, markNoteSeen, noteFromNotice, type LockNote } from "@/lib/idol-notes";
@@ -1120,6 +1121,7 @@ export function DesktopShell({ initialThemeProfile, initialThemeAssets }: Deskto
       try { eventsTick(idolNotify); } catch { /* 同上 */ }
       try { rankTick(idolNotify); } catch { /* 同上 */ }
       try { debutTick(idolNotify); } catch { /* 同上 */ }
+      try { yearlyTick(idolNotify); } catch { /* 同上 */ }
       try { syncIdolWorldBook(); } catch { /* 同上 */ }
     };
     run();

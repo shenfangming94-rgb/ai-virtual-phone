@@ -31,7 +31,7 @@ export const COMPANIES: Company[] = [
 export const companyOf = (id?: string) => COMPANIES.find(c => c.id === id);
 
 export type Offer = { id: string; companyId: string; kind: "scout" | "audition"; at: number; message: string; place: string; status: "new" | "accepted" | "declined"; notified?: boolean };
-export type NodeKind = "audition" | "first_day" | "weekly" | "monthly" | "talk" | "makeup" | "chance" | "date" | "custom" | "selection" | "debut";
+export type NodeKind = "audition" | "first_day" | "weekly" | "monthly" | "talk" | "makeup" | "chance" | "date" | "custom" | "selection" | "debut" | "event";
 /** invite = 待回复；pending = 定了还没到/没做；done = 演了或打勾；leave = 请假；absent = 缺席；declined = 不去/过期；passed = 旧数据（当缺席） */
 export type NodeStatus = "invite" | "pending" | "done" | "leave" | "absent" | "declined" | "passed";
 export type CareerNode = {
@@ -136,7 +136,7 @@ export function addToCalendar(node: CareerNode): void {
       endTime: end.getDate() === d.getDate() ? hhmm(end) : "23:59",
       location: node.place,
       title: node.title,
-      emoji: node.kind === "selection" ? "🌟" : node.kind === "debut" ? (node.step === "showcase" ? "🎉" : node.step === "record" ? "🎙️" : node.step === "mv" ? "🎬" : "✨") : node.kind === "monthly" ? "📋" : node.kind === "weekly" ? "🎬" : node.kind === "audition" ? "🎤" : node.kind === "date" ? "☕" : node.kind === "custom" ? "📝" : node.kind === "chance" ? "⭐" : "🏢",
+      emoji: node.kind === "event" ? "🎊" : node.kind === "selection" ? "🌟" : node.kind === "debut" ? (node.step === "showcase" ? "🎉" : node.step === "record" ? "🎙️" : node.step === "mv" ? "🎬" : "✨") : node.kind === "monthly" ? "📋" : node.kind === "weekly" ? "🎬" : node.kind === "audition" ? "🎤" : node.kind === "date" ? "☕" : node.kind === "custom" ? "📝" : node.kind === "chance" ? "⭐" : "🏢",
       source: "generated",
     });
   } catch { /* 日历写不进去不影响剧情 */ }

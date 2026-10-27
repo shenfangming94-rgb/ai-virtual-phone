@@ -1577,3 +1577,6 @@
 .idol-cal-hint { font-size: calc(13px * var(--app-text-scale, 1)); color: var(--c-calendar-sub); line-height: 1.6; margin: 6px 0 0; }
 .idol-cal-view { font-size: calc(14px * var(--app-text-scale, 1)); color: var(--c-calendar-sub); padding: 8px 0 4px; line-height: 1.6; }
 .idol-cal-view p { color: var(--c-calendar-ink); margin-top: 6px; }
+.idol-mark[data-kind="birthday"] { color: #e86d9a; }
+.idol-cal-day-item[data-kind="birthday"] i { color: #e86d9a; }
+.idol-cal-row[data-kind="birthday"] .idol-cal-row-k { color: #e86d9a; }

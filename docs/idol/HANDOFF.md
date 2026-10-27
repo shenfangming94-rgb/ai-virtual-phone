@@ -353,3 +353,12 @@ Flora 要一个专门玩「爱豆模拟器」的小手机：她是想当爱豆�
   2. 发快拍不能用自己的图：要能上传图片、从相册选（像发帖那样）
   3. 快拍顶端（进度条、头像名字时间、… 和 ×）有地方没对齐，整页都检查一遍对齐
 - YouTube：预览 `mockups/youtube/y1`、`y2` 定稿，规矩全在记忆 project_virtual_time 末尾两条；另外她同意：右上角搜索（团名/公司名/人名，只搜名册 `idol-groups.ts` + IdolSearch 公司里有的，没有就搜不到），第一次进频道 AI 照名册写好存下，频道能订阅，底栏「订阅」看更新，每周自动刷先照顾订阅的
+
+### 2.28 YouTube（10-27 晚，1042bb1，`lib/idol-youtube.ts`、`components/youtube/youtube-app.tsx`、`styles/youtube.css`）
+- kv `idol_youtube_v1`：channels（公司频道 id `co_<公司>`，团/个人频道）、videos（target 播放量，`viewsOf` 本地按 3 天曲线涨；评论数 `cmtCountOf` 本地估）、subs、feedAt、me.handle（她的匿名小号）
+- 她的视频：`closeWorldScene` 记账 JSON 多一个 `video`（只有真给公司公开频道拍了才写，画面写名字和站位），`recordSceneVideo` 存进公司频道，上传时间 = 戏的时间 + 2～6 天；`ytTick` 到点记关注度 medium + 通知。没签公司不记
+- 首页：`needsFeed` 世界过 7 天自动 `fillFeed` 一次（5～8 条，频道只能是名册里的团或六家公司，可补新团进名册），下拉刷新手动；分类按 kind 筛
+- 评论不自动刷：她的视频第一次点开评论补第一批，其余全靠「加载更多评论」；楼中楼「N 条回复」展开、「加载更多回复」；她自己的评论下有「看看有没有人回复」，她说过话的楼一定有人回；认识她的人偶尔用小号评论，`charId` → 粉色「他的小号」
+- 搜索 `searchYt`：六家公司（含别名）+ 已有频道 + 名册团名/成员名，没有就搜不到；`openHit` 建频道，`writeChannel` 第一次进 AI 写简介、订阅数、几条旧视频
+- 点画面放大（生成图片 / 编辑文字），「…」里看大图、彻底删除；点左上 YouTube logo 退出；底栏 + 提示练习生不能开频道；Shorts 占位
+- 测试 `tests/yt1.mjs`

@@ -267,7 +267,7 @@ export function InsApp({ onClose, onNotice }: { onClose: () => void; onNotice?: 
     const un = unseenNotes();
     body = (
       <div className="ig-page">
-        <div className="ig-top"><span className="ig-wm">Instagram</span><button type="button" className="ig-bell" onClick={() => go({ v: "notes" })}><Heart size={25} strokeWidth={1.9} />{un ? <i /> : null}</button></div>
+        <div className="ig-top"><button type="button" className="ig-wm" onClick={onClose}>Instagram</button><button type="button" className="ig-bell" onClick={() => go({ v: "notes" })}><Heart size={25} strokeWidth={1.9} />{un ? <i /> : null}</button></div>
         <div className="ig-scroll">
           <div className="ig-stories">
             <button type="button" className="ig-st me" onClick={() => (mineSt.length ? setStory({ list: mineSt, i: 0 }) : go({ v: "story-new" }))}>
@@ -606,13 +606,48 @@ function Compose({ onBack, onDone, onNotice }: { onBack: () => void; onDone: () 
 function StoryNew({ onBack, onNotice }: { onBack: () => void; onNotice: Notice }) {
   const [text, setText] = useState("");
   const [bg, setBg] = useState(BGS[0]);
+  const [img, setImg] = useState<Img | null>(null);
+  const [mode, setMode] = useState<"none" | "pick" | "write">("none");
   const [desc, setDesc] = useState("");
+  const file = useRef<HTMLInputElement>(null);
+  const photos = loadPhotos().filter(p => p.inLibrary).slice(-60).reverse();
+  const post = () => {
+    if (!text.trim() && !img) return;
+    myStory({ text: text.trim() || undefined, img: img ?? undefined, bg });
+    onNotice?.("快拍发出去了，24 小时后消失");
+    onBack();
+  };
   return (
     <div className="ig-page ig-story-new" style={{ background: bg }}>
-      <div className="ig-bar dark"><button type="button" onClick={onBack}><X size={24} /></button><b>快拍</b><button type="button" className="ig-link w" onClick={() => { if (!text.trim() && !desc.trim()) return; myStory({ text: text.trim() || undefined, img: desc.trim() ? { desc: desc.trim(), who: [SELF_REFERENCE_ID] } : undefined, bg }); onNotice?.("快拍发出去了，24 小时后消失"); onBack(); }}>发布</button></div>
-      <textarea className="ig-st-text" value={text} onChange={e => setText(e.target.value)} placeholder="写点什么" />
-      <input className="ig-st-desc" value={desc} onChange={e => setDesc(e.target.value)} placeholder="配一张图？写画面（可以不写）" />
+      <div className="ig-bar dark"><button type="button" onClick={onBack}><X size={24} /></button><b>快拍</b><button type="button" className="ig-link w" disabled={!text.trim() && !img} onClick={post}>发布</button></div>
+      <div className="ig-stn-body">
+        {img ? (
+          <div className="ig-stn-img"><Pic img={img} ratio="3/4" /><button type="button" onClick={() => setImg(null)}><X size={14} /></button></div>
+        ) : mode === "write" ? (
+          <div className="ig-stn-write">
+            <textarea className="ig-st-desc" rows={3} value={desc} onChange={e => setDesc(e.target.value)} placeholder="这张图拍的是什么" autoFocus />
+            <div className="ig-stn-row"><button type="button" onClick={() => setMode("none")}>取消</button><button type="button" className="on" disabled={!desc.trim()} onClick={() => { setImg({ desc: desc.trim(), who: [SELF_REFERENCE_ID] }); setMode("none"); }}>好了</button></div>
+          </div>
+        ) : (
+          <div className="ig-stn-add">
+            <button type="button" onClick={() => setMode("pick")}><ImageIcon size={22} />相册</button>
+            <button type="button" onClick={() => file.current?.click()}><SquarePlus size={22} />上传</button>
+            <button type="button" onClick={() => { setDesc(""); setMode("write"); }}><PencilLine size={22} />写画面</button>
+          </div>
+        )}
+        <input ref={file} type="file" accept="image/*" hidden onChange={async e => { const f = e.target.files?.[0]; e.target.value = ""; if (!f) return; const ref = await storeMediaBlob(f, f.type || "image/jpeg", "image"); setImg({ desc: "（上传的照片）", src: ref, who: [] }); }} />
+        <textarea className="ig-st-text" value={text} onChange={e => setText(e.target.value)} placeholder="写点什么" />
+      </div>
       <div className="ig-bgs">{BGS.map(b => <button type="button" key={b} className={b === bg ? "on" : ""} style={{ background: b }} onClick={() => setBg(b)} />)}</div>
+      {mode === "pick" ? (
+        <div className="ig-sheet-bk" onClick={() => setMode("none")}>
+          <div className="ig-sheet ig-stn-pick" onClick={e => e.stopPropagation()}>
+            <div className="ig-edit-h"><b>从相册选</b></div>
+            <div className="ig-grid">{photos.map(p => <button type="button" key={p.id} onClick={() => { setImg({ desc: p.desc || "一张照片", src: p.src, who: p.genWho }); setMode("none"); }}><Pic img={{ desc: p.desc, src: p.src }} ratio="1/1" small /></button>)}</div>
+            {!photos.length ? <div className="ig-empty">相册里还没有照片</div> : null}
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -630,7 +665,7 @@ function StoryViewer({ list, start, onClose, onNotice }: { list: Story[]; start:
   return (
     <div className="ig-sv" style={{ background: st.bg }} onClick={next}>
       <div className="ig-sv-prog">{list.map((_, k) => <i key={k} className={k <= i ? "on" : ""} />)}</div>
-      <div className="ig-sv-h"><Avatar acc={a} size={32} /><b>{mine ? "你的快拍" : a?.handle}</b><span>{ago(st.at)}</span><button type="button" onClick={e => { e.stopPropagation(); setMenu(true); }}><Ellipsis size={22} /></button><button type="button" onClick={e => { e.stopPropagation(); onClose(); }}><X size={22} /></button></div>
+      <div className="ig-sv-h"><Avatar acc={a} size={32} /><b>{mine ? "你的快拍" : a?.handle}</b><span>{ago(st.at)}</span><div className="ig-sv-btns"><button type="button" onClick={e => { e.stopPropagation(); setMenu(true); }}><Ellipsis size={22} /></button><button type="button" onClick={e => { e.stopPropagation(); onClose(); }}><X size={24} /></button></div></div>
       {st.img ? <div className="ig-sv-img" onClick={e => e.stopPropagation()}><Pic img={st.img} ratio="3/4" onOpen={() => setOpen(true)} /></div> : null}
       {st.text ? <div className="ig-sv-text">{st.text}</div> : null}
       {mine ? <button type="button" className="ig-sv-seen" onClick={e => { e.stopPropagation(); setSeen(true); }}><Eye size={16} />{viewers.length} 位看过</button> : null}

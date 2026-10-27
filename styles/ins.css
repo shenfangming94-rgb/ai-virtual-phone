@@ -29,12 +29,13 @@
 .ig-ring .ig-av { border: 2.5px solid #fff; }
 
 .ig-top { display: flex; align-items: center; padding: calc(var(--page-header-safe-top, 44px) + 4px) 14px 6px; }
-.ig-wm { font-family: "Snell Roundhand", "Brush Script MT", cursive; font-size: 30px; font-weight: 700; margin-right: auto; }
+.ig-app .ig-wm { font-family: "Snell Roundhand", "Brush Script MT", cursive; font-size: 30px; font-weight: 700; margin-right: auto; }
 .ig-bell { position: relative; }
 .ig-bell i { position: absolute; right: -1px; top: -1px; width: 8px; height: 8px; border-radius: 50%; background: #ff3040; }
-.ig-bar { display: flex; align-items: center; justify-content: space-between; padding: calc(var(--page-header-safe-top, 44px) + 4px) 12px 10px; border-bottom: 0.5px solid #efefef; }
+.ig-bar { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; padding: calc(var(--page-header-safe-top, 44px) + 4px) 12px 10px; border-bottom: 0.5px solid #efefef; }
 .ig-bar b { font-size: 17px; font-weight: 700; }
-.ig-bar > span, .ig-bar > button:first-child { min-width: 40px; }
+.ig-bar > :first-child { justify-self: start; } .ig-bar > :last-child { justify-self: end; }
+.ig-bar > button:first-child { display: flex; align-items: center; }
 .ig-bar.dark { border-bottom: 0; color: #fff; }
 .ig-bar.dark button { color: #fff !important; }
 .ig-stories { display: flex; gap: 12px; padding: 8px 12px 12px; overflow-x: auto; border-bottom: 0.5px solid #efefef; }
@@ -135,18 +136,30 @@
 .ig-who button.on { background: #111 !important; color: #fff !important; border-color: #111 !important; }
 
 /* 快拍 */
+.ig-stn-body { flex: 1; overflow-y: auto; padding-top: 16px; }
+.ig-stn-add { display: flex; gap: 10px; padding: 0 24px; }
+.ig-stn-add button { flex: 1; height: 72px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; border-radius: 14px; background: rgba(255, 255, 255, 0.16) !important; color: #fff !important; font-size: 13px; font-weight: 600; }
+.ig-stn-img { position: relative; width: 62%; margin: 0 auto; border-radius: 12px; overflow: hidden; }
+.ig-stn-img > button { position: absolute; right: 8px; top: 8px; width: 24px; height: 24px; border-radius: 50%; background: rgba(0, 0, 0, 0.55) !important; color: #fff !important; display: flex; align-items: center; justify-content: center; }
+.ig-stn-write { padding: 0 24px; }
+.ig-stn-row { display: flex; gap: 10px; margin-top: 10px; }
+.ig-stn-row button { flex: 1; height: 40px; border-radius: 10px; background: rgba(255, 255, 255, 0.16) !important; color: #fff !important; font-size: 14px; font-weight: 600; }
+.ig-stn-row button.on { background: #fff !important; color: #111 !important; } .ig-stn-row button:disabled { opacity: 0.5; }
+.ig-stn-pick { max-height: 70%; overflow-y: auto; color: #111; }
 .ig-story-new { color: #fff; }
-.ig-st-text { margin: 60px 24px 0; background: transparent; border: 0; outline: 0; color: #fff; font-family: "Songti SC", "STSong", serif; font-size: 22px; line-height: 1.8; text-align: center; resize: none; min-height: 200px; }
+.ig-st-text { display: block; width: calc(100% - 48px); margin: 24px 24px 0; background: transparent; border: 0; outline: 0; color: #fff; font-family: "Songti SC", "STSong", serif; font-size: 22px; line-height: 1.8; text-align: center; resize: none; min-height: 200px; }
 .ig-st-text::placeholder, .ig-st-desc::placeholder { color: rgba(255, 255, 255, 0.6); }
-.ig-st-desc { margin: 20px 24px; background: rgba(255, 255, 255, 0.15); border: 1px solid rgba(255, 255, 255, 0.35); border-radius: 12px; padding: 10px 12px; color: #fff; outline: 0; font-size: 14px; }
-.ig-bgs { display: flex; gap: 10px; justify-content: center; margin-top: auto; padding-bottom: 40px; }
+.ig-st-desc { display: block; width: 100%; box-sizing: border-box; resize: none; font-family: inherit; line-height: 1.6; margin: 0; background: rgba(255, 255, 255, 0.15); border: 1px solid rgba(255, 255, 255, 0.35); border-radius: 12px; padding: 10px 12px; color: #fff; outline: 0; font-size: 14px; }
+.ig-bgs { display: flex; gap: 10px; justify-content: center; padding: 16px 0 calc(32px + env(safe-area-inset-bottom, 0px)); }
 .ig-bgs button { width: 32px; height: 32px; border-radius: 50%; border: 2px solid rgba(255, 255, 255, 0.5) !important; }
 .ig-bgs button.on { border-color: #fff !important; transform: scale(1.12); }
 .ig-sv { position: absolute; inset: 0; z-index: 50; color: #fff; }
-.ig-sv-prog { position: absolute; left: 10px; right: 10px; top: calc(var(--page-header-safe-top, 44px) + 2px); display: flex; gap: 3px; }
+.ig-sv-prog { position: absolute; left: 12px; right: 12px; top: calc(var(--page-header-safe-top, 44px) + 2px); display: flex; gap: 3px; }
 .ig-sv-prog i { flex: 1; height: 2.5px; border-radius: 2px; background: rgba(255, 255, 255, 0.35); } .ig-sv-prog i.on { background: #fff; }
-.ig-sv-h { position: absolute; left: 12px; right: 12px; top: calc(var(--page-header-safe-top, 44px) + 12px); display: flex; align-items: center; gap: 8px; font-size: 13.5px; }
-.ig-sv-h span { opacity: 0.75; } .ig-sv-h button { margin-left: auto; color: #fff !important; }
+.ig-sv-h { position: absolute; left: 12px; right: 8px; top: calc(var(--page-header-safe-top, 44px) + 12px); display: flex; align-items: center; gap: 8px; font-size: 13.5px; }
+.ig-sv-h b { font-weight: 600; } .ig-sv-h span { opacity: 0.75; }
+.ig-sv-btns { margin-left: auto; display: flex; align-items: center; gap: 4px; }
+.ig-sv-btns button { width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; color: #fff !important; }
 .ig-sv-img { position: absolute; left: 30px; right: 30px; top: 140px; border-radius: 12px; overflow: hidden; }
 .ig-sv-text { position: absolute; left: 24px; right: 24px; top: 46%; transform: translateY(-50%); text-align: center; font-family: "Songti SC", "STSong", serif; font-size: 20px; line-height: 1.8; letter-spacing: 2px; white-space: pre-wrap; }
 .ig-sv-img + .ig-sv-text { top: auto; bottom: 120px; transform: none; font-size: 16px; }

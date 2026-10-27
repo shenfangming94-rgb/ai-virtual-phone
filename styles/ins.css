@@ -87,7 +87,26 @@
 .ig-nt-th { width: 44px; height: 44px; border-radius: 4px; overflow: hidden; flex: none; }
 
 /* 发帖 */
-.ig-np-imgs { display: flex; gap: 8px; padding: 14px 16px 6px; overflow-x: auto; }
+.ig-np-imgs { display: flex; gap: 8px; padding: 14px 16px 6px; overflow-x: auto; align-items: center; }
+.ig-np-imgs.one { justify-content: center; }
+.ig-np-imgs.one .ig-np-img { width: 58%; }
+.ig-np-more { width: 44px; height: 44px; flex: none; border-radius: 50%; border: 1px solid #dbdbdb !important; display: flex; align-items: center; justify-content: center; color: #555 !important; }
+.ig-np-empty { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; width: 58%; aspect-ratio: 3/4; margin: 14px auto 6px; border-radius: 12px; background: #f5f5f5 !important; color: #555 !important; font-size: 15px; }
+.ig-np-empty small { font-size: 12px; color: #999; }
+.ig-add { padding-top: 14px; }
+.ig-np-redo { display: flex; justify-content: center; gap: 10px; font-size: 13px; color: #8e8e8e; padding: 4px 0 2px; }
+.ig-np-redo button { color: #0095f6 !important; font-weight: 600; }
+.ig-sel { position: relative; }
+.ig-sel i { position: absolute; right: 6px; top: 6px; width: 22px; height: 22px; border-radius: 50%; border: 1.5px solid #fff; background: rgba(0, 0, 0, 0.2); font-style: normal; font-size: 12px; font-weight: 700; color: #fff; display: flex; align-items: center; justify-content: center; }
+.ig-sel i.on { background: #0095f6; }
+.ig-sec-sub { font-size: 12px; color: #8e8e8e; font-weight: 400; margin-left: 8px; }
+.ig-wd { margin-bottom: 12px; }
+.ig-wd-h { display: flex; justify-content: space-between; align-items: center; font-size: 13px; color: #8e8e8e; margin-bottom: 6px; }
+.ig-wd-h button { color: #8e8e8e !important; }
+.ig-more-link { display: block; width: 100%; text-align: center; padding: 10px !important; border: 1px dashed #c7c7c7 !important; border-radius: 12px; font-size: 14px; color: #555 !important; margin-bottom: 4px; }
+.ig-sheet > button.ig-np-row { display: flex; text-align: left; padding: 13px 18px !important; }
+.ig-av-edit { display: flex; flex-direction: column; align-items: center; gap: 8px; margin: 6px 0 4px; }
+.ig-av-pick { margin: 4px -16px 6px; border-top: 0.5px solid #efefef; border-bottom: 0.5px solid #efefef; padding-bottom: 6px; }
 .ig-np-img { position: relative; width: 120px; flex: none; border-radius: 10px; overflow: hidden; }
 .ig-np-img button { position: absolute; right: 6px; top: 6px; width: 22px; height: 22px; border-radius: 50%; background: rgba(0, 0, 0, 0.55) !important; color: #fff !important; display: flex; align-items: center; justify-content: center; }
 .ig-np-add { width: 120px; flex: none; aspect-ratio: 3/4; display: flex; flex-direction: column; gap: 8px; }

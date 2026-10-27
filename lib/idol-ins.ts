@@ -60,7 +60,7 @@ export type Msg = { id: string; me: boolean; text: string; zh?: string; at: numb
 export type Dm = { msgs: Msg[]; status: "request" | "open"; auto: boolean; proactive: boolean; lastMine?: number };
 
 type State = {
-  me: { handle: string; name: string; bio: string; private: boolean; riskHint: boolean };
+  me: { handle: string; name: string; bio: string; private: boolean; riskHint: boolean; avatar?: string };
   accs: Record<string, InsAcc>;
   following: string[];
   followers: string[];

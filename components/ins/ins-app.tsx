@@ -54,7 +54,8 @@ function Verified() {
 }
 
 function Avatar({ acc, size = 32, ring }: { acc?: InsAcc; size?: number; ring?: "new" | "seen" }) {
-  const src = acc?.id === ME ? loadTraineeCard()?.photo ?? null : charAvatar(acc);
+  const mine = useMedia(acc?.id === ME ? loadIns().me.avatar : undefined);
+  const src = acc?.id === ME ? mine ?? loadTraineeCard()?.photo ?? null : charAvatar(acc);
   const inner = <span className="ig-av" style={{ width: size, height: size, background: src ? undefined : `linear-gradient(160deg, hsl(${acc?.hue ?? 300} 45% 86%), hsl(${acc?.hue ?? 300} 35% 66%))` }}>{src ? <img src={src} alt="" /> : null}</span>;
   if (!ring) return inner;
   return <span className={`ig-ring ${ring}`} style={{ width: size + 8, height: size + 8 }}>{inner}</span>;
@@ -364,14 +365,30 @@ function Profile({ id, onBack, onPosts, onReq, onNotice, tabbar, onChat, onStory
 function EditMe({ onClose }: { onClose: () => void }) {
   const s = loadIns();
   const [f, setF] = useState(s.me);
+  const [pickAv, setPickAv] = useState(false);
+  const avFile = useRef<HTMLInputElement>(null);
+  const avUrl = useMedia(f.avatar);
+  const cur = avUrl ?? loadTraineeCard()?.photo ?? null;
   return (
     <div className="ig-sheet-bk" onClick={onClose}>
       <div className="ig-sheet ig-edit" onClick={e => e.stopPropagation()}>
         <div className="ig-edit-h"><b>编辑主页</b></div>
+        <div className="ig-av-edit">
+          <span className="ig-av" style={{ width: 84, height: 84, background: cur ? undefined : "linear-gradient(160deg, hsl(340 45% 86%), hsl(340 35% 66%))" }}>{cur ? <img src={cur} alt="" /> : null}</span>
+          <button type="button" className="ig-link" onClick={() => setPickAv(!pickAv)}>更换头像</button>
+        </div>
+        {pickAv ? (
+          <div className="ig-av-pick">
+            <button type="button" className="ig-np-row" onClick={() => avFile.current?.click()}><ImageIcon size={20} /><span>从手机里上传</span><ChevronRight size={16} /></button>
+            <input ref={avFile} type="file" accept="image/*" hidden onChange={async e => { const file = e.target.files?.[0]; e.target.value = ""; if (!file) return; const ref = await storeMediaBlob(file, file.type || "image/jpeg", "image"); setF(x => ({ ...x, avatar: ref })); setPickAv(false); }} />
+            <div className="ig-grid">{loadPhotos().filter(p => p.inLibrary && p.src).slice(-9).reverse().map(p => <button type="button" key={p.id} onClick={() => { setF(x => ({ ...x, avatar: p.src })); setPickAv(false); }}><Pic img={{ desc: p.desc, src: p.src }} ratio="1/1" small /></button>)}</div>
+            {f.avatar ? <button type="button" className="ig-np-row" onClick={() => { setF(x => ({ ...x, avatar: undefined })); setPickAv(false); }}><span>用练习生证上的照片</span></button> : null}
+          </div>
+        ) : null}
         <label>用户名<input value={f.handle} onChange={e => setF({ ...f, handle: e.target.value.replace(/[^a-zA-Z0-9._]/g, "").toLowerCase() })} /></label>
         <label>名字<input value={f.name} onChange={e => setF({ ...f, name: e.target.value })} /></label>
         <label>简介<textarea rows={3} value={f.bio} onChange={e => setF({ ...f, bio: e.target.value })} /></label>
-        <button type="button" className="ig-blue-btn" onClick={() => { setMe({ handle: f.handle || s.me.handle, name: f.name, bio: f.bio }); onClose(); }}>完成</button>
+        <button type="button" className="ig-blue-btn" onClick={() => { setMe({ handle: f.handle || s.me.handle, name: f.name, bio: f.bio, avatar: f.avatar }); onClose(); }}>完成</button>
       </div>
     </div>
   );
@@ -442,11 +459,13 @@ function Compose({ onBack, onDone, onNotice }: { onBack: () => void; onDone: () 
   const [cap, setCap] = useState("");
   const [place, setPlace] = useState("");
   const [page, setPage] = useState<"main" | "pick" | "write" | "who" | "place" | "more">("main");
-  const [desc, setDesc] = useState("");
+  const [descs, setDescs] = useState<string[]>([""]);
+  const [sel, setSel] = useState<string[]>([]);
   const [who, setWho] = useState<string[]>([SELF_REFERENCE_ID]);
   const [hideLikes, setHideLikes] = useState(false);
   const [noComments, setNoComments] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [add, setAdd] = useState(false);
   const file = useRef<HTMLInputElement>(null);
   const photos = loadPhotos().filter(p => p.inLibrary).slice(-60).reverse();
 
@@ -461,20 +480,31 @@ function Compose({ onBack, onDone, onNotice }: { onBack: () => void; onDone: () 
   const top = (title: string, onB: () => void, right?: React.ReactNode) => <div className="ig-bar"><button type="button" onClick={onB}><ChevronLeft size={26} /></button><b>{title}</b>{right ?? <span />}</div>;
 
   if (page === "pick") return (
-    <div className="ig-page">{top("选照片", () => setPage("main"))}
+    <div className="ig-page">{top("选照片", () => setPage("main"), <button type="button" className="ig-link" disabled={!sel.length} onClick={() => { setImgs(sel.map(id => photos.find(p => p.id === id)!).filter(Boolean).map(p => ({ desc: p.desc || "一张照片", src: p.src, who: p.genWho }))); setPage("main"); }}>下一步{sel.length ? `（${sel.length}）` : ""}</button>)}
       <div className="ig-scroll">
-        <button type="button" className="ig-np-row" onClick={() => file.current?.click()}><ImageIcon size={22} /><span>从手机里上传</span><ChevronRight size={16} /></button>
-        <input ref={file} type="file" accept="image/*" hidden onChange={async e => { const f = e.target.files?.[0]; e.target.value = ""; if (!f) return; const ref = await storeMediaBlob(f, f.type || "image/jpeg", "image"); setImgs(x => [...x, { desc: "（上传的照片）", src: ref, who: [] }].slice(0, 5)); setPage("main"); }} />
-        <div className="ig-sec">相册</div>
-        <div className="ig-grid">{photos.map(p => <button type="button" key={p.id} onClick={() => { setImgs(x => [...x, { desc: p.desc || "一张照片", src: p.src, who: p.genWho }].slice(0, 5)); setPage("main"); }}><Pic img={{ desc: p.desc, src: p.src }} ratio="1/1" small /></button>)}</div>
+        <button type="button" className="ig-np-row" onClick={() => file.current?.click()}><ImageIcon size={22} /><span>从手机里上传<small>可以一次选好几张，最多 5 张</small></span><ChevronRight size={16} /></button>
+        <input ref={file} type="file" accept="image/*" multiple hidden onChange={async e => { const fs = [...(e.target.files ?? [])].slice(0, 5); e.target.value = ""; if (!fs.length) return; const refs = await Promise.all(fs.map(f => storeMediaBlob(f, f.type || "image/jpeg", "image"))); setImgs(refs.map(ref => ({ desc: "（上传的照片）", src: ref, who: [] }))); setPage("main"); }} />
+        <div className="ig-sec">相册<small className="ig-sec-sub">点一下选中，最多 5 张</small></div>
+        <div className="ig-grid">{photos.map(p => { const n = sel.indexOf(p.id); return (
+          <button type="button" key={p.id} className="ig-sel" onClick={() => setSel(n >= 0 ? sel.filter(x => x !== p.id) : sel.length < 5 ? [...sel, p.id] : sel)}>
+            <Pic img={{ desc: p.desc, src: p.src }} ratio="1/1" small />
+            <i className={n >= 0 ? "on" : ""}>{n >= 0 ? n + 1 : ""}</i>
+          </button>
+        ); })}</div>
         {!photos.length ? <div className="ig-empty">相册里还没有照片</div> : null}
       </div>
     </div>
   );
   if (page === "write") return (
-    <div className="ig-page">{top("写画面", () => setPage("main"), <button type="button" className="ig-link" onClick={() => { if (desc.trim()) { setImgs(x => [...x, { desc: desc.trim(), who }].slice(0, 5)); setDesc(""); setPage("main"); } }}>添加</button>)}
+    <div className="ig-page">{top("写画面", () => setPage("main"), <button type="button" className="ig-link" disabled={!descs.some(d => d.trim())} onClick={() => { setImgs(descs.filter(d => d.trim()).map(d => ({ desc: d.trim(), who }))); setPage("main"); }}>完成</button>)}
       <div className="ig-scroll ig-pad">
-        <textarea className="ig-ta" rows={4} value={desc} onChange={e => setDesc(e.target.value)} placeholder="这张照片拍的是什么，比如：两只手隔着桌子各拿一杯冰美式" />
+        {descs.map((d, i) => (
+          <div key={i} className="ig-wd">
+            <div className="ig-wd-h">第 {i + 1} 张{descs.length > 1 ? <button type="button" onClick={() => setDescs(descs.filter((_, k) => k !== i))}><X size={14} /></button> : null}</div>
+            <textarea className="ig-ta" rows={3} value={d} onChange={e => setDescs(descs.map((x, k) => (k === i ? e.target.value : x)))} placeholder={i === 0 ? "这张照片拍的是什么，比如：两只手隔着桌子各拿一杯冰美式" : "下一张拍的是什么"} />
+          </div>
+        ))}
+        {descs.length < 5 ? <button type="button" className="ig-more-link" onClick={() => setDescs([...descs, ""])}>再写一张</button> : null}
         <div className="ig-hint">先显示成黑底的描述卡，点「生成这张图」才生图。照片里有谁会带上谁的参考图：</div>
         <WhoPicker value={who} onChange={setWho} />
       </div>
@@ -496,10 +526,14 @@ function Compose({ onBack, onDone, onNotice }: { onBack: () => void; onDone: () 
     <div className="ig-page">
       {top("新帖子", onBack)}
       <div className="ig-scroll">
-        <div className="ig-np-imgs">
-          {imgs.map((m, i) => <div key={i} className="ig-np-img"><Pic img={m} ratio="3/4" small /><button type="button" onClick={() => setImgs(imgs.filter((_, k) => k !== i))}><X size={14} /></button></div>)}
-          {imgs.length < 5 ? <div className="ig-np-add"><button type="button" onClick={() => setPage("pick")}><ImageIcon size={20} />相册选图</button><button type="button" onClick={() => setPage("write")}><SquarePlus size={20} />写画面</button></div> : null}
-        </div>
+        {imgs.length ? (
+          <div className={`ig-np-imgs${imgs.length === 1 ? " one" : ""}`}>
+            {imgs.map((m, i) => <div key={i} className="ig-np-img"><Pic img={m} ratio="3/4" small={imgs.length > 1} /><button type="button" onClick={() => setImgs(imgs.filter((_, k) => k !== i))}><X size={14} /></button></div>)}
+          </div>
+        ) : null}
+        {!imgs.length ? (
+          <button type="button" className="ig-np-empty" onClick={() => { setSel([]); setDescs([""]); setAdd(true); }}><ImageIcon size={30} strokeWidth={1.6} /><span>添加照片</span><small>最多 5 张</small></button>
+        ) : null}
         <textarea className="ig-cap" rows={3} value={cap} onChange={e => setCap(e.target.value)} placeholder="添加配文…" />
         {row(<UsersRound size={22} />, "照片里有谁", whoText, "who")}
         {row(<MapPin size={22} />, "添加地点", place, "place")}
@@ -510,6 +544,15 @@ function Compose({ onBack, onDone, onNotice }: { onBack: () => void; onDone: () 
         <div style={{ height: 90 }} />
       </div>
       <button type="button" className="ig-share" disabled={busy} onClick={() => void share()}>{busy ? "发送中…" : "分享"}</button>
+      {add ? (
+        <div className="ig-sheet-bk" onClick={() => setAdd(false)}>
+          <div className="ig-sheet ig-add" onClick={e => e.stopPropagation()}>
+            <div className="ig-edit-h"><b>添加照片</b></div>
+            <button type="button" className="ig-np-row" onClick={() => { setAdd(false); setSel([]); setPage("pick"); }}><ImageIcon size={22} /><span>从相册选<small>相册里的照片，或者从手机里上传</small></span><ChevronRight size={16} /></button>
+            <button type="button" className="ig-np-row" onClick={() => { setAdd(false); setDescs([""]); setPage("write"); }}><SquarePlus size={22} /><span>写画面<small>先显示成描述卡，想要真图再点「生成这张图」</small></span><ChevronRight size={16} /></button>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

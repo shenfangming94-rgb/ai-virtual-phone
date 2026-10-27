@@ -124,6 +124,17 @@ export function promoteCrowd(sessionId: string, crowdId: string, groupName: stri
   return char.id;
 }
 
+/** 路人离开公司：从名册里拿掉（转正过的不走这里） */
+export function removeCrowd(sessionId: string, crowdId: string): boolean {
+  const all = loadAll();
+  const list = all[sessionId] ?? [];
+  const m = list.find(x => x.id === crowdId);
+  if (!m || m.promotedTo) return false;
+  all[sessionId] = list.filter(x => x.id !== crowdId);
+  saveAll(all);
+  return true;
+}
+
 /** 消息上记的是路人 id：转正过的换成真角色 id */
 export function resolveSenderId(id: string | undefined): string | undefined {
   if (!isCrowdId(id)) return id;

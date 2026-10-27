@@ -7,6 +7,7 @@
  * 跳过的日子里：不用她回的（群里、八卦、动态）按原来的时间补上；要她回的私聊在她落地时才发过来。
  */
 
+import { nudgeLeave } from "./idol-leave";
 import { fameEvent, fameTotal, fameWordNow } from "./idol-fame";
 import { kvGet, kvSet } from "./kv-db";
 import { loadCharacters } from "./character-storage";
@@ -38,6 +39,8 @@ export type PlannedEvent = {
   invite?: { title: string; at: number; place: string; replyBy?: number; from: string };
   /** 这件事让她的关注度动了多少（只有外界看得到、跟她有关的事才有） */
   fame?: "small" | "medium" | "big";
+  /** 这件事让谁更想走 / 更想留（idol-leave.ts） */
+  moods?: { name: string; d: "leave" | "stay"; why: string }[];
   done?: boolean;
 };
 type Post = { who: string; text: string; at: number; done?: boolean };
@@ -138,7 +141,8 @@ function rosterBlock(): string {
     .map(c => {
       const p = profiles[c.id];
       const stale = !p.status || now - p.status.at > 7 * DAY;
-      return `- ${c.name}（${p.role || p.group || "身份没写"}${p.gender ? `，${p.gender}` : ""}${p.age ? `，${p.age}岁` : ""}；跟她：${relationOf(p)}${friends.has(c.id) ? "，KakaoTalk 好友" : ""}）最近：${p.status?.text || "没写"}${stale ? "【近况要更新】" : ""}`;
+      const worry = p.leave?.phase === "waver" || p.leave?.phase === "decided" ? `【心事：在想要不要离开公司，${p.leave.log.filter(x => x.d > 0).slice(-2).map(x => x.text).join("；")}】` : "";
+      return `- ${c.name}（${p.role || p.group || "身份没写"}${p.gender ? `，${p.gender}` : ""}${p.age ? `，${p.age}岁` : ""}；跟她：${relationOf(p)}${friends.has(c.id) ? "，KakaoTalk 好友" : ""}）最近：${p.status?.text || "没写"}${stale ? "【近况要更新】" : ""}${worry}`;
     }).join("\n");
 }
 
@@ -168,9 +172,10 @@ const PLAN_RULES = `你在给一出韩国娱乐圈练习生的戏排接下来几
 - 有人「【近况要更新】」的，在 status 里给他写新的近况：status 世界视角一句他最近在忙什么，kakao 他自己会写在 KakaoTalk 状态消息里的短句。有事发生在谁身上，也更新他的近况。
 - posts：偶尔有一两个人发 KakaoTalk 动态（练习生手机管得严，一周一两条），写他自己口吻的一两句。
 - fame：这件事让外界更多人知道她了才写，按动静写 small（路透、小帖子）/ medium（公开视频上传、给前辈伴舞、上杂志）/ big（上热搜、出了大事，好事坏事都算）；跟外界无关、别人身上的事不写。
+- moods：这件事让名单里哪个同公司练习生更想离开公司或更想留下，写 {"name":"","d":"leave/stay","why":"一句"}；没影响就空着。名单里标「心事」的人在犹豫要不要走，可以有相应的事（跟老师谈话、家里来电话、别家公司的人找他），也可以有让他想留下的事。
 - 时间都写成 YYYY-MM-DD HH:mm，必须在给定的时间段里。
 JSON 格式：
-{"events":[{"at":"","kind":"small/big/setback/sick/chance/date","about":"世界视角一句话：发生了什么","people":["相关的人"],"lines":[{"where":"group/private","who":"","text":""}],"invite":null,"fame":null}],"newPeople":[{"name":"","role":"","gender":"男/女","age":""}],"status":[{"name":"","status":"","kakao":""}],"posts":[{"who":"","text":"","at":""}]}`;
+{"events":[{"at":"","kind":"small/big/setback/sick/chance/date","about":"世界视角一句话：发生了什么","people":["相关的人"],"lines":[{"where":"group/private","who":"","text":""}],"invite":null,"fame":null,"moods":[]}],"newPeople":[{"name":"","role":"","gender":"男/女","age":""}],"status":[{"name":"","status":"","kakao":""}],"posts":[{"who":"","text":"","at":""}]}`;
 
 async function plan(from: number, to: number): Promise<void> {
   const s = load();
@@ -206,7 +211,7 @@ async function plan(from: number, to: number): Promise<void> {
   const res = await simpleLLMCall(chatConfig(), [{ role: "system", content: PLAN_RULES }, { role: "user", content: user }], { temperature: 0.9, label: "世界排事情" });
   if (!res.content) throw new Error(res.error || "AI 没回");
   const j = JSON.parse(res.content.match(/\{[\s\S]*\}/)?.[0] ?? "{}") as {
-    events?: { at?: string; kind?: string; about?: string; people?: string[]; lines?: Line[]; invite?: { title?: string; at?: string; place?: string; replyBy?: string; from?: string } | null }[];
+    events?: { at?: string; kind?: string; about?: string; people?: string[]; lines?: Line[]; invite?: { title?: string; at?: string; place?: string; replyBy?: string; from?: string } | null; moods?: { name?: string; d?: string; why?: string }[] }[];
     newPeople?: { name?: string; role?: string; gender?: string; age?: string }[];
     status?: { name?: string; status?: string; kakao?: string }[];
     posts?: { who?: string; text?: string; at?: string }[];
@@ -230,6 +235,7 @@ async function plan(from: number, to: number): Promise<void> {
       lines: (e.lines ?? []).filter(l => l && l.who && l.text).map(l => ({ where: l.where === "group" ? "group" : "private", who: String(l.who), text: String(l.text) })),
       ...(["small", "medium", "big"].includes(String((e as { fame?: string }).fame)) ? { fame: (e as { fame?: string }).fame as PlannedEvent["fame"] } : {}),
       ...(e.invite && invAt ? { invite: { title: String(e.invite.title ?? "邀请"), at: invAt, place: String(e.invite.place ?? ""), replyBy: parseAt(e.invite.replyBy) ?? undefined, from: String(e.invite.from ?? "") } } : {}),
+      ...((e.moods ?? []).length ? { moods: (e.moods ?? []).filter(m => m?.name && (m.d === "leave" || m.d === "stay")).map(m => ({ name: String(m.name), d: m.d as "leave" | "stay", why: String(m.why ?? e.about ?? "") })) } : {}),
     };
     return ev;
   }).filter((e): e is PlannedEvent => Boolean(e));
@@ -311,6 +317,7 @@ function runEvent(e: PlannedEvent, notify: (m: string) => void) {
       notify(`📩 待回复：${node.title}`);
     }
   }
+  for (const m of e.moods ?? []) { const c = charByName(m.name); if (c) nudgeLeave(c.id, m.d === "leave" ? 1 : -1, m.why || e.about, e.at); }
   if (e.kind === "sick") {
     const s = load();
     save({ ...s, health: { what: e.about, until: e.at + 3 * DAY } });

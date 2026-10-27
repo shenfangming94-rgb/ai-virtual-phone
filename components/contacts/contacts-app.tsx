@@ -486,6 +486,14 @@ function CardView({ data, id, onBack, onEdit, onNotice }: { data: Data; id: stri
           {p.birthday ? <><hr /><div className="ct-k">生日</div><div className="ct-v">{p.birthday.split("-").map(x => String(parseInt(x, 10) || x)).join("月")}日</div></> : null}
         </div>
 
+        {p.leave?.phase === "left" && p.leave.left ? (
+          <div className="ct-block">
+            <div className="ct-k">已离开公司</div>
+            <div className="ct-v">{p.leave.left.why}</div>
+            <div className="ct-v is-dim">{fmtDay(p.leave.left.at)}{p.leave.left.to ? ` · ${p.leave.left.to}` : ""}</div>
+          </div>
+        ) : null}
+
         {p.status?.text ? (
           <div className="ct-block">
             <div className="ct-k">最近</div>

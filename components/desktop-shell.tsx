@@ -10,6 +10,7 @@ import { InsApp } from "./ins/ins-app";
 import { insTick } from "@/lib/idol-ins";
 import { YoutubeApp } from "./youtube/youtube-app";
 import { ytTick } from "@/lib/idol-youtube";
+import { leaveTick } from "@/lib/idol-leave";
 import { socialTick } from "@/lib/idol-social";
 import { careerTick } from "@/lib/idol-career";
 import { mailAppIcon, mailAppTick, searchTick } from "@/lib/idol-search";
@@ -1133,6 +1134,7 @@ export function DesktopShell({ initialThemeProfile, initialThemeAssets }: Deskto
       try { mailAppTick(idolNotify); } catch { /* 同上 */ }
       try { insTick(idolNotify); } catch { /* 同上 */ }
       try { ytTick(idolNotify); } catch { /* 同上 */ }
+      try { leaveTick(); } catch { /* 同上 */ }
       try { socialTick(); } catch { /* 同上 */ }
       try { syncIdolWorldBook(); } catch { /* 同上 */ }
     };
@@ -1140,6 +1142,7 @@ export function DesktopShell({ initialThemeProfile, initialThemeAssets }: Deskto
     // 开发时给测试脚本用（线上没有）
     if (process.env.NODE_ENV !== "production") {
       void import("@/lib/idol-reminders").then(m => { (window as unknown as { __idol?: unknown }).__idol = { checkNode: m.checkNode, leaveNode: m.leaveNode, run }; });
+      void Promise.all([import("@/lib/idol-leave"), import("@/lib/chat-storage")]).then(([l, cs]) => { (window as unknown as { __idolLeave?: unknown }).__idolLeave = { nudge: l.nudgeLeave, afterRank: l.afterMonthlyRank, tick: l.leaveTick, dm: (id: string) => { const s = cs.createOrGetSession(id); cs.pushChatMessage({ sessionId: s.id, role: "assistant", content: "嗨", status: "sent" }); } }; });
       void Promise.all([import("@/lib/idol-groups"), import("@/lib/idol-calendar"), import("@/lib/idol-search")]).then(([g, c, se]) => { (window as unknown as { __idolGroups?: unknown }).__idolGroups = { load: g.loadGroups, month: c.generateWorldMonth, site: se.buildSite }; });
     }
     const timer = window.setInterval(run, 5000);

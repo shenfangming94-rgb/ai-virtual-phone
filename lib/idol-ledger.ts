@@ -6,6 +6,7 @@
  * 她的名次从账来，一个月最多升降八名；考前写了「想要的结果」就照那个排；排名页能「改我的名次」。
  */
 
+import { afterMonthlyRank } from "./idol-leave";
 import { kvGet, kvSet } from "./kv-db";
 import { loadCharacters } from "./character-storage";
 import { createOrGetSession, loadChatContacts, loadChatSessions, pushChatMessage, updateMessageMediaUrl } from "./chat-storage";
@@ -96,7 +97,7 @@ function participants(): { id: string; name: string; group: string; hurt: boolea
   const profiles = loadProfiles();
   for (const c of loadCharacters()) {
     const p = profiles[c.id];
-    if (!p || p.gender === "男" || !/练习生|室友|同期/.test(`${p.role}${p.group}`) || /老师|管理/.test(p.role)) continue;
+    if (!p || p.gender === "男" || p.leave?.phase === "left" || !/练习生|室友|同期/.test(`${p.role}${p.group}`) || /老师|管理/.test(p.role)) continue;
     list.push({ id: c.id, name: c.name, group: crowdGroup(`${p.role}`), hurt: /受伤|扭伤|生病|住院/.test(p.status?.text ?? "") });
   }
   try {
@@ -268,6 +269,7 @@ async function publish(node: CareerNode, at: number, notify: (m: string) => void
   });
   const s = load();
   save({ ...s, months: [...s.months, r] });
+  try { afterMonthlyRank(r.rows, at); } catch { /* 走人的事出错不影响排名 */ }
   if (typeof window !== "undefined") window.dispatchEvent(new Event(RANK_EVENT));
   notify(`💬 月末评价结果出来了：第 ${r.rank} 名`);
 }

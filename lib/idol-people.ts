@@ -79,6 +79,19 @@ export type IdolProfile = {
   rolled?: boolean;
   /** 最近在忙什么：text 世界视角一句（名片「最近」），kakao 他自己写的 KakaoTalk 状态消息 */
   status?: { text: string; kakao: string; at: number };
+  /** 想不想离开公司（只有同公司练习生有，规矩在 idol-leave.ts） */
+  leave?: LeaveInfo;
+};
+
+export type LeaveInfo = {
+  /** 0～10，越高越想走，她看不到 */
+  score: number;
+  /** 每次涨落的原因 */
+  log: { at: number; d: number; text: string }[];
+  phase: "ok" | "waver" | "decided" | "left";
+  waverAt?: number;
+  decided?: { at: number; leaveAt: number; kind: string; why: string; to: string; after?: { status: string; kakao: string } };
+  left?: { at: number; kind: string; why: string; to: string; wasRole: string };
 };
 
 export type ContactList = { id: string; name: string; memberIds: string[] };
@@ -147,6 +160,8 @@ export function composePersona(p: IdolProfile): string {
   if (p.taboo) out.push(`【雷区】${p.taboo}`);
   if (p.status?.text) out.push(`【最近】${p.status.text}`);
   if (p.met && p.withYou) out.push(`【对她的印象】${p.withYou}`);
+  const leave = leaveLine(p);
+  if (leave) out.push(leave);
   const rel = relationOf(p);
   out.push(`【你对她的态度】关系：${rel}${p.canCrush && p.heart ? `；心动：${p.heart}` : ""}。照这个态度说话做事，不要比它更热情或更冷淡；心动到哪一步就表现到哪一步，要不要表白、什么时候表白看你的性格和处境。`);
   if (p.secret && p.secret.kind !== "none" && p.secret.text) {
@@ -156,6 +171,18 @@ export function composePersona(p: IdolProfile): string {
     out.push(`【和她之间的事】\n${p.events.slice(-12).map(e => `- ${fmtDay(e.at)}${e.place ? ` · ${e.place}` : ""}：${e.text}`).join("\n")}`);
   }
   return out.join("\n\n");
+}
+
+/** 他自己知道、她看不到的：在不在想离开公司 */
+export function leaveLine(p: IdolProfile): string {
+  const l = p.leave;
+  if (!l) return "";
+  const md = (ms: number) => `${new Date(ms).getMonth() + 1}月${new Date(ms).getDate()}日`;
+  const why = l.log.filter(x => x.d > 0).slice(-4).map(x => x.text).join("；");
+  if (l.phase === "waver") return `【心事】你最近在想要不要离开公司（${why || "说不清"}），还没决定。要不要告诉她、告诉多少，看你的性格和跟她的关系；她要是关心你、劝你，你心里会动。`;
+  if (l.phase === "decided" && l.decided) return `【心事】你${l.decided.kind === "淘汰" ? "被公司淘汰了" : "已经决定离开公司"}（${l.decided.why}），${md(l.decided.leaveAt)}走。${l.decided.kind === "淘汰" ? "" : "她要是真心留你，你可能会动摇。"}`;
+  if (l.phase === "left" && l.left) return `【你已经离开公司】${md(l.left.at)}离开（${l.left.why}）${l.left.to ? `，现在：${l.left.to}` : ""}。你不再是她的同期，不住宿舍，不去她公司的练习室。`;
+  return "";
 }
 
 export function relationOf(p: IdolProfile): Relation {

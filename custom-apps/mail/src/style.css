@@ -262,3 +262,19 @@ svg{display:block;flex:none}
 .ny-photo{position:absolute;left:52px;top:44px;width:300px;height:168px;object-fit:cover}
 .flame{transform-box:fill-box;transform-origin:50% 100%;animation:flk 1.6s ease-in-out infinite alternate}
 @keyframes flk{to{transform:scale(.88,1.08)}}
+/* 爱豆小手机：公司来信 */
+.body.idol{white-space:normal;font-family:"PingFang SC","Hiragino Sans GB","Apple SD Gothic Neo",sans-serif}
+.body.idol .ko{font-size:15px;line-height:1.7;color:#1f1f1f;margin:10px 0 0}
+.body.idol .zh{font-size:13px;line-height:1.6;color:#9a9a9a;font-weight:300;margin:2px 0 0}
+.body.idol .zh.solo{font-size:15px;color:#1f1f1f;font-weight:400;margin-top:10px}
+.body.idol .zh.sub{font-size:13px;color:#9a9a9a;margin:0 0 4px}
+.inv{border:1px solid #e3e3e3;border-radius:14px;padding:10px 14px;margin-top:16px}
+.inv div{display:flex;font-size:14px;line-height:1.5;padding:4px 0}
+.inv span{width:56px;flex:none;color:#888}
+.iv-acts{display:flex;gap:8px;margin-top:14px}
+.iv-acts button{flex:1;border-radius:22px;padding:12px 0;font-size:14.5px;font-weight:600}
+.iv-a{background:#0b57d0;color:#fff}
+.iv-b{border:1px solid #c4c7c5;color:#0b57d0;background:#fff}
+.iv-no{display:block;margin:10px auto 0;font-size:13px;color:#999}
+.iv-done{margin-top:14px;text-align:center;font-size:14px;color:#0b8043;font-weight:600}
+.iv-done.no{color:#999}

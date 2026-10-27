@@ -1,0 +1,120 @@
+<!doctype html><html><head><meta charset="utf-8"><link rel="stylesheet" href="base.css"><style>
+.sb span{display:none}
+.hd{display:flex;align-items:center;gap:10px;padding:6px 16px 10px}
+.hd b{font-size:22px;font-weight:800}
+.hd small{font-size:12px;color:#999;margin-left:auto}
+.ap{display:flex;gap:12px;padding:13px 16px;border-bottom:1px solid #f2f2f2;align-items:center}
+.lg{width:46px;height:46px;border-radius:11px;color:#fff;font-weight:900;font-size:12px;display:flex;align-items:center;justify-content:center;flex:none;letter-spacing:-.3px}
+.ap .m{flex:1;min-width:0}
+.ap .n{font-size:15.5px;font-weight:700}
+.ap .d{font-size:12px;color:#999;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.st{font-size:12px;font-weight:700;padding:4px 10px;border-radius:20px;flex:none}
+.st.ok{background:#e6f9ee;color:#02a94c}.st.wait{background:#f2f4f6;color:#888}.st.no{background:#fdeceb;color:#d0443a}.st.mute{background:#f6f6f6;color:#bbb}
+.dt{padding:0 16px}
+.dh{display:flex;gap:12px;align-items:center;padding:6px 0 14px}
+.dh .n{font-size:19px;font-weight:800}.dh .d{font-size:12.5px;color:#999;margin-top:2px}
+.tl{border-left:2px solid #e5e7ea;margin:4px 0 0 8px;padding-left:16px}
+.tl div{position:relative;padding:0 0 16px}
+.tl div:before{content:"";position:absolute;left:-22px;top:4px;width:10px;height:10px;border-radius:50%;background:#cfd3d8}
+.tl .on:before{background:var(--g)}
+.tl p{font-size:14px;font-weight:600}.tl small{display:block;font-size:12px;color:#999;margin-top:2px}
+.box{background:#f7f8fa;border-radius:14px;padding:12px 14px;margin-top:4px}
+.box .k{font-size:12px;color:#999;margin-bottom:6px}
+.box .v{font-size:13.5px;line-height:1.6}
+.thumbs{display:flex;gap:6px;margin-top:8px}.thumbs i{width:48px;height:48px;border-radius:8px;background:linear-gradient(160deg,#f6d5dc,#c99aab)}
+.gbtn{margin:14px 0 0;background:var(--g);color:#fff;text-align:center;border-radius:12px;padding:13px;font-size:15px;font-weight:700}
+/* 邮箱 */
+.mtop{display:flex;align-items:center;gap:10px;margin:4px 14px 6px;background:#eef2f9;border-radius:28px;padding:11px 16px;font-size:15px;color:#666}
+.mtop .av{margin-left:auto;width:30px;height:30px;border-radius:50%;background:linear-gradient(160deg,#ffb3c7,#f07a9a);color:#fff;font-size:13px;display:flex;align-items:center;justify-content:center}
+.ml{font-size:12.5px;color:#666;padding:10px 18px 4px}
+.mi{display:flex;gap:12px;padding:11px 16px}
+.mi .lg{width:40px;height:40px;border-radius:50%;font-size:10.5px}
+.mi .m{flex:1;min-width:0}
+.mi .r1{display:flex;justify-content:space-between;font-size:15px}
+.mi .r1 span{font-size:12px;color:#666}
+.mi.u .r1 b,.mi.u .s{font-weight:700;color:#111}
+.mi .r1 b{font-weight:500}
+.mi .s{font-size:13.5px;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#444}
+.mi .p{font-size:13px;color:#888;margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.fab{position:absolute;right:18px;bottom:34px;background:#c2e7ff;border-radius:18px;padding:16px 20px;font-size:15px;font-weight:600;color:#001d35}
+/* 读信 */
+.rt{padding:4px 18px}
+.rt h2{font-size:20px;font-weight:600;line-height:1.35}
+.tagi{display:inline-block;font-size:11.5px;background:#eee;border-radius:4px;padding:1px 6px;margin-top:6px;color:#555}
+.fr{display:flex;align-items:center;gap:10px;margin:14px 0 12px}
+.fr .lg{width:38px;height:38px;border-radius:50%;font-size:10px}
+.fr b{font-size:14.5px}.fr small{display:block;font-size:12px;color:#888}
+.body p.ko{font-size:14px;line-height:1.7;color:#222;font-family:"Apple SD Gothic Neo",-apple-system,sans-serif;margin-top:10px}
+.body p.zh{font-size:12.5px;line-height:1.6;color:#999;font-weight:300;margin-top:2px}
+.inv{border:1px solid #e3e3e3;border-radius:14px;padding:12px 14px;margin-top:14px}
+.inv div{display:flex;font-size:13.5px;padding:4px 0}.inv span{width:64px;color:#888;flex:none}
+.acts{display:flex;gap:8px;margin-top:14px}
+.acts div{flex:1;text-align:center;border-radius:22px;padding:12px 0;font-size:14.5px;font-weight:600}
+.acts .a{background:#0b57d0;color:#fff}.acts .b{border:1px solid #c4c7c5;color:#0b57d0}
+</style></head><body>
+
+<!-- 1 我的投递 -->
+<div><div class="ph">
+<div class="sb"><span>.</span></div>
+<div class="hd"><b>我的投递</b><small>2015.03.24</small></div>
+<div class="ap"><div class="lg" style="background:#3478f6">JYP</div><div class="m"><div class="n">JYP 娱乐</div><div class="d">03.14 投递 · 声乐 舞蹈</div></div><span class="st ok">邀请试镜</span></div>
+<div class="ap"><div class="lg" style="background:#7b4fd6">CUBE</div><div class="m"><div class="n">Cube 娱乐</div><div class="d">03.16 投递 · 舞蹈</div></div><span class="st ok">邀请试镜</span></div>
+<div class="ap"><div class="lg" style="background:#e85d9a">SM</div><div class="m"><div class="n">SM 娱乐</div><div class="d">03.14 投递 · 声乐 舞蹈</div></div><span class="st wait">审核中</span></div>
+<div class="ap"><div class="lg" style="background:#111">YG</div><div class="m"><div class="n">YG 娱乐</div><div class="d">「舞蹈基础很好，但我们这次更想找个性强烈的声音」</div></div><span class="st no">未通过</span></div>
+<div class="ap"><div class="lg" style="background:#5ab4e5">STAR</div><div class="m"><div class="n">Starship</div><div class="d">03.01 投递</div></div><span class="st mute">没有回音</span></div>
+<div style="font-size:12px;color:#aaa;text-align:center;margin-top:16px;line-height:1.6">投递三周没有消息，就会标成「没有回音」<br>结果出来时邮箱里也会收到信</div>
+<div class="tabbar">
+<div><svg viewBox="0 0 24 24" style="width:22px;height:22px;stroke:currentColor;fill:none;stroke-width:1.8"><path d="M4 11l8-7 8 7v9h-5v-6H9v6H4z"/></svg>首页</div>
+<div><svg viewBox="0 0 24 24" style="width:22px;height:22px;stroke:currentColor;fill:none;stroke-width:1.8"><rect x="4" y="4" width="16" height="16" rx="2.5"/><path d="M8 9h8M8 13h8M8 17h5"/></svg>新闻</div>
+<div class="on"><svg viewBox="0 0 24 24" style="width:22px;height:22px;stroke:currentColor;fill:none;stroke-width:1.8"><rect x="3" y="5" width="18" height="14" rx="2.5"/><path d="M3.5 6.5 12 13l8.5-6.5"/></svg>我的投递</div>
+<div><svg viewBox="0 0 24 24" style="width:22px;height:22px;stroke:currentColor;fill:none;stroke-width:1.8"><circle cx="12" cy="8.5" r="4"/><path d="M4.5 20a7.5 7.5 0 0 1 15 0"/></svg>我的</div>
+</div>
+</div><div class="cap">① IdolSearch「我的投递」：每家一行，状态一眼看清</div></div>
+
+<!-- 2 投递详情 -->
+<div><div class="ph">
+<div class="sb"><span>.</span></div>
+<div style="padding:4px 16px 8px;font-size:22px;color:#333">‹</div>
+<div class="dt">
+<div class="dh"><div class="lg" style="background:#3478f6">JYP</div><div><div class="n">JYP 娱乐</div><div class="d">2015 全球公开试镜 · 首尔站</div></div></div>
+<div class="tl">
+<div class="on"><p>投递成功</p><small>03.14 21:46</small></div>
+<div class="on"><p>资料审核中</p><small>03.15</small></div>
+<div class="on"><p>邀请试镜</p><small>03.21 · 已发到你的邮箱</small></div>
+</div>
+<div class="box"><div class="k">我交的资料</div><div class="v">金夏琳 · 2000.04.12 · 165cm<br>报名：声乐、舞蹈<br>「从小学开始跟着视频学跳舞……」</div><div class="thumbs"><i></i><i style="background:linear-gradient(160deg,#d9e4f5,#9fb1d1)"></i><i style="background:#222"></i></div></div>
+<div class="gbtn">去邮箱看回信 →</div>
+</div>
+</div><div class="cap">② 点进一家：进度、自己交了什么，跳去邮箱</div></div>
+
+<!-- 3 邮箱收件箱 -->
+<div><div class="ph">
+<div class="sb"><span>.</span></div>
+<div class="mtop">☰　在邮件中搜索<div class="av">夏</div></div>
+<div class="ml">收件箱</div>
+<div class="mi u"><div class="lg" style="background:#3478f6">JYP</div><div class="m"><div class="r1"><b>JYP 오디션팀</b><span>3月21日</span></div><div class="s">[JYP] 서류 심사 결과 안내 · 资料审核结果</div><div class="p">김하린 님, 안녕하세요. 2015 JYP 글로벌 오디션에…</div></div></div>
+<div class="mi u"><div class="lg" style="background:#7b4fd6">CUBE</div><div class="m"><div class="r1"><b>Cube Audition</b><span>3月20日</span></div><div class="s">[CUBE] 오디션 초대 · 试镜邀请</div><div class="p">지원해 주셔서 감사합니다. 실기 오디션에 초대…</div></div></div>
+<div class="mi"><div class="lg" style="background:#111">YG</div><div class="m"><div class="r1"><b>YG Audition</b><span>3月19日</span></div><div class="s">[YG] 지원 결과 안내 · 投递结果</div><div class="p">아쉽게도 이번에는 함께하지 못하게 되었습니다…</div></div></div>
+<div class="mi"><div class="lg" style="background:#03c75a">i</div><div class="m"><div class="r1"><b>IdolSearch</b><span>3月14日</span></div><div class="s">投递成功：JYP、SM</div><div class="p">你的资料已经送达，结果会发到这个邮箱。</div></div></div>
+<div class="fab">✎　写邮件</div>
+</div><div class="cap">③ 邮箱（从 float 搬来的 Gmail 风）：只有通知，<br>没有 char 的信</div></div>
+
+<!-- 4 读邀请信 -->
+<div><div class="ph">
+<div class="sb"><span>.</span></div>
+<div style="padding:4px 16px 4px;font-size:22px;color:#333">‹</div>
+<div class="rt">
+<h2>[JYP] 서류 심사 결과 안내</h2><span class="tagi">收件箱</span>
+<div class="fr"><div class="lg" style="background:#3478f6">JYP</div><div><b>JYP 오디션팀</b><small>发给 我 · 3月21日 10:02</small></div></div>
+<div class="body">
+<p class="ko">김하린 님, 안녕하세요. 2015 JYP 글로벌 오디션에 지원해 주셔서 감사합니다.</p>
+<p class="zh">金夏琳你好，感谢你报名 2015 JYP 全球公开试镜。</p>
+<p class="ko">서류 심사 결과, 실기 오디션에 초대하게 되었습니다. 특히 영상 속 춤의 리듬감이 인상적이었습니다.</p>
+<p class="zh">经过资料审核，我们邀请你参加线下试镜。视频里跳舞的节奏感让我们印象很深。</p>
+</div>
+<div class="inv"><div><span>时间</span>3月26日（周四）14:00</div><div><span>地点</span>JYP 사옥 B1 오디션룸</div><div><span>准备</span>自由曲一首（唱或跳），动作方便的衣服</div></div>
+<div class="acts"><div class="a">接受 · 进提醒事项</div><div class="b">改时间</div></div>
+</div>
+</div><div class="cap">④ 邀请信：韩文+灰色中文，接受就进提醒事项变试镜日程</div></div>
+
+</body></html>

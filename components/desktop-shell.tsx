@@ -5,7 +5,9 @@ import { AlbumApp } from "./album/album-app";
 import { ClockApp } from "./clock-app";
 import { ContactsApp } from "./contacts/contacts-app";
 import { CareerApp } from "./career/career-app";
+import { IdolSearchApp } from "./idolsearch/idol-search-app";
 import { careerTick } from "@/lib/idol-career";
+import { mailAppIcon, mailAppTick, searchTick } from "@/lib/idol-search";
 import { kakaoTick } from "@/lib/idol-kakao";
 import { installIdolChatHooks, reminderTick } from "@/lib/idol-reminders";
 import { eventsTick } from "@/lib/idol-events";
@@ -1122,6 +1124,8 @@ export function DesktopShell({ initialThemeProfile, initialThemeAssets }: Deskto
       try { rankTick(idolNotify); } catch { /* 同上 */ }
       try { debutTick(idolNotify); } catch { /* 同上 */ }
       try { yearlyTick(idolNotify); } catch { /* 同上 */ }
+      try { searchTick(idolNotify); } catch { /* 同上 */ }
+      try { mailAppTick(idolNotify); } catch { /* 同上 */ }
       try { syncIdolWorldBook(); } catch { /* 同上 */ }
     };
     run();
@@ -4293,6 +4297,9 @@ html,body{margin:0;padding:0;width:100%;height:100%;background:#121110;color:rgb
     if (activeApp === "album") {
       return <AlbumApp onClose={() => setActiveApp(null)} onNotice={setNotice} />;
     }
+    if (activeApp === "idolsearch") {
+      return <IdolSearchApp onClose={() => setActiveApp(null)} onNotice={setNotice} onOpenMail={() => { const ic = mailAppIcon(); if (ic) openApp(ic as DesktopIconId); else setNotice("先装上邮箱 app"); }} />;
+    }
     if (activeApp === "career") {
       return <CareerApp onClose={() => setActiveApp(null)} onNotice={setNotice} />;
     }
@@ -4421,6 +4428,7 @@ html,body{margin:0;padding:0;width:100%;height:100%;background:#121110;color:rgb
                     if (app === "kakao") setActiveApp("chat" as IconId);
                     else if (app === "reminders") setActiveApp("career" as IconId);
                     else if (app === "clock") setActiveApp("clock" as IconId);
+                    else if (app === "mail") { const ic = mailAppIcon(); if (ic) openApp(ic as DesktopIconId); }
                   }}
                 >
                   <span className="idol-note-ic" style={{ background: APP_LOOK[banner.app].bg, color: APP_LOOK[banner.app].fg }}>{APP_LOOK[banner.app].icon}</span>

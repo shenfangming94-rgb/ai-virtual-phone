@@ -114,7 +114,9 @@
     S.chars = chars.filter((c, i) => !owners[i] || !identity || owners[i].id === identity.id);
     const [mails, metas] = await Promise.all([dbList(COL.mails), dbList(COL.meta)]);
     const scope = S.identity.id;
-    S.mails = (await dedupeMails(mails)).filter(m => m.scope === scope).map(m => ({ ...m, att: m.att || [] }));
+    S.mails = (await dedupeMails(mails)).filter(m => m.scope === scope || m.idol).map(m => ({ ...m, att: m.att || [] }));
+    // 爱豆小手机：宿主写进来的开关。开着时 char 不主动写信，信箱里多了公司来信
+    S.idol = Boolean((metas.find(m => m.id === "idol_mode") || {}).on);
     S.debug = (metas.find(m => m.id === "debug_log") || {}).entries || [];
     S.meta = metas.find(m => m.id === `meta_${scope}`) || { id: `meta_${scope}` };
     const d = { myName: S.identity.name || "我", myAddr: "", charAddrs: {}, excluded: [], quiet: [], freq: "sometimes", instant: false, promos: true, lastByChar: {}, npcs: [], cardsSeen: 0 };
@@ -137,6 +139,7 @@
     if (!p) return `<div class="${cls}"></div>`;
     if (p.kind === "char") { const c = charById(p.charId); if (c && c.avatar) return `<div class="${cls}"><img src="${esc(c.avatar)}" alt=""></div>`; }
     if (p.kind === "me" && S.identity.avatarUrl) return `<div class="${cls}"><img src="${esc(S.identity.avatarUrl)}" alt=""></div>`;
+    if (p.kind === "sys" && p.color) return `<div class="${cls}" style="background:${esc(p.color)};font-size:${String(p.short || "").length > 2 ? 10 : 14}px">${esc(p.short || (p.name || "?").slice(0, 1))}</div>`;
     if (p.kind === "sys" && p.brand) { const b = BRANDS[p.brand]; if (b) return `<div class="${cls}" style="background:${b.color}">${esc(b.short || b.name.slice(0, 1))}</div>`; }
     const n = nameOf(p); return `<div class="${cls}" style="background:${colorFor(n)}">${esc((n || "?").replace(/^[^\p{L}\p{N}]+/u, "").slice(0, 1) || "?")}</div>`;
   }
@@ -439,6 +442,18 @@ ${ask ? "邮箱：你的邮箱地址（按你的人设、年代和习惯起一�
   // ───────────────────────── 时间推进 ─────────────────────────
   const visible = m => m.status === "draft" || m.status === "scheduled" || ts(m.at) <= Date.now();
   let ticking = false;
+  /** 爱豆小手机：宿主往信箱里塞的公司来信，打开着也要收得到 */
+  async function pullIdolMail() {
+    const rows = await dbList(COL.mails); let got = false;
+    for (const r of rows) {
+      if (!r.idol) continue;
+      const have = S.mails.find(m => m.id === r.id);
+      if (!have) { S.mails.push({ ...r, att: r.att || [] }); got = true; }
+      else if (JSON.stringify(have.idol) !== JSON.stringify(r.idol) && r.idol.action && have.idol.action && r.idol.action.nodeId && !have.idol.action.nodeId) { have.idol = r.idol; got = true; }
+    }
+    if (got) renderAll();
+    return got;
+  }
   async function tick() {
     if (ticking) return; ticking = true;
     try {
@@ -451,7 +466,8 @@ ${ask ? "邮箱：你的邮箱地址（按你的人设、年代和习惯起一�
       fillSystemMail();
       // 寄出去还没回的：补回信（失败最多试 3 次）
       for (const m of S.mails.filter(x => x.from.kind === "me" && x.status === "ok" && x.folder !== "draft" && x.needReply && !x.replied && (x.replyTries || 0) < 3 && ts(x.at) <= now)) await genReply(m);
-      if (proactiveDue()) { const c = pickWriter(); S.meta.lastProactiveAt = nowIso(); saveMeta(); if (c) await genProactive(c); }
+      if (await pullIdolMail()) changed = true;
+      if (!S.idol && proactiveDue()) { const c = pickWriter(); S.meta.lastProactiveAt = nowIso(); saveMeta(); if (c) await genProactive(c); }
       renderAll();
     } finally { ticking = false; }
   }
@@ -549,7 +565,7 @@ ${ask ? "邮箱：你的邮箱地址（按你的人设、年代和习惯起一�
   PAGES.drawer = () => {
     const item = (k, extra) => { const f = FOLDERS[k]; const n = ["inbox", "spam"].includes(k) ? unreadCount(k) : k === "draft" || k === "scheduled" ? threadsOf(f.test).length : 0;
       return `<div class="fd${S.folder === k && S.tab === "mail" ? " on" : ""}" data-act="folder" data-f="${k}">${I[f.icon]}${f.name}${n ? `<em class="${k === "spam" ? "red" : ""}">${n}</em>` : ""}${extra || ""}</div>`; };
-    const people = activeChars();
+    const people = S.idol ? [] : activeChars();
     return `<div class="dim" data-act="back"></div><div class="drawer"><div class="logo"><b>M</b> 邮箱</div>
       ${item("inbox")}${item("promo")}${item("update")}<div class="dline"></div>
       ${item("starred")}${item("scheduled")}${item("sent")}${item("draft")}${item("spam")}${item("trash")}
@@ -570,7 +586,7 @@ ${ask ? "邮箱：你的邮箱地址（按你的人设、年代和习惯起一�
       const toLine = m.from.kind === "me" ? `发送至 ${esc(nameOf(m.to))}${m.to.addr ? ` &lt;${esc(m.to.addr)}&gt;` : ""}` : `发送至 我`;
       return `<div class="msg"><div class="from">${avatarHtml(m.from)}<div class="mbd"><b>${esc(nameOf(m.from))}<small>${esc(fmtFull(m.at))}</small></b><div>${m.from.addr ? `&lt;${esc(m.from.addr)}&gt; · ` : ""}${toLine}</div></div>${m.from.kind !== "me" && m.from.kind !== "sys" ? `<button class="ib" data-act="reply" data-id="${m.id}">${I.reply}</button>` : ""}${m.from.kind === "char" && !m.promo ? `<button class="ib" data-act="mail-more" data-id="${m.id}">${I.more}</button>` : ""}</div>
         ${m.status === "scheduled" ? `<div class="banner blue">${I.clock}将于 ${esc(fmtFull(m.at))} 发送<button data-act="unschedule" data-id="${m.id}">取消定时</button></div>` : ""}
-        ${m.promo ? promoHtml(m) : `<div class="body">${esc(m.body || "")}</div>`}
+        ${m.promo ? promoHtml(m) : m.idol ? idolHtml(m) : `<div class="body">${esc(m.body || "")}</div>`}
         ${(m.att || []).length ? `<div class="att">${m.att.map((a, i) => attHtml(m, a, i)).join("")}</div>` : ""}</div>`;
     }).join("");
     const canReply = last.from.kind !== "sys" && !(last.from.kind === "me" && last.to.kind === "sys");
@@ -588,6 +604,20 @@ ${ask ? "邮箱：你的邮箱地址（按你的人设、年代和习惯起一�
     for (const m of all) if (!m.read && visible(m)) { m.read = true; saveMail(m); ch = true; }
     if (ch) setTimeout(renderBase, 0);
   };
+  const WEEK_CN = ["日", "一", "二", "三", "四", "五", "六"];
+  function whenCn(ms) { const d = new Date(ms); return `${d.getMonth() + 1}月${d.getDate()}日（周${WEEK_CN[d.getDay()]}）${pad(d.getHours())}:${pad(d.getMinutes())}`; }
+  function idolHtml(m) {
+    const paras = (m.idol.paras || []).map(p => `${p.ko ? `<p class="ko">${esc(p.ko)}</p>` : ""}<p class="${p.ko ? "zh" : "zh solo"}">${esc(p.zh || "")}</p>`).join("");
+    const a = m.idol.action;
+    let inv = "";
+    if (a && a.kind === "invite") {
+      const btns = a.status === "new"
+        ? `<div class="iv-acts"><button class="iv-a" data-act="idol-accept" data-id="${m.id}">接受 · 进提醒事项</button><button class="iv-b" data-act="idol-resched" data-id="${m.id}">改时间</button></div><button class="iv-no" data-act="idol-decline" data-id="${m.id}">不去了</button>`
+        : a.status === "accepted" ? `<div class="iv-done">✓ 已接受${a.nodeId ? "，在提醒事项里" : "，正在放进提醒事项……"}</div>` : `<div class="iv-done no">已经回绝了</div>`;
+      inv = `<div class="inv"><div><span>时间</span>${esc(whenCn(a.at))}</div><div><span>地点</span>${esc(a.place)}</div><div><span>准备</span>${esc(a.prep)}</div></div>${btns}`;
+    }
+    return `<div class="body idol">${m.idol.subjectZh ? `<p class="zh solo sub">${esc(m.idol.subjectZh)}</p>` : ""}${paras}${inv}</div>`;
+  }
   function promoHtml(m) {
     const b = BRANDS[m.from.brand] || BRANDS.mail;
     return `<div class="promo"><div class="promo-hd" style="background:${b.color};color:${b.ink || "#fff"}">${esc(b.name)}</div><div class="promo-bd"><h3>${esc(m.promo.h)}</h3>${m.promo.l.map(x => `<p>${esc(x)}</p>`).join("")}<span class="promo-btn" style="background:${b.color};color:${b.ink || "#fff"}" data-act="promo-btn">${esc(m.promo.btn || "去看看")}</span></div><div class="promo-ft">此邮件由系统自动发送，请勿直接回复 · 退订</div></div>`;
@@ -769,6 +799,21 @@ ${ask ? "邮箱：你的邮箱地址（按你的人设、年代和习惯起一�
     const mail = id ? S.mails.find(m => m.id === id) : null;
     switch (act) {
       case "back": pop(); return;
+      case "idol-accept": case "idol-decline": case "idol-resched": {
+        if (!mail || !mail.idol || !mail.idol.action) return;
+        const a = mail.idol.action;
+        if (act === "idol-resched") {
+          const opts = [1, 2, 3].map(n => { const d = new Date(a.at); d.setDate(d.getDate() + n); return { label: whenCn(d.getTime()), value: String(d.getTime()) }; });
+          const v = await sheet("换一个时间（公司那边说这几个都可以）", opts); if (!v) return;
+          a.at = +v;
+        }
+        a.status = act === "idol-decline" ? "declined" : "accepted";
+        mail.read = true; await saveMail(mail); renderTop();
+        toast(act === "idol-decline" ? "回绝了" : "接受了，去提醒事项看看");
+        // 宿主几秒内就会排好日程，回头拉一下好把「正在放进」换成「在提醒事项里」
+        if (act !== "idol-decline") for (const ms of [6000, 12000]) setTimeout(() => { pullIdolMail().catch(() => {}); }, ms);
+        return;
+      }
       case "drawer": push("drawer"); return;
       case "folder": S.folder = t.dataset.f; S.tab = "mail"; while (S.stack.length) pop(); renderAll(); return;
       case "tab": S.tab = t.dataset.t; if (S.tab === "cards") { S.meta.cardsSeen = myCards().length; saveMeta(); } renderAll(); return;
@@ -894,7 +939,7 @@ ${ask ? "邮箱：你的邮箱地址（按你的人设、年代和习惯起一�
     await loadAll();
     root().innerHTML = "";
     // 第一次打开：一封欢迎信
-    if (!S.mails.length) {
+    if (!S.mails.length && !S.idol) {
       const w = { id: uid("m"), scope: S.identity.id, folder: "inbox", cat: "primary", from: { kind: "sys", brand: "mail", name: "邮箱团队", addr: BRANDS.mail.addr }, to: me(), subject: "欢迎使用邮箱", at: nowIso(), status: "ok", read: false, star: false, att: [{ kind: "card", style: "daily1", f: { body: "欢迎来到邮箱\n这里会收到他们的信\n也可以写信给任何人" } }],
         body: `你好呀！\n\n· 先去右上角头像（设置）里填一个你的邮箱号。\n· 点「写邮件」可以写给角色，也可以随便写给谁：客服、编辑部、十年后的自己，对方都会回信。\n· 回信要过一阵才到，像真的在等信；不想等可以在设置里打开「回信立刻到」。\n· 他们也会主动给你写信。偶尔有信会掉进垃圾邮件，记得翻翻。\n· 回形针里可以寄贺卡，收到和寄出的贺卡都在底下的「卡册」里。\n\n—— 邮箱团队`, thread: null };
       w.thread = w.id; S.mails.push(w); saveMail(w);

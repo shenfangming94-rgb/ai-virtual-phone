@@ -155,8 +155,10 @@ function makeOffers(now: number): Offer[] {
   const card = loadTraineeCard();
   const name = card?.name || "";
   const scouted = ["star", "rich", "chaebol", "child"].includes(card?.family || "");
+  // 普通家境（含自己写的）没人来找，得自己去 IdolSearch 投；有背景的星探照样来，也能自己投
+  if (!scouted) return [];
   const pool = [...COMPANIES].sort(() => Math.random() - 0.5);
-  const picks = pool.slice(0, scouted ? 3 : 2);
+  const picks = pool.slice(0, 3);
   return picks.map((c, i) => {
     const kind: Offer["kind"] = scouted ? "scout" : "audition";
     const at = now + (scouted ? (1 + i * 5) * HOUR : (1 + i) * DAY);
@@ -328,7 +330,7 @@ export function takePendingScene(): { nodeId: string; place: string; premise: st
 export function careerPromptBlock(): string {
   const career = loadCareer();
   const c = companyOf(career.companyId);
-  if (career.stage === "pre" || !c) return "【她现在】还没进任何公司。";
+  if (career.stage === "pre" || !c) return ["【她现在】还没进任何公司。", applicationsBrief()].filter(Boolean).join("\n");
   const days = career.signedAt ? Math.max(1, Math.floor((Date.now() - career.signedAt) / DAY) + 1) : 1;
   const debut = debutPromptBlock();
   const next = career.nodes.filter(n => n.status === "pending" && n.dueAt > Date.now()).slice(0, 3)
@@ -344,6 +346,16 @@ export function careerPromptBlock(): string {
     recentResults(career),
     lastRankLine(),
   ].filter(Boolean).join("\n\n");
+}
+
+/** 她投了哪些公司（直接读 IdolSearch 的数据，免得互相引用） */
+function applicationsBrief(): string {
+  try {
+    const apps = (JSON.parse(kvGet("idol_search_v1") || "null") as { apps?: { companyId: string; status: string; at: number }[] } | null)?.apps ?? [];
+    if (!apps.length) return "【她的投递】还没投过任何公司（要自己在网上搜公司投递）。";
+    const label: Record<string, string> = { review: "审核中", invited: "邀请她去试镜", rejected: "没通过", silent: "还没回音" };
+    return `【她的投递】${apps.map(a => `${companyOf(a.companyId)?.name}（${label[a.status] ?? a.status}）`).join("、")}`;
+  } catch { return ""; }
 }
 
 /** 上次月末排名（直接读账本，免得互相引用） */

@@ -215,6 +215,17 @@ Flora 要一个专门玩「爱豆模拟器」的小手机：她是想当爱豆�
 - 日历大事记加主要人物生日（kind `birthday`，粉色，「🎂名字」），只标注
 - 测试 `tests/yr1.mjs`
 
+### 2.22 IdolSearch + 邮箱（10-27 夜，`lib/idol-search.ts`、`components/idolsearch/idol-search-app.tsx`、`styles/idolsearch.css`、`lib/idol-mail.ts`、`custom-apps/mail` 0.2.0）
+- 预览定稿在 `mockups/search/`（s2 首页、s3 搜索结果、s4 官网三页、s5 投递和邮箱；s1/s3_old 是旧版）
+- **开局**：普通家境（含自己写）`makeOffers` 返回空，只能自己去 IdolSearch 投；星二代/富二代/财阀/童星照样有星探，也能投
+- IdolSearch（桌面图标 `idolsearch`，第一页提醒事项后面）：首页实时热搜+新闻（世界每过一天 AI 写一次，kv `idol_search_v1.trend`）、搜公司（资料卡+官网）、搜艺人（官网里写过的团，`artists`）、搜她自己（童星/星二代或关注度 ≥20 才搜得到，否则「没有相关结果」）、其他词 AI 出新闻（按天缓存）、我的（搜索记录、六家公司）
+- 官网：第一次打开 AI 按公司资料+世界年份写（about 四段韩上中下、年表、公告、旗下艺人），存 `sites[公司]`，年份变了才重写；每家主题色在 `LOOKS`；报名资格 = 世界年份 − 20 年以后出生
+- 投递：表单从练习生证带名字生日身高、特长→方向；照片压成 260px 存 dataURL；视频写文字描述。投完 IdolSearch 发回执信。`decideAt` 3～8 天后 `searchTick` 让 AI 当审核组判：invite/reject/silent（拒信写原因，列表上直接显示）。**保底**：一家都还没邀请、也没别的在审核 → 这家一定邀请（`forced`）。不回的那种三周后才显示「没有回音」。已经签约了剩下的直接当没回音。三个月后能再投同一家
+- 邮箱：**用 float 原来的邮箱 app 改**（她要的，`nox.mail` 0.2.0，包在 `custom-apps/mail/mail-0.2.0.zip`，爱豆版要装上）。宿主存一份 kv `idol_mail_v1`，`mailAppTick` 塞进邮箱的 `mails` 集合（行上带 `idol: {paras, subjectZh, action}`），写 meta `idol_mode` → 邮箱里 char 不主动写信、抽屉不列 char、不发欢迎信。公司信韩文在上灰色中文在下；邀请信有时间地点准备 +「接受 · 进提醒事项」「改时间」（顺延 1～3 天）「不去了」。她点了 → 邮箱写回行 → 宿主 `acceptInviteMail` 建 audition 节点（premise 带公司看中她的地方）进提醒事项和日历，演完照旧 `signCompany`
+- 横幅 app `mail` 点了打开邮箱 app；IdolSearch 投递详情「去邮箱看回信」也是
+- `careerPromptBlock` 没进公司时带【她的投递】
+- 测试 `tests/is1.mjs`（普通家境→搜 JYP→官网→投递→九天后保底邀请→邮箱里接受→提醒事项有试镜）
+
 ---
 
 ## 3. 定下来但还没做的（按她的意愿排）
@@ -253,7 +264,7 @@ Flora 要一个专门玩「爱豆模拟器」的小手机：她是想当爱豆�
 - 好几个新人同时出场：一个弹窗叠几张卡，左右翻，一张张点或「都要」（现在是直接存背景人物）
 - 锁屏通知（消息、好友申请、日程提醒）
 - 「她是谁」世界书：给微博、bubble、小红书读（身份、出道几年、关注度——练习生也有一小撮粉丝，从公开视频/伴舞来）；练习生时期没有自己的 bubble，但能订已出道前辈的 bubble
-- IdolSearch（搜公司、官网、用邮箱投递）——「你去找公司」那条路，最后也走 `signCompany`
+- ~~IdolSearch~~ 做完了（2.22）
 - 新 app：ins（练习生一般不能开公开号，可有私人小号）、YouTube（公司频道放练习生视频，评论区是早期粉丝来源）
 - 存档：一个链接里多个档，整机快照（用 `lib/data-management/backup.ts`），设置里「存档」页每档显示练习生证；开局页留「重新开局」
 - 设置里「用户身份」入口改成跳去通讯录我的名片；多身份切换在爱豆版藏掉

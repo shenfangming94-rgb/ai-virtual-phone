@@ -1,0 +1,38 @@
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:#d9dce1;font-family:-apple-system,"PingFang SC","Hiragino Sans GB","Apple SD Gothic Neo",sans-serif;display:flex;gap:24px;padding:26px;align-items:flex-start;color:#0f0f0f}
+.ph{width:390px;height:844px;border-radius:50px;overflow:hidden;position:relative;box-shadow:0 10px 40px rgba(0,0,0,.18);border:9px solid #111;background:#fff}
+.cap{text-align:center;font-size:12px;color:#555;margin-top:10px;width:390px;line-height:1.6}
+.scroll{position:absolute;inset:0;bottom:74px;overflow:hidden}
+svg.i{width:24px;height:24px;stroke:#0f0f0f;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.bar{display:flex;align-items:center;gap:18px;padding:54px 14px 8px}
+.logo{display:flex;align-items:center;gap:4px;margin-right:auto}
+.logo span{display:grid;place-items:center;width:30px;height:21px;border-radius:6px;background:#ff0033}
+.logo span::after{content:"";border-left:8px solid #fff;border-top:5px solid transparent;border-bottom:5px solid transparent;margin-left:2px}
+.logo strong{font-size:21px;font-weight:700;letter-spacing:-.8px;font-family:-apple-system,"Helvetica Neue",sans-serif}
+.chips{display:flex;gap:8px;padding:6px 12px 10px;overflow:hidden;white-space:nowrap}
+.chips span{flex:none;padding:6px 12px;border-radius:8px;background:#f2f2f2;font-size:13.5px;font-weight:500}
+.chips span.on{background:#0f0f0f;color:#fff}
+.thumb{position:relative;aspect-ratio:16/9;display:flex;align-items:center;justify-content:center;text-align:center;padding:22px 34px;color:#f3f3f3;font-family:"Songti SC","STSong",serif;font-size:14.5px;line-height:1.75;letter-spacing:.5px}
+.thumb b{position:absolute;right:8px;bottom:8px;background:rgba(0,0,0,.78);color:#fff;font:600 11.5px -apple-system,sans-serif;padding:2px 5px;border-radius:4px;letter-spacing:0}
+.thumb small{position:absolute;left:10px;top:8px;font:10.5px -apple-system,sans-serif;color:rgba(255,255,255,.55);letter-spacing:0}
+.vrow{display:flex;gap:12px;padding:11px 12px 18px}
+.av{flex:none;width:36px;height:36px;border-radius:50%}
+.vmeta{flex:1;min-width:0}
+.vt{font-size:15px;font-weight:600;line-height:1.35}
+.zh{font-size:13px;color:#909090;line-height:1.45;margin-top:2px;font-weight:400}
+.sub{font-size:12.5px;color:#606060;margin-top:4px}
+.dots{width:4px;flex:none;align-self:flex-start;margin-top:4px;color:#0f0f0f;font-weight:900;line-height:5px;font-size:16px}
+.tab{position:absolute;left:0;right:0;bottom:0;height:78px;border-top:.5px solid #e5e5e5;background:#fff;display:grid;grid-template-columns:repeat(5,1fr);padding:8px 6px 0}
+.tab div{display:flex;flex-direction:column;align-items:center;gap:3px;font-size:10px;color:#0f0f0f}
+.tab .plus svg{width:38px;height:38px;stroke-width:1.2}
+.tab .me i{width:24px;height:24px;border-radius:50%;background:linear-gradient(160deg,#ffe3ec,#e59ab4)}
+.g1{background:linear-gradient(150deg,#1d2438,#34405f 55%,#6a5a7e)}
+.g2{background:linear-gradient(160deg,#2a2622,#4a3f35 60%,#8a7356)}
+.g3{background:linear-gradient(160deg,#16303a,#2a5560 60%,#5e8c8a)}
+.g4{background:linear-gradient(160deg,#2b1e2e,#5a3550 60%,#b07a90)}
+.a1{background:linear-gradient(135deg,#1f4fbf,#f5c400)}
+.a2{background:linear-gradient(135deg,#c8c8d8,#7a7a9a)}
+.a3{background:linear-gradient(135deg,#ff9fb5,#ffd6c2)}
+.a4{background:linear-gradient(135deg,#9bd1b5,#4f8f7a)}
+.a5{background:linear-gradient(135deg,#d7c3ff,#8b6fd6)}
+.a6{background:linear-gradient(135deg,#ffd38a,#f08a4b)}

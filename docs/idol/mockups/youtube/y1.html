@@ -1,0 +1,148 @@
+<!doctype html><html><head><meta charset="utf-8"><link rel="stylesheet" href="base.css">
+<style>
+/* 看视频 */
+.ph.dark::before{content:"";position:absolute;left:0;right:0;top:0;height:47px;background:#0b0b0b;z-index:1}
+.player{position:relative;margin-top:47px;aspect-ratio:16/9;background:#0b0b0b;color:#eee;display:flex;align-items:center;justify-content:center;text-align:center;padding:20px 30px;font-family:"Songti SC",serif;font-size:14.5px;line-height:1.8}
+.player .pg{position:absolute;left:0;right:0;bottom:0;height:3px;background:rgba(255,255,255,.25)}
+.player .pg i{display:block;width:38%;height:100%;background:#ff0033}
+.player .pg i::after{content:"";position:absolute;left:38%;top:-4px;width:11px;height:11px;margin-left:-5px;border-radius:50%;background:#ff0033}
+.player small{position:absolute;left:10px;bottom:9px;font:11px -apple-system,sans-serif;color:rgba(255,255,255,.8)}
+.wt{padding:12px 12px 0}
+.wt h1{font-size:18px;font-weight:700;line-height:1.35}
+.wt .zh{font-size:13.5px}
+.wt .sub{margin-top:6px}
+.wt .sub em{font-style:normal;color:#0f0f0f;font-weight:600}
+.ch{display:flex;align-items:center;gap:10px;padding:12px}
+.ch .av{width:34px;height:34px}
+.ch b{font-size:15px;font-weight:600}.ch span{font-size:12px;color:#606060;margin-left:6px}
+.subbtn{margin-left:auto;background:#0f0f0f;color:#fff;border-radius:18px;padding:8px 15px;font-size:13.5px;font-weight:600}
+.acts{display:flex;gap:8px;padding:0 12px;overflow:hidden;white-space:nowrap}
+.acts div{flex:none;display:flex;align-items:center;gap:6px;background:#f2f2f2;border-radius:18px;padding:7px 13px;font-size:13px;font-weight:600}
+.acts svg{width:18px;height:18px;stroke-width:1.9}
+.acts .lk{padding-right:0}.acts .lk i{width:1px;height:20px;background:#ccc;margin:0 2px 0 6px}
+.acts .lk svg+svg{margin-right:12px}
+.cbox{margin:14px 12px 0;background:#f2f2f2;border-radius:12px;padding:10px 12px}
+.cbox h3{font-size:14px;font-weight:700}.cbox h3 span{font-weight:400;color:#606060;margin-left:6px;font-size:13px}
+.cbox p{display:flex;gap:8px;align-items:flex-start;margin-top:8px;font-size:13px;line-height:1.45}
+.cbox p i{flex:none;width:24px;height:24px;border-radius:50%}
+/* 评论抽屉 */
+.sheet{position:absolute;left:0;right:0;top:268px;bottom:0;background:#fff;border-radius:16px 16px 0 0;box-shadow:0 -4px 20px rgba(0,0,0,.12)}
+.grab{width:40px;height:4px;border-radius:2px;background:#d0d0d0;margin:8px auto 4px}
+.sh-h{display:flex;align-items:center;padding:6px 14px 10px;border-bottom:.5px solid #e5e5e5}
+.sh-h b{font-size:17px;font-weight:700}.sh-h span{color:#606060;margin-left:8px;font-size:14px;margin-right:auto}
+.sh-chips{display:flex;gap:8px;padding:10px 14px 4px}
+.sh-chips span{padding:5px 11px;border-radius:8px;background:#f2f2f2;font-size:13px;font-weight:500}.sh-chips .on{background:#0f0f0f;color:#fff}
+.cm{display:flex;gap:11px;padding:11px 14px 4px}
+.cm .av{width:32px;height:32px}
+.cm .who{font-size:12px;color:#606060}.cm .who b{font-weight:500;color:#0f0f0f}
+.cm .tx{font-size:14px;line-height:1.45;margin-top:2px}
+.cm .zh{font-size:12.5px}
+.cm .ops{display:flex;align-items:center;gap:18px;margin-top:6px;font-size:12px;color:#606060}
+.cm .ops svg{width:16px;height:16px;stroke:#0f0f0f;stroke-width:1.8}
+.cm .ops span{display:flex;align-items:center;gap:5px}
+.ts{color:#065fd4}
+.mj{display:inline-block;margin-left:6px;padding:1px 6px;border-radius:4px;background:#fdecef;color:#c2185b;font-size:10.5px;font-weight:600;vertical-align:1px}
+.pin{font-size:11.5px;color:#606060;display:flex;align-items:center;gap:4px;margin-bottom:2px}
+.input{position:absolute;left:0;right:0;bottom:0;padding:10px 14px 30px;border-top:.5px solid #e5e5e5;background:#fff;display:flex;align-items:center;gap:10px}
+.input i{width:28px;height:28px;border-radius:50%;flex:none}
+.input div{flex:1;background:#f2f2f2;border-radius:18px;padding:9px 14px;font-size:13.5px;color:#909090}
+.input small{display:block;font-size:10.5px;color:#aaa;margin-top:1px}
+/* 频道 */
+.banner{height:96px;margin:6px 12px 0;border-radius:12px;background:linear-gradient(120deg,#1f4fbf 0 55%,#f5c400 55%);position:relative;overflow:hidden}
+.banner::after{content:"LUMINA · 2ND MINI ALBUM 'Afterglow'";position:absolute;left:16px;bottom:12px;color:#fff;font:700 13px -apple-system,sans-serif;letter-spacing:1.5px}
+.cinfo{display:flex;gap:14px;padding:14px 12px 0;align-items:center}
+.cinfo .av{width:72px;height:72px}
+.cinfo h2{font-size:21px;font-weight:700;line-height:1.25}
+.cinfo h2 em{font-style:normal;display:inline-block;width:14px;height:14px;border-radius:50%;background:#606060;color:#fff;font-size:9px;line-height:14px;text-align:center;vertical-align:2px;margin-left:4px}
+.cinfo .sub{line-height:1.5;margin-top:3px}
+.cdesc{padding:10px 12px 0;font-size:13px;color:#606060;line-height:1.5}
+.cdesc b{color:#0f0f0f;font-weight:600}
+.wide{margin:12px 12px 0;background:#f2f2f2;color:#0f0f0f;border-radius:20px;text-align:center;padding:9px;font-size:14px;font-weight:600}
+.ctabs{display:flex;gap:22px;padding:14px 14px 0;border-bottom:.5px solid #e5e5e5;font-size:14.5px;font-weight:600;color:#606060;white-space:nowrap;overflow:hidden}
+.ctabs span{padding-bottom:10px}.ctabs .on{color:#0f0f0f;border-bottom:2px solid #0f0f0f}
+.sec{padding:14px 12px 4px;display:flex;align-items:baseline}
+.sec b{font-size:17px;font-weight:700}.sec span{font-size:12.5px;color:#909090;margin-left:6px}.sec em{margin-left:auto;font-style:normal;font-size:13px;color:#065fd4}
+.hrow{display:flex;gap:10px;padding:4px 12px 0;overflow:hidden}
+.hc{flex:none;width:200px}
+.hc .thumb{border-radius:10px;font-size:12px;padding:14px 18px;line-height:1.6}
+.hc .vt{font-size:13.5px;margin-top:7px;line-height:1.35}
+.hc .zh{font-size:12px}
+.hc .sub{font-size:12px}
+.new{display:inline-block;background:#f2f2f2;color:#606060;font-size:10.5px;padding:1px 5px;border-radius:3px;margin-top:4px;font-weight:600}
+.feed .thumb{font-size:15px}
+.shorts-h{display:flex;align-items:center;gap:8px;padding:2px 12px 10px;font-size:17px;font-weight:700}
+.shorts-h i{width:20px;height:24px;border-radius:6px;background:#ff0033;display:inline-block;position:relative}
+.shorts-h i::after{content:"";position:absolute;left:7px;top:7px;border-left:7px solid #fff;border-top:5px solid transparent;border-bottom:5px solid transparent}
+.srow{display:flex;gap:8px;padding:0 12px}
+.sc{flex:none;width:176px}
+.sc .thumb{aspect-ratio:9/14;border-radius:10px;font-size:12.5px;padding:16px;align-items:flex-end;justify-content:flex-start;text-align:left}
+</style></head><body>
+
+<!-- 1 首页 -->
+<div><div class="ph"><div class="scroll feed">
+<div class="bar"><div class="logo"><span></span><strong>YouTube</strong></div>
+<svg class="i" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="13" rx="2"/><path d="M3 20a3 3 0 0 1 3 0M3 16.5a6.5 6.5 0 0 1 6.5 3.5"/></svg>
+<svg class="i" viewBox="0 0 24 24"><path d="M6 16V11a6 6 0 0 1 12 0v5l2 2H4z"/><path d="M10 21h4"/></svg>
+<svg class="i" viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M20 20l-4.8-4.8"/></svg></div>
+<div class="chips"><span class="on">全部</span><span>音乐</span><span>舞蹈练习</span><span>练习生</span><span>直播</span><span>团综</span></div>
+
+<div class="thumb g1"><small>画面</small>镜子墙前五个女生一字排开<br>最后一个八拍定格，有人笑出了声<b>3:41</b></div>
+<div class="vrow"><i class="av a1"></i><div class="vmeta"><div class="vt">[Choreography Video] LUMINA(루미나) 'Afterglow' Dance Practice</div><div class="zh">LUMINA《Afterglow》练习室舞蹈</div><div class="sub">JYP Entertainment · 观看 412万次 · 3 天前</div></div><div class="dots">⋮</div></div>
+
+<div class="thumb g4"><small>画面</small>四个练习生穿着同款白 T<br>翻跳前辈的出道曲，左二那个女生眼神很稳<b>2:58</b></div>
+<div class="vrow"><i class="av a1"></i><div class="vmeta"><div class="vt">[JYP TRAINEE] 연습생 커버 댄스 #3 | LUMINA 'Spark'</div><div class="zh">练习生翻跳第三期｜LUMINA《Spark》</div><div class="sub">JYP Entertainment · 观看 1.2万次 · 2 天前</div></div><div class="dots">⋮</div></div>
+</div>
+<div class="tab">
+<div><svg class="i" viewBox="0 0 24 24" style="fill:#0f0f0f"><path d="M4 11l8-7 8 7v9h-5v-6H9v6H4z"/></svg>首页</div>
+<div><svg class="i" viewBox="0 0 24 24"><path d="M14.5 3.5l-7 3.8a3.5 3.5 0 0 0 0 6.2l.8.4-.8.4a3.5 3.5 0 0 0 3.5 6.1l7-3.8a3.5 3.5 0 0 0 0-6.2l-.8-.4.8-.4a3.5 3.5 0 0 0-3.5-6.1z"/><path d="M10.5 9.5v5l4-2.5z"/></svg>Shorts</div>
+<div class="plus"><svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 7.5v9M7.5 12h9"/></svg></div>
+<div><svg class="i" viewBox="0 0 24 24"><rect x="3" y="8" width="18" height="13" rx="2"/><path d="M6 5h12M8 2h8M10.5 11.5v6l5-3z"/></svg>订阅</div>
+<div class="me"><i></i>我</div>
+</div></div>
+<div class="cap">① 首页：上面前辈团，第二个就是你们练习生的翻跳<br>画面是一段文字，像 ins 写画面那样</div></div>
+
+<!-- 2 看视频 + 评论 -->
+<div><div class="ph dark"><div class="scroll" style="bottom:0">
+<div class="player">四个练习生穿着同款白 T<br>翻跳前辈的出道曲，左二那个女生眼神很稳<div class="pg"><i></i></div><small>1:07 / 2:58</small></div>
+<div class="wt"><h1>[JYP TRAINEE] 연습생 커버 댄스 #3 | LUMINA 'Spark'</h1><div class="zh">练习生翻跳第三期｜LUMINA《Spark》</div><div class="sub">观看 1.2万次 · 2 天前 <em>...更多</em></div></div>
+<div class="sheet"><div class="grab"></div>
+<div class="sh-h"><b>评论</b><span>238</span><svg class="i" viewBox="0 0 24 24"><path d="M4 6h16M7 12h10M10 18h4"/></svg><svg class="i" viewBox="0 0 24 24" style="margin-left:14px"><path d="M6 6l12 12M18 6L6 18"/></svg></div>
+<div class="sh-chips"><span class="on">热门</span><span>最新</span></div>
+<div class="cm"><i class="av a3"></i><div><div class="who"><b>@luminarchive</b> · 2 天前</div><div class="tx">왼쪽에서 두 번째 연습생 누구예요?? 이름 좀 알려주세요 ㅠㅠ</div><div class="zh">左边第二个练习生是谁？？求名字呜呜</div><div class="ops"><span><svg viewBox="0 0 24 24" fill="none"><path d="M7 10v11H3V10zM7 10l4-8a2 2 0 0 1 3 2l-1 5h6a2 2 0 0 1 2 2.3l-1.4 8A2 2 0 0 1 17.6 21H7"/></svg>412</span><span>回复</span><span class="ts">87 条回复</span></div></div></div>
+<div class="cm"><i class="av a5"></i><div><div class="who"><b>@seoul_daydream</b> · 1 天前</div><div class="tx"><span class="ts">1:52</span> the girl in the middle is SO precise?? JYP pls don't let her rot in the basement</div><div class="zh">中间那个女生也太利落了吧？？JYP 别让她在地下室烂掉</div><div class="ops"><span><svg viewBox="0 0 24 24" fill="none"><path d="M7 10v11H3V10zM7 10l4-8a2 2 0 0 1 3 2l-1 5h6a2 2 0 0 1 2 2.3l-1.4 8A2 2 0 0 1 17.6 21H7"/></svg>186</span><span>回复</span></div></div></div>
+<div class="cm"><i class="av a2"></i><div><div class="who"><b>@m00n_sleeper</b> · 5 小时前<span class="mj">他的小号</span></div><div class="tx">2:31 넘어질 뻔했는데 끝까지 안 멈췄네</div><div class="zh">2:31 差点摔了，还是跳完了</div><div class="ops"><span><svg viewBox="0 0 24 24" fill="none"><path d="M7 10v11H3V10zM7 10l4-8a2 2 0 0 1 3 2l-1 5h6a2 2 0 0 1 2 2.3l-1.4 8A2 2 0 0 1 17.6 21H7"/></svg>4</span><span>回复</span></div></div></div>
+<div class="cm"><i class="av a6"></i><div><div class="who"><b>@用户-晚风</b> · 1 天前</div><div class="tx">这个妹妹是不是中国人！！资料一点都搜不到，先蹲一个</div><div class="ops"><span><svg viewBox="0 0 24 24" fill="none"><path d="M7 10v11H3V10zM7 10l4-8a2 2 0 0 1 3 2l-1 5h6a2 2 0 0 1 2 2.3l-1.4 8A2 2 0 0 1 17.6 21H7"/></svg>93</span><span>回复</span></div></div></div>
+<div class="input"><i class="a4"></i><div>添加评论…<small>以 @blue_hour_04 发出，别人看不出是你</small></div></div>
+</div></div></div>
+<div class="cap">② 看视频：评论区是最早一批粉丝，人数看关注度<br>粉色「他的小号」只有你看得到；你用自己的小号评论</div></div>
+
+<!-- 3 公司频道 -->
+<div><div class="ph"><div class="scroll">
+<div class="bar" style="gap:18px"><svg class="i" viewBox="0 0 24 24" style="margin-right:auto"><path d="M15 5l-7 7 7 7"/></svg>
+<svg class="i" viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M20 20l-4.8-4.8"/></svg>
+<svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="5" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="12" cy="19" r="1"/></svg></div>
+<div class="banner"></div>
+<div class="cinfo"><i class="av a1"></i><div><h2>JYP Entertainment<em>✓</em></h2><div class="sub">@JYPEntertainment<br>2860万位订阅者 · 4812 个视频</div></div></div>
+<div class="cdesc">JYP Entertainment 공식 유튜브 채널입니다.<br>JYP 官方 YouTube 频道。<b>...更多</b></div>
+<div class="wide">已订阅</div>
+<div class="ctabs"><span class="on">首页</span><span>视频</span><span>Shorts</span><span>直播</span><span>播放列表</span><span>帖子</span></div>
+<div class="sec"><b>JYP TRAINEE</b><span>练习生</span><em>全部</em></div>
+<div class="hrow">
+<div class="hc"><div class="thumb g4"><small>画面</small>四个练习生<br>穿同款白 T 翻跳<b>2:58</b></div><div class="vt">[JYP TRAINEE] 연습생 커버 댄스 #3</div><div class="zh">练习生翻跳第三期</div><div class="sub">1.2万次 · 2 天前</div></div>
+<div class="hc"><div class="thumb g2"><small>画面</small>练习室角落<br>一个男生抱着吉他试唱<b>1:46</b></div><div class="vt">[JYP TRAINEE] 연습생 보컬 #2</div><div class="zh">练习生唱歌第二期</div><div class="sub">3.4万次 · 1 个月前</div></div>
+</div>
+<div class="sec"><b>LUMINA</b><span>루미나</span><em>全部</em></div>
+<div class="hrow">
+<div class="hc"><div class="thumb g1"><small>画面</small>废弃游乐园<br>五个人坐在旋转木马上<b>3:29</b></div><div class="vt">LUMINA 'Afterglow' M/V</div><div class="zh">LUMINA《Afterglow》MV</div><div class="sub">4108万次 · 2 周前</div></div>
+<div class="hc"><div class="thumb g3"><small>画面</small>宿舍客厅<br>五个人抢一盒炸鸡<b>18:02</b></div><div class="vt">[LUMI-LOG] 컴백 전날 밤</div><div class="zh">回归前一晚</div><div class="sub">96万次 · 1 周前</div></div>
+</div>
+</div>
+<div class="tab">
+<div><svg class="i" viewBox="0 0 24 24"><path d="M4 11l8-7 8 7v9h-5v-6H9v6H4z"/></svg>首页</div>
+<div><svg class="i" viewBox="0 0 24 24"><path d="M14.5 3.5l-7 3.8a3.5 3.5 0 0 0 0 6.2l.8.4-.8.4a3.5 3.5 0 0 0 3.5 6.1l7-3.8a3.5 3.5 0 0 0 0-6.2l-.8-.4.8-.4a3.5 3.5 0 0 0-3.5-6.1z"/><path d="M10.5 9.5v5l4-2.5z"/></svg>Shorts</div>
+<div class="plus"><svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 7.5v9M7.5 12h9"/></svg></div>
+<div><svg class="i" viewBox="0 0 24 24"><rect x="3" y="8" width="18" height="13" rx="2"/><path d="M6 5h12M8 2h8M10.5 11.5v6l5-3z"/></svg>订阅</div>
+<div class="me"><i></i>我</div>
+</div></div>
+<div class="cap">③ 公司频道：练习生一栏放你们的视频，下面是前辈团<br>频道颜色跟官网主题色走（JYP 蓝黄）</div></div>
+</body></html>

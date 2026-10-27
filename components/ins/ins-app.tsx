@@ -6,14 +6,15 @@
  */
 
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import {
-  Bookmark, ChevronLeft, ChevronRight, Clapperboard, Ellipsis, SquareUserRound, Eye, Grid3X3, Heart, Home, Image as ImageIcon, MapPin, MessageCircle, Music, Plus, Search, Send, Settings, SquarePlus, UserRound, UsersRound, X,
+  Bookmark, ChevronLeft, ChevronRight, Clapperboard, Ellipsis, SquareUserRound, Eye, Grid3X3, Heart, Home, Image as ImageIcon, MapPin, MessageCircle, Music, PencilLine, Plus, Search, Send, Settings, Sparkles, SquarePlus, UserRound, UsersRound, X,
 } from "lucide-react";
 
 import {
   BGS, INS_EVENT, ME, accOf, activeStories, answerIncoming, canSee, charAvatar, dmAllowed, dmOf, dmReplying, deleteDm, editDm, fillFeed, follow, generateImg, hidePost,
   loadIns, markNotesSeen, maybeKnow, myPost, myStory, needsFill, ownerName, refreshExplore, relationTo, replyDm, searchAccs, sendDm, setDmFlags, setMe, setPrivate,
-  unfollow, unarchive, unseenNotes, toggleLike, myComment, moreComments, commentsBusy, sendDmImg, type Img, type InsAcc, type Post, type Story,
+  unfollow, unarchive, purgePost, purgeStory, editImgDesc, unseenNotes, toggleLike, myComment, moreComments, commentsBusy, sendDmImg, type Img, type InsAcc, type Post, type Story,
 } from "@/lib/idol-ins";
 import { loadCharacters } from "@/lib/character-storage";
 import { loadProfiles } from "@/lib/idol-people";
@@ -72,23 +73,57 @@ function useMedia(src?: string) {
   return url;
 }
 
-function Pic({ img, onGen, ratio = "1/1", small }: { img: Img; onGen?: () => void; ratio?: string; small?: boolean }) {
+function Pic({ img, onOpen, ratio = "1/1", small }: { img: Img; onOpen?: () => void; ratio?: string; small?: boolean }) {
   const url = useMedia(img.src);
-  if (url) return <div className="ig-pic" style={{ aspectRatio: ratio }}><img src={url} alt="" /></div>;
+  const click = onOpen ? (e: React.MouseEvent) => { e.stopPropagation(); onOpen(); } : undefined;
+  if (url) return <div className="ig-pic" style={{ aspectRatio: ratio }} onClick={click}><img src={url} alt="" /></div>;
   return (
-    <div className={`ig-desc${small ? " sm" : ""}`} style={{ aspectRatio: ratio }}>
+    <div className={`ig-desc${small ? " sm" : ""}`} style={{ aspectRatio: ratio }} onClick={click}>
       {!small ? <small>画面</small> : null}
       <span>{img.desc}</span>
-      {onGen && !small ? <button type="button" className="ig-gen" disabled={img.busy} onClick={e => { e.stopPropagation(); onGen(); }}>{img.busy ? "生成中…" : "生成这张图"}</button> : null}
+      {img.busy && !small ? <em className="ig-busy">生成中…</em> : null}
     </div>
   );
 }
 
-function Carousel({ post, onGen }: { post: Post; onGen: (i: number) => void }) {
+/** 点图放大：生成图片 / 编辑文字（别人的帖子也能改） */
+function ImgViewer({ img, ratio, onGen, onSave, onClose }: { img: Img; ratio: string; onGen: () => void; onSave: (desc: string) => void; onClose: () => void }) {
+  const [edit, setEdit] = useState<string | null>(null);
+  const url = useMedia(img.src);
+  const root = typeof document !== "undefined" ? document.querySelector(".ig-app") : null;
+  const node = (
+    <div className="ig-iv" onClick={e => e.stopPropagation()}>
+      <div className="ig-iv-top"><button type="button" onClick={onClose}><X size={24} color="#fff" /></button></div>
+      <div className="ig-iv-body">
+        {edit === null
+          ? (url ? <img src={url} alt="" style={{ aspectRatio: ratio }} /> : <div className="ig-desc" style={{ aspectRatio: ratio }}><small>画面</small><span>{img.desc}</span></div>)
+          : <textarea className="ig-iv-ta" value={edit} onChange={e => setEdit(e.target.value)} autoFocus />}
+      </div>
+      <div className="ig-iv-bar">
+        {edit === null ? (
+          <>
+            <button type="button" disabled={img.busy} onClick={onGen}><Sparkles size={18} />{img.busy ? "生成中…" : url ? "重新生成" : "生成图片"}</button>
+            <button type="button" onClick={() => setEdit(img.desc)}><PencilLine size={18} />编辑文字</button>
+          </>
+        ) : (
+          <>
+            <button type="button" onClick={() => setEdit(null)}>取消</button>
+            <button type="button" className="on" disabled={!edit.trim()} onClick={() => { onSave(edit.trim()); setEdit(null); }}>保存</button>
+          </>
+        )}
+      </div>
+    </div>
+  );
+  return root ? createPortal(node, root) : node;
+}
+
+function Carousel({ post, onNotice }: { post: Post; onNotice: Notice }) {
   const [i, setI] = useState(0);
+  const [open, setOpen] = useState(false);
+  const img = post.imgs[i];
   return (
     <div className="ig-car">
-      <Pic img={post.imgs[i]} onGen={() => onGen(i)} />
+      <Pic img={img} onOpen={() => setOpen(true)} />
       {post.imgs.length > 1 ? (
         <>
           {i > 0 ? <button type="button" className="ig-nav l" onClick={() => setI(i - 1)}><ChevronLeft size={16} /></button> : null}
@@ -96,6 +131,9 @@ function Carousel({ post, onGen }: { post: Post; onGen: (i: number) => void }) {
           <div className="ig-dots">{post.imgs.map((_, k) => <i key={k} className={k === i ? "on" : ""} />)}</div>
         </>
       ) : null}
+      {open && img ? <ImgViewer img={img} ratio="1/1" onClose={() => setOpen(false)}
+        onGen={() => void generateImg(post.id, i).catch(e => onNotice?.(e instanceof Error ? e.message : "生图失败"))}
+        onSave={d => editImgDesc(post.id, i, d)} /> : null}
     </div>
   );
 }
@@ -106,15 +144,14 @@ function PostCard({ post, onOpen, onNotice, mine }: { post: Post; onOpen: (id: s
   const [cm, setCm] = useState(false);
   const [menu, setMenu] = useState(false);
   const [draft, setDraft] = useState("");
-  const gen = (i: number) => void generateImg(post.id, i).catch(e => onNotice?.(e instanceof Error ? e.message : "生图失败"));
   return (
     <article className="cp-instagram-feed-post">
       <div className="cp-instagram-post-head">
         <button type="button" onClick={() => onOpen(post.by)}><Avatar acc={a} /></button>
         <div className="cp-instagram-post-author"><strong onClick={() => onOpen(post.by)}>{a?.handle}{a?.verified ? <Verified /> : null}{post.place ? <span>{post.place}</span> : null}</strong></div>
-        {mine ? <button type="button" onClick={() => setMenu(true)}><Ellipsis size={19} /></button> : <Ellipsis size={19} />}
+        <button type="button" onClick={() => setMenu(true)}><Ellipsis size={19} /></button>
       </div>
-      <Carousel post={post} onGen={gen} />
+      <Carousel post={post} onNotice={onNotice} />
       <div className="cp-instagram-post-actions">
         <button type="button" onClick={() => toggleLike(post.id)}><Heart size={23} strokeWidth={2.1} fill={post.liked ? "#ff3040" : "none"} color={post.liked ? "#ff3040" : "currentColor"} /></button>
         <button type="button" onClick={() => setCm(true)}><MessageCircle size={23} strokeWidth={2.1} /></button>
@@ -171,10 +208,11 @@ function PostCard({ post, onOpen, onNotice, mine }: { post: Post; onOpen: (id: s
       {menu ? (
         <div className="ig-sheet-bk" onClick={() => setMenu(false)}>
           <div className="ig-sheet" onClick={e => e.stopPropagation()}>
-            {post.archived
+            {mine ? (post.archived
               ? <button type="button" onClick={() => { unarchive(post.id); setMenu(false); }}>取消归档</button>
-              : <button type="button" onClick={() => { hidePost(post.id, "archive"); setMenu(false); onNotice?.("归档了，只有你看得到"); }}>归档</button>}
-            <button type="button" className="red" onClick={() => { hidePost(post.id, "delete"); setMenu(false); onNotice?.("删掉了"); }}>删除</button>
+              : <button type="button" onClick={() => { hidePost(post.id, "archive"); setMenu(false); onNotice?.("归档了，只有你看得到"); }}>归档</button>) : null}
+            {mine ? <button type="button" className="red" onClick={() => { hidePost(post.id, "delete"); setMenu(false); onNotice?.("删掉了"); }}>删除<small>戏里删帖，删之前可能已经有人截图</small></button> : null}
+            <button type="button" className="red" onClick={() => { purgePost(post.id); setMenu(false); onNotice?.("彻底删掉了，当它没发生过"); }}>彻底删除<small>当它没发生过，记忆里也不留</small></button>
             <button type="button" onClick={() => setMenu(false)}>取消</button>
           </div>
         </div>
@@ -576,6 +614,8 @@ function StoryNew({ onBack, onNotice }: { onBack: () => void; onNotice: Notice }
 function StoryViewer({ list, start, onClose, onNotice }: { list: Story[]; start: number; onClose: () => void; onNotice: Notice }) {
   const [i, setI] = useState(start);
   const [seen, setSeen] = useState(false);
+  const [open, setOpen] = useState(false);
+  const [menu, setMenu] = useState(false);
   const st = list[i];
   const a = accOf(st.by);
   const mine = st.by === ME;
@@ -584,8 +624,8 @@ function StoryViewer({ list, start, onClose, onNotice }: { list: Story[]; start:
   return (
     <div className="ig-sv" style={{ background: st.bg }} onClick={next}>
       <div className="ig-sv-prog">{list.map((_, k) => <i key={k} className={k <= i ? "on" : ""} />)}</div>
-      <div className="ig-sv-h"><Avatar acc={a} size={32} /><b>{mine ? "你的快拍" : a?.handle}</b><span>{ago(st.at)}</span><button type="button" onClick={e => { e.stopPropagation(); onClose(); }}><X size={22} /></button></div>
-      {st.img ? <div className="ig-sv-img" onClick={e => e.stopPropagation()}><Pic img={st.img} ratio="3/4" onGen={() => void generateImg(st.id, 0, "story").catch(err => onNotice?.(err instanceof Error ? err.message : "生图失败"))} /></div> : null}
+      <div className="ig-sv-h"><Avatar acc={a} size={32} /><b>{mine ? "你的快拍" : a?.handle}</b><span>{ago(st.at)}</span><button type="button" onClick={e => { e.stopPropagation(); setMenu(true); }}><Ellipsis size={22} /></button><button type="button" onClick={e => { e.stopPropagation(); onClose(); }}><X size={22} /></button></div>
+      {st.img ? <div className="ig-sv-img" onClick={e => e.stopPropagation()}><Pic img={st.img} ratio="3/4" onOpen={() => setOpen(true)} /></div> : null}
       {st.text ? <div className="ig-sv-text">{st.text}</div> : null}
       {mine ? <button type="button" className="ig-sv-seen" onClick={e => { e.stopPropagation(); setSeen(true); }}><Eye size={16} />{viewers.length} 位看过</button> : null}
       {seen ? (
@@ -593,6 +633,17 @@ function StoryViewer({ list, start, onClose, onNotice }: { list: Story[]; start:
           <div className="hd"><span />{viewers.length} 位看过<button type="button" onClick={() => setSeen(false)}><X size={18} /></button></div>
           {viewers.map(v => { const va = accOf(v.id); const late = new Date(v.at).getHours() < 5; return <div className="ig-vw" key={v.id}><Avatar acc={va} size={40} /><div><b>{va?.handle}</b><small>{va ? ownerName(va) : ""}</small></div><em className={late ? "late" : ""}>{String(new Date(v.at).getHours()).padStart(2, "0")}:{String(new Date(v.at).getMinutes()).padStart(2, "0")}</em></div>; })}
           {!viewers.length ? <div className="ig-empty">还没有人看过</div> : null}
+        </div>
+      ) : null}
+      {open && st.img ? <ImgViewer img={st.img} ratio="3/4" onClose={() => setOpen(false)}
+        onGen={() => void generateImg(st.id, 0, "story").catch(err => onNotice?.(err instanceof Error ? err.message : "生图失败"))}
+        onSave={d => editImgDesc(st.id, 0, d, "story")} /> : null}
+      {menu ? (
+        <div className="ig-sheet-bk" onClick={e => { e.stopPropagation(); setMenu(false); }}>
+          <div className="ig-sheet" onClick={e => e.stopPropagation()}>
+            <button type="button" className="red" onClick={() => { purgeStory(st.id); setMenu(false); onNotice?.("彻底删掉了，当它没发生过"); onClose(); }}>彻底删除<small>当它没发生过，记忆里也不留</small></button>
+            <button type="button" onClick={() => setMenu(false)}>取消</button>
+          </div>
         </div>
       ) : null}
     </div>

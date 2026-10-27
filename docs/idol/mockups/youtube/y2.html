@@ -1,0 +1,118 @@
+<!doctype html><html><head><meta charset="utf-8"><link rel="stylesheet" href="base.css"><style>
+/* 看视频 */
+.ph.dark::before{content:"";position:absolute;left:0;right:0;top:0;height:47px;background:#0b0b0b;z-index:1}
+.player{position:relative;margin-top:47px;aspect-ratio:16/9;background:#0b0b0b;color:#eee;display:flex;align-items:center;justify-content:center;text-align:center;padding:20px 30px;font-family:"Songti SC",serif;font-size:14.5px;line-height:1.8}
+.player .pg{position:absolute;left:0;right:0;bottom:0;height:3px;background:rgba(255,255,255,.25)}
+.player .pg i{display:block;width:38%;height:100%;background:#ff0033}
+.player .pg i::after{content:"";position:absolute;left:38%;top:-4px;width:11px;height:11px;margin-left:-5px;border-radius:50%;background:#ff0033}
+.player small{position:absolute;left:10px;bottom:9px;font:11px -apple-system,sans-serif;color:rgba(255,255,255,.8)}
+.wt{padding:12px 12px 0}
+.wt h1{font-size:18px;font-weight:700;line-height:1.35}
+.wt .zh{font-size:13.5px}
+.wt .sub{margin-top:6px}
+.wt .sub em{font-style:normal;color:#0f0f0f;font-weight:600}
+.ch{display:flex;align-items:center;gap:10px;padding:12px}
+.ch .av{width:34px;height:34px}
+.ch b{font-size:15px;font-weight:600}.ch span{font-size:12px;color:#606060;margin-left:6px}
+.subbtn{margin-left:auto;background:#0f0f0f;color:#fff;border-radius:18px;padding:8px 15px;font-size:13.5px;font-weight:600}
+.acts{display:flex;gap:8px;padding:0 12px;overflow:hidden;white-space:nowrap}
+.acts div{flex:none;display:flex;align-items:center;gap:6px;background:#f2f2f2;border-radius:18px;padding:7px 13px;font-size:13px;font-weight:600}
+.acts svg{width:18px;height:18px;stroke-width:1.9}
+.acts .lk{padding-right:0}.acts .lk i{width:1px;height:20px;background:#ccc;margin:0 2px 0 6px}
+.acts .lk svg+svg{margin-right:12px}
+.cbox{margin:14px 12px 0;background:#f2f2f2;border-radius:12px;padding:10px 12px}
+.cbox h3{font-size:14px;font-weight:700}.cbox h3 span{font-weight:400;color:#606060;margin-left:6px;font-size:13px}
+.cbox p{display:flex;gap:8px;align-items:flex-start;margin-top:8px;font-size:13px;line-height:1.45}
+.cbox p i{flex:none;width:24px;height:24px;border-radius:50%}
+/* 评论抽屉 */
+.sheet{position:absolute;left:0;right:0;top:268px;bottom:0;background:#fff;border-radius:16px 16px 0 0;box-shadow:0 -4px 20px rgba(0,0,0,.12)}
+.grab{width:40px;height:4px;border-radius:2px;background:#d0d0d0;margin:8px auto 4px}
+.sh-h{display:flex;align-items:center;padding:6px 14px 10px;border-bottom:.5px solid #e5e5e5}
+.sh-h b{font-size:17px;font-weight:700}.sh-h span{color:#606060;margin-left:8px;font-size:14px;margin-right:auto}
+.sh-chips{display:flex;gap:8px;padding:10px 14px 4px}
+.sh-chips span{padding:5px 11px;border-radius:8px;background:#f2f2f2;font-size:13px;font-weight:500}.sh-chips .on{background:#0f0f0f;color:#fff}
+.cm{display:flex;gap:11px;padding:11px 14px 4px}
+.cm .av{width:32px;height:32px}
+.cm .who{font-size:12px;color:#606060}.cm .who b{font-weight:500;color:#0f0f0f}
+.cm .tx{font-size:14px;line-height:1.45;margin-top:2px}
+.cm .zh{font-size:12.5px}
+.cm .ops{display:flex;align-items:center;gap:18px;margin-top:6px;font-size:12px;color:#606060}
+.cm .ops svg{width:16px;height:16px;stroke:#0f0f0f;stroke-width:1.8}
+.cm .ops span{display:flex;align-items:center;gap:5px}
+.ts{color:#065fd4}
+.mj{display:inline-block;margin-left:6px;padding:1px 6px;border-radius:4px;background:#fdecef;color:#c2185b;font-size:10.5px;font-weight:600;vertical-align:1px}
+.pin{font-size:11.5px;color:#606060;display:flex;align-items:center;gap:4px;margin-bottom:2px}
+.input{position:absolute;left:0;right:0;bottom:0;padding:10px 14px 30px;border-top:.5px solid #e5e5e5;background:#fff;display:flex;align-items:center;gap:10px}
+.input i{width:28px;height:28px;border-radius:50%;flex:none}
+.input div{flex:1;background:#f2f2f2;border-radius:18px;padding:9px 14px;font-size:13.5px;color:#909090}
+.input small{display:block;font-size:10.5px;color:#aaa;margin-top:1px}
+/* 频道 */
+.banner{height:96px;margin:6px 12px 0;border-radius:12px;background:linear-gradient(120deg,#1f4fbf 0 55%,#f5c400 55%);position:relative;overflow:hidden}
+.banner::after{content:"LUMINA · 2ND MINI ALBUM 'Afterglow'";position:absolute;left:16px;bottom:12px;color:#fff;font:700 13px -apple-system,sans-serif;letter-spacing:1.5px}
+.cinfo{display:flex;gap:14px;padding:14px 12px 0;align-items:center}
+.cinfo .av{width:72px;height:72px}
+.cinfo h2{font-size:21px;font-weight:700;line-height:1.25}
+.cinfo h2 em{font-style:normal;display:inline-block;width:14px;height:14px;border-radius:50%;background:#606060;color:#fff;font-size:9px;line-height:14px;text-align:center;vertical-align:2px;margin-left:4px}
+.cinfo .sub{line-height:1.5;margin-top:3px}
+.cdesc{padding:10px 12px 0;font-size:13px;color:#606060;line-height:1.5}
+.cdesc b{color:#0f0f0f;font-weight:600}
+.wide{margin:12px 12px 0;background:#f2f2f2;color:#0f0f0f;border-radius:20px;text-align:center;padding:9px;font-size:14px;font-weight:600}
+.ctabs{display:flex;gap:22px;padding:14px 14px 0;border-bottom:.5px solid #e5e5e5;font-size:14.5px;font-weight:600;color:#606060;white-space:nowrap;overflow:hidden}
+.ctabs span{padding-bottom:10px}.ctabs .on{color:#0f0f0f;border-bottom:2px solid #0f0f0f}
+.sec{padding:14px 12px 4px;display:flex;align-items:baseline}
+.sec b{font-size:17px;font-weight:700}.sec span{font-size:12.5px;color:#909090;margin-left:6px}.sec em{margin-left:auto;font-style:normal;font-size:13px;color:#065fd4}
+.hrow{display:flex;gap:10px;padding:4px 12px 0;overflow:hidden}
+.hc{flex:none;width:200px}
+.hc .thumb{border-radius:10px;font-size:12px;padding:14px 18px;line-height:1.6}
+.hc .vt{font-size:13.5px;margin-top:7px;line-height:1.35}
+.hc .zh{font-size:12px}
+.hc .sub{font-size:12px}
+.new{display:inline-block;background:#f2f2f2;color:#606060;font-size:10.5px;padding:1px 5px;border-radius:3px;margin-top:4px;font-weight:600}
+.feed .thumb{font-size:15px}
+.shorts-h{display:flex;align-items:center;gap:8px;padding:2px 12px 10px;font-size:17px;font-weight:700}
+.shorts-h i{width:20px;height:24px;border-radius:6px;background:#ff0033;display:inline-block;position:relative}
+.shorts-h i::after{content:"";position:absolute;left:7px;top:7px;border-left:7px solid #fff;border-top:5px solid transparent;border-bottom:5px solid transparent}
+.srow{display:flex;gap:8px;padding:0 12px}
+.sc{flex:none;width:176px}
+.sc .thumb{aspect-ratio:9/14;border-radius:10px;font-size:12.5px;padding:16px;align-items:flex-end;justify-content:flex-start;text-align:left}
+
+.cast{display:flex;gap:5px;align-items:center;padding:10px 12px 0;font-size:12.5px;color:#606060;flex-wrap:wrap}
+.cast b{color:#0f0f0f;font-weight:600;margin-right:2px}
+.cast span{background:#f2f2f2;border-radius:6px;padding:3px 6px;font-size:12px;color:#0f0f0f}
+.cast span.me{background:#fdecef;color:#c2185b;font-weight:600}
+.sheet2{top:430px}
+.reps{margin:6px 0 0 0}
+.rep{display:flex;gap:9px;margin-top:9px}
+.rep .av{width:24px;height:24px}
+.rep .tx{font-size:13.5px}
+.more{display:flex;align-items:center;gap:6px;color:#065fd4;font-size:13px;font-weight:600;margin-top:9px}
+.pf .player,.pf .thumb{font-family:-apple-system,"PingFang SC",sans-serif;font-weight:500;letter-spacing:0}
+.tag{position:absolute;left:0;right:0;top:12px;text-align:center;font-size:20px;font-weight:700;color:#333}
+</style></head><body>
+<div><div class="ph dark "><div class="scroll" style="bottom:0">
+<div class="player">你站在左二，旁边是金智妍和林瑞秋<br>四个人穿同款白 T 翻跳前辈的出道曲<br>最后一个八拍你转身慢了半拍，没停<div class="pg"><i></i></div><small>1:07 / 2:58</small></div>
+<div class="wt"><h1>[JYP TRAINEE] 연습생 커버 댄스 #3 | LUMINA 'Spark'</h1><div class="zh">练习生翻跳第三期｜LUMINA《Spark》</div><div class="sub">观看 1.2万次 · 2 天前 <em>...更多</em></div></div>
+<div class="cast"><b>出镜</b><span>左一 朴书雅</span><span class="me">左二 你</span><span>右二 金智妍</span><span>右一 林瑞秋</span></div>
+<div class="sheet sheet2"><div class="grab"></div>
+<div class="sh-h"><b>评论</b><span>238</span><svg class="i" viewBox="0 0 24 24"><path d="M4 6h16M7 12h10M10 18h4"/></svg><svg class="i" viewBox="0 0 24 24" style="margin-left:14px"><path d="M6 6l12 12M18 6L6 18"/></svg></div>
+<div class="cm"><i class="av a3"></i><div><div class="who"><b>@luminarchive</b> · 2 天前</div><div class="tx">왼쪽에서 두 번째 연습생 누구예요?? 이름 좀 알려주세요 ㅠㅠ</div><div class="zh">左边第二个练习生是谁？？求名字呜呜</div><div class="ops"><span><svg viewBox="0 0 24 24" fill="none"><path d="M7 10v11H3V10zM7 10l4-8a2 2 0 0 1 3 2l-1 5h6a2 2 0 0 1 2 2.3l-1.4 8A2 2 0 0 1 17.6 21H7"/></svg>412</span><span>回复</span></div>
+<div class="reps">
+<div class="rep"><i class="av a5"></i><div><div class="who"><b>@jyp_trainee_watch</b> · 1 天前</div><div class="tx">중국인 연습생이래요 작년에 들어왔대</div><div class="zh">听说是中国练习生，去年进来的</div></div></div>
+<div class="rep"><i class="av a6"></i><div><div class="who"><b>@用户-晚风</b> · 1 天前</div><div class="tx">真的吗！！那我先关注一下</div></div></div>
+<div class="more">⌄ 加载更多回复（85）</div>
+</div></div></div>
+</div></div></div><div class="cap">A · 宋体（现在这版）</div></div>
+<div><div class="ph dark pf"><div class="scroll" style="bottom:0">
+<div class="player">你站在左二，旁边是金智妍和林瑞秋<br>四个人穿同款白 T 翻跳前辈的出道曲<br>最后一个八拍你转身慢了半拍，没停<div class="pg"><i></i></div><small>1:07 / 2:58</small></div>
+<div class="wt"><h1>[JYP TRAINEE] 연습생 커버 댄스 #3 | LUMINA 'Spark'</h1><div class="zh">练习生翻跳第三期｜LUMINA《Spark》</div><div class="sub">观看 1.2万次 · 2 天前 <em>...更多</em></div></div>
+<div class="cast"><b>出镜</b><span>左一 朴书雅</span><span class="me">左二 你</span><span>右二 金智妍</span><span>右一 林瑞秋</span></div>
+<div class="sheet sheet2"><div class="grab"></div>
+<div class="sh-h"><b>评论</b><span>238</span><svg class="i" viewBox="0 0 24 24"><path d="M4 6h16M7 12h10M10 18h4"/></svg><svg class="i" viewBox="0 0 24 24" style="margin-left:14px"><path d="M6 6l12 12M18 6L6 18"/></svg></div>
+<div class="cm"><i class="av a3"></i><div><div class="who"><b>@luminarchive</b> · 2 天前</div><div class="tx">왼쪽에서 두 번째 연습생 누구예요?? 이름 좀 알려주세요 ㅠㅠ</div><div class="zh">左边第二个练习生是谁？？求名字呜呜</div><div class="ops"><span><svg viewBox="0 0 24 24" fill="none"><path d="M7 10v11H3V10zM7 10l4-8a2 2 0 0 1 3 2l-1 5h6a2 2 0 0 1 2 2.3l-1.4 8A2 2 0 0 1 17.6 21H7"/></svg>412</span><span>回复</span></div>
+<div class="reps">
+<div class="rep"><i class="av a5"></i><div><div class="who"><b>@jyp_trainee_watch</b> · 1 天前</div><div class="tx">중국인 연습생이래요 작년에 들어왔대</div><div class="zh">听说是中国练习生，去年进来的</div></div></div>
+<div class="rep"><i class="av a6"></i><div><div class="who"><b>@用户-晚风</b> · 1 天前</div><div class="tx">真的吗！！那我先关注一下</div></div></div>
+<div class="more">⌄ 加载更多回复（85）</div>
+</div></div></div>
+</div></div></div><div class="cap">B · 苹方（iOS 自带）</div></div>
+</body></html>

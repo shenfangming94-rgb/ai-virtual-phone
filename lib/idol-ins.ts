@@ -477,6 +477,17 @@ async function reactToMine(postId: string): Promise<void> {
 export function hidePost(id: string, how: "delete" | "archive") {
   patch(s => ({ ...s, posts: s.posts.map(p => p.id === id ? { ...p, [how === "delete" ? "deleted" : "archived"]: true, hiddenAt: p.hiddenAt ?? Date.now() } : p) }));
 }
+/** 彻底删除：当这条没发生过，帖子、相关通知、发现页都清掉（她觉得 OOC 或出错时用，不算戏里删帖） */
+export function purgePost(id: string) {
+  patch(s => ({ ...s, posts: s.posts.filter(p => p.id !== id), notes: s.notes.filter(n => n.postId !== id), explore: s.explore ? { ...s.explore, ids: s.explore.ids.filter(x => x !== id) } : s.explore }));
+}
+export function purgeStory(id: string) { patch(s => ({ ...s, stories: s.stories.filter(x => x.id !== id) })); }
+/** 改图片描述（别人的也能改） */
+export function editImgDesc(postId: string, idx: number, desc: string, kind: "post" | "story" = "post") {
+  patch(x => kind === "post"
+    ? { ...x, posts: x.posts.map(p => p.id === postId ? { ...p, imgs: p.imgs.map((m, i) => i === idx ? { ...m, desc } : m) } : p) }
+    : { ...x, stories: x.stories.map(st => st.id === postId && st.img ? { ...st, img: { ...st.img, desc } } : st) });
+}
 export function unarchive(id: string) { patch(s => ({ ...s, posts: s.posts.map(p => p.id === id ? { ...p, archived: false } : p) })); }
 /** 切私密：之前公开时发的帖子，陌生人那边算「藏起来了」 */
 export function setPrivate(on: boolean) {

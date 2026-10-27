@@ -106,8 +106,6 @@ function instruction(charId: string, now: number, gapDays: number): string {
   const next = career.nodes.filter(n => n.status === "pending" && n.dueAt > now).sort((a, b) => a.dueAt - b.dueAt)[0];
   const lastDone = career.nodes.filter(n => n.dueAt < now && n.dueAt > now - 2 * DAY && n.status === "done").slice(-1)[0];
   const ev = p?.events.slice(-3).map(e => `${md(e.at)} ${e.text}`).join("；");
-  const s = loadChatSessions().find(x => !x.isGroup && x.contactId === charId);
-  const recent = s ? loadChatMessages(s.id).filter(m => m.role === "user" || m.role === "assistant").slice(-6).map(m => `${m.role === "user" ? "她" : "你"}：${m.content}`).join("\n") : "";
   const her = loadTraineeCard()?.name || "她";
   const mine = p ? bdayIn(p, now) : 999;
   const chars = loadCharacters();
@@ -121,7 +119,6 @@ function instruction(charId: string, now: number, gapDays: number): string {
     `可以接着你们最近的事（${ev || "还没什么"}），可以说你自己今天的事（你最近：${p?.status?.text || "没写"}），${next ? `可以聊她接下来的「${next.title}」（${md(next.dueAt)}）` : ""}${lastDone ? `，可以问她刚过去的「${lastDone.title}」怎么样` : ""}。挑一个最自然的，不要全说。`,
     bday ? `快到的生日：${bday}。想提就提，可以别别扭扭地暗示，也可以直说。` : "",
     gapDays >= 2 ? `世界里刚过去了${Math.round(gapDays)}天，这几天你们照常相处、照常聊天，只是没写出来：不要说好久没联系、不要怪她没找你，接着平常的日子往下说。` : "",
-    recent ? `你们上次的聊天：\n${recent}` : "",
     "按你的性格和跟她的关系，一到三条短消息；别每次都问身体、别客套。",
   ].filter(Boolean).join("\n");
 }

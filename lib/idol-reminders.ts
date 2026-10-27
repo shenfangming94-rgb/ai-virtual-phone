@@ -9,7 +9,7 @@
 import { kvGet, kvSet } from "./kv-db";
 import { loadCharacters } from "./character-storage";
 import type { Character } from "./character-types";
-import { addChatContact, createOrGetSession, loadChatContacts, pushChatMessage } from "./chat-storage";
+import { loadChatMessages, addChatContact, createOrGetSession, loadChatContacts, pushChatMessage } from "./chat-storage";
 import { simpleLLMCall } from "./api-helpers";
 import { loadApiConfigs, loadBindingConfig, resolveBinding, resolveUserIdentity } from "./settings-storage";
 import { getChatPluginHookBus } from "./chat-plugin-hooks";
@@ -196,10 +196,23 @@ export function queueMessage(charId: string, instruction: string, delay: number)
   save({ ...s, outbox: [...s.outbox, { id: uid("out"), charId, instruction, at: Date.now() + delay }] });
 }
 
-/** 让某人在 KakaoTalk 私聊给她发消息（没加过就先加上，比如老师） */
+/** 让某人在 KakaoTalk 私聊给她发消息（没加过就先加上，比如老师）。
+ *  走正常的 KakaoTalk 聊天引擎（她的预设、世界书、正则、聊天记录都在），为什么来找她放进 buildIdolChatHint 悄悄告诉他；
+ *  聊天引擎失败就退回简单调用 */
 async function sendAs(charId: string, instruction: string): Promise<string | null> {
   const char = loadCharacters().find(c => c.id === charId);
   if (!char) return null;
+  if (!loadChatContacts().some(c => c.characterId === charId)) addChatContact(charId);
+  const session = createOrGetSession(charId);
+  const before = loadChatMessages(session.id).length;
+  try {
+    proactive.set(charId, instruction);
+    const { requestBackgroundChatReply } = await import("./follow-up-service");
+    const r = await requestBackgroundChatReply(session.id);
+    proactive.delete(charId);
+    const fresh = loadChatMessages(session.id).slice(before).filter(m => m.role === "assistant" && m.content.trim());
+    if (r.ok && fresh.length) return fresh[0].content;
+  } catch { proactive.delete(charId); }
   const me = resolveUserIdentity(charId, "chat")?.name || "她";
   const res = await simpleLLMCall(chatConfig(), [
     { role: "system", content: `你是${char.name}。${char.persona}\n\n你在 KakaoTalk 上给${me}发私聊消息。只输出要发的消息本身，一到三条，每条一行，口语，不要旁白、不要引号。` },
@@ -207,8 +220,6 @@ async function sendAs(charId: string, instruction: string): Promise<string | nul
   ], { temperature: 0.85, label: "有人来找你" });
   const lines = (res.content || "").split("\n").map(l => l.trim().replace(/^["「]|["」]$/g, "")).filter(Boolean).slice(0, 3);
   if (!lines.length) return null;
-  if (!loadChatContacts().some(c => c.characterId === charId)) addChatContact(charId);
-  const session = createOrGetSession(charId);
   for (const l of lines) pushChatMessage({ sessionId: session.id, role: "assistant", content: l, status: "sent" });
   return lines[0];
 }
@@ -283,9 +294,17 @@ export function reminderTick(notify: (msg: string) => void): void {
 // ── 老师在 KakaoTalk 里批假 ──
 
 /** 私聊老师时给他的提示：她请假你决定批不批，批了写记号 */
+/** 主动找她：下一次给这个人生成回复时悄悄告诉他为什么来找她（用一次就清掉） */
+const proactive = new Map<string, string>();
+
 export function buildIdolChatHint(characterId: string, isGroup: boolean): string {
   if (isGroup || typeof window === "undefined") return "";
   const out: string[] = [];
+  const intent = proactive.get(characterId);
+  if (intent) {
+    proactive.delete(characterId);
+    out.push("### 这一条是你主动发的", "她没有给你发消息，是你自己想找她：", intent);
+  }
   const now = Date.now();
   const teacher = teacherOf();
   if (teacher && teacher.id === characterId) {

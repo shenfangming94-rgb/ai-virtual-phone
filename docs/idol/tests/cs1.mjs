@@ -5,7 +5,7 @@ const p = await b.newPage(); await p.setViewport({ width: 430, height: 900, devi
 const errs = []; p.on("pageerror", e => errs.push(e.message));
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const asks = [];
-function reply(s) { if (s.includes("平常的一天")) { asks.push(JSON.parse(s).messages.at(-1).content); return "腿还酸吗\n我今天差点在练习室睡着"; } return "{}"; }
+function reply(s) { if (s.includes("平常的一天")) { { const body = JSON.parse(s); const all = body.messages.map(m => typeof m.content === "string" ? m.content : JSON.stringify(m.content)).join("\n"); const i = all.indexOf("这一条是你主动发的"); asks.push(i >= 0 ? all.slice(i, i + 420) : "（没找到主动标记）"); } return "腿还酸吗\n我今天差点在练习室睡着"; } return "{}"; }
 const CORS = { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers": "*", "Access-Control-Allow-Methods": "POST, OPTIONS" };
 await p.setRequestInterception(true);
 p.on("request", r => {

@@ -263,12 +263,15 @@ export function stepRelation(p: IdolProfile, dir: "up" | "down" | "same", heartD
   return { ...p, relation: rel, heart };
 }
 
-/** 很久没交集会淡：好朋友三周没事退回朋友，暧昧退回好朋友 */
-export function decayRelations(): void {
+/** 很久没交集会淡：好朋友三周没事退回朋友，暧昧退回好朋友。
+ *  加了 KakaoTalk 的人和室友不淡：她跳过的日子算照常联系（keepIds 由调用方给） */
+export function decayRelations(keepIds: string[] = []): void {
   const all = loadProfiles();
   const now = Date.now();
+  const keep = new Set(keepIds);
   let changed = false;
   for (const id of Object.keys(all)) {
+    if (keep.has(id)) continue;
     const p = all[id];
     const last = Math.max(p.metAt?.at ?? 0, ...p.events.map(e => e.at));
     if (!last || now - last < 21 * 864e5) continue;

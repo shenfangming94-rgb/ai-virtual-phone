@@ -314,7 +314,7 @@ export function kakaoTick(notify: (msg: string) => void): void {
   if (tickBusy || !loadTraineeCard()) return;
   const now = Date.now();
   const today = new Date(now).toDateString();
-  if (today !== lastDecayDay) { lastDecayDay = today; try { decayRelations(); } catch { /* 不挡着 */ } }
+  if (today !== lastDecayDay) { lastDecayDay = today; try { decayRelations([...loadChatContacts().map(c => c.characterId), ...(loadCareer().roommates ?? [])]); } catch { /* 不挡着 */ } }
   const s = load();
   const due = s.incoming.filter(i => i.at <= now);
   if (due.length) {

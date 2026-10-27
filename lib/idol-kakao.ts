@@ -290,6 +290,13 @@ async function mateAddsAfter(present: Character[], place: string): Promise<void>
   save({ ...load(), incoming: [...load().incoming, { id: uid("in"), charId: mate.id, message, place, at: Date.now() + (30 + Math.random() * 150) * MIN }] });
 }
 
+/** 别处安排的好友申请（平常日子有人来加她），到点出现在「新的朋友」 */
+export function queueFriendRequest(charId: string, message: string, place: string, at: number): void {
+  const s = load();
+  if (isKakaoFriend(charId) || s.incoming.some(i => i.charId === charId) || loadFriendRequests().some(r => r.characterId === charId && r.status === "pending")) return;
+  save({ ...s, incoming: [...s.incoming, { id: uid("in"), charId, message, place, at }] });
+}
+
 /** 节点那场戏演完：发动机安排后续的人 */
 export async function afterNodeScene(node: CareerNode | undefined, presentIds: string[], place: string): Promise<void> {
   if (!node) return;

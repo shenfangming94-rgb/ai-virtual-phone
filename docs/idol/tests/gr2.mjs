@@ -1,0 +1,31 @@
+// 日历「记一笔大事」填团名 → 进名册
+import puppeteer from "puppeteer-core";
+const OUT = process.argv[2] || ".";
+const b = await puppeteer.launch({ executablePath: "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome", headless: "new" });
+const p = await b.newPage(); await p.setViewport({ width: 430, height: 900, deviceScaleFactor: 2 });
+const errs = []; p.on("pageerror", e => errs.push(e.message));
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+await p.goto("http://localhost:3031/", { waitUntil: "networkidle2", timeout: 300000 }); await sleep(2500);
+await p.evaluate(async () => {
+  const db = await new Promise(res => { const r = indexedDB.open("AiPhoneKvDB"); r.onsuccess = () => res(r.result); });
+  const tx = db.transaction("entries", "readwrite"); const st = tx.objectStore("entries");
+  st.put({ key: "idol_trainee_card_v1", value: JSON.stringify({ name: "Flora", photo: null, birthday: "1999-04-12", nationality: "中国", mbti: "", looks: "", start: "2015-03-01", trainLength: "一年半", family: "normal", familyCustom: "", familyNote: "", talents: [], talentNote: "", weakness: "", other: "", signature: null, company: "", no: "x", createdAt: 1 }) });
+  st.put({ key: "idol_groups_v1", value: JSON.stringify({ aurora: { name: "Aurora", companyId: "sm", kind: "女团", debut: 2013, members: ["金瑞雅", "宋夏妍", "林恩"], from: "site" } }) });
+  await new Promise(r => tx.oncomplete = r);
+});
+await p.reload({ waitUntil: "networkidle2" }); await sleep(2500);
+await p.evaluate(() => { const wc = window.__worldClock; wc.offset = new Date("2015-03-14T21:40:00").getTime() - wc.RealDate.now(); });
+await p.evaluate(() => document.querySelector(".lock-swipe")?.click()); await sleep(800);
+await p.evaluate(() => window.postMessage({ type: "OS_CMD", action: "open_app", appId: "calendar" }, "*")); await sleep(2500);
+const clickText = t => p.evaluate(t => { const el = [...document.querySelectorAll("button")].find(x => x.textContent.trim() === t); el?.click(); return !!el; }, t);
+console.log("大事记", await clickText("大事记")); await sleep(1000);
+console.log("记一笔", await clickText("记一笔")); await sleep(800);
+await p.type(".idol-cal-edit input:not([type=date])", "Aurora 出道");
+const inputs = await p.$$(".idol-cal-edit .idol-cal-field input");
+await inputs[inputs.length - 1].type("Aurora");
+await p.select(".idol-cal-edit select", "jyp"); await sleep(400);
+await p.screenshot({ path: OUT + "/gr2_form.png" });
+await clickText("保存"); await sleep(1200);
+console.log("名册", JSON.stringify(await p.evaluate(() => window.__idolGroups.load()).then(g => g.aurora)));
+console.log(errs.slice(0, 3));
+await b.close();

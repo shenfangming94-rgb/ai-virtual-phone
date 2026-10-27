@@ -1572,7 +1572,7 @@
 .idol-cal-actions .calendar-block-btn { display: inline-flex; align-items: center; gap: 4px; }
 .idol-cal-close { display: none; }
 .idol-cal-field { display: flex; flex-direction: column; gap: 4px; margin: 10px 0 0; font-size: calc(13px * var(--app-text-scale, 1)); color: var(--c-calendar-sub); }
-.idol-cal-field input, .idol-cal-field textarea { border: 0; border-radius: 10px; background: var(--c-calendar-surface); color: var(--c-calendar-ink); padding: 9px 11px; font-size: calc(14px * var(--app-text-scale, 1)); font-family: inherit; resize: none; }
+.idol-cal-field input, .idol-cal-field textarea, .idol-cal-field select { border: 0; border-radius: 10px; background: var(--c-calendar-surface); color: var(--c-calendar-ink); padding: 9px 11px; font-size: calc(14px * var(--app-text-scale, 1)); font-family: inherit; resize: none; }
 .idol-cal-edit .idol-cal-actions { margin-top: 14px; }
 .idol-cal-hint { font-size: calc(13px * var(--app-text-scale, 1)); color: var(--c-calendar-sub); line-height: 1.6; margin: 6px 0 0; }
 .idol-cal-view { font-size: calc(14px * var(--app-text-scale, 1)); color: var(--c-calendar-sub); padding: 8px 0 4px; line-height: 1.6; }
@@ -1580,3 +1580,8 @@
 .idol-mark[data-kind="birthday"] { color: #e86d9a; }
 .idol-cal-day-item[data-kind="birthday"] i { color: #e86d9a; }
 .idol-cal-row[data-kind="birthday"] .idol-cal-row-k { color: #e86d9a; }
+
+.idol-cal-field select { appearance: none; -webkit-appearance: none; }
+.idol-cal-check { display: flex; align-items: flex-start; gap: 8px; margin: 12px 0 0; font-size: calc(14px * var(--app-text-scale, 1)); color: var(--c-calendar-ink); }
+.idol-cal-check input { margin-top: 3px; accent-color: #0a84ff; }
+.idol-cal-check small { display: block; font-size: calc(12px * var(--app-text-scale, 1)); color: var(--c-calendar-sub); margin-top: 2px; line-height: 1.5; }

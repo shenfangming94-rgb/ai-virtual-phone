@@ -1,5 +1,7 @@
 "use client";
 
+import { findGroup, groupLine, upsertGroups, companyIdByName } from "@/lib/idol-groups";
+import { COMPANIES, companyOf } from "@/lib/idol-career";
 import { useEffect, useMemo, useState } from "react";
 import { Sparkles, Trash2, X } from "lucide-react";
 import {
@@ -100,6 +102,14 @@ export function AlmanacEdit({ item, date, onClose, onNotice }: { item: AlmanacIt
   const [title, setTitle] = useState(item?.title ?? "");
   const [note, setNote] = useState(item?.note ?? "");
   const [busy, setBusy] = useState(false);
+  // 这件事是哪个团的：填了团名可以选记进圈内名册（官网、热搜、剧情都认）
+  const [group, setGroup] = useState("");
+  const [companyId, setCompanyId] = useState(() => companyIdByName(item?.company) ?? "");
+  const [toRoster, setToRoster] = useState(true);
+  const known = group.trim() ? findGroup(group) : undefined;
+  useEffect(() => {
+    if (known?.companyId && known.name.toLowerCase() === group.trim().toLowerCase()) setCompanyId(known.companyId);
+  }, [known?.companyId, known?.name, group]);
   const ai = async () => {
     setBusy(true);
     try { const r = await aiWriteMine(d, [title, note].filter(Boolean).join("；")); setTitle(r.title); setNote(r.note); }
@@ -108,8 +118,22 @@ export function AlmanacEdit({ item, date, onClose, onNotice }: { item: AlmanacIt
   };
   const saveIt = () => {
     if (!title.trim()) { onNotice?.("写个标题"); return; }
-    if (item) updateItem(item.id, { date: d, title, note }); else addMine(d, title, note);
-    onNotice?.(item ? "改好了" : "记下了");
+    const g = group.trim();
+    let company = companyOf(companyId)?.name;
+    let rosterMsg = "";
+    if (g && toRoster) {
+      const exact = known && known.name.toLowerCase() === g.toLowerCase() ? known : undefined;
+      if (exact?.companyId && companyId && exact.companyId !== companyId) {
+        rosterMsg = `，${exact.name} 已经是 ${companyOf(exact.companyId)?.name} 的团了，名册没改`;
+        company = companyOf(exact.companyId)?.name;
+      } else {
+        upsertGroups([{ name: g, companyId: companyId || undefined, debut: /出道/.test(title) ? +d.slice(0, 4) : undefined }], "almanac");
+        if (!company && exact?.companyId) company = companyOf(exact.companyId)?.name;
+        rosterMsg = exact ? "" : `，${g} 记进名册了`;
+      }
+    }
+    if (item) updateItem(item.id, { date: d, title, note, company }); else addMine(d, title, note, company);
+    onNotice?.((item ? "改好了" : "记下了") + rosterMsg);
     onClose();
   };
   return (
@@ -125,6 +149,19 @@ export function AlmanacEdit({ item, date, onClose, onNotice }: { item: AlmanacIt
             <label className="idol-cal-field"><span>日期</span><input type="date" value={d} onChange={e => setD(e.target.value)} /></label>
             <label className="idol-cal-field"><span>标题</span><input value={title} onChange={e => setTitle(e.target.value)} placeholder="比如：第一次进练习室通宵" /></label>
             <label className="idol-cal-field"><span>备注</span><textarea value={note} onChange={e => setNote(e.target.value)} rows={3} placeholder="可以不写" /></label>
+            <label className="idol-cal-field"><span>哪个团</span><input value={group} onChange={e => setGroup(e.target.value)} placeholder="可以不写，比如：Aurora" /></label>
+            <label className="idol-cal-field"><span>公司</span>
+              <select value={companyId} onChange={e => setCompanyId(e.target.value)}>
+                <option value="">不写</option>
+                {COMPANIES.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+              </select>
+            </label>
+            {group.trim() ? (
+              <label className="idol-cal-check">
+                <input type="checkbox" checked={toRoster} onChange={e => setToRoster(e.target.checked)} />
+                <span>记进圈内名册<small>{known && known.name.toLowerCase() === group.trim().toLowerCase() ? `名册里已经有：${groupLine(known)}` : "官网、热搜、剧情以后都认这个团"}</small></span>
+              </label>
+            ) : null}
             <div className="idol-cal-actions">
               {item ? <button type="button" className="calendar-block-btn" data-variant="ghost" onClick={() => { deleteItem(item.id); onNotice?.("删掉了"); onClose(); }}><Trash2 size={14} />删除</button> : null}
               <button type="button" className="calendar-block-btn" data-variant="ghost" disabled={busy} onClick={ai}>{busy ? "写着呢…" : "让 AI 帮我写"}</button>

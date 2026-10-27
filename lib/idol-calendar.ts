@@ -136,11 +136,11 @@ export function almanacByDate(fromIso: string, toIso: string): Map<string, Alman
 
 // ── 她自己记的 ──
 
-export function addMine(date: string, title: string, note = ""): void {
+export function addMine(date: string, title: string, note = "", company?: string): void {
   const s = load();
-  save({ ...s, mine: [...s.mine, { id: uid("mine"), date, title: title.trim(), note: note.trim() || undefined, kind: "mine" }] });
+  save({ ...s, mine: [...s.mine, { id: uid("mine"), date, title: title.trim(), note: note.trim() || undefined, kind: "mine", company: company || undefined }] });
 }
-export function updateItem(id: string, patch: { date?: string; title?: string; note?: string }): void {
+export function updateItem(id: string, patch: { date?: string; title?: string; note?: string; company?: string }): void {
   const s = load();
   const fix = (i: AlmanacItem) => i.id === id ? { ...i, ...patch, note: patch.note !== undefined ? patch.note.trim() || undefined : i.note } : i;
   save({ mine: s.mine.map(fix), world: Object.fromEntries(Object.entries(s.world).map(([k, v]) => [k, v.map(fix)])) });

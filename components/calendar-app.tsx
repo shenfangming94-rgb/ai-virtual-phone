@@ -47,6 +47,9 @@ import {
 import { CalendarMonthPage } from "./calendar/month-page";
 import { CalendarDetailPage } from "./calendar/detail-page";
 import { CalendarEventEditModal, type CalendarEventDraft } from "./calendar/event-edit-modal";
+import { AlmanacBar, AlmanacDayPanel, AlmanacEdit, AlmanacSheet, PlanSheet, useAlmanacVersion } from "./calendar/idol-almanac";
+import { almanacByDate, generateWorldMonth, type AlmanacItem } from "@/lib/idol-calendar";
+import { loadCareer } from "@/lib/idol-career";
 
 type OwnerOption = {
   key: string;
@@ -65,6 +68,8 @@ const CALENDAR_THEMES: Array<{ id: (typeof CALENDAR_THEME_IDS)[number]; name: st
   { id: "sakura", name: "樱粉" },
 ];
 
+const IDOL_ONLY_ME = true;
+
 function buildOwnerOptions(): OwnerOption[] {
   const options: OwnerOption[] = [];
   const identity = resolveUserIdentity(undefined, "calendar") ?? resolveUserIdentity() ?? null;
@@ -75,7 +80,8 @@ function buildOwnerOptions(): OwnerOption[] {
     name: identity?.name?.trim() || "我",
     avatar: identity?.avatarUrl || null,
   });
-  for (const char of loadCharacters()) {
+  // 爱豆小手机：日历只留她自己的（char 们不在这里）
+  for (const char of IDOL_ONLY_ME ? [] : loadCharacters()) {
     options.push({
       key: `character:${char.id}`,
       ownerType: "character",
@@ -151,6 +157,20 @@ export function PhoneCalendarApp({
   const autoAttemptedRef = useRef<Set<string>>(new Set());
   const [editingItem, setEditingItem] = useState<(CalendarEventDraft & { originalDate?: string }) | null>(null);
   const autoGenerateEnabled = config.autoGenerateEnabled;
+  const [almanacOpen, setAlmanacOpen] = useState(false);
+  const [planOpen, setPlanOpen] = useState(false);
+  const [almanacEdit, setAlmanacEdit] = useState<{ item: AlmanacItem | null; date: string } | null>(null);
+  const almanacVersion = useAlmanacVersion();
+  const almanacMarks = useMemo(() => {
+    const t = parseIsoDate(todayIso);
+    return almanacByDate(formatIsoDate(new Date(t.getFullYear() - 1, t.getMonth(), 1)), formatIsoDate(new Date(t.getFullYear() + 1, t.getMonth() + 1, 0)));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [todayIso, almanacVersion]);
+  // 打开日历时补这个月的圈内大事（一个月只写一次）
+  useEffect(() => {
+    if (loadCareer().stage === "pre") return;
+    void generateWorldMonth(todayIso.slice(0, 7)).catch(() => undefined);
+  }, [todayIso]);
 
   const [menstrualDraft, setMenstrualDraft] = useState<{
     cycleLength: string;
@@ -494,7 +514,9 @@ export function PhoneCalendarApp({
     </div>
   ) : null;
 
-  const ownerStrip = (
+  const ownerStrip = IDOL_ONLY_ME ? (
+    <AlmanacBar onAlmanac={() => setAlmanacOpen(true)} onPlan={() => setPlanOpen(true)} />
+  ) : (
     <section className="calendar-owner-strip hide-scrollbar">
       {owners.map(owner => (
         <button
@@ -530,6 +552,7 @@ export function PhoneCalendarApp({
             todayIso={todayIso}
             itemsByDate={itemsByDate}
             cycleMap={cycleMap}
+            marks={almanacMarks}
             ownerStrip={ownerStrip}
             onPickDay={openDetail}
             onClose={onClose}
@@ -542,7 +565,7 @@ export function PhoneCalendarApp({
             todayIso={todayIso}
             itemsByDate={itemsByDate}
             cycleMap={cycleMap}
-            cyclePanel={cyclePanel}
+            cyclePanel={<><AlmanacDayPanel date={selectedDate} onOpen={(item, date) => setAlmanacEdit({ item, date })} />{cyclePanel}</>}
             daysPerPage={config.daysPerPage}
             onOpenDaysPicker={() => setShowDaysPanel(true)}
             onOpenCycleSettings={selectedOwner?.ownerType === "user" ? openMenstrualSettings : null}
@@ -712,6 +735,12 @@ export function PhoneCalendarApp({
           </div>
         </div>
       )}
+
+      {almanacOpen && (
+        <AlmanacSheet ym={selectedDate.slice(0, 7)} onClose={() => setAlmanacOpen(false)} onNotice={onNotice} onOpen={(item, date) => setAlmanacEdit({ item, date })} />
+      )}
+      {almanacEdit && <AlmanacEdit item={almanacEdit.item} date={almanacEdit.date} onClose={() => setAlmanacEdit(null)} onNotice={onNotice} />}
+      {planOpen && <PlanSheet weekStart={weekStart} onClose={() => setPlanOpen(false)} onNotice={onNotice} onDone={refreshPlans} />}
 
       {editingItem && (
         <CalendarEventEditModal

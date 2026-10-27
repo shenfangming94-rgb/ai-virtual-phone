@@ -15,6 +15,7 @@ import { loadApiConfigs, loadBindingConfig, resolveBinding } from "./settings-st
 import { loadTraineeCard, saveTraineeCard, describeTrainee } from "./trainee-card";
 import { upsertCalendarScheduleItem } from "./calendar-storage";
 import { getWeekStartIso } from "./calendar-utils";
+import { debutPromptBlock, onSelection, revealName, type Debut } from "./idol-debut";
 
 export type Company = { id: string; name: string; scale: string; style: string; trainee: string; recruit: string; fame: string };
 
@@ -30,7 +31,7 @@ export const COMPANIES: Company[] = [
 export const companyOf = (id?: string) => COMPANIES.find(c => c.id === id);
 
 export type Offer = { id: string; companyId: string; kind: "scout" | "audition"; at: number; message: string; place: string; status: "new" | "accepted" | "declined"; notified?: boolean };
-export type NodeKind = "audition" | "first_day" | "weekly" | "monthly" | "talk" | "makeup" | "chance" | "date" | "custom";
+export type NodeKind = "audition" | "first_day" | "weekly" | "monthly" | "talk" | "makeup" | "chance" | "date" | "custom" | "selection" | "debut";
 /** invite = 待回复；pending = 定了还没到/没做；done = 演了或打勾；leave = 请假；absent = 缺席；declined = 不去/过期；passed = 旧数据（当缺席） */
 export type NodeStatus = "invite" | "pending" | "done" | "leave" | "absent" | "declined" | "passed";
 export type CareerNode = {
@@ -55,6 +56,8 @@ export type CareerNode = {
   wish?: string;
   note?: string;
   doneAt?: number;
+  /** 出道那几件事：name 队名公布 / record 录音 / mv / showcase */
+  step?: string;
 };
 
 /** 节点归哪个列表 */
@@ -65,7 +68,8 @@ export function listOf(n: CareerNode): "company" | "chance" | "date" | "mine" {
   return "company";
 }
 export type Career = {
-  stage: "pre" | "trainee";
+  /** idol = 已经出道 */
+  stage: "pre" | "trainee" | "idol";
   companyId?: string;
   signedAt?: number;
   insider?: string;
@@ -75,6 +79,8 @@ export type Career = {
   offersMadeAt?: number;
   /** 室友（角色 id） */
   roommates?: string[];
+  /** 往出道走（idol-debut.ts） */
+  debut?: Debut;
 };
 
 const KEY = "idol_career_v1";
@@ -130,7 +136,7 @@ export function addToCalendar(node: CareerNode): void {
       endTime: end.getDate() === d.getDate() ? hhmm(end) : "23:59",
       location: node.place,
       title: node.title,
-      emoji: node.kind === "monthly" ? "📋" : node.kind === "weekly" ? "🎬" : node.kind === "audition" ? "🎤" : node.kind === "date" ? "☕" : node.kind === "custom" ? "📝" : node.kind === "chance" ? "⭐" : "🏢",
+      emoji: node.kind === "selection" ? "🌟" : node.kind === "debut" ? (node.step === "showcase" ? "🎉" : node.step === "record" ? "🎙️" : node.step === "mv" ? "🎬" : "✨") : node.kind === "monthly" ? "📋" : node.kind === "weekly" ? "🎬" : node.kind === "audition" ? "🎤" : node.kind === "date" ? "☕" : node.kind === "custom" ? "📝" : node.kind === "chance" ? "⭐" : "🏢",
       source: "generated",
     });
   } catch { /* 日历写不进去不影响剧情 */ }
@@ -292,6 +298,8 @@ export async function completeNode(nodeId: string): Promise<string | null> {
     await signCompany(node.companyId);
     return `签约了：${companyOf(node.companyId)?.name}`;
   }
+  if (node.kind === "selection") return onSelection({ ...node, status: "done" }, "done");
+  if (node.kind === "debut" && node.step === "name") { await revealName(); return "队名公布了"; }
   return null;
 }
 
@@ -322,10 +330,12 @@ export function careerPromptBlock(): string {
   const c = companyOf(career.companyId);
   if (career.stage === "pre" || !c) return "【她现在】还没进任何公司。";
   const days = career.signedAt ? Math.max(1, Math.floor((Date.now() - career.signedAt) / DAY) + 1) : 1;
+  const debut = debutPromptBlock();
   const next = career.nodes.filter(n => n.status === "pending" && n.dueAt > Date.now()).slice(0, 3)
     .map(n => `${new Date(n.dueAt).getMonth() + 1}月${new Date(n.dueAt).getDate()}日 ${n.title}`);
   return [
-    `【她现在】${c.name} 的练习生，进公司第 ${days} 天。`,
+    career.stage === "idol" && career.debut?.team ? `【她现在】${c.name} 女团 ${career.debut.team.en} 的成员，刚出道（进公司第 ${days} 天）。` : `【她现在】${c.name} 的练习生，进公司第 ${days} 天。`,
+    debut,
     `【公司】${c.name}：${c.scale}；${c.style}；练习生：${c.trainee}；名声：${c.fame}`,
     career.insider ? `【公司内部档案】\n${career.insider}` : "",
     career.roommates?.length ? `【她的室友】${career.roommates.map(id => loadCharacters().find(c => c.id === id)?.name).filter(Boolean).join("、")}` : "",

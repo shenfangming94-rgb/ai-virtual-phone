@@ -19,6 +19,7 @@ import { companyOf, loadCareer, saveCareer, type CareerNode } from "./idol-caree
 import { simpleLLMCall } from "./api-helpers";
 import { loadTraineeCard } from "./trainee-card";
 import { seedCrowd } from "./idol-crowd";
+import { debutNoticeTarget } from "./idol-debut";
 
 const KEY = "idol_kakao_v1";
 const MIN = 60e3;
@@ -320,6 +321,18 @@ export function kakaoTick(notify: (msg: string) => void): void {
   }
   const career = loadCareer();
   if (career.stage !== "trainee") return;
+  // 出道那几件事：经纪人在出道组群里提前通知
+  const dn = career.nodes.find(n => n.status === "pending" && n.kind === "debut" && !s.noticed.includes(n.id) && now >= n.dueAt - 20 * HOUR && now < n.dueAt);
+  const target = dn ? debutNoticeTarget(dn) : null;
+  if (dn && target) {
+    tickBusy = true;
+    save({ ...s, noticed: [...s.noticed, dn.id] });
+    void teacherNotice(target.sender, dn).then(text => {
+      pushChatMessage({ sessionId: target.groupId, role: "assistant", content: text, senderCharacterId: target.sender.id, senderName: target.sender.name, status: "sent" });
+      notify(`💬 ${target.sender.name}：${text}`);
+    }).finally(() => { tickBusy = false; });
+    return;
+  }
   // 第一天那场没演、平常地过去了：老师照样拉群
   if (!s.groupId && career.nodes.some(n => n.kind === "first_day" && n.status !== "pending")) {
     void ensureTraineeGroup([], notify);
@@ -327,7 +340,7 @@ export function kakaoTick(notify: (msg: string) => void): void {
   }
   const teacher = s.teacherId ? loadCharacters().find(c => c.id === s.teacherId) : undefined;
   if (!s.groupId || !teacher || !loadChatSessions().some(x => x.id === s.groupId)) return;
-  const next = career.nodes.find(n => n.status === "pending" && n.kind !== "first_day" && !s.noticed.includes(n.id)
+  const next = career.nodes.find(n => n.status === "pending" && n.kind !== "first_day" && n.kind !== "debut" && !s.noticed.includes(n.id)
     && now >= n.dueAt - 20 * HOUR && now < n.dueAt);
   if (!next) return;
   tickBusy = true;

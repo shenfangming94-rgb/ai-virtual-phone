@@ -1533,3 +1533,47 @@
     animation: none !important;
   }
 }
+
+/* ── 爱豆小手机：大事记、帮我排这周 ── */
+.idol-cal-bar { display: flex; gap: 8px; padding: 2px 16px 6px; }
+.idol-cal-bar .calendar-pill-btn { display: inline-flex; align-items: center; gap: 4px; }
+.calendar-month-week { grid-template-columns: repeat(7, minmax(0, 1fr)); }
+.calendar-month-cell { min-width: 0; }
+.calendar-month-lunar.idol-mark { display: block; width: 100%; box-sizing: border-box; overflow: hidden; text-overflow: ellipsis; padding: 0 3px; font-weight: 500; text-align: center; }
+.idol-mark[data-kind="fixed"] { color: #e0475b; }
+.idol-mark[data-kind="career"] { color: #7a5cf0; font-weight: 600; }
+.idol-mark[data-kind="world"] { color: #2f8fd8; }
+.idol-mark[data-kind="mine"] { color: #e8892d; }
+.idol-cal-day { display: flex; flex-direction: column; gap: 6px; padding: 8px 16px 4px; }
+.idol-cal-day-item { display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-radius: 12px; border: 0; background: var(--c-calendar-surface); color: var(--c-calendar-ink); font-size: calc(14px * var(--app-text-scale, 1)); text-align: left; }
+.idol-cal-day-item i { width: 4px; height: 16px; border-radius: 2px; background: currentColor; flex: none; }
+.idol-cal-day-item[data-kind="fixed"] i { color: #e0475b; }
+.idol-cal-day-item[data-kind="career"] i { color: #7a5cf0; }
+.idol-cal-day-item[data-kind="world"] i { color: #2f8fd8; }
+.idol-cal-day-item[data-kind="mine"] i { color: #e8892d; }
+.idol-cal-day-item span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.idol-cal-day-item small, .idol-cal-row-k { font-size: calc(12px * var(--app-text-scale, 1)); color: var(--c-calendar-sub); flex: none; }
+.idol-cal-day-add { align-self: flex-start; border: 0; background: none; color: var(--c-calendar-today); font-size: calc(14px * var(--app-text-scale, 1)); padding: 4px 2px; }
+.idol-cal-sheet { position: relative; max-height: 78%; display: flex; flex-direction: column; padding: 14px 18px 18px; box-sizing: border-box; }
+.idol-cal-sheet .calendar-theme-modal-head { gap: 8px; }
+.idol-cal-sheet .calendar-theme-modal-head strong { flex: 1; text-align: center; }
+.idol-cal-list { flex: 1; overflow-y: auto; display: flex; flex-direction: column; margin: 6px 0 12px; }
+.idol-cal-row { display: flex; align-items: flex-start; gap: 10px; padding: 11px 2px; border: 0; border-bottom: 0.5px solid var(--c-calendar-surface-2); background: none; color: var(--c-calendar-ink); text-align: left; font-size: calc(14px * var(--app-text-scale, 1)); }
+.idol-cal-row-d { width: 64px; flex: none; color: var(--c-calendar-sub); white-space: nowrap; }
+.idol-cal-row-t { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.idol-cal-row-t b { font-weight: 500; }
+.idol-cal-row-t small { font-size: calc(12px * var(--app-text-scale, 1)); color: var(--c-calendar-sub); line-height: 1.4; }
+.idol-cal-row[data-kind="fixed"] .idol-cal-row-k { color: #e0475b; }
+.idol-cal-row[data-kind="career"] .idol-cal-row-k { color: #7a5cf0; }
+.idol-cal-row[data-kind="world"] .idol-cal-row-k { color: #2f8fd8; }
+.idol-cal-row[data-kind="mine"] .idol-cal-row-k { color: #e8892d; }
+.idol-cal-empty { text-align: center; padding: 30px 0; color: var(--c-calendar-sub); font-size: calc(14px * var(--app-text-scale, 1)); }
+.idol-cal-actions { display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap; }
+.idol-cal-actions .calendar-block-btn { display: inline-flex; align-items: center; gap: 4px; }
+.idol-cal-close { display: none; }
+.idol-cal-field { display: flex; flex-direction: column; gap: 4px; margin: 10px 0 0; font-size: calc(13px * var(--app-text-scale, 1)); color: var(--c-calendar-sub); }
+.idol-cal-field input, .idol-cal-field textarea { border: 0; border-radius: 10px; background: var(--c-calendar-surface); color: var(--c-calendar-ink); padding: 9px 11px; font-size: calc(14px * var(--app-text-scale, 1)); font-family: inherit; resize: none; }
+.idol-cal-edit .idol-cal-actions { margin-top: 14px; }
+.idol-cal-hint { font-size: calc(13px * var(--app-text-scale, 1)); color: var(--c-calendar-sub); line-height: 1.6; margin: 6px 0 0; }
+.idol-cal-view { font-size: calc(14px * var(--app-text-scale, 1)); color: var(--c-calendar-sub); padding: 8px 0 4px; line-height: 1.6; }
+.idol-cal-view p { color: var(--c-calendar-ink); margin-top: 6px; }

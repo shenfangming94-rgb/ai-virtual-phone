@@ -56,7 +56,7 @@ export function addEntry(delta: number, why: string): void {
   save({ ...s, entries: [...s.entries, { at: Date.now(), delta, why }].slice(-200) });
 }
 
-const EXAM = new Set(["weekly", "monthly", "makeup"]);
+const EXAM = new Set(["weekly", "monthly", "makeup", "selection"]);
 
 /** 打勾写的那句换成分数（写了好的就加得多，写了坏的就扣） */
 export function scoreResultText(text: string): number {

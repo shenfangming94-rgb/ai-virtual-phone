@@ -5,6 +5,9 @@ import { useEffect, useRef, useState, type CSSProperties, type PointerEvent as R
 import { LOCK_CHANGED_EVENT, LOCK_NOW_EVENT, loadLock, loadLockWallpaper, lunarLabel, saveLock } from "@/lib/lock-screen";
 import { subscribeWorldClock } from "@/lib/world-clock";
 import { loadTraineeCard } from "@/lib/trainee-card";
+import { DEBUT_EVENT, debutCountdown, loadDebut } from "@/lib/idol-debut";
+import { CAREER_EVENT, loadCareer } from "@/lib/idol-career";
+import { APP_LOOK, LOCK_NOTES_EVENT, agoLabel, markNotesSeen, unseenNotes, type LockNote } from "@/lib/idol-notes";
 
 const pad = (n: number) => String(n).padStart(2, "0");
 const WEEK = ["日", "一", "二", "三", "四", "五", "六"];
@@ -36,7 +39,13 @@ export function LockScreen({ wallpaperStyle }: { wallpaperStyle?: CSSProperties 
     const onLockNow = () => { setLocked(true); setLeaving(false); setPad6(false); setEntry(""); setDrag(0); };
     window.addEventListener(LOCK_CHANGED_EVENT, onChange);
     window.addEventListener(LOCK_NOW_EVENT, onLockNow);
-    return () => { window.removeEventListener(LOCK_CHANGED_EVENT, onChange); window.removeEventListener(LOCK_NOW_EVENT, onLockNow); };
+    window.addEventListener(LOCK_NOTES_EVENT, onChange);
+    window.addEventListener(DEBUT_EVENT, onChange);
+    window.addEventListener(CAREER_EVENT, onChange);
+    return () => {
+      window.removeEventListener(LOCK_CHANGED_EVENT, onChange); window.removeEventListener(LOCK_NOW_EVENT, onLockNow);
+      window.removeEventListener(LOCK_NOTES_EVENT, onChange); window.removeEventListener(DEBUT_EVENT, onChange); window.removeEventListener(CAREER_EVENT, onChange);
+    };
   }, []);
 
   // 离开超过一分钟回来就重新锁上（按现实时间算）
@@ -68,6 +77,7 @@ export function LockScreen({ wallpaperStyle }: { wallpaperStyle?: CSSProperties 
   const bgStyle: CSSProperties | undefined = ownWallpaper ? { backgroundImage: `url("${ownWallpaper}")` } : wallpaperStyle?.backgroundImage ? wallpaperStyle : undefined;
   const unlock = () => {
     setLeaving(true);
+    markNotesSeen();
     window.setTimeout(() => { setLocked(false); setLeaving(false); setPad6(false); setEntry(""); setDrag(0); }, 380);
   };
   const askOpen = () => { if (code) setPad6(true); else unlock(); };
@@ -115,6 +125,9 @@ export function LockScreen({ wallpaperStyle }: { wallpaperStyle?: CSSProperties 
               <div className="lock-time">{pad(now.getHours())}:{pad(now.getMinutes())}</div>
             </>
           )}
+          <DebutDay now={now} />
+          <DebutWidgets now={now} />
+          <LockNotes now={now} />
           <div className="lock-bottom">
             <button type="button" className="lock-round" aria-label="手电筒" onClick={e => e.stopPropagation()}>
               <svg width="18" height="22" viewBox="0 0 18 22" fill="currentColor"><path d="M3 1h12v4l-3 5v10a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V10L3 5z" /></svg>
@@ -197,6 +210,67 @@ function WidgetFace({ now, text }: { now: Date; text: string }) {
           ))}
         </div>
       </div>
+    </div>
+  );
+}
+
+/** 出道当天：时间下面一行小字 */
+function DebutDay({ now }: { now: Date }) {
+  const d = loadDebut();
+  if (!d?.debutAt || !d.team || new Date(d.debutAt).toDateString() !== now.toDateString()) return null;
+  return <div className="lock-dday">✦ {d.team.en.toUpperCase()} DEBUT DAY ✦</div>;
+}
+
+/** 出道倒计时 + 今天的日程（出道前一百天内才有） */
+function DebutWidgets({ now }: { now: Date }) {
+  const cd = debutCountdown();
+  if (!cd) return null;
+  const today = loadCareer().nodes
+    .filter(n => (n.status === "pending" || n.status === "done") && new Date(n.dueAt).toDateString() === now.toDateString())
+    .sort((a, b) => a.dueAt - b.dueAt).slice(0, 3);
+  return (
+    <div className="lock-dwidgets">
+      <div className="lock-dw">
+        <div className="lock-dw-k">{cd.label}</div>
+        <div className="lock-dw-d">{cd.days === 0 ? "D-DAY" : `D-${cd.days}`}<small>{cd.date}</small></div>
+        <div className="lock-dw-prog"><i style={{ width: `${Math.round(cd.progress * 100)}%` }} /></div>
+      </div>
+      <div className="lock-dw lock-dw-list">
+        <div className="lock-dw-k">今天</div>
+        {today.length ? today.map(n => (
+          <div key={n.id} className="lock-dw-row"><b>{pad(new Date(n.dueAt).getHours())}:{pad(new Date(n.dueAt).getMinutes())}</b><span>{n.title}</span></div>
+        )) : <div className="lock-dw-row is-empty"><span>今天没有安排</span></div>}
+      </div>
+    </div>
+  );
+}
+
+/** 还没看过的通知（同一个人连着好几条就叠起来，只露最新一条） */
+function LockNotes({ now }: { now: Date }) {
+  const list = unseenNotes();
+  if (!list.length) return null;
+  const groups: { head: LockNote; count: number }[] = [];
+  for (const n of list) {
+    const last = groups[groups.length - 1];
+    if (last && last.head.app === n.app && last.head.title === n.title && last.head.from === n.from) last.count += 1;
+    else groups.push({ head: n, count: 1 });
+  }
+  return (
+    <div className="lock-notes" onPointerDown={e => e.stopPropagation()}>
+      {groups.slice(0, 5).map(({ head, count }) => (
+        <div key={head.id} className={`lock-note-wrap ${count > 1 ? "is-stack" : ""}`}>
+          <div className="lock-note">
+            <span className="idol-note-ic" style={{ background: APP_LOOK[head.app].bg, color: APP_LOOK[head.app].fg }}>{APP_LOOK[head.app].icon}</span>
+            <span className="idol-note-body">
+              <span className="idol-note-head"><span>{head.from || APP_LOOK[head.app].name}</span><span>{agoLabel(head.at, now.getTime())}</span></span>
+              {head.title ? <b className="idol-note-title">{head.title}</b> : null}
+              <span className="idol-note-text">{head.text}</span>
+            </span>
+          </div>
+          {count > 1 ? <i className="lock-note-stack" /> : null}
+        </div>
+      ))}
+      {groups.length > 5 ? <div className="lock-notes-more">还有 {groups.length - 5} 条通知</div> : null}
     </div>
   );
 }

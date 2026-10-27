@@ -22,6 +22,7 @@ import { setWorldTime } from "./world-clock";
 import { addFame, plannedStops } from "./idol-events";
 import { recordAbsent, recordNodeDone } from "./idol-ledger";
 import { getProfile, saveProfile } from "./idol-people";
+import { onSelection, revealName } from "./idol-debut";
 
 const KEY = "idol_reminders_v1";
 const MIN = 60e3;
@@ -91,6 +92,16 @@ export function leaveNode(id: string, reason: string, approvedBy?: string): Care
   const teacher = teacherOf();
   if (node.kind !== "custom" && node.kind !== "date") noteToPerson(teacher?.id, `她请假没去${node.title}${reason ? `（${reason}）` : ""}`, node.dueAt);
   if (node.kind === "date") noteToPerson(node.fromId, `她临时说去不了「${node.title}」${reason ? `：${reason}` : ""}`, node.dueAt);
+  if (node.kind === "debut" && node.step === "name") void revealName();
+  if (node.kind === "selection") {
+    // 选拔请假：公司给她单独再看一次
+    const career = loadCareer();
+    const d = new Date(node.dueAt + 3 * DAY);
+    d.setHours(14, 0, 0, 0);
+    const again: CareerNode = { ...node, id: uid("node"), title: `${node.title}（单独补看）`, premise: `${node.premise}（那天她请假了，今天单独给她补一次，只有她一个人表演）`, dueAt: d.getTime(), status: "pending", result: undefined, remindedDue: false, remindedEve: false };
+    saveCareer({ ...career, nodes: [...career.nodes, again].sort((a, b) => a.dueAt - b.dueAt) });
+    addToCalendar(again);
+  }
   if (node.kind === "weekly" || node.kind === "monthly") {
     const career = loadCareer();
     const d = new Date(node.dueAt + 3 * DAY);
@@ -178,7 +189,7 @@ function chatConfig() {
   return config;
 }
 
-function queueMessage(charId: string, instruction: string, delay: number) {
+export function queueMessage(charId: string, instruction: string, delay: number) {
   const s = load();
   save({ ...s, outbox: [...s.outbox, { id: uid("out"), charId, instruction, at: Date.now() + delay }] });
 }
@@ -203,6 +214,8 @@ async function sendAs(charId: string, instruction: string): Promise<string | nul
 /** 缺席的后果：公司的事老师来问，第二次起叫去办公室；约好的事那个人来问 */
 function onAbsent(node: CareerNode) {
   recordAbsent(node);
+  if (node.kind === "selection") void onSelection(node, "absent");
+  if (node.kind === "debut" && node.step === "name") void revealName();
   const teacher = teacherOf();
   if (node.kind === "custom") return;
   if (node.kind === "date") {

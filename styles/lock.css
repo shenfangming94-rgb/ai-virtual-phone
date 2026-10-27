@@ -220,3 +220,52 @@
 .lock-widget-cal { align-content: center; }
 .lock-keys + .lock-pad-foot button, .lock-pad-foot button { font-size: 17px; }
 .lock-widget-head { font-size: 22px; gap: 20px; margin-top: 6px; }
+
+/* ── 出道：当天一行字、D-N 小组件、今天日程（照预览 d4/d5） ── */
+.lock-dday { margin-top: 10px; font-size: 14px; letter-spacing: 3px; color: #e4dcff; }
+.lock-dwidgets { width: calc(100% - 52px); margin-top: 26px; display: grid; grid-template-columns: 1fr 1fr; gap: 12px; text-shadow: none; }
+.lock-dw {
+  height: 150px; border-radius: 24px; padding: 14px 16px;
+  background: rgba(255, 255, 255, 0.18); border: 0.5px solid rgba(255, 255, 255, 0.35);
+  backdrop-filter: blur(30px); -webkit-backdrop-filter: blur(30px);
+  display: flex; flex-direction: column; justify-content: space-between; color: #fff;
+}
+.lock-dw-k { font-size: 11.5px; letter-spacing: 1.5px; opacity: 0.85; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lock-dw-d { font-size: 34px; font-weight: 600; letter-spacing: -0.5px; line-height: 1; }
+.lock-dw-d small { display: block; font-size: 12px; font-weight: 400; letter-spacing: 0; opacity: 0.85; margin-top: 6px; }
+.lock-dw-prog { height: 5px; border-radius: 3px; background: rgba(255, 255, 255, 0.25); overflow: hidden; }
+.lock-dw-prog i { display: block; height: 100%; background: #fff; border-radius: 3px; }
+.lock-dw-list { justify-content: flex-start; gap: 10px; }
+.lock-dw-row { display: flex; gap: 8px; font-size: 13px; white-space: nowrap; overflow: hidden; }
+.lock-dw-row b { font-weight: 500; opacity: 0.7; flex: none; width: 38px; font-size: 12px; }
+.lock-dw-row span { overflow: hidden; text-overflow: ellipsis; }
+.lock-dw-row.is-empty { opacity: 0.7; }
+
+/* ── 通知：锁屏列表 + 桌面横幅（同一个样子，照 d5） ── */
+.lock-notes { width: calc(100% - 24px); margin: 22px 0 calc(120px + env(safe-area-inset-bottom, 0px)); display: flex; flex-direction: column; gap: 8px; text-shadow: none; flex: 1 1 auto; min-height: 0; overflow-y: auto; scrollbar-width: none; }
+.lock-note-wrap { flex: none; }
+.lock-notes::-webkit-scrollbar { display: none; }
+.lock-note-wrap { position: relative; }
+.lock-note-wrap.is-stack { padding-bottom: 8px; }
+.lock-note, .idol-banner {
+  position: relative; z-index: 1; display: flex; gap: 11px; padding: 11px 14px; border-radius: 22px; text-align: left; color: #fff;
+  background: rgba(255, 255, 255, 0.14); border: 0.5px solid rgba(255, 255, 255, 0.2);
+  backdrop-filter: blur(30px) saturate(1.4); -webkit-backdrop-filter: blur(30px) saturate(1.4);
+  font-family: "PingFang SC", "Hiragino Sans GB", "Apple SD Gothic Neo", -apple-system, sans-serif;
+}
+.lock-note-stack { position: absolute; left: 20px; right: 20px; bottom: 0; height: 16px; border-radius: 0 0 18px 18px; background: rgba(255, 255, 255, 0.08); }
+.lock-notes-more { text-align: center; font-size: 13px; opacity: 0.75; padding: 4px 0; }
+.idol-note-ic { width: 38px; height: 38px; border-radius: 10px; flex: none; display: flex; align-items: center; justify-content: center; font-size: 18px; font-weight: 700; }
+.idol-note-body { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.idol-note-head { display: flex; justify-content: space-between; gap: 8px; font-size: 13px; opacity: 0.7; }
+.idol-note-head span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.idol-note-title { font-size: 15px; font-weight: 600; margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.idol-note-text { font-size: 15px; opacity: 0.92; margin-top: 1px; line-height: 1.35; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+
+.idol-banner {
+  position: absolute; left: 10px; right: 10px; top: calc(var(--page-header-safe-top, 44px) + 2px); z-index: 190;
+  background: rgba(40, 36, 52, 0.72); border-color: rgba(255, 255, 255, 0.16);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.22); cursor: pointer;
+  animation: idol-banner-in 0.42s cubic-bezier(0.2, 0.9, 0.25, 1.15);
+}
+@keyframes idol-banner-in { from { transform: translateY(-120%); opacity: 0; } to { transform: none; opacity: 1; } }

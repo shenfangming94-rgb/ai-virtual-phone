@@ -75,7 +75,7 @@ function stripCodeFences(text: string): string {
     .trim();
 }
 
-function parseScheduleLines(rawText: string, weekStart: string): CalendarScheduleItem[] {
+export function parseScheduleLines(rawText: string, weekStart: string): CalendarScheduleItem[] {
   const weekDates = new Set(getWeekDates(weekStart));
   const lines = stripCodeFences(rawText)
     .split(/\r?\n/)

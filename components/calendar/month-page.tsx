@@ -6,6 +6,7 @@ import type { CalendarScheduleItem } from "@/lib/calendar-types";
 import type { MenstrualDayState } from "@/lib/menstrual-storage";
 import { formatIsoDate } from "@/lib/calendar-utils";
 import { getLunarInfoByIso } from "@/lib/lunar";
+import type { AlmanacItem } from "@/lib/idol-calendar";
 
 const MONTH_CN = ["一月", "二月", "三月", "四月", "五月", "六月", "七月", "八月", "九月", "十月", "十一月", "十二月"];
 const WEEKDAY_CN = ["日", "一", "二", "三", "四", "五", "六"];
@@ -62,6 +63,7 @@ export function CalendarMonthPage({
   todayIso,
   itemsByDate,
   cycleMap,
+  marks,
   ownerStrip,
   onPickDay,
   onClose,
@@ -70,6 +72,8 @@ export function CalendarMonthPage({
   todayIso: string;
   itemsByDate: Map<string, CalendarScheduleItem[]>;
   cycleMap: Map<string, MenstrualDayState> | null;
+  /** 爱豆小手机的大事记：格子里农历那行换成大事 */
+  marks?: Map<string, AlmanacItem[]>;
   ownerStrip: ReactNode;
   onPickDay: (iso: string) => void;
   onClose: () => void;
@@ -165,7 +169,11 @@ export function CalendarMonthPage({
                       onClick={() => onPickDay(cell.iso)}
                     >
                       <span className="calendar-month-num">{cell.day}</span>
-                      <span className={`calendar-month-lunar${cell.lunarFirst ? " is-first" : ""}`}>{cell.lunarLabel}</span>
+                      {marks?.get(cell.iso)?.length ? (
+                        <span className="calendar-month-lunar idol-mark" data-kind={marks.get(cell.iso)![0].kind}>{marks.get(cell.iso)![0].title}</span>
+                      ) : (
+                        <span className={`calendar-month-lunar${cell.lunarFirst ? " is-first" : ""}`}>{cell.lunarLabel}</span>
+                      )}
                       <span className="calendar-month-dots" aria-hidden="true">
                         {cycle ? <i className="calendar-cycle-dot" data-type={cycle.type} /> : null}
                         {items && items.length > 0 ? <i className="calendar-event-dot" data-color={items[0].colorKey} /> : null}

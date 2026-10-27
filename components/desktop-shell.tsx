@@ -10,6 +10,8 @@ import { kakaoTick } from "@/lib/idol-kakao";
 import { installIdolChatHooks, reminderTick } from "@/lib/idol-reminders";
 import { eventsTick } from "@/lib/idol-events";
 import { rankTick } from "@/lib/idol-ledger";
+import { debutTick } from "@/lib/idol-debut";
+import { APP_LOOK, markNotesSeen, noteFromNotice, type LockNote } from "@/lib/idol-notes";
 import { isChatStorageHydrated } from "@/lib/chat-storage";
 import { LockScreen } from "./lock-screen";
 import { TraineeOpening } from "./opening/trainee-opening";
@@ -1091,20 +1093,33 @@ export function DesktopShell({ initialThemeProfile, initialThemeAssets }: Deskto
   const [desktopReady, setDesktopReady] = useState(false);
   const [glassPaintPass, setGlassPaintPass] = useState(0);
   const [notice, setNotice] = useState<string | null>(null);
-  useWorldAlarms(setNotice);
+  // 爱豆小手机的通知：iOS 横幅，同时进锁屏
+  const [banner, setBanner] = useState<LockNote | null>(null);
+  const idolNotify = useCallback((msg: string) => { setBanner(noteFromNotice(msg)); }, []);
+  useEffect(() => {
+    if (!banner) return;
+    const t = window.setTimeout(() => setBanner(null), 4200);
+    return () => window.clearTimeout(t);
+  }, [banner]);
+  useWorldAlarms(idolNotify);
   // 发动机：每隔几秒看一眼世界时间，该来的邀请、该提醒的日程到了就提醒
   useEffect(() => {
-    installIdolChatHooks(setNotice);
+    installIdolChatHooks(idolNotify);
     const run = () => {
       // 聊天存储还没读完就写消息会被盖掉：先等它读完
       if (!isChatStorageHydrated()) { void hydrateChatStorage(); return; }
-      try { careerTick(setNotice); } catch { /* 发动机出错不挡着用手机 */ }
-      try { kakaoTick(setNotice); } catch { /* 同上 */ }
-      try { reminderTick(setNotice); } catch { /* 同上 */ }
-      try { eventsTick(setNotice); } catch { /* 同上 */ }
-      try { rankTick(setNotice); } catch { /* 同上 */ }
+      try { careerTick(idolNotify); } catch { /* 发动机出错不挡着用手机 */ }
+      try { kakaoTick(idolNotify); } catch { /* 同上 */ }
+      try { reminderTick(idolNotify); } catch { /* 同上 */ }
+      try { eventsTick(idolNotify); } catch { /* 同上 */ }
+      try { rankTick(idolNotify); } catch { /* 同上 */ }
+      try { debutTick(idolNotify); } catch { /* 同上 */ }
     };
     run();
+    // 开发时给测试脚本用（线上没有）
+    if (process.env.NODE_ENV !== "production") {
+      void import("@/lib/idol-reminders").then(m => { (window as unknown as { __idol?: unknown }).__idol = { checkNode: m.checkNode, leaveNode: m.leaveNode, run }; });
+    }
     const timer = window.setInterval(run, 5000);
     return () => window.clearInterval(timer);
   }, []);
@@ -4384,6 +4399,28 @@ html,body{margin:0;padding:0;width:100%;height:100%;background:#121110;color:rgb
                 <aside className="phone-shell-notice" role="status" aria-live="polite">
                   {notice}
                 </aside>
+              ) : null}
+
+              {banner ? (
+                <button
+                  type="button"
+                  className="idol-banner"
+                  onClick={() => {
+                    const app = banner.app;
+                    setBanner(null);
+                    markNotesSeen();
+                    if (app === "kakao") setActiveApp("chat" as IconId);
+                    else if (app === "reminders") setActiveApp("career" as IconId);
+                    else if (app === "clock") setActiveApp("clock" as IconId);
+                  }}
+                >
+                  <span className="idol-note-ic" style={{ background: APP_LOOK[banner.app].bg, color: APP_LOOK[banner.app].fg }}>{APP_LOOK[banner.app].icon}</span>
+                  <span className="idol-note-body">
+                    <span className="idol-note-head"><span>{banner.from || APP_LOOK[banner.app].name}</span><span>现在</span></span>
+                    {banner.title ? <b className="idol-note-title">{banner.title}</b> : null}
+                    <span className="idol-note-text">{banner.text}</span>
+                  </span>
+                </button>
               ) : null}
 
 

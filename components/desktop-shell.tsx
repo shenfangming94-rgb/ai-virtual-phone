@@ -8,6 +8,7 @@ import { CareerApp } from "./career/career-app";
 import { IdolSearchApp } from "./idolsearch/idol-search-app";
 import { InsApp } from "./ins/ins-app";
 import { insTick } from "@/lib/idol-ins";
+import { socialTick } from "@/lib/idol-social";
 import { careerTick } from "@/lib/idol-career";
 import { mailAppIcon, mailAppTick, searchTick } from "@/lib/idol-search";
 import { kakaoTick } from "@/lib/idol-kakao";
@@ -1129,6 +1130,7 @@ export function DesktopShell({ initialThemeProfile, initialThemeAssets }: Deskto
       try { searchTick(idolNotify); } catch { /* 同上 */ }
       try { mailAppTick(idolNotify); } catch { /* 同上 */ }
       try { insTick(idolNotify); } catch { /* 同上 */ }
+      try { socialTick(); } catch { /* 同上 */ }
       try { syncIdolWorldBook(); } catch { /* 同上 */ }
     };
     run();

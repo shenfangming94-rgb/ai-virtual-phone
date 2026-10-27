@@ -137,6 +137,9 @@
       joined: [], searches: {}, charNicks: {}, excludedChars: [], avatarPool: [] };
     for (const k of ["joined", "excludedChars", "avatarPool"]) if (!Array.isArray(S.meta[k])) S.meta[k] = [];
     for (const k of ["searches", "charNicks"]) if (!S.meta[k] || typeof S.meta[k] !== "object") S.meta[k] = {};
+    // 爱豆小手机：宿主写进来的「爱豆模式」，公众人物不用手动开
+    S.idol = metas.find(m => m.id === "idol_mode" && m.on) || null;
+    if (S.idol) { S.meta.publicChars = (S.idol.publicChars || []).slice(); S.meta.publicMe = !!S.idol.publicMe; }
   }
 
   // ───────────────────────── 人 ─────────────────────────
@@ -270,7 +273,9 @@ ${CALM_LINE}
   /** 被讨论时对用户的底线（公众人物、熟人组都适用） */
   const USER_LINE = `角色可以聊他们没跟用户提过的新鲜事（他们有自己的生活），合人设就行；*用户（${"${herName()}"}）做过的事只能来自聊天记录和记忆，不能编*。万一一定要提到她，也绝不能贬低、矮化她，不能把她写成衬托角色的工具人、陪衬或笑料。`;
   const userLine = () => USER_LINE.replace("${herName()}", herName());
-  const publicLine = () => { const list = [...activeChars().filter(c => (S.meta.publicChars || []).includes(c.id)).map(c => `${c.name}（角色，豆瓣昵称「${charNick(c.id)}」）`), ...(S.meta.publicMe ? [`用户本人（${herName()}）`] : [])];
+  /** 爱豆小手机：宿主写进来的 idol_mode（谁是公众人物由世界算；公众人物角色在豆瓣只用匿名小号） */
+  const altOnly = id => !!(S.idol && S.idol.altOnly && (S.idol.publicChars || []).includes(id));
+  const publicLine = () => { const list = [...activeChars().filter(c => (S.meta.publicChars || []).includes(c.id)).map(c => S.idol ? `${c.name}（角色，出道爱豆；他在豆瓣只用匿名小号，豆友不知道是他，他自己的楼不会暴露身份、不聊自己是明星）` : `${c.name}（角色，豆瓣昵称「${charNick(c.id)}」）`), ...(S.meta.publicMe ? [`用户本人（${herName()}）`] : [])];
     return list.length ? `这个世界的公众人物（可以被大家当明星名人讨论）：${list.join("、")}。${userLine()}` : "这个世界里没有公众人物：角色和用户都不会被当成明星讨论。"; };
   /** 熟人组：组里的人现实中认识角色和用户（同校、同城、同公司），不是公众人物也会被聊到 */
   const localLine = g => g && g.local ? `这是熟人组：组里的人现实中认识这些人（同校、同城、同事），会聊到他们、八卦他们：${[...activeChars().map(c => c.name), `用户（${herName()}）`].join("、")}。他们本人这次不一定出场。组里的人认识用户（${herName()}，豆瓣昵称「${S.meta.nickname}」），聊到她可以用名字，也可以用大家对她的叫法（按人设和世界书里她的身份来，不要自己编身份）。${userLine()}` : "";
@@ -358,8 +363,10 @@ ${CALM_LINE}
   }
   /** AI 写的作者 → 作者对象（角色本名/豆瓣昵称认得出来；匿名的 char 记下是谁） */
   function authorFrom(b) {
-    const anon = yes(b["匿名"]) || /^匿名/.test(String(b["作者"] || ""));
+    let anon = yes(b["匿名"]) || /^匿名/.test(String(b["作者"] || ""));
     const ch = charByName(b["角色"]) || (!anon ? charByName(b["作者"]) : null);
+    // 爱豆小手机：公众人物角色在豆瓣一律用小号（匿名）
+    if (ch && altOnly(ch.id)) anon = true;
     if (ch) {
       const nick = String(b["作者"] || "").trim();
       if (!anon && nick && nick !== ch.name && !S.meta.charNicks[ch.id] && !isUserName(nick)) { S.meta.charNicks[ch.id] = nick.slice(0, 20); saveMeta(); }
@@ -466,7 +473,7 @@ ${CALM_LINE}
     const rates = charRates(g);
     const cast = pickCast(rates.pool.length ? rates.pool : activeChars(), 3);
     const hit = cast.length && Math.random() < rates.post ? cast[0] : null;
-    const anon = hit && Math.random() < 0.6;
+    const anon = hit && (altOnly(hit.id) || Math.random() < 0.6);
     const lead = g.mine && g.admin;
     const needInfo = !g.charsChecked || !g.memberNoun || !(g.sections || []).length || (!lead && !(g.titles || []).length) || (!g.leader && !lead);
     // 现实新闻别每个组都聊同一件：别的组最近 5 天聊过的真事列出来
@@ -743,7 +750,7 @@ ${CALM_LINE}
     let n = 0;
     for (const x of parseBlocks(text, "帖子")) {
       const title = String(x["标题"] || "").trim(); const bodyT = String(x["正文"] || "").trim(); if (!title || !bodyT) continue;
-      const anon = isChar && yes(x["匿名"]);
+      const anon = isChar && (yes(x["匿名"]) || altOnly(id));
       const g = ensureGroupByName(x["小组"], anon ? null : author); if (!g) continue;
       const createdAt = parseRelTime(x["时间"], 60 * 24 * 30);
       const t = { id: uid("t"), scope: S.identity.id, groupId: g.id, title, author: { ...author, ...(anon ? { anon: true } : {}) }, body: bodyT, createdAt, lastReplyAt: createdAt, replyCount: clampInt(x["回应数"], rand(3, 60)), floors: [],
@@ -1085,7 +1092,7 @@ ${CALM_LINE}
   /** 帖子页（照真豆瓣）：顶部作者 + 关注；标题、正文、配图；回复/赞/转发/收藏；全部回复 + 「楼主」筛选；底部 实名匿名 + 写回复 + 赞转发收藏 */
   function openTopic(id, fromPerson) {
     const t0 = topicById(id); if (!t0) return;
-    let onlyOp = false; let quote = null; let anon = false;
+    let onlyOp = false; let quote = null; let anon = !!(S.idol && S.idol.meAnon);
     const w0 = whoOf(t0.author);
     const page = openPage(`topic:${id}`, pg => {
       const t = topicById(id); if (!t) { body(pg, `<div class="empty">帖子已删除</div>`); return; }
@@ -1115,7 +1122,7 @@ ${CALM_LINE}
       // 滑过发帖人那一行后，顶栏才出现头像、名字和关注（关注在最右）
       const th = $(".topic-head", pg.el); if (th) { const fb = th.querySelector(".follow-mini"); if (fb) { fb.classList.toggle("on", isFollowing(t.author)); fb.textContent = isFollowing(t.author) ? "已关注" : "＋关注"; } }
     }, { cls: "tpage", action: `<button class="top-icon" data-act="topic-menu" aria-label="更多">${I.more}</button>`, head: `<div class="topic-head" data-act="noop">${avatarHtml(w0)}<span>${esc(w0.name)}</span>${t0.author.type === "user" || t0.author.anon ? "" : `<button class="follow-mini ${isFollowing(t0.author) ? "on" : ""}" data-act="follow-author">${isFollowing(t0.author) ? "已关注" : "＋关注"}</button>`}</div>`,
-      footer: `<div class="reply-quote hidden"></div><div class="reply-bar bb"><button class="anon-chip" data-act="toggle-anon">实名</button><textarea class="reply-input" rows="1" placeholder="写回复" maxlength="500"></textarea><button class="reply-send hidden">发送</button>
+      footer: `<div class="reply-quote hidden"></div><div class="reply-bar bb"><button class="anon-chip${S.idol && S.idol.meAnon ? " on" : ""}" data-act="toggle-anon">${S.idol && S.idol.meAnon ? "匿名" : "实名"}</button><textarea class="reply-input" rows="1" placeholder="写回复" maxlength="500"></textarea><button class="reply-send hidden">发送</button>
         <span class="bb-icons"><button class="bb-like" data-act="topic-like">${I.like}</button><button data-act="topic-repost">${I.repost}</button><button class="bb-fav" data-act="topic-fav">${I.fav}</button></span></div>` });
     page.setOnlyOp = () => { onlyOp = !onlyOp; page.render(page); };
     page.setQuote = n => { quote = n; page.render(page); $(".reply-input", page.el).focus(); };
@@ -1186,7 +1193,7 @@ ${CALM_LINE}
   /** 她发帖：标题、正文、分区、配图（相册或描述）、实名/匿名 → 楼下来人 */
   function newTopic(groupId) {
     const g = groupById(groupId); if (!g) return;
-    const d = { title: "", body: "", anon: false, section: "", images: [] };
+    const d = { title: "", body: "", anon: !!(S.idol && S.idol.meAnon), section: "", images: [] };
     openPage(`new-topic:${groupId}`, pg => {
       body(pg, `<div class="form"><div class="form-note" style="margin:0">发到「${esc(g.name)}」</div>
         ${(g.sections || []).length ? `<div class="chips" style="padding:10px 16px;background:var(--wb-card)"><button class="${!d.section ? "on" : ""}" data-act="nt-sec" data-v="">不选分区</button>${g.sections.map(x => `<button class="${d.section === x ? "on" : ""}" data-act="nt-sec" data-v="${esc(x)}">${esc(x)}</button>`).join("")}</div>` : ""}
@@ -1235,9 +1242,10 @@ ${CALM_LINE}
         <div class="form-note" style="margin-top:4px">「亲密」：书影音里他会和你扯上关系，也更常跟着你标记。第一次生成他的书影音时 AI 按你们的关系判断，可以自己改</div>
         <div class="form-note" style="margin-top:8px">广播 · 打开后，你关注的人会自己发广播、偶尔写日记（隔几个小时打开豆瓣时补上，会自己花 API）；关掉就只有你在首页点「刷新」时才发</div>
         <div class="list-cell"><div class="cell-main"><div>自动发广播</div></div><button class="switch ${S.meta.autoFeed ? "on" : ""}" data-act="s-auto"><span></span></button></div>
-        <div class="form-note" style="margin-top:8px">公众人物 · 打开的人会被豆友当成明星、名人讨论（只聊真发生过的事）；都不打开就没人被八卦</div>
+        ${S.idol ? `<div class="form-note" style="margin-top:8px">公众人物 · 爱豆小手机里由世界决定：出道的爱豆是公众人物，在豆瓣只用匿名小号吃瓜（只有你认得出是他）；你现在是「${esc(S.idol.tierMe || "普通人")}」${S.idol.publicMe ? "，会被豆友当明星讨论" : ""}。你发帖回帖默认匿名</div>
+        ${S.chars.filter(c => (S.idol.publicChars || []).includes(c.id)).map(c => `<div class="list-cell"><div class="cell-main"><div>${esc(c.name)}</div><div class="cell-sub">公众人物 · 只用匿名小号</div></div></div>`).join("")}` : `<div class="form-note" style="margin-top:8px">公众人物 · 打开的人会被豆友当成明星、名人讨论（只聊真发生过的事）；都不打开就没人被八卦</div>
         <div class="list-cell"><div class="cell-main"><div>我（${esc(S.meta.nickname)}）</div></div><button class="switch ${S.meta.publicMe ? "on" : ""}" data-act="toggle-public-me"><span></span></button></div>
-        ${S.chars.map(c => `<div class="list-cell"><div class="cell-main"><div>${esc(c.name)}</div></div><button class="switch ${(S.meta.publicChars || []).includes(c.id) ? "on" : ""}" data-act="toggle-public" data-id="${esc(c.id)}"><span></span></button></div>`).join("")}
+        ${S.chars.map(c => `<div class="list-cell"><div class="cell-main"><div>${esc(c.name)}</div></div><button class="switch ${(S.meta.publicChars || []).includes(c.id) ? "on" : ""}" data-act="toggle-public" data-id="${esc(c.id)}"><span></span></button></div>`).join("")}`}
         <div class="form-note" style="margin-top:8px">匿名头像 · 所有匿名豆友都用这一张</div>
         <div class="list-cell">${avatarHtml(whoOf({ type: "npc", anon: true }))}<div class="cell-main"></div><button class="btn-ghost" data-act="anon-ava">换一张</button>${S.meta.anonRef ? `<button class="btn-ghost" data-act="anon-ava-reset">用默认</button>` : ""}</div>
         <div class="form-note" style="margin-top:8px">豆友头像库 · 豆友从这里分头像，同一个人一直是同一张。点图片可以删除</div>
@@ -1325,8 +1333,8 @@ ${CALM_LINE}
         return;
       }
       case "topic-about": { const t = topicById(pg.key.split(":")[1]); if (t && t.about) sheet(`这帖说的是：${t.about}${t.source ? `（${t.source}）` : ""}\n只有你看得到，豆友们照样打哑谜`, []); return; }
-      case "toggle-public": { const id = el.dataset.id; const l = S.meta.publicChars || []; S.meta.publicChars = l.includes(id) ? l.filter(x => x !== id) : [...l, id]; saveMeta(); refreshAll(); return; }
-      case "toggle-public-me": S.meta.publicMe = !S.meta.publicMe; saveMeta(); refreshAll(); return;
+      case "toggle-public": { if (S.idol) return; const id = el.dataset.id; const l = S.meta.publicChars || []; S.meta.publicChars = l.includes(id) ? l.filter(x => x !== id) : [...l, id]; saveMeta(); refreshAll(); return; }
+      case "toggle-public-me": if (S.idol) return; S.meta.publicMe = !S.meta.publicMe; saveMeta(); refreshAll(); return;
       case "topic-menu": {
         const t = topicById(pg.key.split(":")[1]); if (!t) return;
         const lead = isLeadGroup(groupById(t.groupId));

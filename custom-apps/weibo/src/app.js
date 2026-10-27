@@ -293,6 +293,9 @@
       pinnedPostId: null,
     };
     for (const k of ["excludedChars", "starredChars", "avatarPool", "fans", "publicChars", "visits", "history", "favs", "drafts"]) if (!Array.isArray(S.meta[k])) S.meta[k] = [];
+    // 爱豆小手机：宿主写进来的「爱豆模式」。谁是公众人物由世界算（她看关注度三档，角色看是不是出道爱豆），不用手动开
+    S.idol = metaRows.find(m => m.id === "idol_mode" && m.on) || null;
+    if (S.idol) { S.meta.publicFigure = !!S.idol.publicMe; S.meta.publicChars = (S.idol.publicChars || []).slice(); }
     if (S.alt) for (const k of ["fans", "visits", "history", "favs", "drafts", "knownBy"]) if (!Array.isArray(S.alt[k])) S.alt[k] = [];
     S.acct = S.alt && S.meta.acct === "alt" ? "alt" : String(S.meta.acct || "").startsWith("c:") && (S.meta.logins || {})[S.meta.acct.slice(2)] ? S.meta.acct : "main";
     S.threads = dmRows.filter(t => t.scope === S.identity.id && t.peer && acctOf(t) === S.acct).map(t => ({ ...t, messages: t.messages || [] }));
@@ -2001,7 +2004,7 @@
     const instruction = [
       `当前时间：${nowText()}`,
       superLine, altPostLine,
-      `用户的微博昵称：${prof.nickname}，粉丝 ${prof.followers} 人。${pubPost ? "用户是公众人物：评论区以她的粉丝为主（控评、表白、心疼、催营业），夹着路人和少量黑粉，大家都知道她是谁，不把她当普通网友。" : ""}用户性别：${S.identity.gender || "未知（评论里用「博主」「ta」）"}，评论称呼一定要用对性别。`,
+      `用户的微博昵称：${prof.nickname}，粉丝 ${prof.followers} 人。${pubPost ? "用户是公众人物：评论区以她的粉丝为主（控评、表白、心疼、催营业），夹着路人和少量黑粉，大家都知道她是谁，不把她当普通网友。" : S.idol && S.idol.tierMe === "小有人知" && !alt ? `用户小有人知（${S.idol.whoMe || "有一小撮人认识她"}）：评论区大多是陌生网友，偶尔有一两个人认出她是谁、说「这是不是那个……」。` : ""}用户性别：${S.identity.gender || "未知（评论里用「博主」「ta」）"}，评论称呼一定要用对性别。`,
       post.repost ? `用户转发了 @${post.repost.author} 的微博：「${post.repost.text}」，转发语：` : `用户的微博正文：`,
       post.text || "（无文字）",
       post.images.length ? `配图：${post.images.map(i => i.desc || "一张用户自己上传的照片").join(" | ")}（看不到图片时不要臆测细节）` : "",
@@ -4477,7 +4480,7 @@
       body.innerHTML = `<div class="cs-head">${avatarHtml(a, 52)}<div><div class="cs-name">${esc(ch.name)}</div><div class="cs-s">${esc(a.name !== ch.name ? `微博：${a.name}` : "还没有微博账号")}</div></div></div>
         <div class="cs-row cs-flex"><div><div class="cs-t">参与微博</div><div class="cs-s">关掉后他不发微博也不来评论</div></div><button class="switch ${on ? "on" : ""}" data-act="toggle-part" data-char="${esc(charId)}"><span></span></button></div>
         <div class="cs-row cs-flex"><div><div class="cs-t">★ 特别关注</div><div class="cs-s">刷新和你发博时一定会叫到他</div></div><button class="switch ${isStarred(charId) ? "on" : ""}" data-act="toggle-star" data-char="${esc(charId)}"><span></span></button></div>
-        <div class="cs-row"><div class="cs-t">身份</div>${seg("set-public", [["0", "普通人"], ["1", "公众人物"]], isPublic(charId) ? "1" : "0")}<div class="cs-s">公众人物才会上热搜、有粉丝控评</div></div>
+        <div class="cs-row"><div class="cs-t">身份</div>${S.idol ? `<div class="cs-s">${isPublic(charId) ? "公众人物" : "普通人"}（爱豆小手机里由世界决定：出道的爱豆是公众人物）</div>` : `${seg("set-public", [["0", "普通人"], ["1", "公众人物"]], isPublic(charId) ? "1" : "0")}<div class="cs-s">公众人物才会上热搜、有粉丝控评</div>`}</div>
         <div class="cs-row cs-flex" data-act="char-alt" data-char="${esc(charId)}"><div><div class="cs-t">微博小号</div><div class="cs-s">${esc(altSub)}</div></div><span class="set-chev">›</span></div>
         <div class="cs-row"><div class="cs-t">所在城市</div>${seg("set-city", [["same", "跟我同城"], ["custom", "别的城市"], ["none", "不设置"]], charCityCfg(charId).mode)}<div class="cs-s">${(m => m === "none" ? "他的博不带天气，AI 也不会给他编温度" : m === "custom" ? (cityOf(charId) ? `${esc(cityLabel(cityOf(charId)))} · <button class="link" data-act="set-city" data-char="${esc(charId)}" data-v="custom">改</button>` : "还没填城市") : myCity() ? `跟你一样：${esc(cityLabel(myCity()))}` : "你还没填所在城市（编辑资料里填）")(charCityCfg(charId).mode)}</div></div>
         <div class="cs-row cs-flex" data-act="set-char-ip" data-char="${esc(charId)}"><div><div class="cs-t">IP属地</div><div class="cs-s">${esc(charIp(charId) || "还没有（打开他主页时生成）")}${(S.accounts[charId] || {}).ipManual ? " · 你改过" : " · 跟着城市走"}</div></div><span class="set-chev">改 ›</span></div>
@@ -4592,7 +4595,7 @@
         <div class="form-row"><label>微博里叫</label><input id="f-cityname" maxlength="20" placeholder="不填就用真名，如 临江市" value="${esc((S.meta.city || {}).name || "")}"></div>
         <div class="form-row"><label>发布设备</label><input id="f-dev" maxlength="30" placeholder="如 iPhone 16 Pro" value="${esc(S.me.device || "")}"></div>
         <div class="form-row"><label>会员</label><input type="checkbox" id="f-vip" ${S.me.vip ? "checked" : ""} style="flex:none;width:20px;height:20px"></div>
-        ${isAlt() ? "" : `<div class="form-row"><label>公众人物</label><input type="checkbox" id="f-pub" ${S.meta.publicFigure ? "checked" : ""} style="flex:none;width:20px;height:20px"><span class="cell-sub" style="margin-left:8px">打开后会上热搜、有粉丝，粉丝少于一万会自动涨上去</span></div>`}
+        ${isAlt() ? "" : S.idol ? `<div class="form-row"><label>身份</label><span class="cell-sub">${S.idol.tierMe || "普通人"}（由关注度决定，在通讯录我的名片里看）</span></div>` : `<div class="form-row"><label>公众人物</label><input type="checkbox" id="f-pub" ${S.meta.publicFigure ? "checked" : ""} style="flex:none;width:20px;height:20px"><span class="cell-sub" style="margin-left:8px">打开后会上热搜、有粉丝，粉丝少于一万会自动涨上去</span></div>`}
         <div class="form-row"><label>头像</label>${avatarHtml(authorOf({ authorType: "user", ...acctTag() }), 44)}<button class="btn-ghost" data-act="upload-avatar">上传图片</button>${S.me.avatarRef ? `<button class="btn-ghost" data-act="reset-avatar">${isAlt() ? "删除头像" : "用身份头像"}</button>` : ""}</div>
         <div class="form-row" style="display:block;padding-top:12px"><label>封面</label>
           <div class="profile-cover" style="height:90px;border-radius:8px;margin-top:8px;background:${COVERS[S.me.cover || 0]}" ${S.me.coverRef ? `data-bg-ref="${esc(S.me.coverRef)}"` : ""}></div>
@@ -4876,6 +4879,7 @@
         saveMeta(); toast(on ? "已取消特别关注" : "已设为特别关注"); refreshAll(); return;
       }
       case "toggle-public": {
+        if (S.idol) { toast("爱豆小手机里由世界决定"); return; }
         const id = el.dataset.char; const on = isPublic(id);
         S.meta.publicChars = on ? S.meta.publicChars.filter(x => x !== id) : [...(S.meta.publicChars || []), id];
         saveMeta(); refreshAll(); return;
@@ -4921,6 +4925,7 @@
         ensureAccount(id, { followsMe: v === "auto" ? null : v === "1" }); refreshAll(); return;
       }
       case "set-public": {
+        if (S.idol) { toast("爱豆小手机里由世界决定"); return; }
         const id = el.dataset.char; const want = el.dataset.v === "1";
         if (want !== isPublic(id)) { S.meta.publicChars = want ? [...(S.meta.publicChars || []), id] : (S.meta.publicChars || []).filter(x => x !== id); saveMeta(); }
         refreshAll(); return;
@@ -5039,7 +5044,7 @@
         S.me.device = $("#f-dev", pg.el).value.trim(); S.me.vip = $("#f-vip", pg.el).checked;
         const fansIn = clampInt($("#f-fans", pg.el).value, S.me.followers || 0); const fansEdited = fansIn !== (S.me.followers || 0);
         S.me.followers = fansIn;
-        if (!isAlt()) {
+        if (!isAlt() && $("#f-pub", pg.el)) {
           const pubOn = $("#f-pub", pg.el).checked;
           // 刚变成公众人物、粉丝还没自己改过：直接涨到公众人物的量级
           if (pubOn && !S.meta.publicFigure && !fansEdited && S.meta.followers < 10000) S.meta.followers = rand(10, 300) * 10000;

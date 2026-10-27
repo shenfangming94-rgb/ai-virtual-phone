@@ -1,3 +1,4 @@
+import { idolXhsLine } from "./idol-social";
 import { getChatImageFromIndexedDB } from "./chat-asset-storage";
 import { ChatEngineError, previewMessagesForApi, sendLLMRequest } from "./chat-engine";
 import { loadCharacters } from "./character-storage";
@@ -1153,6 +1154,7 @@ export async function generateXiaohongshuNpcReactionForUserPost(
       { userXiaohongshuName: userNames[0], extraReservedNames: userNames },
     ),
     "",
+    idolXhsLine(),
     "<user_xiaohongshu_post>",
     formatXiaohongshuUserPostContext(note),
     "</user_xiaohongshu_post>",
@@ -1280,6 +1282,7 @@ export async function generateXiaohongshuNpcMoreComments(
       { userXiaohongshuName: userNames[0], extraReservedNames: userNames },
     ),
     "",
+    idolXhsLine(),
     "<xiaohongshu_note_comment_context>",
     commentContext,
     "</xiaohongshu_note_comment_context>",

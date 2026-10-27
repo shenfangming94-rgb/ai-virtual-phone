@@ -7,6 +7,7 @@
  * 发动机每 5 秒看一眼，内容变了才写。她可以在世界书里看，但改了会被下次更新盖掉。
  */
 
+import { rosterPrompt } from "./idol-groups";
 import { loadWorldBooks, saveWorldBooks } from "./settings-storage";
 import type { WorldBookConfig, WorldBookEntry } from "./settings-types";
 import { companyOf, loadCareer } from "./idol-career";
@@ -66,6 +67,7 @@ export function circleText(): string {
     past.length ? `【最近一个月】\n${past.join("\n")}` : "",
     next.length ? `【接下来一个月】\n${next.join("\n")}` : "",
     feed.length ? `【她身边最近的事（外人多半不知道）】\n${feed.join("\n")}` : "",
+    rosterPrompt(25),
   ].filter(Boolean).join("\n\n");
 }
 

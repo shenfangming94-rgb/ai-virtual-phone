@@ -1132,6 +1132,7 @@ export function DesktopShell({ initialThemeProfile, initialThemeAssets }: Deskto
     // 开发时给测试脚本用（线上没有）
     if (process.env.NODE_ENV !== "production") {
       void import("@/lib/idol-reminders").then(m => { (window as unknown as { __idol?: unknown }).__idol = { checkNode: m.checkNode, leaveNode: m.leaveNode, run }; });
+      void Promise.all([import("@/lib/idol-groups"), import("@/lib/idol-calendar"), import("@/lib/idol-search")]).then(([g, c, se]) => { (window as unknown as { __idolGroups?: unknown }).__idolGroups = { load: g.loadGroups, month: c.generateWorldMonth, site: se.buildSite }; });
     }
     const timer = window.setInterval(run, 5000);
     return () => window.clearInterval(timer);

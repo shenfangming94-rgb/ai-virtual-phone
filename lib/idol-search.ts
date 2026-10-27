@@ -19,6 +19,7 @@ import { fameNow } from "./idol-events";
 import { addMail, loadMails, updateMail, type InviteAction, type MailPara } from "./idol-mail";
 import { loadInstalledCustomApps, readCustomAppCollection, writeCustomAppCollection } from "./custom-app-storage";
 import { toCustomAppIconId } from "./custom-app-types";
+import { findGroup, groupLine, groupsOf, rosterPrompt, upsertGroups, type Group } from "./idol-groups";
 
 const KEY = "idol_search_v1";
 export const SEARCH_EVENT = "idol-search-changed";
@@ -46,10 +47,8 @@ export const AREAS = ["声乐", "舞蹈", "说唱", "演技", "模特", "作词�
 // ── 数据 ──
 
 export type Para = { h_ko: string; h_zh: string; ko: string; zh: string };
-export type Artist = {
-  name: string; companyId: string; kind: string; size?: number; debut?: number;
-  style?: string; fandom?: string; recent?: string; members?: string[]; songs?: { title: string; year?: number; note?: string }[];
-};
+/** 团和艺人都记在圈内名册（idol-groups.ts） */
+export type Artist = Group;
 export type Site = {
   year: number; at: number;
   motto_ko?: string; motto_zh?: string; founded?: string; hq_ko?: string; hq_zh?: string; nameNote?: string;
@@ -129,7 +128,7 @@ export async function refreshTrend(force = false): Promise<void> {
         content: `你在给一出韩国娱乐圈的戏写搜索网站首页的「实时热搜」和新闻，照这个世界这一天的样子写。只输出 JSON：{"trends":[{"q":"热搜词，中文，可夹团名","move":"up3 / down2 / new / same 这种"}],"news":[{"title":"新闻标题，中文","src":"媒体名","ago":"2小时前 这种"}]}
 热搜正好十条，新闻六条。内容是圈内的事（回归、打歌一位、试镜、路透、综艺、演唱会）夹两三条普通生活的事（天气、美食、电视剧）。团和人全部虚构，可以用下面已经出现过的；公司用真名（${COMPANIES.map(c => c.name).join("、")}）。照这个年份当时的样子写（当时有的平台、节目和说法）。她只是普通练习生或还没进公司时，热搜里不会有她。`,
       },
-      { role: "user", content: `今天：${d.getFullYear()}年${d.getMonth() + 1}月${d.getDate()}日\n\n${ctx()}\n\n已经出现过的：${knownCircle() || "还没有"}；${Object.values(load().artists).map(a => a.name).slice(0, 20).join("、")}` },
+      { role: "user", content: `今天：${d.getFullYear()}年${d.getMonth() + 1}月${d.getDate()}日\n\n${ctx()}\n\n${rosterPrompt() || "还没有写过任何团"}\n\n日历里出现过的圈内事：${knownCircle() || "还没有"}` },
     ], { temperature: 0.9, label: "IdolSearch 热搜" });
     const j = pickJson<{ trends?: { q?: string; move?: string }[]; news?: { title?: string; src?: string; ago?: string }[] }>(res.content);
     const items = (j.trends ?? []).filter(t => t.q).slice(0, 10).map(t => ({ q: String(t.q), move: String(t.move || "same") }));
@@ -149,16 +148,8 @@ export function siteOf(companyId: string): Site | undefined {
   return s && s.year === worldYear() ? s : undefined;
 }
 
-export function artistsOf(companyId: string): Artist[] {
-  return Object.values(load().artists).filter(a => a.companyId === companyId);
-}
-
-export function findArtist(q: string): Artist | undefined {
-  const k = q.trim().toLowerCase();
-  if (!k) return undefined;
-  const all = Object.values(load().artists);
-  return all.find(a => a.name.toLowerCase() === k) ?? all.find(a => k.length >= 2 && a.name.toLowerCase().includes(k));
-}
+export const artistsOf = groupsOf;
+export const findArtist = findGroup;
 
 const siteBusy = new Set<string>();
 export async function buildSite(companyId: string, force = false): Promise<void> {
@@ -167,25 +158,21 @@ export async function buildSite(companyId: string, force = false): Promise<void>
   siteBusy.add(companyId);
   try {
     const year = worldYear();
-    const old = artistsOf(companyId);
+    const mine = groupsOf(companyId);
+    const others = rosterPrompt();
     const res = await simpleLLMCall(config(), [
       {
         role: "system",
-        content: `你在给一出韩国娱乐圈的戏写「${c.name}」${year}年的官网。照这家公司在${year}年当时的样子写：当时叫什么名字、总部在哪、规模多大（如果那年公司叫别的名字，nameNote 写一句说明）。旗下艺人和年表里的团、人全部虚构，不写真实艺人；已经有的团照样留着，可以再加一两个，一共三到五个，出道年份要早于${year}年。韩文要地道，中文是它的翻译。只输出 JSON：
+        content: `你在给一出韩国娱乐圈的戏写「${c.name}」${year}年的官网。照这家公司在${year}年当时的样子写：当时叫什么名字、总部在哪、规模多大（如果那年公司叫别的名字，nameNote 写一句说明）。旗下艺人和年表里的团、人全部虚构，不写真实艺人。这家已经有的团必须全部写进 artists，团名、男团女团、出道年份、成员、粉丝名照抄不能改，只能补没写到的和更新「最近」；可以再加新团，一共三到五个，新团出道年份要早于${year}年，不能跟别家已有的团重名。韩文要地道，中文是它的翻译。只输出 JSON：
 {"motto_ko":"社训或口号","motto_zh":"","founded":"成立年份","hq_ko":"本社地址（到洞）","hq_zh":"","nameNote":"","about":[{"h_ko":"小标题","h_zh":"","ko":"两三句","zh":""}],"history":[{"year":"1997","ko":"","zh":""}],"artists":[{"name":"团名或艺名","kind":"女团/男团/Solo","size":5,"debut":2012,"style":"一句话风格","fandom":"粉丝名","recent":"最近在做什么","members":["成员中文名"],"songs":[{"title":"","year":2012,"note":"出道曲 / 一位 这种"}]}],"notices":[{"tag":"오디션 或 공지","ko":"","zh":"","date":"MM.DD"}]}
 about 写四段：我们是谁、我们怎样培养练习生、我们的音乐、在${year}年想做什么。history 五到七条，最后一条在${year}年。notices 三条，日期在${year}年最近一个月内，一条是开试镜。`,
       },
-      { role: "user", content: `公司资料：\n规模：${c.scale}\n风格：${c.style}\n练习生：${c.trainee}\n招人：${c.recruit}\n名声：${c.fame}\n\n已经有的旗下艺人：${old.map(a => `${a.name}（${a.kind}，${a.debut}出道）`).join("、") || "还没有"}\n日历里出现过的圈内事：${knownCircle() || "还没有"}\n\n${ctx()}` },
+      { role: "user", content: `公司资料：\n规模：${c.scale}\n风格：${c.style}\n练习生：${c.trainee}\n招人：${c.recruit}\n名声：${c.fame}\n\n这家已经有的团（必须照抄）：\n${mine.map(a => `- ${groupLine(a)}`).join("\n") || "还没有"}\n\n${others}\n\n日历里出现过的圈内事：${knownCircle() || "还没有"}\n\n${ctx()}` },
     ], { temperature: 0.8, label: `${c.name} 官网`, max_tokens: 3500 });
     const j = pickJson<Partial<Site> & { artists?: Artist[] }>(res.content);
     if (!j.about?.length) throw new Error(res.error || "AI 没写出来");
+    upsertGroups((j.artists ?? []).map(a => ({ ...a, companyId })), "site", companyId);
     const s = load();
-    const artists = { ...s.artists };
-    for (const a of j.artists ?? []) {
-      if (!a?.name) continue;
-      const key = a.name.toLowerCase();
-      artists[key] = { ...artists[key], ...a, companyId } as Artist;
-    }
     const site: Site = {
       year, at: Date.now(),
       motto_ko: j.motto_ko, motto_zh: j.motto_zh, founded: j.founded, hq_ko: j.hq_ko, hq_zh: j.hq_zh, nameNote: j.nameNote,
@@ -193,7 +180,7 @@ about 写四段：我们是谁、我们怎样培养练习生、我们的音乐�
       history: (j.history ?? []).filter(h => h && h.year),
       notices: (j.notices ?? []).filter(n => n && (n.ko || n.zh)),
     };
-    save({ ...s, artists, sites: { ...s.sites, [companyId]: site } });
+    save({ ...s, sites: { ...s.sites, [companyId]: site } });
   } finally {
     siteBusy.delete(companyId);
   }
@@ -249,7 +236,7 @@ export async function runQuery(q: string): Promise<QueryResult> {
         content: `你在给一出韩国娱乐圈的戏写搜索网站的搜索结果（新闻和帖子），照这个世界今天的样子写。只输出 JSON：{"snippet":"一两句百科式简介，没有就空","results":[{"title":"中文标题","src":"媒体或论坛名","ago":"3小时前 这种"}]}
 results 写四到六条，跟搜的词直接有关，有新有旧。团和人全部虚构；公司用真名。照这个年份当时的样子写。${me ? "搜的是她自己：只写外界真的会知道的（家里的新闻、以前的作品、练习生路透），关注度低就只写一两条小帖子。" : "她只是普通练习生或还没进公司时，结果里不会出现她。"}`,
       },
-      { role: "user", content: `搜的词：${q}\n${company ? `这是公司：${company.name}（${company.style}）` : ""}${artist ? `这是 ${companyOf(artist.companyId)?.name} 的${artist.kind} ${artist.name}，${artist.debut}年出道，${artist.style ?? ""}，最近：${artist.recent ?? ""}` : ""}\n\n${ctx()}` },
+      { role: "user", content: `搜的词：${q}\n${company ? `这是公司：${company.name}（${company.style}）` : ""}${artist ? `这是 ${groupLine(artist)}，最近：${artist.recent ?? ""}` : ""}\n\n${ctx()}\n\n${rosterPrompt()}` },
     ], { temperature: 0.85, label: "IdolSearch 搜索" });
     const j = pickJson<{ snippet?: string; results?: { title?: string; src?: string; ago?: string }[] }>(res.content);
     const results = (j.results ?? []).filter(r => r.title).slice(0, 6).map(r => ({ title: String(r.title), src: String(r.src || "星闻日报"), ago: String(r.ago || "今天") }));

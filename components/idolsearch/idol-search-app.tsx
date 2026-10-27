@@ -352,7 +352,7 @@ function SitePage({ id, tab, onBack, onTab, onArtist, onApply, onNotice }: { id:
 
 function ArtistsGrid({ id, onArtist }: { id: string; onArtist: (n: string) => void }) {
   const [kind, setKind] = useState("全部");
-  const list = artistsOf(id).filter(a => kind === "全部" || a.kind.includes(kind)).sort((a, b) => (b.debut ?? 0) - (a.debut ?? 0));
+  const list = artistsOf(id).filter(a => kind === "全部" || (a.kind ?? "").includes(kind)).sort((a, b) => (b.debut ?? 0) - (a.debut ?? 0));
   return (
     <>
       <div className="is-jsec"><div className="is-jt">Artists · 아티스트<small>ARTISTS</small></div></div>
@@ -362,7 +362,7 @@ function ArtistsGrid({ id, onArtist }: { id: string; onArtist: (n: string) => vo
           <button type="button" className="is-gc" key={a.name} onClick={() => onArtist(a.name)}>
             <span className="ac" style={{ background: artistBg(a.name) }} />
             <span className="an">{a.name}</span>
-            <span className="ad">{a.kind}{a.size && !a.kind.includes("Solo") ? ` · ${a.size} 人` : ""}{a.debut ? ` · ${a.debut}` : ""}</span>
+            <span className="ad">{a.kind}{a.size && !(a.kind ?? "").includes("Solo") ? ` · ${a.size} 人` : ""}{a.debut ? ` · ${a.debut}` : ""}</span>
           </button>
         ))}
       </div>
@@ -383,7 +383,7 @@ function ArtistPage({ name, onBack }: { name: string; onBack: () => void }) {
       <div className="is-scroll">
         <div className="is-gh" style={{ background: artistBg(a.name) }}>
           <button type="button" className="is-ghb" onClick={onBack} aria-label="返回"><ChevronLeft size={22} /></button>
-          <div className="g1"><div className="gn">{a.name}</div><div className="gs">{companyOf(a.companyId)?.name} 娱乐 · {a.kind}{a.size && !a.kind.includes("Solo") ? ` · ${a.size} 人` : ""}{a.debut ? ` · ${a.debut} 出道` : ""}</div></div>
+          <div className="g1"><div className="gn">{a.name}</div><div className="gs">{companyOf(a.companyId)?.name} 娱乐 · {a.kind}{a.size && !(a.kind ?? "").includes("Solo") ? ` · ${a.size} 人` : ""}{a.debut ? ` · ${a.debut} 出道` : ""}</div></div>
         </div>
         <div className="is-gkv">
           {a.style ? <div><b>风格</b><span>{a.style}</span></div> : null}

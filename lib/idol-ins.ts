@@ -71,6 +71,8 @@ type State = {
   notes: Note[];
   dms: Record<string, Dm>;
   filledAt?: number;
+  /** 陌生人关注算到哪了（跟 AI 刷新成不成功无关） */
+  strangersAt?: number;
   explore?: { day: string; ids: string[] };
   seenNotesAt?: number;
   /** 认识的人什么时候来申请关注她：每个人一次 */
@@ -273,7 +275,10 @@ export async function fillFeed(): Promise<number> {
     const now = Date.now();
     const s0 = loadIns();
     const from = Math.max(s0.filledAt ?? now - 2 * DAY, now - 7 * DAY);
-    patch(x => strangersFollow(x, (now - from) / HOUR));
+    patch(x => {
+      const since = Math.max(x.strangersAt ?? now - 2 * DAY, now - 7 * DAY);
+      return { ...strangersFollow(x, (now - since) / HOUR), strangersAt: now };
+    });
     const s = loadIns();
     const tier = fameTier(fameTotal()).name;
     // 陌生人私信：公开号或有点名气才有

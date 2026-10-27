@@ -81,6 +81,7 @@ await p.evaluate(() => document.querySelector(".ig-sv-h button")?.click()); awai
 await p.evaluate(() => document.querySelectorAll(".ig-tabbar button")[1].click()); await sleep(600);
 await p.type(".ig-sbar input", "seojun"); await sleep(400);
 await p.evaluate(() => document.querySelector(".ig-ac > div").click()); await sleep(800);
+await p.screenshot({ path: OUT + "/ig9b_profile.png" });
 await clickText(".cp-instagram-profile-actions button", "发消息"); await sleep(600);
 await p.type(".ig-inp input", "前辈好"); await p.keyboard.press("Enter"); await sleep(300);
 await p.evaluate(() => document.querySelector(".ig-plus").click()); await sleep(400);

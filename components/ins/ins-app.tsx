@@ -332,7 +332,7 @@ function Profile({ id, onBack, onPosts, onReq, onNotice, tabbar, onChat, onStory
               <button type="button" onClick={() => st.length && onStory(st)}><Avatar acc={a} size={76} ring={st.length ? "new" : undefined} /></button>
               <div className="cp-instagram-profile-stats"><div><strong>{posts.length}</strong><span>帖子</span></div><div><strong>{fmtN(followers)}</strong><span>粉丝</span></div><div><strong>{fmtN(following)}</strong><span>关注</span></div></div>
             </div>
-            <div className="cp-instagram-profile-main"><h3>{a.name}</h3>{a.bio ? <p style={{ whiteSpace: "pre-wrap" }}>{a.bio}</p> : null}</div>
+            {a.bio ? <div className="cp-instagram-profile-main"><p style={{ whiteSpace: "pre-wrap" }}>{a.bio}</p></div> : null}
             <div className="cp-instagram-profile-actions">
               {mine ? <><button type="button" onClick={() => setEditing(true)}>编辑主页</button><button type="button" onClick={() => onNotice?.("分享链接复制好了")}>分享主页</button></>
                 : <><button type="button" className={rel === "none" ? "ig-blue" : ""} onClick={() => { if (rel === "none") { if (follow(id) === "requested") onNotice?.("申请发出去了"); } else unfollow(id); }}>{rel === "following" ? "已关注" : rel === "requested" ? "已申请" : "关注"}</button>

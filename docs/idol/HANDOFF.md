@@ -421,3 +421,11 @@ Flora 要一个专门玩「爱豆模拟器」的小手机：她是想当爱豆�
 - `sendAs`（queueMessage 落地）改成：设 `proactive` 悄悄话 → `requestBackgroundChatReply` 走正常 KakaoTalk 聊天引擎；`buildIdolChatHint` 里输出「### 这一条是你主动发的」后清掉。失败退回 simpleLLMCall
 - **重要**：`buildIdolChatHint`（请假批假、等她回复的事、主动发的理由）和别的 app 指令都靠预设里的 `{{customAppRichMediaDirectives}}` 宏进提示词。外面找来的酒馆预设没有这些 float 宏，导进来功能会悄悄失效。她要换文风：以 float 自带预设为底，把外部预设的文风条目加进去
 - 文风测试见记忆 project_virtual_time（先中后韩不要；韩国人说话规矩方向对；要带她的预设测）
+
+### 2.33 10-28 凌晨：文风测试 + 待做
+- 用启明星 key 真跑了几轮剧情/聊天对比（脚本 `tests/vo1.mjs`～`vo4.mjs`，请求拦截只放行目标请求，`DRY=1` 空跑不花钱）。结论在记忆 project_virtual_time 末尾
+- 文风她自己在剧情设置里换（她说「可以一直缝、来回换」），不用我定
+- **待做（她要的）**：
+  1. 剧情设置加「语言」开关：人物说话先韩后中（旁白中文）/ 全部先韩语再中文。她用 Flash 喜欢全韩语、用 Pro 喜欢先韩后中，换模型自己切
+  2. 人物名片加「国籍」，按国籍决定说什么语言（现在 persona 不写国籍，模型会把韩国人当中国人，This World 预设下全说中文）
+- 另外记着：剧情字数设定总被超（800～1000 写成 1300～3300）

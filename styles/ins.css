@@ -8,7 +8,9 @@
 .ig-prof .cp-instagram-profile-card { padding-bottom: 14px; }
 .ig-prof .cp-instagram-profile-main { margin-top: -6px; }
 .ig-prof .cp-instagram-profile-actions { margin-top: 14px; }
-.ig-prof .cp-instagram-profile-tabs { margin-top: 6px; }
+.ig-prof .cp-instagram-profile-tabs { margin: 4px 0 2px; border-top: 0; height: 46px; }
+.ig-prof .cp-instagram-profile-tabs span { cursor: pointer; }
+.ig-prof .cp-instagram-profile-tabs span.is-active::before { top: auto; bottom: 0; left: 30%; right: 30%; height: 2px; }
 .ig-prof .ig-scroll { padding-bottom: 90px; }
 .ig-pad { padding: 14px 16px; }
 .ig-empty { padding: 34px 20px; text-align: center; font-size: 13.5px; color: #8e8e8e; line-height: 1.6; }

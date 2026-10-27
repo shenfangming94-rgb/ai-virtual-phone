@@ -7,7 +7,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import {
-  Bookmark, ChevronLeft, ChevronRight, Ellipsis, Eye, Grid3X3, Heart, Home, Image as ImageIcon, MapPin, MessageCircle, Music, Plus, Search, Send, Settings, SquarePlus, UserRound, UsersRound, X,
+  Bookmark, ChevronLeft, ChevronRight, Clapperboard, Ellipsis, SquareUserRound, Eye, Grid3X3, Heart, Home, Image as ImageIcon, MapPin, MessageCircle, Music, Plus, Search, Send, Settings, SquarePlus, UserRound, UsersRound, X,
 } from "lucide-react";
 
 import {
@@ -311,6 +311,7 @@ function Profile({ id, onBack, onPosts, onReq, onNotice, tabbar, onChat, onStory
   const a = accOf(id);
   const mine = id === ME;
   const [editing, setEditing] = useState(false);
+  const [ptab, setPtab] = useState<"grid" | "video" | "tag">("grid");
   if (!a) return <div className="ig-page"><div className="ig-bar"><button type="button" onClick={onBack}><ChevronLeft size={26} /></button><b /></div><div className="ig-empty">找不到这个号</div></div>;
   const posts = s.posts.filter(p => p.by === id && !p.deleted && (mine || !p.archived)).sort((x, y) => y.at - x.at);
   const see = canSee(id);
@@ -343,11 +344,15 @@ function Profile({ id, onBack, onPosts, onReq, onNotice, tabbar, onChat, onStory
             <button type="button" className="ig-req" onClick={onReq}><span className="ig-av3">{s.incoming.slice(0, 3).map(r => <Avatar key={r.id} acc={accOf(r.id)} size={24} />)}</span><span><b>关注申请</b> · {s.incoming.length} 个人想关注你</span><em>查看</em></button>
           ) : null}
           {mine ? <div className="ig-pv"><span>私密账号<small>关了就是公开：陌生人也能看、能评论</small></span><button type="button" className={`ig-sw${s.me.private ? " on" : ""}`} onClick={() => { setPrivate(!s.me.private); onNotice?.(s.me.private ? "现在是公开账号" : "现在是私密账号"); }} /></div> : null}
-          <div className="cp-instagram-profile-tabs"><span className="is-active"><Grid3X3 size={17} /></span><span><UserRound size={17} /></span></div>
-          {see ? (
+          <div className="cp-instagram-profile-tabs">
+            <span className={ptab === "grid" ? "is-active" : ""} onClick={() => setPtab("grid")}><Grid3X3 size={22} /></span>
+            <span className={ptab === "video" ? "is-active" : ""} onClick={() => setPtab("video")}><Clapperboard size={22} /></span>
+            <span className={ptab === "tag" ? "is-active" : ""} onClick={() => setPtab("tag")}><SquareUserRound size={22} /></span>
+          </div>
+          {ptab !== "grid" ? <div className="ig-empty">{ptab === "video" ? "还没有视频" : "还没有被标记的照片"}</div> : see ? (
             <div className="ig-grid">{posts.map(p => <button type="button" key={p.id} onClick={() => onPosts(id, p.id)} className={p.archived ? "dim" : ""}><Pic img={p.imgs[0]} ratio="3/4" small /></button>)}</div>
           ) : <div className="ig-lock"><b>这是私密账号</b><span>关注后才能看到帖子</span></div>}
-          {see && !posts.length ? <div className="ig-empty">还没有帖子</div> : null}
+          {ptab === "grid" && see && !posts.length ? <div className="ig-empty">还没有帖子</div> : null}
         </div>
       </div>
       {tabbar}

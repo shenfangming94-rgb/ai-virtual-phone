@@ -82,6 +82,12 @@ function parseAt(v: unknown): number | null {
 
 // ── 关注度、身体 ──
 
+/** 别处发生的事记进「最近正在发生的事」（ins 被扒这种） */
+export function addWorldFeed(text: string, at = Date.now()): void {
+  const s = load();
+  save({ ...s, feed: [...s.feed, { at, text }].slice(-40) });
+}
+
 /** 关注度现在在 idol-fame.ts（人气 + 热度），这几个留着给旧代码用 */
 export function fameNow(): number { return fameTotal(); }
 export function addFame(n: number, text = "完成了一次机会"): void { fameEvent(n >= 5 ? "medium" : "small", text); }

@@ -256,6 +256,30 @@ Flora 要一个专门玩「爱豆模拟器」的小手机：她是想当爱豆�
 - 点路人头像 → `promoteCrowd` 建背景人物、进群成员、后台补全卡 → 宿主陌生人名片「加好友」（加了升主要人物）
 - 测试 `tests/cr2.mjs`
 
+### 2.24 关注度（10-27 夜，`lib/idol-fame.ts`、`components/contacts/fame-card.tsx`、`styles/fame.css`）
+- kv `idol_fame_v1`：pop 人气（慢涨基本不掉）+ heat 热度（半衰期一周，按世界时间衰减；退掉的按周并成一行「热度慢慢退了」）+ log。旧存档 `idol_events_v1.fame` 自动迁过来
+- 三档 `FAME_TIERS`：0～19 普通人 / 20～49 小有人知 / 50+ 公众人物；career.stage 是 idol 一律公众人物（`fameTier`）
+- 开局人气：童星 55、星二代 50、富二代/财阀 30、普通和自己写 5
+- `fameEvent(size, text)`：small 热度+2；medium 热度+5 人气+1；big 热度+10～20；debut 人气+30。发动机 PLAN_RULES 事件多了 `fame` 字段（AI 标），runEvent 时加；完成机会走 medium（`addFame`）；出道当天 `sendDday` 加 debut
+- `idol-events` 里 `fameNow/addFame/fameWord` 留着转到这里；新加 `addWorldFeed(text)`
+- 名片：练习生证下面薄荷绿「인지도」证（预览 mockups/fame2）；点开液态玻璃详情（现在/三档只写档名/最近的变化近 30 天+看更早的，开局那行固定最底/自己改滑条 `setFameTotal`，差多少算在人气上）
+- 测试 `tests/fm1.mjs`
+
+### 2.25 ins（10-27 夜，`lib/idol-ins.ts`、`components/ins/ins-app.tsx`、`styles/ins.css`，桌面图标 `ins`）
+- 预览定稿 `mockups/ig/i2.png`、`i3.png`；主页和帖子直接用 checkphone.css 的 `cp-instagram-*`；**界面不要 emoji**，图标全是线条；锁着的号不标锁
+- kv `idol_ins_v1`：me（handle/name/bio/private 默认 true/riskHint 默认 true）、accs（char 主号；出道爱豆=蓝勾公开号+私人小号 alt；团官方号从圈内名册来；路人 npc）、following/followers/requested/incoming/askedMe、posts、stories（24 小时）、notes、dms、filledAt、explore
+- 起账号 `ensureAccounts`：主要人物一次 AI 调用起网名简介；练习生一律锁，爱豆大号公开认证+小号
+- 关注：公开号直接关注；锁着的申请，`insTick` 到 decideAt 决定（见过的 95% 同意）；认识她的人偶尔来申请关注她（她私密就进「关注申请」）
+- 打开 ins：距上次 >2 小时就 `fillFeed`（一次调用补她关注的号这段时间的帖子和快拍；帖子必须有图 1～5 张、配文短、韩国人韩语带 capZh）。不跟发动机
+- 她发帖 `myPost` → `reactToMine`（一次调用：点赞评论 + 风险 none/low/mid/high + why + love）。被扒概率 = 风险 × 档位（普通人 0.3/小有人知 0.8/公众人物 1.3）× 公开 1/私密 0.5；会被扒就定 leakAt（high 3～12 小时、mid 1～3 天、low 3～7 天）。之前删帖/归档/切私密（`hiddenAt`）在前一半时间里就躲掉，晚了 50%。被扒 → `fameEvent` + `addWorldFeed` + 横幅 + 老师 `queueMessage`（秀恩爱按恋爱禁令约谈）
+- 风险灰字只在 me.riskHint 开着时显示（更多选项里的开关），判断照样做
+- 图：描述卡（黑底宋体）+「生成这张图」（`generateImg`，带「照片里有谁」的参考图，`SELF_REFERENCE_ID` 是她）；相册选图（`loadPhotos`）或上传（`storeMediaBlob`）
+- 快拍：纯色底+字或画面；谁看过由代码排（关注她的人，心动的人深夜看的多，深夜时间标粉）
+- 探索：每个世界日一次调用 12 条公开帖
+- 私信：只给没加 Kakao 的人（`dmAllowed`）；默认不自动回，+ 里「让他回」「他先说一句」「照片（没做）」「聊天设置」（自动回复：她停 10 秒后回；他会主动来找你：开关已有，**主动来找还没接发动机**）；长按 换一条/编辑/复制/删除
+- 还没做：私信发照片、陌生人私信请求的来源（fill 里还没出）、他主动来私信、出道后公司开公开号（现在只有她自己切公开）
+- 测试 `tests/ig1.mjs`
+
 ### 「有人来找你」（大部分已做，见 2.9；还没做的：平常日子偶尔有人来、多人叠卡）
 1. 戏里有人要她的号或给她号 → 记号（比如 `[加好友:名字|谁提的]`）。**她要加人不能自动加上**：她得去 KakaoTalk 右上 + 添加好友、输入他的 KakaoTalk ID 搜出来发申请（宿主已有：`chat-message-list.tsx` 按 wechatID 搜）；他加她 → 走「新的朋友」好友申请（`lib/friend-request-storage.ts`、`lib/group-friend.ts` 已有类似逻辑）
 2. 背景人物被她搜 ID 时，才照模板补全卡、弹给她看

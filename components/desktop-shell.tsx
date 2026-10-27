@@ -6,6 +6,8 @@ import { ClockApp } from "./clock-app";
 import { ContactsApp } from "./contacts/contacts-app";
 import { CareerApp } from "./career/career-app";
 import { IdolSearchApp } from "./idolsearch/idol-search-app";
+import { InsApp } from "./ins/ins-app";
+import { insTick } from "@/lib/idol-ins";
 import { careerTick } from "@/lib/idol-career";
 import { mailAppIcon, mailAppTick, searchTick } from "@/lib/idol-search";
 import { kakaoTick } from "@/lib/idol-kakao";
@@ -1126,6 +1128,7 @@ export function DesktopShell({ initialThemeProfile, initialThemeAssets }: Deskto
       try { yearlyTick(idolNotify); } catch { /* 同上 */ }
       try { searchTick(idolNotify); } catch { /* 同上 */ }
       try { mailAppTick(idolNotify); } catch { /* 同上 */ }
+      try { insTick(idolNotify); } catch { /* 同上 */ }
       try { syncIdolWorldBook(); } catch { /* 同上 */ }
     };
     run();
@@ -4297,6 +4300,9 @@ html,body{margin:0;padding:0;width:100%;height:100%;background:#121110;color:rgb
 
     if (activeApp === "album") {
       return <AlbumApp onClose={() => setActiveApp(null)} onNotice={setNotice} />;
+    }
+    if (activeApp === "ins") {
+      return <InsApp onClose={() => setActiveApp(null)} onNotice={setNotice} />;
     }
     if (activeApp === "idolsearch") {
       return <IdolSearchApp onClose={() => setActiveApp(null)} onNotice={setNotice} onOpenMail={() => { const ic = mailAppIcon(); if (ic) openApp(ic as DesktopIconId); else setNotice("先装上邮箱 app"); }} />;

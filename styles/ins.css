@@ -1,0 +1,167 @@
+/* 爱豆小手机 ins（主页、帖子用 checkphone.css 的 cp-instagram-*） */
+.ig-app { position: relative; height: 100%; overflow: hidden; background: #fff; color: #111; font-family: -apple-system, "PingFang SC", "Hiragino Sans GB", "Apple SD Gothic Neo", sans-serif; --cp-appbar-safe-top: var(--page-header-safe-top, 44px); }
+.ig-app button { font-family: inherit; color: inherit; background: none; border: 0; cursor: pointer; padding: 0; }
+.ig-app input, .ig-app textarea { font-family: inherit; }
+.ig-page { position: absolute; inset: 0; display: flex; flex-direction: column; background: #fff; }
+.ig-scroll { flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch; padding-bottom: 80px; }
+.ig-prof { position: absolute; inset: 0; }
+.ig-prof .ig-scroll { padding-bottom: 90px; }
+.ig-pad { padding: 14px 16px; }
+.ig-empty { padding: 34px 20px; text-align: center; font-size: 13.5px; color: #8e8e8e; line-height: 1.6; }
+.ig-loading { text-align: center; font-size: 12.5px; color: #8e8e8e; padding: 6px 0; }
+.ig-note { margin: 10px 16px; padding: 10px 12px; border-radius: 12px; background: #f5f5f5; font-size: 13px; color: #555; }
+.ig-hint { font-size: 12.5px; color: #8e8e8e; margin: 10px 0 8px; line-height: 1.5; }
+.ig-link { color: #0095f6 !important; font-weight: 600; font-size: 15px; }
+.ig-link:disabled { opacity: 0.4; }
+.ig-link.w { color: #fff !important; }
+.ig-tr { font-size: 12.5px; color: #8e8e8e; margin-top: 2px; }
+.ig-vf { width: 14px; height: 14px; vertical-align: -2px; margin-left: 3px; display: inline-block; }
+.ig-av { display: inline-flex; border-radius: 50%; overflow: hidden; flex: none; }
+.ig-av img { width: 100%; height: 100%; object-fit: cover; }
+.ig-ring { display: inline-flex; align-items: center; justify-content: center; border-radius: 50%; padding: 2.5px; flex: none; background: conic-gradient(#feda75, #fa7e1e, #d62976, #962fbf, #4f5bd5, #feda75); }
+.ig-ring.seen { background: #dbdbdb; }
+.ig-ring .ig-av { border: 2.5px solid #fff; }
+
+.ig-top { display: flex; align-items: center; padding: calc(var(--page-header-safe-top, 44px) + 4px) 14px 6px; }
+.ig-wm { font-family: "Snell Roundhand", "Brush Script MT", cursive; font-size: 30px; font-weight: 700; margin-right: auto; }
+.ig-bell { position: relative; }
+.ig-bell i { position: absolute; right: -1px; top: -1px; width: 8px; height: 8px; border-radius: 50%; background: #ff3040; }
+.ig-bar { display: flex; align-items: center; justify-content: space-between; padding: calc(var(--page-header-safe-top, 44px) + 4px) 12px 10px; border-bottom: 0.5px solid #efefef; }
+.ig-bar b { font-size: 17px; font-weight: 700; }
+.ig-bar > span, .ig-bar > button:first-child { min-width: 40px; }
+.ig-bar.dark { border-bottom: 0; color: #fff; }
+.ig-bar.dark button { color: #fff !important; }
+.ig-stories { display: flex; gap: 12px; padding: 8px 12px 12px; overflow-x: auto; border-bottom: 0.5px solid #efefef; }
+.ig-st { width: 72px; flex: none; display: flex; flex-direction: column; align-items: center; gap: 4px; font-size: 11.5px; color: #262626 !important; position: relative; }
+.ig-st span { max-width: 72px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ig-st em { position: absolute; right: 4px; top: 48px; width: 20px; height: 20px; border-radius: 50%; background: #0095f6; color: #fff; border: 2px solid #fff; display: flex; align-items: center; justify-content: center; }
+.ig-tabbar { position: absolute; left: 0; right: 0; bottom: 0; height: calc(58px + env(safe-area-inset-bottom, 0px)); border-top: 0.5px solid #dbdbdb; background: #fff; display: flex; justify-content: space-around; align-items: flex-start; padding-top: 12px; z-index: 5; }
+
+/* 帖子图 */
+.ig-car { position: relative; }
+.ig-pic img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.ig-pic { width: 100%; overflow: hidden; background: #f2f2f2; }
+.ig-desc { position: relative; width: 100%; background: #111; color: #f3f3f3; display: flex; align-items: center; justify-content: center; text-align: center; padding: 26px; font-family: "Songti SC", "STSong", serif; font-size: 16px; line-height: 1.8; letter-spacing: 1px; }
+.ig-desc.sm { padding: 8px; font-size: 10.5px; line-height: 1.5; letter-spacing: 0; }
+.ig-desc small { position: absolute; left: 12px; top: 10px; font-family: -apple-system, sans-serif; font-size: 10.5px; color: rgba(255, 255, 255, 0.55); letter-spacing: 0; }
+.ig-gen { position: absolute; right: 12px; bottom: 12px; font-family: -apple-system, "PingFang SC", sans-serif; font-size: 12px; letter-spacing: 0; background: rgba(255, 255, 255, 0.92) !important; color: #111 !important; border-radius: 16px; padding: 6px 12px !important; font-weight: 600; }
+.ig-nav { position: absolute; top: 50%; transform: translateY(-50%); width: 26px; height: 26px; border-radius: 50%; background: rgba(255, 255, 255, 0.85) !important; display: flex; align-items: center; justify-content: center; }
+.ig-nav.l { left: 8px; } .ig-nav.r { right: 8px; }
+.ig-dots { position: absolute; left: 0; right: 0; bottom: -14px; display: flex; justify-content: center; gap: 4px; }
+.ig-dots i { width: 6px; height: 6px; border-radius: 50%; background: #dbdbdb; } .ig-dots i.on { background: #0095f6; }
+.ig-risk { font-size: 12.5px; color: #8e8e8e; margin-top: 6px; line-height: 1.5; }
+
+.ig-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1.5px; }
+.ig-grid > button { display: block; overflow: hidden; }
+.ig-grid > button.dim { opacity: 0.45; }
+.ig-sec { font-size: 15px; font-weight: 700; padding: 14px 16px 6px; }
+.ig-sbar { display: flex; align-items: center; gap: 8px; margin: calc(var(--page-header-safe-top, 44px) + 4px) 14px 8px; background: #efefef; border-radius: 10px; padding: 8px 12px; color: #8e8e8e; }
+.ig-sbar input { flex: 1; border: 0; outline: 0; background: transparent; font-size: 15px; color: #111; }
+.ig-ac { display: flex; align-items: center; gap: 12px; padding: 9px 16px; }
+.ig-ac > div { flex: 1; min-width: 0; font-size: 14px; }
+.ig-ac b { font-weight: 600; }
+.ig-ac small { display: block; color: #8e8e8e; font-size: 12.5px; margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ig-tag { font-size: 10.5px; color: #d62976; background: #fde8f1; border-radius: 6px; padding: 1px 6px; margin-left: 6px; font-weight: 600; }
+.ig-fb { background: #0095f6 !important; color: #fff !important; font-size: 13px; font-weight: 600; border-radius: 8px; padding: 7px 14px !important; flex: none; }
+.ig-fb.ghost { background: #efefef !important; color: #111 !important; }
+.ig-blue { background: #0095f6 !important; color: #fff !important; }
+.ig-blue-btn { display: block; width: 100%; margin-top: 12px; background: #0095f6 !important; color: #fff !important; border-radius: 10px; padding: 12px !important; font-weight: 600; text-align: center; }
+.ig-req { display: flex; align-items: center; gap: 10px; width: calc(100% - 28px); margin: 8px 14px 0; padding: 10px 12px !important; border-radius: 12px; background: #f5f5f5 !important; font-size: 13px; text-align: left; }
+.ig-req b { font-weight: 600; } .ig-req em { font-style: normal; margin-left: auto; color: #0095f6; font-weight: 600; }
+.ig-av3 { display: flex; } .ig-av3 .ig-av { border: 2px solid #f5f5f5; margin-left: -8px; } .ig-av3 .ig-av:first-child { margin-left: 0; }
+.ig-pv { display: flex; align-items: center; justify-content: space-between; margin: 10px 14px 6px; font-size: 13px; }
+.ig-pv small { display: block; color: #8e8e8e; font-size: 11.5px; margin-top: 2px; }
+.ig-sw { width: 46px; height: 28px; border-radius: 14px; background: #e5e5ea !important; position: relative; flex: none; }
+.ig-sw::after { content: ""; position: absolute; left: 2px; top: 2px; width: 24px; height: 24px; border-radius: 50%; background: #fff; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2); transition: left 0.15s; }
+.ig-sw.on { background: #4a5df9 !important; } .ig-sw.on::after { left: 20px; }
+.ig-lock { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 40px 20px; font-size: 14px; }
+.ig-lock span { color: #8e8e8e; font-size: 13px; }
+.ig-nt { display: flex; align-items: center; gap: 12px; padding: 9px 16px !important; width: 100%; text-align: left; font-size: 13.5px; line-height: 1.45; }
+.ig-nt > div { flex: 1; min-width: 0; } .ig-nt b { font-weight: 600; } .ig-nt small { color: #8e8e8e; }
+.ig-nt-th { width: 44px; height: 44px; border-radius: 4px; overflow: hidden; flex: none; }
+
+/* 发帖 */
+.ig-np-imgs { display: flex; gap: 8px; padding: 14px 16px 6px; overflow-x: auto; }
+.ig-np-img { position: relative; width: 120px; flex: none; border-radius: 10px; overflow: hidden; }
+.ig-np-img button { position: absolute; right: 6px; top: 6px; width: 22px; height: 22px; border-radius: 50%; background: rgba(0, 0, 0, 0.55) !important; color: #fff !important; display: flex; align-items: center; justify-content: center; }
+.ig-np-add { width: 120px; flex: none; aspect-ratio: 3/4; display: flex; flex-direction: column; gap: 8px; }
+.ig-np-add button { flex: 1; border: 1px dashed #c7c7c7 !important; border-radius: 10px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; font-size: 12.5px; color: #555 !important; }
+.ig-cap { display: block; width: calc(100% - 32px); margin: 8px 16px 6px; border: 0; outline: 0; resize: none; font-size: 15px; min-height: 64px; }
+.ig-np-row { display: flex; align-items: center; gap: 14px; width: 100%; padding: 13px 18px !important; font-size: 15.5px; text-align: left; }
+.ig-np-row span { flex: 1; } .ig-np-row em { font-style: normal; color: #8e8e8e; font-size: 14px; max-width: 150px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ig-np-row small { display: block; font-size: 12.5px; color: #8e8e8e; margin-top: 2px; line-height: 1.5; }
+.ig-np-row svg { color: #8e8e8e; flex: none; } .ig-np-row svg:first-child { color: #111; }
+.ig-np-sep { height: 6px; background: #f2f2f2; margin: 4px 0; }
+.ig-share { position: absolute; left: 16px; right: 16px; bottom: calc(22px + env(safe-area-inset-bottom, 0px)); background: #4a5df9 !important; color: #fff !important; text-align: center; border-radius: 12px; padding: 13px !important; font-size: 16px; font-weight: 600; }
+.ig-share:disabled { opacity: 0.6; }
+.ig-ta { display: block; width: 100%; box-sizing: border-box; border: 1px solid #dbdbdb; border-radius: 12px; padding: 12px; font-size: 14.5px; line-height: 1.6; outline: 0; resize: none; }
+.ig-who { display: flex; flex-wrap: wrap; gap: 8px; }
+.ig-who button { border: 1px solid #dbdbdb !important; border-radius: 16px; padding: 6px 14px !important; font-size: 13.5px; }
+.ig-who button.on { background: #111 !important; color: #fff !important; border-color: #111 !important; }
+
+/* 快拍 */
+.ig-story-new { color: #fff; }
+.ig-st-text { margin: 60px 24px 0; background: transparent; border: 0; outline: 0; color: #fff; font-family: "Songti SC", "STSong", serif; font-size: 22px; line-height: 1.8; text-align: center; resize: none; min-height: 200px; }
+.ig-st-text::placeholder, .ig-st-desc::placeholder { color: rgba(255, 255, 255, 0.6); }
+.ig-st-desc { margin: 20px 24px; background: rgba(255, 255, 255, 0.15); border: 1px solid rgba(255, 255, 255, 0.35); border-radius: 12px; padding: 10px 12px; color: #fff; outline: 0; font-size: 14px; }
+.ig-bgs { display: flex; gap: 10px; justify-content: center; margin-top: auto; padding-bottom: 40px; }
+.ig-bgs button { width: 32px; height: 32px; border-radius: 50%; border: 2px solid rgba(255, 255, 255, 0.5) !important; }
+.ig-bgs button.on { border-color: #fff !important; transform: scale(1.12); }
+.ig-sv { position: absolute; inset: 0; z-index: 50; color: #fff; }
+.ig-sv-prog { position: absolute; left: 10px; right: 10px; top: calc(var(--page-header-safe-top, 44px) + 2px); display: flex; gap: 3px; }
+.ig-sv-prog i { flex: 1; height: 2.5px; border-radius: 2px; background: rgba(255, 255, 255, 0.35); } .ig-sv-prog i.on { background: #fff; }
+.ig-sv-h { position: absolute; left: 12px; right: 12px; top: calc(var(--page-header-safe-top, 44px) + 12px); display: flex; align-items: center; gap: 8px; font-size: 13.5px; }
+.ig-sv-h span { opacity: 0.75; } .ig-sv-h button { margin-left: auto; color: #fff !important; }
+.ig-sv-img { position: absolute; left: 30px; right: 30px; top: 140px; border-radius: 12px; overflow: hidden; }
+.ig-sv-text { position: absolute; left: 24px; right: 24px; top: 46%; transform: translateY(-50%); text-align: center; font-family: "Songti SC", "STSong", serif; font-size: 20px; line-height: 1.8; letter-spacing: 2px; white-space: pre-wrap; }
+.ig-sv-img + .ig-sv-text { top: auto; bottom: 120px; transform: none; font-size: 16px; }
+.ig-sv-seen { position: absolute; left: 50%; bottom: calc(30px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); display: flex; align-items: center; gap: 6px; font-size: 13px; color: #fff !important; background: rgba(0, 0, 0, 0.25) !important; border-radius: 16px; padding: 6px 14px !important; }
+.ig-seen { position: absolute; left: 0; right: 0; bottom: 0; max-height: 60%; overflow-y: auto; background: #fff; color: #111; border-radius: 18px 18px 0 0; padding: 6px 0 30px; }
+.ig-seen .hd { display: flex; justify-content: space-between; align-items: center; font-size: 14px; font-weight: 700; padding: 10px 16px; border-bottom: 0.5px solid #efefef; }
+.ig-vw { display: flex; align-items: center; gap: 12px; padding: 9px 16px; font-size: 14px; }
+.ig-vw > div { flex: 1; } .ig-vw b { display: block; font-weight: 600; } .ig-vw small { color: #8e8e8e; font-size: 12px; }
+.ig-vw em { font-style: normal; font-size: 12px; color: #8e8e8e; } .ig-vw em.late { color: #d62976; font-weight: 600; }
+
+/* 私信 */
+.ig-dmtabs { display: flex; gap: 18px; padding: 10px 16px 6px; font-size: 15px; font-weight: 600; }
+.ig-dmtabs .on { color: #111; } .ig-dmtabs button { color: #0095f6 !important; font-size: 13px; margin-left: auto; }
+.ig-th { display: flex; align-items: center; gap: 12px; width: 100%; padding: 9px 16px !important; text-align: left; }
+.ig-th > div { flex: 1; min-width: 0; font-size: 14px; } .ig-th b { display: block; font-weight: 500; }
+.ig-th small { display: block; color: #8e8e8e; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ig-th.un b, .ig-th.un small { color: #111; font-weight: 600; }
+.ig-chtop { display: flex; align-items: center; gap: 10px; padding: calc(var(--page-header-safe-top, 44px) + 2px) 12px 10px; border-bottom: 0.5px solid #efefef; }
+.ig-chtop b { font-size: 15px; display: block; } .ig-chtop small { font-size: 12px; color: #8e8e8e; }
+.ig-msgs { padding: 12px 12px 140px; display: flex; flex-direction: column; gap: 6px; }
+.ig-mrow { display: flex; flex-direction: column; }
+.ig-m { max-width: 74%; padding: 9px 13px; border-radius: 20px; font-size: 14.5px; line-height: 1.4; user-select: none; -webkit-user-select: none; white-space: pre-wrap; }
+.ig-m.l { background: #efefef; color: #111; align-self: flex-start; }
+.ig-m.r { background: linear-gradient(135deg, #7b3fe4, #3d6cff); color: #fff; align-self: flex-end; }
+.ig-m small { display: block; font-size: 12px; opacity: 0.7; margin-top: 2px; }
+.ig-m.typing { color: #8e8e8e; letter-spacing: 2px; }
+.ig-tm { align-self: center; font-size: 11.5px; color: #8e8e8e; margin: 8px 0 4px; }
+.ig-inp { position: absolute; left: 12px; right: 12px; bottom: calc(18px + env(safe-area-inset-bottom, 0px)); display: flex; align-items: center; gap: 10px; border: 1px solid #dbdbdb; border-radius: 24px; padding: 6px 14px 6px 6px; background: #fff; z-index: 4; }
+.ig-inp input { flex: 1; border: 0; outline: 0; font-size: 15px; line-height: 26px; background: transparent; }
+.ig-plus { width: 30px; height: 30px; border-radius: 50%; background: #4a5df9 !important; color: #fff !important; display: flex; align-items: center; justify-content: center; flex: none; }
+.ig-panel { position: absolute; left: 0; right: 0; bottom: 0; height: calc(190px + env(safe-area-inset-bottom, 0px)); background: #f7f7f7; border-top: 0.5px solid #e5e5e5; display: grid; grid-template-columns: repeat(4, 1fr); padding: 18px 10px 0; align-content: start; z-index: 3; }
+.ig-panel ~ .ig-inp, .ig-inp:has(+ .ig-panel) { bottom: calc(200px + env(safe-area-inset-bottom, 0px)); }
+.ig-panel button { display: flex; flex-direction: column; align-items: center; gap: 6px; font-size: 12px; color: #262626 !important; }
+.ig-panel i { width: 52px; height: 52px; border-radius: 14px; background: #fff; display: flex; align-items: center; justify-content: center; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06); }
+.ig-reqbar { margin: 8px 12px; padding: 10px 12px; border-radius: 12px; background: #f5f5f5; font-size: 12.5px; color: #555; line-height: 1.5; }
+.ig-reqbar div { display: flex; gap: 8px; margin-top: 8px; }
+.ig-reqbar button { flex: 1; text-align: center; padding: 7px !important; border-radius: 8px; background: #fff !important; font-weight: 600; font-size: 13px; }
+.ig-reqbar button:first-child { background: #0095f6 !important; color: #fff !important; }
+
+/* 弹层 */
+.ig-sheet-bk { position: absolute; inset: 0; z-index: 60; background: rgba(0, 0, 0, 0.3); display: flex; align-items: flex-end; }
+.ig-sheet { width: 100%; background: #fff; border-radius: 18px 18px 0 0; padding: 8px 0 calc(24px + env(safe-area-inset-bottom, 0px)); }
+.ig-sheet > button { display: block; width: 100%; text-align: center; padding: 14px !important; font-size: 15.5px; border-top: 0.5px solid #efefef !important; }
+.ig-sheet > button:first-child { border-top: 0 !important; }
+.ig-sheet .red, .ig-lpm .red { color: #ed4956 !important; }
+.ig-edit { padding: 14px 16px calc(24px + env(safe-area-inset-bottom, 0px)); }
+.ig-edit-h { text-align: center; font-weight: 700; margin-bottom: 8px; }
+.ig-edit label { display: block; font-size: 12.5px; color: #8e8e8e; margin-top: 10px; }
+.ig-edit input, .ig-edit textarea { display: block; width: 100%; box-sizing: border-box; margin-top: 4px; border: 1px solid #dbdbdb; border-radius: 10px; padding: 9px 11px; font-size: 14.5px; color: #111; outline: 0; resize: none; }
+.ig-set .hd { text-align: center; font-weight: 700; font-size: 15px; padding: 8px 0 12px; border-bottom: 0.5px solid #efefef; }
+.ig-lpm { margin: auto auto 40%; width: 230px; background: #fff; border-radius: 14px; overflow: hidden; }
+.ig-lpm button { display: block; width: 100%; text-align: left; padding: 12px 16px !important; font-size: 15px; border-top: 0.5px solid #efefef !important; }
+.ig-lpm button:first-child { border-top: 0 !important; }

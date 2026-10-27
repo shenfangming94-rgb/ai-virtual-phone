@@ -71,16 +71,16 @@ function AvImg({ src, size }: { src: string; size: number }) {
 function ChAvatar({ ch, size = 36 }: { ch?: Partial<Channel>; size?: number }) {
   if (ch?.avatar) return <AvImg src={ch.avatar} size={size} />;
   const look = ch?.kind === "company" && ch.companyId ? LOOKS[ch.companyId] : undefined;
-  if (look) { const fs = size * (look.logo.length > 3 ? 0.26 : 0.32); return <i className="yt-av yt-av-t" style={{ width: size, height: size, background: look.c, color: look.c === "#151515" || look.c === "#222222" ? "#fff" : "#fff", fontSize: fs, letterSpacing: -0.3 }}>{look.logo}</i>; }
+  if (look) { const fs = size * (look.logo.length > 3 ? 0.26 : 0.32); return <i className="yt-av yt-av-t yt-av-co" style={{ width: size, height: size, background: `linear-gradient(135deg, ${look.c}, ${look.y})`, fontSize: fs, letterSpacing: -0.3 }}>{look.logo}</i>; }
   const name = ch?.name ?? "?";
   const h = hue(name);
   return <i className="yt-av yt-av-t" style={{ width: size, height: size, background: `hsl(${h} 42% 46%)`, fontSize: size * 0.42 }}>{firstChar(name)}</i>;
 }
-/** 路人：照真 YouTube 默认头像，彩色圆里一个首字 */
+/** 路人：按网名一个渐变圆 */
 function UserAvatar({ name, size = 32, src }: { name: string; size?: number; src?: string }) {
   if (src) return <AvImg src={src} size={size} />;
   const h = hue(name);
-  return <i className="yt-av yt-av-t" style={{ width: size, height: size, background: `hsl(${h} 55% 52%)`, fontSize: size * 0.45 }}>{firstChar(name)}</i>;
+  return <i className="yt-av" style={{ width: size, height: size, background: `linear-gradient(135deg, hsl(${h} 70% 78%), hsl(${(h + 50) % 360} 60% 62%))` }} />;
 }
 function firstChar(name: string): string {
   const c = [...name.replace(/^[@_\-.\d]+/, "")][0] ?? "?";

@@ -1,0 +1,296 @@
+/**
+ * 爱豆小手机：场景 app（原「漫卷」改的）。一场戏 = 「世界」漫卷会话里的一章。
+ *
+ * - 地图一层套一层：首尔大地图 → 公司 / 江南 / 电视台 / 演唱会场馆小地图。地图图片和钉子位置她自己传、自己摆
+ * - 每个地点一张背景（存在漫卷素材里，挂在「世界」名下，名字 = 地点 key）和几首 BGM（宿主音乐库里的歌）
+ * - 提醒事项里的事（主线）只能在这里演完才算完成；剧情 app 降为支线
+ * - 记号、新面孔、收尾记账都跟剧情 app「世界」模式共用 idol-world 那套（SceneHost）
+ */
+
+import { kvGet, kvSet } from "./kv-db";
+import { WORLD_CHAR_ID, closeSceneWith, ensureWorldCharacter, worldPromptFor, type SceneCloseResult, type SceneHost, type SceneMeta } from "./idol-world";
+import { createOrGetVnSession, loadVnMessagesForChapter, startNewChapter, archiveChapter, type VnSession } from "./vn-storage";
+import { parseVnResponse } from "./vn-parser";
+import { companyOf, loadCareer, nodeById, type CareerNode } from "./idol-career";
+import { fmtWorld } from "./idol-scenes";
+import { resolveUserIdentity } from "./settings-storage";
+
+export const STAGE_APP_NAME = "此刻";
+
+// ── 地图 ──
+
+export type StagePlace = {
+  /** 背景 / BGM / 提示词里用的名字，全局唯一 */
+  key: string;
+  /** 地图上显示的名字 */
+  label: string;
+  /** 点进去是另一张地图 */
+  sub?: string;
+  /** company：进了公司才能去；debut：出道后才能去 */
+  lock?: "company" | "debut";
+};
+
+export type StageMap = { id: string; label: string; places: StagePlace[]; parent?: string };
+
+const p = (key: string, extra: Partial<StagePlace> = {}): StagePlace => ({ key, label: key, ...extra });
+const inMap = (map: string, label: string, extra: Partial<StagePlace> = {}): StagePlace => ({ key: `${map}·${label}`, label, ...extra });
+
+export const STAGE_MAPS: StageMap[] = [
+  {
+    id: "seoul", label: "首尔", places: [
+      p("家"), p("宿舍", { lock: "company" }), { key: "公司", label: "公司", sub: "company", lock: "company" },
+      p("便利店"), p("汉江公园"), p("南山塔"), p("弘大"), p("明洞"), p("圣水洞"), p("清潭洞"),
+      { key: "江南", label: "江南", sub: "gangnam" }, p("梨泰院"), p("唱片店"),
+      { key: "电视台", label: "电视台", sub: "tv" }, { key: "演唱会场馆", label: "演唱会场馆", sub: "arena" },
+      p("医院"), p("仁川机场"),
+    ],
+  },
+  {
+    id: "company", label: "公司", parent: "seoul", places: ["大厅", "练习室", "录音室", "会议室", "老师办公室", "食堂", "天台"].map(l => inMap("公司", l)),
+  },
+  {
+    id: "gangnam", label: "江南", parent: "seoul", places: ["商场", "烤肉店", "KTV", "电影院", "餐厅", "咖啡店"].map(l => inMap("江南", l)),
+  },
+  {
+    id: "tv", label: "电视台", parent: "seoul", places: [
+      inMap("电视台", "下班路"), ...["待机室", "化妆间", "后台走廊", "舞台"].map(l => inMap("电视台", l, { lock: "debut" })),
+    ],
+  },
+  {
+    id: "arena", label: "演唱会场馆", parent: "seoul", places: [
+      inMap("场馆", "场馆外"), inMap("场馆", "观众席"), ...["化妆间", "后台", "舞台"].map(l => inMap("场馆", l, { lock: "debut" })),
+    ],
+  },
+];
+
+export function mapById(id: string): StageMap {
+  return STAGE_MAPS.find(m => m.id === id) ?? STAGE_MAPS[0];
+}
+
+/** 能走进去的地点（不含只是入口的公司/江南这种） */
+export function allScenePlaces(): StagePlace[] {
+  return STAGE_MAPS.flatMap(m => m.places).filter(x => !x.sub);
+}
+
+export function placeByKey(key: string): StagePlace | undefined {
+  return STAGE_MAPS.flatMap(m => m.places).find(x => x.key === key);
+}
+
+export function placeLocked(place: StagePlace): string | null {
+  const stage = loadCareer().stage;
+  if (place.lock === "company" && stage === "pre") return "进了公司才能去";
+  if (place.lock === "debut" && stage !== "idol") return "出道后才能去";
+  return null;
+}
+
+/** 给 AI 看的地点全称：公司、宿舍前面带公司名 */
+export function placeFullName(key: string): string {
+  const c = companyOf(loadCareer().companyId);
+  const place = placeByKey(key);
+  const label = place?.label ?? key;
+  if (key.startsWith("公司·")) return c ? `${c.name} 公司 ${label}` : `公司 ${label}`;
+  if (key === "宿舍") return c ? `${c.name} 宿舍` : "宿舍";
+  if (key.includes("·")) return `${key.split("·")[0]} ${label}`;
+  return label;
+}
+
+/** 提醒事项里写的地点（「LOOKS 公司 练习室」这种）对到地图上的地点 */
+export function placeKeyFromText(text: string): string {
+  const t = text.replace(/\s+/g, "");
+  const scored = allScenePlaces()
+    .map(pl => ({ pl, hit: t.includes(pl.label) ? pl.label.length + (pl.key.includes("·") && t.includes(pl.key.split("·")[0]) ? 5 : 0) : 0 }))
+    .filter(x => x.hit > 0)
+    .sort((a, b) => b.hit - a.hit);
+  if (scored.length) return scored[0].pl.key;
+  if (/公司/.test(t)) return "公司·练习室";
+  return text.trim() || "家";
+}
+
+// ── 地图图片和钉子（她自己传、自己摆） ──
+
+export type MapLook = { imageAssetId?: string; pins: Record<string, { x: number; y: number }> };
+const LOOK_KEY = "idol_stage_maps_v1";
+
+export function loadMapLooks(): Record<string, MapLook> {
+  try { return JSON.parse(kvGet(LOOK_KEY) || "{}") as Record<string, MapLook>; } catch { return {}; }
+}
+export function saveMapLook(mapId: string, look: MapLook): void {
+  kvSet(LOOK_KEY, JSON.stringify({ ...loadMapLooks(), [mapId]: look }));
+}
+
+// ── BGM：每个地点勾几首歌，轮着放。歌可以是她传的 mp3（宿主音乐库），也可以是网易云的歌 ──
+
+export type BgmSong = { src: "local"; id: string; title: string; artist?: string } | { src: "netease"; id: number; title: string; artist?: string };
+
+const BGM_KEY = "idol_stage_bgm_v1";
+export function loadBgmMap(): Record<string, BgmSong[]> {
+  try { return JSON.parse(kvGet(BGM_KEY) || "{}") as Record<string, BgmSong[]>; } catch { return {}; }
+}
+export function saveBgmFor(placeKey: string, songs: BgmSong[]): void {
+  kvSet(BGM_KEY, JSON.stringify({ ...loadBgmMap(), [placeKey]: songs }));
+}
+
+// ── 一场戏 ──
+
+export type StageScene = SceneMeta & {
+  chapterId: string;
+  /** 进来时的地点 key（背景） */
+  bg: string;
+  ids: string[];
+  /** 不想碰见的人（名字） */
+  avoid?: string[];
+};
+
+const SCENES_KEY = "idol_stage_scenes_v1";
+
+function loadScenes(): Record<string, StageScene> {
+  try { return JSON.parse(kvGet(SCENES_KEY) || "{}") as Record<string, StageScene>; } catch { return {}; }
+}
+export function getStageScene(chapterId: string): StageScene | null {
+  return loadScenes()[chapterId] ?? null;
+}
+function saveStageScene(s: StageScene): void {
+  kvSet(SCENES_KEY, JSON.stringify({ ...loadScenes(), [s.chapterId]: s }));
+}
+
+export function worldVnSession(): VnSession {
+  return createOrGetVnSession(WORLD_CHAR_ID);
+}
+
+/** 开一场：新的一章 + 记下时间地点。不写开场，等她说第一句 */
+export function startStageScene(opts: { placeKey: string; meetIds?: string[]; avoid?: string[]; nodeId?: string; premise?: string }): { chapterIndex: number; scene: StageScene } | null {
+  ensureWorldCharacter();
+  const session = worldVnSession();
+  const node = opts.nodeId ? nodeById(opts.nodeId) : undefined;
+  const place = placeFullName(opts.placeKey);
+  const title = node ? node.title : (placeByKey(opts.placeKey)?.label ?? opts.placeKey);
+  const ch = startNewChapter(session.id, title, `${fmtWorld(Date.now()).slice(5)} · ${place}`);
+  if (!ch) return null;
+  const ids = [WORLD_CHAR_ID, ...(opts.meetIds ?? []).filter(id => id !== WORLD_CHAR_ID)];
+  const scene: StageScene = {
+    chapterId: ch.id, bg: opts.placeKey, ids,
+    place, premise: (opts.premise ?? node?.premise ?? "").trim(), startAt: Date.now(), newFaces: [],
+    ...(opts.nodeId ? { nodeId: opts.nodeId } : {}),
+    ...(ids.length === 1 ? { open: true } : {}),
+    ...(opts.avoid?.length ? { avoid: opts.avoid } : {}),
+  };
+  saveStageScene(scene);
+  return { chapterIndex: ch.index, scene };
+}
+
+/** 提醒事项里「去演」/ 横幅点进来 */
+export function startNodeStage(node: CareerNode): { chapterIndex: number; scene: StageScene } | null {
+  const premise = node.wish ? `${node.premise}（她想要的结果：${node.wish}。照这个结果写，写得合理，要有具体的原因）` : node.premise;
+  // 这件事已经开过一场、还没结束：接着那一场
+  const session = worldVnSession();
+  for (const ch of session.chapters) {
+    const s = getStageScene(ch.id);
+    if (s && s.nodeId === node.id && !s.ended) return { chapterIndex: ch.index, scene: s };
+  }
+  return startStageScene({ placeKey: placeKeyFromText(node.place), nodeId: node.id, premise });
+}
+
+function frameText(raw: string, role: string): string {
+  const { frames } = parseVnResponse(raw);
+  const me = resolveUserIdentity(WORLD_CHAR_ID, "vn")?.name;
+  return frames.filter(f => f.text).map(f => {
+    if (role === "user") return f.speaker ? `她：「${f.text}」` : `她：${f.text}`;
+    return f.speaker && f.speaker !== me ? `${f.speaker}：「${f.text}」` : f.text;
+  }).join("\n");
+}
+
+export function stageHost(chapterId: string): SceneHost | null {
+  const session = worldVnSession();
+  const ch = session.chapters.find(c => c.id === chapterId);
+  if (!ch) return null;
+  const get = () => getStageScene(chapterId);
+  return {
+    key: chapterId,
+    meta: () => get(),
+    saveMeta: m => { const cur = get(); if (cur) saveStageScene({ ...cur, ...m }); },
+    ids: () => get()?.ids ?? [WORLD_CHAR_ID],
+    setIds: ids => { const cur = get(); if (cur) saveStageScene({ ...cur, ids }); },
+    transcript: () => loadVnMessagesForChapter(session.id, ch.index)
+      .filter(m => m.role === "user" || m.role === "assistant")
+      .map(m => frameText(m.rawContent, m.role))
+      .filter(Boolean)
+      .join("\n\n"),
+    fallbackPlace: get()?.place || "某个地方",
+  };
+}
+
+export function chapterIdOf(chapterIndex: number): string | undefined {
+  return worldVnSession().chapters[chapterIndex]?.id;
+}
+
+/** 这一章的场景提示：世界那套 + 场景 app 自己的格式规矩 */
+export function buildStagePrompt(chapterIndex: number): string {
+  const chId = chapterIdOf(chapterIndex);
+  const scene = chId ? getStageScene(chId) : null;
+  if (!scene) return "";
+  const base = worldPromptFor(scene, scene.place, scene.ids);
+  const places = allScenePlaces().filter(x => !placeLocked(x)).map(x => x.key);
+  return [
+    base,
+    scene.avoid?.length ? `【这一场不出场的人】${scene.avoid.join("、")}：这一场绝对不让他们出现，也不要有人提到他们正在附近。` : "",
+    `【这一场的写法】
+- 这是一帧一帧往下走的场景，不是小说。每次回复 4～10 帧：旁白写环境和动作，别人说话写成「名字|"台词"」。
+- 说话的人写他自己的名字，绝不写「世界」；没名字的路人写身份（店员、经纪人、粉丝）。
+- **绝不替她说话、不写她的动作和心理**。写到需要她回应的地方就停，最后一帧落在别人的话或一个需要她反应的情况上。
+- 剧情要自己往前走：别人有自己的目的和情绪，会主动开口、提要求、出状况，不要只是等她。
+- 这一场不用立绘：<scene> 里不写 sprite。
+- bg 写地点：只能从这些里选（写原样）：${places.join("、")}。她还在原地就不写 bg；她走去别处了，第一帧写新地点的 bg。
+- 她刚到「${scene.place}」${scene.premise ? `，这一场是：${scene.premise}` : ""}。${scene.open ? "这会儿谁在这里交给你按时间地点判断。" : ""}`,
+  ].filter(Boolean).join("\n\n");
+}
+
+/** 结束这一场：记账（关系、记忆、想走、视频、主线完成）+ 归档这一章 */
+export async function closeStageScene(chapterIndex: number): Promise<SceneCloseResult> {
+  const chId = chapterIdOf(chapterIndex);
+  const host = chId ? stageHost(chId) : null;
+  if (!host) throw new Error("找不到这一场");
+  const res = await closeSceneWith(host);
+  archiveChapter(worldVnSession().id, chapterIndex);
+  return res;
+}
+
+/** 还没结束的那几场（最近的在前） */
+export function openStageScenes(): { chapterIndex: number; title: string; subtitle?: string; scene: StageScene }[] {
+  const session = worldVnSession();
+  return session.chapters
+    .map(ch => ({ ch, scene: getStageScene(ch.id) }))
+    .filter((x): x is { ch: typeof x.ch; scene: StageScene } => Boolean(x.scene && !x.scene.ended && !x.ch.archived))
+    .reverse()
+    .map(({ ch, scene }) => ({ chapterIndex: ch.index, title: ch.title, subtitle: ch.subtitle, scene }));
+}
+
+export function pastStageScenes(): { chapterIndex: number; title: string; subtitle?: string; scene: StageScene }[] {
+  const session = worldVnSession();
+  return session.chapters
+    .map(ch => ({ ch, scene: getStageScene(ch.id) }))
+    .filter((x): x is { ch: typeof x.ch; scene: StageScene } => Boolean(x.scene && (x.scene.ended || x.ch.archived)))
+    .reverse()
+    .map(({ ch, scene }) => ({ chapterIndex: ch.index, title: ch.title, subtitle: ch.subtitle, scene }));
+}
+
+// ── 别的 app 让这里开一场（提醒事项「去演」、横幅） ──
+
+const PENDING_KEY = "idol_stage_pending_v1";
+export const STAGE_OPEN_EVENT = "idol-stage-open";
+
+export function requestStageForNode(nodeId: string): void {
+  kvSet(PENDING_KEY, JSON.stringify({ nodeId }));
+  if (typeof window === "undefined") return;
+  window.dispatchEvent(new CustomEvent("open-app", { detail: { appId: "vnmode" } }));
+  window.dispatchEvent(new Event(STAGE_OPEN_EVENT));
+}
+
+export function takePendingStage(): { nodeId: string } | null {
+  try {
+    const raw = JSON.parse(kvGet(PENDING_KEY) || "null");
+    kvSet(PENDING_KEY, "null");
+    return raw?.nodeId ? raw : null;
+  } catch {
+    return null;
+  }
+}

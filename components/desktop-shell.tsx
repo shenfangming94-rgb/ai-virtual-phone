@@ -24,6 +24,7 @@ import { yearlyTick } from "@/lib/idol-yearly";
 import { syncIdolWorldBook } from "@/lib/idol-worldbook";
 import { ensureSingleIdentity } from "@/lib/trainee-card";
 import { APP_LOOK, markNoteSeen, noteFromNotice, type LockNote } from "@/lib/idol-notes";
+import { requestStageForNode } from "@/lib/idol-stage";
 import { isChatStorageHydrated } from "@/lib/chat-storage";
 import { LockScreen } from "./lock-screen";
 import { TraineeOpening } from "./opening/trainee-opening";
@@ -4450,6 +4451,7 @@ html,body{margin:0;padding:0;width:100%;height:100%;background:#121110;color:rgb
                     else if (app === "reminders") setActiveApp("career" as IconId);
                     else if (app === "clock") setActiveApp("clock" as IconId);
                     else if (app === "mail") { const ic = mailAppIcon(); if (ic) openApp(ic as DesktopIconId); }
+                    else if (app === "stage" && banner.nodeId) requestStageForNode(banner.nodeId);
                   }}
                 >
                   <span className="idol-note-ic" style={{ background: APP_LOOK[banner.app].bg, color: APP_LOOK[banner.app].fg }}>{APP_LOOK[banner.app].icon}</span>

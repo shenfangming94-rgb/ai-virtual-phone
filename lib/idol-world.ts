@@ -30,7 +30,7 @@ import { saveMemoryEntry } from "./memory-storage";
 export const WORLD_CHAR_ID = HIDDEN_WORLD_CHAR_ID;
 const META_KEY = "idol_scene_meta_v1";
 
-export type SceneMeta = { place: string; premise: string; startAt: number; newFaces: string[]; ended?: boolean; summary?: string; nodeId?: string; /** 谁在交给世界 */ open?: boolean };
+export type SceneMeta = { place: string; premise: string; startAt: number; newFaces: string[]; ended?: boolean; summary?: string; nodeId?: string; /** 谁在交给世界 */ open?: boolean; /** 不想碰见的人（名字） */ avoid?: string[] };
 
 const WORLD_PERSONA = "「世界」不是一个人，是这个故事的旁白和所有配角。它负责写她身边发生的事、在场的人说的话和做的事，从不替她说话、不替她做决定。";
 
@@ -83,6 +83,33 @@ export function saveSceneMeta(groupId: string, meta: SceneMeta): void {
   kvSet(META_KEY, JSON.stringify(all));
 }
 
+/** 一场戏放在哪：剧情 app 的分组，或者场景 app（漫卷）里的一章。名单、记录、文字记录都从这里拿 */
+export type SceneHost = {
+  key: string;
+  meta(): SceneMeta | null;
+  saveMeta(meta: SceneMeta): void;
+  ids(): string[];
+  setIds(ids: string[]): void;
+  transcript(): string;
+  fallbackPlace: string;
+};
+
+function storyHost(groupId: string, sessionId: string): SceneHost {
+  const group = () => loadStoryGroups().find(g => g.id === groupId);
+  return {
+    key: groupId,
+    meta: () => getSceneMeta(groupId),
+    saveMeta: m => saveSceneMeta(groupId, m),
+    ids: () => group()?.characterIds ?? [],
+    setIds: ids => { updateStoryGroup(groupId, { characterIds: ids }); updateStorySession(sessionId, { participantIds: ids }); },
+    transcript: () => loadStoryMessages(sessionId)
+      .filter(m => (m.role === "user" || m.role === "assistant") && !m.rawContent.startsWith("（场外指令") && !m.rawContent.startsWith("（开场"))
+      .map(m => (m.role === "user" ? `她：${m.rawContent}` : m.renderedContent || m.rawContent))
+      .join("\n\n"),
+    fallbackPlace: group()?.name || "某个地方",
+  };
+}
+
 /** 开一场戏：建分组（世界 + 在场的人）和主线会话，让「世界」先写开场 */
 export function createWorldScene(place: string, premise: string, peopleIds: string[], nodeId?: string): { groupId: string; session: StorySession } {
   ensureWorldCharacter();
@@ -110,6 +137,10 @@ function whoIsShe(): string {
 export function buildWorldScenePrompt(groupId: string | undefined, participantIds: string[]): string {
   const meta = groupId ? getSceneMeta(groupId) : null;
   const group = groupId ? loadStoryGroups().find(g => g.id === groupId) : null;
+  return worldPromptFor(meta, group?.name || "", participantIds);
+}
+
+export function worldPromptFor(meta: SceneMeta | null, fallbackPlace: string, participantIds: string[]): string {
   const chars = loadCharacters();
   const people = participantIds.filter(id => id !== WORLD_CHAR_ID).map(id => chars.find(c => c.id === id)).filter((c): c is Character => Boolean(c));
   const peopleBlock = people.map(c => `## ${c.name}\n${composePersona(getProfile(c.id)) || c.persona || "（还没写设定）"}`).join("\n\n");
@@ -119,9 +150,9 @@ export function buildWorldScenePrompt(groupId: string | undefined, participantId
     `【她是谁】\n${whoIsShe()}\n${kakaoPromptLine()}`,
     careerPromptBlock(),
     eventsPromptBlock(),
-    `【时间和地点】\n现在：${fmtWorld(Date.now())}\n地点：${meta?.place || group?.name || "某个地方"}${meta?.premise ? `\n开头：${meta.premise}` : ""}`,
+    `【时间和地点】\n现在：${fmtWorld(Date.now())}\n地点：${meta?.place || fallbackPlace || "某个地方"}${meta?.premise ? `\n开头：${meta.premise}` : ""}`,
     `【在场的人】${people.length ? people.map(c => c.name).join("、") : "暂时只有她"}${peopleBlock ? `\n\n${peopleBlock}` : ""}`,
-    meta?.open ? mightMeetBlock(participantIds, meta.place) : "",
+    meta?.open ? mightMeetBlock(participantIds, meta.place, meta.avoid) : "",
     `【规矩】
 - 不替她说话、不替她做决定、不写她的心理。
 - 只写在场的人；不在场的人可以被提到，要出场就写他进来了。
@@ -139,12 +170,12 @@ ${KAKAO_TAG_RULES}`,
 }
 
 /** 谁在交给世界时：她认识的人都列给世界，最相关的写详细，其余只写名字身份（人多也不漏） */
-function mightMeetBlock(presentIds: string[], place: string): string {
+function mightMeetBlock(presentIds: string[], place: string, avoid: string[] = []): string {
   const profiles = loadProfiles();
   const friends = new Set(loadChatContacts().map(c => c.characterId));
   const now = Date.now();
   const scored = loadCharacters()
-    .filter(c => c.id !== WORLD_CHAR_ID && !presentIds.includes(c.id) && profiles[c.id] && (profiles[c.id].met || profiles[c.id].layer === "main"))
+    .filter(c => c.id !== WORLD_CHAR_ID && !presentIds.includes(c.id) && !avoid.includes(c.name) && profiles[c.id] && (profiles[c.id].met || profiles[c.id].layer === "main"))
     .map(c => {
       const p = profiles[c.id];
       const last = p.events[p.events.length - 1];
@@ -180,32 +211,34 @@ export function extractSceneTags(text: string): { text: string; tags: SceneTags 
 
 /** 处理记号：新面孔建成背景人物并拉进这场，时间往前拨，交换 KakaoTalk。返回新加的人名和要给她看的提示 */
 export function applySceneTags(groupId: string, sessionId: string, tags: SceneTags): { added: string[]; notes: string[] } {
+  if (!loadStoryGroups().some(g => g.id === groupId)) {
+    if (tags.minutes > 0) shiftWorldTime(tags.minutes * 60e3);
+    if (tags.facts.length) addCompanyFacts(tags.facts);
+    return { added: [], notes: [] };
+  }
+  return applySceneTagsTo(storyHost(groupId, sessionId), tags);
+}
+
+export function applySceneTagsTo(host: SceneHost, tags: SceneTags): { added: string[]; notes: string[] } {
   if (tags.minutes > 0) shiftWorldTime(tags.minutes * 60e3);
   if (tags.facts.length) addCompanyFacts(tags.facts);
-  const group = loadStoryGroups().find(g => g.id === groupId);
-  if (!group) return { added: [], notes: [] };
-  const added = addFaces(group.id, sessionId, tags.newFaces);
+  const added = addFaces(host, tags.newFaces);
   // 新面孔先建好，再处理给号 / 加你（名字对得上）
-  const place = getSceneMeta(groupId)?.place || group.name;
+  const place = host.meta()?.place || host.fallbackPlace;
   const notes = applyKakaoTags(tags.kakao, place);
   // 给号 / 加你里提到、名单外的人也拉进这场
   const names = [...tags.kakao.gives.map(g => g.name), ...tags.kakao.adds.map(a => a.name)];
   const extra = loadCharacters().filter(c => names.includes(c.name) && c.id !== WORLD_CHAR_ID).map(c => c.id);
-  const now = loadStoryGroups().find(g => g.id === groupId)?.characterIds ?? [];
+  const now = host.ids();
   const missing = extra.filter(id => !now.includes(id));
-  if (missing.length) {
-    updateStoryGroup(groupId, { characterIds: [...now, ...missing] });
-    updateStorySession(sessionId, { participantIds: [...now, ...missing] });
-  }
+  if (missing.length) host.setIds([...now, ...missing]);
   return { added, notes };
 }
 
-function addFaces(groupId: string, sessionId: string, faces: SceneTags["newFaces"]): string[] {
+function addFaces(host: SceneHost, faces: SceneTags["newFaces"]): string[] {
   if (!faces.length) return [];
-  const group = loadStoryGroups().find(g => g.id === groupId);
-  if (!group) return [];
-  const meta = getSceneMeta(groupId) ?? { place: group.name, premise: "", startAt: Date.now(), newFaces: [] };
-  const ids = [...group.characterIds];
+  const meta = host.meta() ?? { place: host.fallbackPlace, premise: "", startAt: Date.now(), newFaces: [] };
+  const ids = [...host.ids()];
   const added: string[] = [];
   for (const f of faces) {
     if (!f.name || f.name.length > 12) continue;
@@ -219,9 +252,8 @@ function addFaces(groupId: string, sessionId: string, faces: SceneTags["newFaces
     meta.newFaces.push(char.id);
     added.push(char.name);
   }
-  updateStoryGroup(groupId, { characterIds: ids });
-  updateStorySession(sessionId, { participantIds: ids });
-  saveSceneMeta(groupId, meta);
+  host.setIds(ids);
+  host.saveMeta(meta);
   return added;
 }
 
@@ -235,16 +267,18 @@ function chatConfig() {
 const uid = (p: string) => `${p}_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
 
 /** 这场结束：每个在场的人记一笔，第一次见的写第一印象，主要人物存长期记忆 */
-export async function closeWorldScene(groupId: string, sessionId: string): Promise<{ summary: string; recorded: string[]; firstMeet: string[]; milestone?: string }> {
-  const group = loadStoryGroups().find(g => g.id === groupId);
-  const meta = getSceneMeta(groupId) ?? { place: group?.name || "某个地方", premise: "", startAt: Date.now(), newFaces: [] };
+export type SceneCloseResult = { summary: string; recorded: string[]; firstMeet: string[]; milestone?: string };
+
+export async function closeWorldScene(groupId: string, sessionId: string): Promise<SceneCloseResult> {
+  return closeSceneWith(storyHost(groupId, sessionId));
+}
+
+export async function closeSceneWith(host: SceneHost): Promise<SceneCloseResult> {
+  const groupId = host.key;
+  const meta = host.meta() ?? { place: host.fallbackPlace, premise: "", startAt: Date.now(), newFaces: [] };
   const chars = loadCharacters();
-  const present = (group?.characterIds ?? []).filter(id => id !== WORLD_CHAR_ID).map(id => chars.find(c => c.id === id)).filter((c): c is Character => Boolean(c));
-  const transcript = loadStoryMessages(sessionId)
-    .filter(m => (m.role === "user" || m.role === "assistant") && !m.rawContent.startsWith("（场外指令") && !m.rawContent.startsWith("（开场"))
-    .map(m => (m.role === "user" ? `她：${m.rawContent}` : m.renderedContent || m.rawContent))
-    .join("\n\n")
-    .slice(-12000);
+  const present = host.ids().filter(id => id !== WORLD_CHAR_ID).map(id => chars.find(c => c.id === id)).filter((c): c is Character => Boolean(c));
+  const transcript = host.transcript().slice(-12000);
   const firstMeet = present.filter(c => !getProfile(c.id).withYou).map(c => c.name);
   const examNode = meta.nodeId ? nodeById(meta.nodeId) : undefined;
   const recorded: string[] = [];
@@ -293,7 +327,7 @@ export async function closeWorldScene(groupId: string, sessionId: string): Promi
       }
     }
   }
-  saveSceneMeta(groupId, { ...meta, ended: true, summary });
+  host.saveMeta({ ...meta, ended: true, summary });
   const node = meta.nodeId ? nodeById(meta.nodeId) : undefined;
   if (node?.kind === "chance") addFame(5, node.title);
   const milestone = meta.nodeId ? await completeNode(meta.nodeId) : null;

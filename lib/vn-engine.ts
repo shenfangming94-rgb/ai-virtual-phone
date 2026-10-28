@@ -1,4 +1,4 @@
-import { loadCharacters } from "./character-storage";
+import { loadAllCharacters as loadCharacters } from "./character-storage";
 import {
   loadBindingConfig,
   loadApiConfigs,
@@ -28,6 +28,8 @@ import { getVnSceneNames, getVnSpriteNames } from "./vn-asset-storage";
 import type { ChatMessage } from "./chat-storage";
 import type { VnFrame, VnOptions } from "./vn-types";
 import { simpleLLMCall } from "./api-helpers";
+import { WORLD_CHAR_ID, applySceneTagsTo, extractSceneTags } from "./idol-world";
+import { allScenePlaces, buildStagePrompt, chapterIdOf, stageHost } from "./idol-stage";
 
 export type VnGenerationResult = {
   rawText: string;
@@ -36,6 +38,8 @@ export type VnGenerationResult = {
   promptMessages: LLMMessage[];
   model: string;
   presetName: string;
+  /** 场景 app（「世界」）：新加的人、给她看的提示、这一场是不是收尾了 */
+  idol?: { added: string[]; notes: string[]; closing: boolean };
 };
 
 function buildVnBilingualInstruction(enabled: boolean, customPrompt?: string): string {
@@ -108,17 +112,31 @@ export async function generateVnCompletion(
   }
 
   const { apiConfig, preset, regexes, worldBooks } = resolveVnConfigs(characterId);
-  const llmMessages = await buildVnPromptMessages(characterId, history, preset, regexes, worldBooks);
+  // 「世界」的场景：一章就是一场戏，只带这一章
+  const isWorld = characterId === WORLD_CHAR_ID;
+  const sceneChapter = history[history.length - 1]?.chapterIndex;
+  const ctx = isWorld ? history.filter(m => m.chapterIndex === sceneChapter) : history;
+  const llmMessages = await buildVnPromptMessages(characterId, ctx, preset, regexes, worldBooks, isWorld ? sceneChapter : undefined);
 
-  const rawOutput = await sendLLMRequest(apiConfig, preset, llmMessages, regexes, {
+  let rawOutput = await sendLLMRequest(apiConfig, preset, llmMessages, regexes, {
     characterName: character.name,
   }, {
     appId: "vn",
     appTags: ["vn"],
   });
 
+  let idol: VnGenerationResult["idol"];
+  if (isWorld && sceneChapter !== undefined) {
+    const ex = extractSceneTags(rawOutput);
+    rawOutput = ex.text;
+    const chId = chapterIdOf(sceneChapter);
+    const host = chId ? stageHost(chId) : null;
+    idol = { ...(host ? applySceneTagsTo(host, ex.tags) : { added: [], notes: [] }), closing: ex.tags.closing };
+  }
+
   const parsed = parseVnResponse(rawOutput);
   return {
+    idol,
     rawText: parsed.rawText,
     frames: parsed.frames,
     options: parsed.options,
@@ -133,7 +151,8 @@ async function buildVnPromptMessages(
   history: VnMessage[],
   preset: PresetConfig | null,
   regexes: RegexConfig[],
-  worldBooks: WorldBookConfig[]
+  worldBooks: WorldBookConfig[],
+  stageChapter?: number,
 ): Promise<LLMMessage[]> {
   const character = loadCharacters().find((c) => c.id === characterId);
   if (!character) {
@@ -158,7 +177,8 @@ async function buildVnPromptMessages(
     retrieveCoreMemoriesForPrompt(characterId, memConfig).catch(() => null),
   ]);
 
-  return assemblePromptPayload({
+  const isStage = stageChapter !== undefined;
+  const messages = assemblePromptPayload({
     character,
     history: truncatedHistory,
     preset,
@@ -173,8 +193,8 @@ async function buildVnPromptMessages(
     recentBlocks,
     unifiedRecentItems,
     chatBilingualInstruction,
-    vnScenes: getVnSceneNames(characterId),
-    vnSprites: getVnSpriteNames(characterId),
+    vnScenes: isStage ? allScenePlaces().map(x => x.key).join("、") : getVnSceneNames(characterId),
+    vnSprites: isStage ? "（这一场不用立绘，sprite 不写）" : getVnSpriteNames(characterId),
     ...(() => {
       const sess = createOrGetVnSession(characterId);
       const ch = sess.chapters[sess.activeChapterIndex];
@@ -183,6 +203,8 @@ async function buildVnPromptMessages(
       return { vnBeats: beatsList, vnCurrentBeat: currentBeat };
     })(),
   });
+  if (isStage) messages.push({ role: "system", content: buildStagePrompt(stageChapter) });
+  return messages;
 }
 
 export type VnPreviewResult = {
@@ -201,7 +223,10 @@ export async function previewVnPromptPayload(
     throw new ChatEngineError(`Character not found: ${characterId}`);
   }
   const { apiConfig, preset, regexes, worldBooks } = resolveVnConfigs(characterId);
-  const llmMessages = await buildVnPromptMessages(characterId, history, preset, regexes, worldBooks);
+  const isWorld = characterId === WORLD_CHAR_ID;
+  const sceneChapter = history[history.length - 1]?.chapterIndex;
+  const ctx = isWorld ? history.filter(m => m.chapterIndex === sceneChapter) : history;
+  const llmMessages = await buildVnPromptMessages(characterId, ctx, preset, regexes, worldBooks, isWorld ? sceneChapter : undefined);
   return {
     messages: previewMessagesForApi(apiConfig, preset, llmMessages),
     characterName: character.name,

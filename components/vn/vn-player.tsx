@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { ArrowLeft, ArrowRight, Clock, EyeOff, Play, Pause, Volume2, Eye, ChevronDown, Send, MessageSquare, BookOpen, Archive, MapPin, RotateCcw, ListOrdered, Plus, Trash2, ChevronRight, Loader2 } from "lucide-react";
+import { ArrowLeft, ArrowRight, Clock, EyeOff, Play, Pause, Volume2, VolumeX, Music2, Square, Eye, ChevronDown, Send, MessageSquare, BookOpen, Archive, MapPin, RotateCcw, ListOrdered, Plus, Trash2, ChevronRight, Loader2 } from "lucide-react";
 import { BilingualTextBlock } from "@/components/chat/message-bubble";
 import {
   createOrGetVnSession,
@@ -26,6 +26,11 @@ import { resolveVnAssetMap, loadVnScenes, getVnSceneLayout, getVnSpriteLayout } 
 import { resolveUserIdentity } from "@/lib/settings-storage";
 import type { VnFrame, VnOptions, VnBeat } from "@/lib/vn-types";
 import { splitBilingualText } from "@/lib/bilingual-text";
+import { allScenePlaces, chapterIdOf, closeStageScene, getStageScene, placeLocked } from "@/lib/idol-stage";
+import { jumpWorld } from "@/lib/idol-reminders";
+import { fmtWorld } from "@/lib/idol-scenes";
+import type { SceneCloseResult } from "@/lib/idol-world";
+import { loadBgmMuted, saveBgmMuted, useStageBgm } from "./stage-bgm";
 import { playAudioBlobViaMediaElement, resolveVoiceConfig, synthesizeSpeech, unlockAudioPlayback } from "@/lib/tts-service";
 
 interface VnPlayerProps {
@@ -34,6 +39,8 @@ interface VnPlayerProps {
   onClose: () => void;
   onChapterEnd: () => void;
   vnTheme?: string;
+  /** 场景 app：「世界」的一场戏（一章 = 一场） */
+  stage?: boolean;
 }
 
 type AssetLoadStatus = "ready" | "failed";
@@ -79,7 +86,12 @@ async function dataUrlToBlob(dataUrl: string): Promise<Blob> {
   return response.blob();
 }
 
-export function VnPlayer({ characterId, chapterIndex, onClose, onChapterEnd, vnTheme }: VnPlayerProps) {
+export function VnPlayer({ characterId, chapterIndex, onClose, onChapterEnd, vnTheme, stage }: VnPlayerProps) {
+  const stageScene = useMemo(() => (stage ? getStageScene(chapterIdOf(chapterIndex) ?? "") : null), [stage, chapterIndex]);
+  const [stageOpening, setStageOpening] = useState(false);
+  const [stageEnd, setStageEnd] = useState<null | "working" | SceneCloseResult | { error: string }>(null);
+  const [stageToast, setStageToast] = useState("");
+  const [bgmMuted, setBgmMuted] = useState(() => loadBgmMuted());
   const [allFrames, setAllFrames] = useState<VnFrame[]>([]);
   const [frameIdx, setFrameIdx] = useState(0);
   const [displayedText, setDisplayedText] = useState("");
@@ -278,7 +290,9 @@ export function VnPlayer({ characterId, chapterIndex, onClose, onChapterEnd, vnT
       setCurrentOptions(lastOptions);
     } else {
       setWaitingForInput(true);
+      if (stageScene) { setCurrentScene(stageScene.bg); setStageOpening(true); }
     }
+    if (stageScene && !frames.some(f => f.bg)) setCurrentScene(stageScene.bg);
 
     // Resolve assets
     const allBgs = new Set<string>();
@@ -290,6 +304,7 @@ export function VnPlayer({ characterId, chapterIndex, onClose, onChapterEnd, vnT
     for (const scene of availableScenes) {
       if (scene.name) allBgs.add(scene.name);
     }
+    if (stageScene) allBgs.add(stageScene.bg);
     if (allBgs.size === 0 && allSprites.size === 0) setAssetsReady(true);
     let cancelled = false;
     Promise.all([
@@ -301,7 +316,21 @@ export function VnPlayer({ characterId, chapterIndex, onClose, onChapterEnd, vnT
       setAssetsReady(true);
     });
     return () => { cancelled = true; };
-  }, [session.id, chapterIndex, availableScenes, characterId]);
+  }, [session.id, chapterIndex, availableScenes, characterId, stageScene]);
+
+  useStageBgm(stage ? currentScene : "", bgmMuted);
+
+  const showStageToast = useCallback((msg: string) => {
+    setStageToast(msg);
+    window.setTimeout(() => setStageToast(t => (t === msg ? "" : t)), 3600);
+  }, []);
+  const handleStageResult = useCallback((idol: { added: string[]; notes: string[]; closing: boolean } | undefined) => {
+    if (!idol) return;
+    const parts = [...idol.notes];
+    if (idol.added.length) parts.push(`认识了：${idol.added.join("、")}`);
+    if (idol.closing) parts.push("这一场差不多可以收尾了，点右上角 ⏹ 结束");
+    if (parts.length) showStageToast(parts.join("\n"));
+  }, [showStageToast]);
 
   // ── Resolve asset name to CSS background ──
   const resolveSceneBg = useCallback((name: string | undefined, useImage = true): React.CSSProperties => {
@@ -566,6 +595,7 @@ export function VnPlayer({ characterId, chapterIndex, onClose, onChapterEnd, vnT
       // Get all messages in session (cross-chapter context)
       const allMessages = loadVnMessages(session.id);
       const result = await generateVnCompletion(characterId, allMessages);
+      handleStageResult(result.idol);
 
       // Save AI response
       const aiMsg = pushVnMessage({
@@ -617,7 +647,7 @@ export function VnPlayer({ characterId, chapterIndex, onClose, onChapterEnd, vnT
       setIsGenerating(false);
       setInputText("");
     }
-  }, [allFrames, assetMap, characterId, chapterIndex, isGenerating, session.id, startTyping, getTypingSourceText, userName]);
+  }, [allFrames, assetMap, characterId, chapterIndex, isGenerating, session.id, startTyping, getTypingSourceText, userName, handleStageResult]);
 
   // Add text to pending
   const handleTextSubmit = useCallback(() => {
@@ -694,6 +724,7 @@ export function VnPlayer({ characterId, chapterIndex, onClose, onChapterEnd, vnT
     try {
       const allMessages = loadVnMessages(session.id);
       const result = await generateVnCompletion(characterId, allMessages);
+      handleStageResult(result.idol);
       const aiMsg = pushVnMessage({ sessionId: session.id, role: "assistant", rawContent: result.rawText, chapterIndex });
       updateChapterStartMessageId(session.id, chapterIndex, userMsg.id);
 
@@ -733,7 +764,7 @@ export function VnPlayer({ characterId, chapterIndex, onClose, onChapterEnd, vnT
       setIsGenerating(false);
       setInputText("");
     }
-  }, [pendingActions, userName, isGenerating, allFrames, assetMap, characterId, chapterIndex, session.id, startTyping, getTypingSourceText]);
+  }, [pendingActions, userName, isGenerating, allFrames, assetMap, characterId, chapterIndex, session.id, startTyping, getTypingSourceText, handleStageResult]);
 
   // ── History message actions ──
   const rebuildFrames = useCallback(() => {
@@ -798,6 +829,7 @@ export function VnPlayer({ characterId, chapterIndex, onClose, onChapterEnd, vnT
     try {
       const allMessages = loadVnMessages(session.id);
       const result = await generateVnCompletion(characterId, allMessages);
+      handleStageResult(result.idol);
       const aiMsg = pushVnMessage({ sessionId: session.id, role: "assistant", rawContent: result.rawText, chapterIndex });
       rebuildFrames();
       // Play new AI frames
@@ -820,7 +852,7 @@ export function VnPlayer({ characterId, chapterIndex, onClose, onChapterEnd, vnT
     } finally {
       setIsGenerating(false);
     }
-  }, [session.id, chapterIndex, characterId, rebuildFrames, startTyping, getTypingSourceText]);
+  }, [session.id, chapterIndex, characterId, rebuildFrames, startTyping, getTypingSourceText, handleStageResult]);
 
   const longPressYRef = useRef(0);
   const longPressXRef = useRef(0);
@@ -913,7 +945,8 @@ export function VnPlayer({ characterId, chapterIndex, onClose, onChapterEnd, vnT
 
   return (
     <div className="vn-shell" ref={vnShellRef} data-vn-theme={vnTheme || "default"} onClick={() => {
-      if (historyOpen || showArchiveConfirm || showReplayConfirm || showScenePicker || showBeatsPanel) return;
+      if (historyOpen || showArchiveConfirm || showReplayConfirm || showScenePicker || showBeatsPanel || stageEnd) return;
+      if (stageOpening) { setStageOpening(false); return; }
       if (isReplaying) { advanceReplay(); return; }
       if (waitingForInput && !isArchived) { setWaitingForInput(false); return; }
       if (!hideDialogue) advance();
@@ -971,7 +1004,12 @@ export function VnPlayer({ characterId, chapterIndex, onClose, onChapterEnd, vnT
           <ArrowLeft size={20} />
         </button>
         <div className="vn-topbar-right">
-          {!isArchived && (
+          {stage && (
+            <button className="vn-topbar-btn" onClick={() => { const v = !bgmMuted; setBgmMuted(v); saveBgmMuted(v); }} title={bgmMuted ? "打开音乐" : "关掉音乐"}>
+              {bgmMuted ? <VolumeX size={18} /> : <Music2 size={18} />}
+            </button>
+          )}
+          {!isArchived && !stage && (
             <button className="vn-topbar-btn" onClick={() => setShowBeatsPanel(true)} title="情节控制">
               <ListOrdered size={18} />
             </button>
@@ -985,8 +1023,8 @@ export function VnPlayer({ characterId, chapterIndex, onClose, onChapterEnd, vnT
             <Clock size={18} />
           </button>
           {!isArchived && (
-            <button className="vn-topbar-btn" onClick={() => setShowArchiveConfirm(true)} title="归档章节">
-              <Archive size={18} />
+            <button className="vn-topbar-btn" onClick={() => setShowArchiveConfirm(true)} title={stage ? "结束这一场" : "归档章节"}>
+              {stage ? <Square size={16} /> : <Archive size={18} />}
             </button>
           )}
         </div>
@@ -994,7 +1032,7 @@ export function VnPlayer({ characterId, chapterIndex, onClose, onChapterEnd, vnT
       </div>
 
       {/* ── Dialogue Box: replay / playing / input ── */}
-      {!showArchiveConfirm && !showReplayConfirm && assetsReady && sceneVisualReady && (isReplaying ? replayFrame : (frame || waitingForInput)) && (
+      {!showArchiveConfirm && !showReplayConfirm && !stageEnd && !stageOpening && assetsReady && sceneVisualReady && (isReplaying ? replayFrame : (frame || waitingForInput)) && (
         <div
           className={`vn-dialogue ${hideDialogue && !waitingForInput && !isReplaying ? "vn-dialogue-hidden" : ""}`}
         >
@@ -1122,7 +1160,7 @@ export function VnPlayer({ characterId, chapterIndex, onClose, onChapterEnd, vnT
       )}
 
       {/* ── Control Bar ── */}
-      {!showArchiveConfirm && !waitingForInput && !isReplaying && (
+      {!showArchiveConfirm && !stageEnd && !waitingForInput && !isReplaying && (
         <div className="vn-controls" onClick={(e) => e.stopPropagation()}>
           <button className="vn-ctrl-btn" onClick={() => setHideDialogue(!hideDialogue)} data-active={hideDialogue ? "true" : undefined} title="隐藏">
             {hideDialogue ? <Eye size={15} /> : <EyeOff size={15} />}
@@ -1229,8 +1267,20 @@ export function VnPlayer({ characterId, chapterIndex, onClose, onChapterEnd, vnT
             <button className="vn-history-close" onClick={() => setShowScenePicker(false)}>
               <ArrowRight size={16} />
             </button>
-            <div className="vn-scene-picker-title">切换场景</div>
-            {availableScenes.length === 0 ? (
+            <div className="vn-scene-picker-title">{stage ? "去别的地方" : "切换场景"}</div>
+            {stage ? (
+              allScenePlaces().filter(pl => !placeLocked(pl)).map((pl) => (
+                <button
+                  key={pl.key}
+                  className="vn-scene-picker-item"
+                  data-active={currentScene === pl.key ? "true" : undefined}
+                  onClick={() => handleSceneSwitch(pl.key)}
+                >
+                  <div className="vn-scene-picker-dot" />
+                  <span className="vn-scene-picker-name">{pl.key.replace("·", " · ")}</span>
+                </button>
+              ))
+            ) : availableScenes.length === 0 ? (
               <div className="vn-scene-picker-empty">暂无场景，请在资源库中上传</div>
             ) : (
               availableScenes.map((scene) => (
@@ -1314,7 +1364,7 @@ export function VnPlayer({ characterId, chapterIndex, onClose, onChapterEnd, vnT
         <div className="vn-end" onClick={(e) => e.stopPropagation()}>
           <div className="vn-end-line" />
           <div className="vn-end-text">
-            {isArchiving ? "归档中..." : "是否决定完结该章节并归档？"}
+            {isArchiving ? "归档中..." : stage ? "结束这一场？在场的人会各记一笔" : "是否决定完结该章节并归档？"}
           </div>
           <div className="vn-end-line" />
           {!isArchiving && (
@@ -1326,6 +1376,13 @@ export function VnPlayer({ characterId, chapterIndex, onClose, onChapterEnd, vnT
                 className="vn-end-btn"
                 style={{ background: "rgba(255,255,255,0.12)", color: "rgba(255,255,255,0.85)" }}
                 onClick={async () => {
+                  if (stage) {
+                    setShowArchiveConfirm(false);
+                    setStageEnd("working");
+                    try { setStageEnd(await closeStageScene(chapterIndex)); }
+                    catch (err) { setStageEnd({ error: err instanceof Error ? err.message : String(err) }); }
+                    return;
+                  }
                   setIsArchiving(true);
                   archiveChapter(session.id, chapterIndex);
                   // Small delay so the user sees the archiving state
@@ -1339,6 +1396,50 @@ export function VnPlayer({ characterId, chapterIndex, onClose, onChapterEnd, vnT
               </button>
             </div>
           )}
+        </div>
+      )}
+
+      {/* ── 场景 app：开场卡 ── */}
+      {stage && stageOpening && stageScene && (
+        <div className="vn-stage-open" onClick={(e) => { e.stopPropagation(); setStageOpening(false); }}>
+          <div className="vn-stage-open-time">{fmtWorld(stageScene.startAt).replace(/^\d+年/, "")}</div>
+          <div className="vn-stage-open-place">{stageScene.place}</div>
+          {stageScene.nodeId ? <div className="vn-stage-open-title">{session.chapters[chapterIndex]?.title}</div> : null}
+          <div className="vn-stage-open-hint">点一下，说你的第一句</div>
+        </div>
+      )}
+
+      {stage && stageToast && !stageEnd && (
+        <div className="vn-stage-toast" onClick={(e) => { e.stopPropagation(); setStageToast(""); }}>{stageToast}</div>
+      )}
+
+      {/* ── 场景 app：结束这一场 ── */}
+      {stage && stageEnd && (
+        <div className="vn-end" onClick={(e) => e.stopPropagation()}>
+          <div className="vn-end-line" />
+          {stageEnd === "working" ? (
+            <div className="vn-end-text">记一笔中……</div>
+          ) : "error" in stageEnd ? (
+            <>
+              <div className="vn-end-text">没记上：{stageEnd.error}</div>
+              <div style={{ display: "flex", gap: 16, marginTop: 16 }}>
+                <button className="vn-end-btn" onClick={() => setStageEnd(null)}>返回</button>
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="vn-end-text">这一场结束了</div>
+              {stageEnd.summary ? <div className="vn-stage-sum">{stageEnd.summary}</div> : null}
+              {stageEnd.recorded.length ? <div className="vn-stage-sub">{stageEnd.recorded.join("、")}{stageEnd.recorded.length > 1 ? "各" : ""}记了一笔{stageEnd.firstMeet.length ? `；${stageEnd.firstMeet.join("、")}是第一次见你` : ""}</div> : null}
+              {stageEnd.milestone ? <div className="vn-stage-sub">🎉 {stageEnd.milestone}</div> : null}
+              <div className="vn-stage-jumps">
+                <button className="vn-end-btn" onClick={() => { onChapterEnd(); }}>就这样</button>
+                <button className="vn-end-btn" onClick={() => { jumpWorld(Date.now() + 3600e3); onChapterEnd(); }}>过 1 小时</button>
+                <button className="vn-end-btn" onClick={() => { const d = new Date(); jumpWorld(new Date(d.getFullYear(), d.getMonth(), d.getDate() + 1, 8, 0, 0).getTime()); onChapterEnd(); }}>第二天早上</button>
+              </div>
+            </>
+          )}
+          <div className="vn-end-line" />
         </div>
       )}
 

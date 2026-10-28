@@ -64,7 +64,7 @@ export type IconMeta = {
   path?: string;
 };
 
-export const PAGE_1_DEFAULT: IconId[] = ["chat", "contacts", "career", "idolsearch", "ins", "youtube", "diary", "music", "calendar", "checkphone", "shopping", "reading", "clock"];
+export const PAGE_1_DEFAULT: IconId[] = ["chat", "contacts", "career", "vnmode", "idolsearch", "ins", "youtube", "diary", "music", "calendar", "checkphone", "shopping", "reading", "clock"];
 
 export const PAGE_2_DEFAULT: IconId[] = [
   "appmarket",
@@ -103,7 +103,7 @@ export const ICONS: Record<IconId, IconMeta> = {
   shopping: { id: "shopping", label: "\u8D2D\u7269", tone: "var(--c-icon-amber)", placeholder: false },
   calendar: { id: "calendar", label: "\u65E5\u5386", tone: "var(--c-icon-rose)", placeholder: true },
   interview_magazine: { id: "interview_magazine", label: "在场", tone: "var(--c-icon-lilac)", placeholder: false },
-  vnmode: { id: "vnmode", label: "漫卷", tone: "var(--c-icon-rose)", placeholder: false },
+  vnmode: { id: "vnmode", label: "此刻", tone: "var(--c-icon-rose)", placeholder: false },
   mapmode: { id: "mapmode", label: "冒险", tone: "var(--c-icon-amber)", placeholder: false },
   vnplay: { id: "vnplay", label: "漫卷播放", tone: "var(--c-icon-rose)", placeholder: true },
   vnchapters: { id: "vnchapters", label: "章节", tone: "var(--c-icon-rose)", placeholder: true },
@@ -143,6 +143,6 @@ export const ICONS: Record<IconId, IconMeta> = {
 
 // ── 爱豆小手机 ──
 // 用不上的自带 app 从清单里拿掉：代码不删，桌面、dock、文件夹认不出它们就会自动跳过
-export const IDOL_HIDDEN_ICONS: IconId[] = ["vnmode", "mapmode", "worldbuilder", "mixology", "qa", "cocreate", "game", "interview_magazine", "realitybridge"];
+export const IDOL_HIDDEN_ICONS: IconId[] = ["mapmode", "worldbuilder", "mixology", "qa", "cocreate", "game", "interview_magazine", "realitybridge"];
 for (const id of IDOL_HIDDEN_ICONS) delete (ICONS as Partial<Record<IconId, IconMeta>>)[id];
 ICONS.chat.label = "KakaoTalk";

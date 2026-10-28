@@ -1,5 +1,6 @@
 "use client";
 
+import { requestStageForNode } from "@/lib/idol-stage";
 import { useEffect, useRef, useState } from "react";
 import { BarChart3, Building2, CalendarDays, Check, ChevronLeft, ChevronRight, Clock3, FileText, Inbox, Info, List, Mail, Minus, Pencil, Plus, RefreshCw, Star, Trash2, Users, X } from "lucide-react";
 
@@ -10,7 +11,6 @@ import {
   expandInsider,
   listOf,
   loadCareer,
-  requestNodeScene,
   saveCareer,
   type Career,
   type CareerNode,
@@ -196,7 +196,7 @@ export function CareerApp({ onClose, onNotice }: { onClose: () => void; onNotice
     if (i.kind === "custom") { void checkNode(i.id, ""); return; }
     setCheckId(i.id);
   };
-  const go = (n: CareerNode) => { onClose(); window.setTimeout(() => requestNodeScene(n), 50); };
+  const go = (n: CareerNode) => { onClose(); window.setTimeout(() => requestStageForNode(n.id), 50); };
 
   const rowFor = (i: Item) => (
     <Row key={i.id} item={i} swiped={swipeId === i.id} onSwipe={open => setSwipeId(open ? i.id : null)} onNotice={onNotice}

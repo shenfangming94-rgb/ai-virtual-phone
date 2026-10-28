@@ -63,7 +63,7 @@ export const STAGE_MAPS: StageMap[] = [
     ],
   },
   {
-    id: "arena", label: "演唱会场馆", parent: "seoul", places: [
+    id: "arena", label: "场馆", parent: "seoul", places: [
       inMap("场馆", "场馆外"), inMap("场馆", "观众席"), ...["化妆间", "后台", "舞台"].map(l => inMap("场馆", l, { lock: "debut" })),
     ],
   },

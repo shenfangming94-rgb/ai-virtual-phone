@@ -65,6 +65,15 @@ export function StageHome({ onClose, onPlay }: Props) {
   const [muted, setMuted] = useState(() => loadBgmMuted());
   const [bgmVer, setBgmVer] = useState(0);
   const [mapMusic, setMapMusic] = useState(false);
+  // 没有地图图片时的卡片：配了背景的地点直接显示那张图
+  const [cardPhotos, setCardPhotos] = useState<Record<string, string>>({});
+  const [photoVer, setPhotoVer] = useState(0);
+  useEffect(() => {
+    let off = false;
+    const picks = mapById(mapId).places.map(pl => [pl.key, placeBackgrounds(pl.key).find(x => x.on)?.assetId] as const).filter((x): x is readonly [string, string] => Boolean(x[1]));
+    void thumbsOf(picks.map(x => x[1])).then(urls => { if (!off) setCardPhotos(Object.fromEntries(picks.filter(x => urls[x[1]]).map(x => [x[0], urls[x[1]]]))); });
+    return () => { off = true; };
+  }, [mapId, photoVer]);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [writing, setWriting] = useState<string | null>(null);
   const [mineOpen, setMineOpen] = useState(false);
@@ -130,14 +139,15 @@ export function StageHome({ onClose, onPlay }: Props) {
         <MapImage url={mapUrl} places={map.places} look={look} editing={pinEdit} onTap={tapPlace}
           onPlace={(x, y) => { if (pinEdit) { updateLook({ ...saved, pins: { ...saved.pins, [pinEdit]: { x, y } } }); setPinEdit(""); } }} />
       ) : (
-        <div className="stg-grid-wrap">
+        <div className="stg-grid-wrap" style={{ ["--stg-under" as string]: `url(${DEFAULT_MAPS.seoul.image})` }}>
           <div className="stg-grid">
             {map.places.map(pl => {
               const lock = placeLocked(pl);
+              const photo = cardPhotos[pl.key];
               return (
-                <button key={pl.key} type="button" className="stg-card" data-lock={lock ? "1" : undefined} onClick={() => tapPlace(pl)}>
-                  <span className="stg-pin" />
-                  <span className="stg-card-name">{pl.label}{pl.sub ? " ›" : ""}</span>
+                <button key={pl.key} type="button" className="stg-card" data-lock={lock ? "1" : undefined} data-photo={photo ? "1" : undefined}
+                  style={photo ? { backgroundImage: `url(${photo})` } : undefined} onClick={() => tapPlace(pl)}>
+                  <span className="stg-card-name"><i className="stg-pin" />{pl.label}{pl.sub ? " ›" : ""}</span>
                   {lock ? <span className="stg-card-lock"><Lock size={11} /> {lock}</span> : null}
                 </button>
               );
@@ -198,7 +208,7 @@ export function StageHome({ onClose, onPlay }: Props) {
       ) : null}
 
       {sheet ? (
-        <PlaceSheet place={sheet} onClose={() => { setSheet(null); bump(n => n + 1); setBgmVer(v => v + 1); }} onGo={(meet, avoid) => {
+        <PlaceSheet place={sheet} onClose={() => { setSheet(null); bump(n => n + 1); setBgmVer(v => v + 1); setPhotoVer(v => v + 1); }} onGo={(meet, avoid) => {
           const r = startStageScene({ placeKey: sheet.key, meetIds: meet, avoid });
           setSheet(null);
           if (r) onPlay(r.chapterIndex);

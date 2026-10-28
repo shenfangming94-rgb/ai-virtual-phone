@@ -34,17 +34,25 @@
 .stg-pill i { font-style: normal; margin-left: 10px; }
 .stg-pill em { font-style: normal; margin: 0 6px; opacity: 0.5; }
 
-/* 没传地图时：地点卡片 */
-.stg-grid-wrap { position: absolute; inset: 0; overflow-y: auto; padding: calc(var(--page-header-safe-top, 44px) + 104px) 16px 150px;
-  background: radial-gradient(120% 60% at 20% 0%, #fde7f0 0%, transparent 60%), radial-gradient(100% 60% at 100% 40%, #e3ecfb 0%, transparent 60%), #f4f5f9; }
-.stg-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-.stg-card { position: relative; display: flex; flex-direction: column; align-items: flex-start; gap: 6px; padding: 14px 14px 13px; border-radius: 16px; background: rgba(255,255,255,0.88); box-shadow: 0 1px 2px rgba(0,0,0,0.04); text-align: left; }
+/* 没传地图时：地点卡片（首尔大地图虚化当底，毛玻璃卡；配了背景的地点显示那张图） */
+.stg-grid-wrap { position: absolute; inset: 0; overflow-y: auto; padding: calc(var(--page-header-safe-top, 44px) + 104px) 16px 150px; isolation: isolate; }
+.stg-grid-wrap::before { content: ""; position: fixed; inset: -30px; z-index: -1; background: var(--stg-under) center/cover; filter: blur(14px) saturate(1.1); }
+.stg-grid-wrap::after { content: ""; position: fixed; inset: 0; z-index: -1; background: linear-gradient(180deg, rgba(240,242,252,0.55) 0%, rgba(240,242,252,0.35) 40%, rgba(236,232,248,0.6) 100%); }
+.stg-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.stg-card { position: relative; height: 112px; display: flex; flex-direction: column; justify-content: flex-end; align-items: flex-start; gap: 4px; padding: 12px 14px; border-radius: 18px; text-align: left; overflow: hidden;
+  background: linear-gradient(160deg, rgba(255,255,255,0.82), rgba(240,242,252,0.66)) !important; border: 1.5px solid rgba(255,255,255,0.9) !important;
+  box-shadow: 0 4px 14px rgba(60,70,120,0.16), inset 0 -2px 4px rgba(150,160,210,0.22); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); }
+.stg-card[data-photo] { background-size: cover !important; background-position: center !important; }
+.stg-card[data-photo]::before { content: ""; position: absolute; inset: 0; background: linear-gradient(180deg, transparent 35%, rgba(20,22,40,0.62)); }
 .stg-card:active { transform: scale(0.98); }
-.stg-card[data-lock] { opacity: 0.55; }
-.stg-pin { width: 12px; height: 15px; background: var(--stg-pink); border-radius: 50% 50% 50% 0; transform: rotate(-45deg); box-shadow: 0 0 0 2px #fff; }
-.stg-card-name { font-size: 16px; font-weight: 600; }
-.stg-card-lock { display: flex; align-items: center; gap: 3px; font-size: 12px; color: var(--stg-dim); }
-.stg-tip { margin: 18px 0 0; text-align: center; font-size: 12px; color: var(--stg-dim); }
+.stg-card[data-lock] { opacity: 0.6; }
+.stg-pin { flex: none; position: relative; display: inline-block; width: 15px; height: 15px; margin-right: 7px; background: #ef6a86; border: 2px solid #fff; border-radius: 50% 50% 50% 0; transform: rotate(-45deg); box-shadow: 0 1px 3px rgba(0,0,0,0.3); }
+.stg-pin::after { content: ""; position: absolute; left: 50%; top: 50%; width: 4px; height: 4px; margin: -2px 0 0 -2px; border-radius: 50%; background: #fff; }
+.stg-card-name { position: relative; display: flex; align-items: center; font-family: "Source Han Serif CN VF", "Songti SC", serif; font-size: 17px; font-weight: 700; color: #36405c; letter-spacing: 0.5px; }
+.stg-card[data-photo] .stg-card-name { color: #fff; text-shadow: 0 1px 3px rgba(0,0,0,0.5); }
+.stg-card-lock { position: relative; display: flex; align-items: center; gap: 3px; font-size: 12px; color: #6c7088; }
+.stg-card[data-photo] .stg-card-lock { color: rgba(255,255,255,0.85); }
+.stg-tip { margin: 18px 0 0; text-align: center; font-size: 12px; color: #5a5f78; }
 
 /* 有地图图片：竖着铺满，左右拖 */
 .stg-map { position: absolute; inset: 0; overflow-x: auto; overflow-y: hidden; -webkit-overflow-scrolling: touch; scrollbar-width: none; }

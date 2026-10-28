@@ -1,0 +1,26 @@
+<!doctype html><html><head><meta charset="utf-8">
+<link href="https://fonts.googleapis.com/css2?family=Mrs+Saint+Delafield&family=Noto+Serif+SC:wght@500;700&display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#f4f2ee;font-family:"Noto Serif SC",serif;padding:40px}
+.grid{display:grid;grid-template-columns:repeat(5,236px);gap:28px}
+.lab{font:13px "PingFang SC";color:#888;text-align:center;margin-top:8px}
+.card{width:236px;aspect-ratio:1179/1752;border-radius:12px;position:relative;overflow:hidden;box-shadow:0 6px 18px rgba(0,0,0,.12)}
+.card .l{position:absolute;inset:0;background:url(card-front-light.png) 0 0/100% 100%}
+.card .d{position:absolute;inset:0;background:url(card-front-dark.png) 0 0/100% 100%;opacity:.8}
+.back{background:url(card-front-source.png) 0 0/100% 100%}
+.no{position:absolute;left:14px;top:14px;font:600 9px/1 "Noto Serif SC";letter-spacing:.2em;color:rgba(40,38,32,.55)}
+.t{position:absolute;left:0;right:0;bottom:44px;text-align:center;font-weight:700;font-size:19px;letter-spacing:.18em;color:#2b2a25}
+.en{position:absolute;left:0;right:0;bottom:16px;text-align:center;font-family:"Mrs Saint Delafield";font-size:24px;color:rgba(43,42,37,.75);transform:rotate(-4deg)}
+.ring{position:absolute;left:50%;bottom:36px;width:150px;height:40px;transform:translateX(-50%) rotate(-3deg)}
+.pur{background:radial-gradient(ellipse 75% 60% at 50% 52%,#7a1c62 0%,#5c1550 45%,#2a0a26 85%,#14050f 100%)!important}
+.pur .d{display:none}.pur .l{background-image:url(coral.png);opacity:.9}
+.pur .t{color:#f3c9dc}.pur .en{color:rgba(240,190,215,.8)}.pur .no{color:rgba(240,190,215,.6)}
+.pur .ring ellipse{stroke:rgba(240,190,215,.5)}.locked{background:url(card-locked.png) center/cover}
+.grid{grid-template-columns:repeat(4,236px)}</style></head><body><div class="grid" id="g"></div>
+<script>
+const C=[["#E4E0AA","巴黎时装秀","Paris"],["#E8CBC5","便利店夜班","night shift"],["#C9DCC6","天台的前辈","on the roof"],["#C6D4E0","越洋来电","a far call"],["#D4CCE1","借来的舞台","borrowed stage"],["#EBD4B6","雨夜的出租车","rainy taxi"],["#CCD3B2","作曲家的工作室","the studio"],["#DED6CB","旧相册里的人","old photograph"]];
+const g=document.getElementById('g');
+const OPEN=[0,2,3,6];C.forEach(([c,t,e],i)=>{if(!OPEN.includes(i)){g.insertAdjacentHTML('beforeend',`<div><div class="card locked"></div><div class="lab">没翻开</div></div>`);return;}const P=c==='purple';g.insertAdjacentHTML('beforeend',`<div><div class="card${P?' pur':''}" style="background:${P?'':c}"><div class="d"></div><div class="l"></div><div class="no">No.0${i+1}</div>
+<div class="t">${t}</div><div class="en">${e}</div></div><div class="lab">翻开</div></div>`)});
+
+</script></body></html>

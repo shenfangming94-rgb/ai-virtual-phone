@@ -52,7 +52,7 @@ export const STAGE_MAPS: StageMap[] = [
     ],
   },
   {
-    id: "company", label: "公司", parent: "seoul", places: ["大厅", "练习室", "录音室", "会议室", "老师办公室", "食堂", "天台"].map(l => inMap("公司", l)),
+    id: "company", label: "公司", parent: "seoul", places: ["大厅", "练习室", "录音室", "会议室", "办公室", "食堂", "天台"].map(l => inMap("公司", l)),
   },
   {
     id: "gangnam", label: "江南", parent: "seoul", places: ["商场", "烤肉店", "KTV", "电影院", "餐厅", "咖啡店"].map(l => inMap("江南", l)),
@@ -128,7 +128,7 @@ export function placeFullName(key: string): string {
 /** 提醒事项里常见、地图上没有的叫法 → 用哪个地点的背景和音乐 */
 const PLACE_ALIASES: [RegExp, string][] = [
   [/试镜室|考核室|오디션룸|大练习室|舞蹈室|声乐室/, "公司·练习室"],
-  [/办公室|面谈/, "公司·老师办公室"],
+  [/办公室|面谈/, "公司·办公室"],
   [/公司大楼$|사옥$|大楼$/, "公司·大厅"],
   [/老家/, "家"],
   [/观众席/, "场馆·观众席"],

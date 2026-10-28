@@ -31,8 +31,7 @@ function Meter({ pop, heat }: { pop: number; heat: number }) {
     <div className="fm-meter">
       <div className="b" style={{ width: `${Math.min(100, pop)}%` }} />
       <div className="h" style={{ left: `${Math.min(100, pop)}%`, width: `${Math.max(0, Math.min(100 - pop, heat))}%` }} />
-      <div className="tk" style={{ left: "20%" }} />
-      <div className="tk" style={{ left: "50%" }} />
+      {FAME_TIERS.filter(t => t.min > 0).map(t => <div key={t.min} className="tk" style={{ left: `${t.min}%` }} />)}
     </div>
   );
 }
@@ -60,9 +59,6 @@ export function FameCardBlock() {
         <div className="fm-id-top"><b>인지도</b><s>关注度 · RECOGNITION</s></div>
         <div className="fm-id-in">
           <div className="fm-n"><b>{f.total}</b><span>{tier.name}</span></div>
-          <div className="fm-scale">
-            {FAME_TIERS.map((t, i) => <div key={t.name} className={t.name === tier.name ? "on" : ""} style={{ width: `${((FAME_TIERS[i + 1]?.min ?? 100) - t.min)}%` }}>{t.name === tier.name ? <>{t.name}<br />{t.range}</> : null}</div>)}
-          </div>
           <Meter pop={f.pop} heat={f.heat} />
           <div className="fm-legend"><span><i className="p" />人气 {f.pop}</span><span><i className="h" />热度 {f.heat}（会退）</span>{next ? <span className="r">差 {next.min - f.total} 分到「{next.name}」</span> : null}</div>
           {stampAt ? <div className="fm-stamp"><b>確認</b>{String(new Date(stampAt).getMonth() + 1).padStart(2, "0")}.{String(new Date(stampAt).getDate()).padStart(2, "0")}</div> : null}

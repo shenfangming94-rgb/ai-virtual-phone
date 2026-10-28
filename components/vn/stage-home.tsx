@@ -120,8 +120,8 @@ export function StageHome({ onClose, onPlay }: Props) {
   return (
     <div className="stg">
       <div className="stg-hud">
-        {!hideClock ? <span className="stg-pill stg-pill-date">{d.getFullYear()}<b>年</b>{d.getMonth() + 1}<b>月</b>{d.getDate()}<b>日</b><i>星期{WEEK[d.getDay()]}</i></span> : null}
-        <span className="stg-pill">{(mapId === "company" && companyOf(loadCareer().companyId)?.name) || map.label}{!hideClock ? <><em>·</em>{clock}</> : null}</span>
+        {!hideClock && !map.parent ? <span className="stg-pill stg-pill-date">{d.getFullYear()}<b>年</b>{d.getMonth() + 1}<b>月</b>{d.getDate()}<b>日</b><i>星期{WEEK[d.getDay()]}</i></span> : null}
+        <span className="stg-pill">{(mapId === "company" && companyOf(loadCareer().companyId)?.name) || map.label}{!hideClock && !map.parent ? <><em>·</em>{clock}</> : null}</span>
       </div>
       <div className="stg-bar">
         <button type="button" className="stg-ic" onClick={() => (map.parent ? setMapId(map.parent) : onClose())} aria-label="返回">

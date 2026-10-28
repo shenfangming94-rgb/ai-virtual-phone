@@ -14,7 +14,8 @@ import { simpleLLMCall } from "./api-helpers";
 import { loadApiConfigs, loadBindingConfig, resolveBinding } from "./settings-storage";
 import { addToCalendar, companyOf, loadCareer, saveCareer, type CareerNode } from "./idol-career";
 import { describeTrainee, loadTraineeCard } from "./trainee-card";
-import { createPerson, draftPerson, draftFields, emptyProfile, getProfile, rollFace, saveProfile } from "./idol-people";
+import { RELATIONS, createPerson, draftPerson, draftFields, emptyProfile, getProfile, loadProfiles, relationOf, rollFace, saveProfile, type Relation } from "./idol-people";
+import { fameTotal } from "./idol-fame";
 import { genKakaoId, queueFriendRequest } from "./idol-kakao";
 import { loadGrades, SUBJECTS, type Subject } from "./idol-starroad";
 import { allScenePlaces } from "./idol-stage";
@@ -35,7 +36,17 @@ export type Trigger =
   | { type: "time" }
   | { type: "grade"; subject: Subject; grade: "C" | "B" | "A" }
   | { type: "place"; place: string; times: number }
-  | { type: "fame"; level: number };
+  | { type: "fame"; level: number }
+  /** 某一类人：关系到 min 以上的有 count 个（可以限 MBTI 里含哪几个字母、身份里有什么词、男女） */
+  | { type: "people"; min: Relation; count: number; mbti?: string; role?: string; gender?: "男" | "女" }
+  /** 谈过几次恋爱（恋人 + 前任） */
+  | { type: "dated"; times: number }
+  /** 月末排名进前几 / 掉到最后几 */
+  | { type: "rank"; top?: number; bottom?: number }
+  /** 到了某个月 / 她生日前后 */
+  | { type: "season"; month?: number; birthday?: boolean }
+  /** 发生过某件大事以后 */
+  | { type: "after"; event: "debut_team" | "someone_left" | "selection_failed" };
 
 export type Destiny = {
   id: string;
@@ -147,7 +158,7 @@ async function generate(): Promise<State | null> {
       `place：via=stage 时从这些地点里选一个（照原样）：${places.join("、")}；其余写空`,
       "meet：要约她去哪儿见谁就写 {\"title\":\"提醒事项里的标题\",\"place\":\"地点\",\"days\":几天后,\"hour\":几点}，不用约就写 null",
       "size：big / mid / small",
-      `trigger：从这几种里选最合适的：{"type":"time"}（到时候就来）、{"type":"grade","subject":"${SUBJECTS.map(s => s.id).join("/")}","grade":"C/B/A"}（某门课升到某档）、{"type":"place","place":"上面的地点","times":2～4}（去过某地几次）、{"type":"fame","level":20～60}（有了一点名气）。time 占一半左右；选 place 的，这件事必须跟那个地方本身有关系`,
+      `trigger：从这几种里选最合适的：{"type":"time"}（到时候就来）、{"type":"grade","subject":"${SUBJECTS.map(s => s.id).join("/")}","grade":"C/B/A"}（某门课升到某档）、{"type":"place","place":"上面的地点","times":2～4}（去过某地几次）、{"type":"fame","level":20～60}（有了一点名气）、{"type":"people","min":"认识/熟人/朋友/好朋友/暧昧/恋人","count":1～3,"mbti":"可选，MBTI 里要有的字母","role":"可选，对方身份里要有的词","gender":"可选，男/女"}（跟某一类人的关系到了某一步，不指定具体哪个人）、{"type":"dated","times":1～3}（谈过几次恋爱）、{"type":"rank","top":几} 或 {"type":"rank","bottom":几}（月末排名进前几 / 掉到最后几）、{"type":"season","month":1～12} 或 {"type":"season","birthday":true}（到了某个月 / 她生日前后）、{"type":"after","event":"debut_team/someone_left/selection_failed"}（进了出道组以后 / 有同期离开公司以后 / 出道组选拔没进以后）。time 占三分之一左右，跟人有关的条件多用一些；条件要跟这件事说得通，选 place 的，这件事必须跟那个地方本身有关系`,
     ].join("\n") },
     { role: "user", content: [
       describeTrainee(card),
@@ -165,11 +176,22 @@ async function generate(): Promise<State | null> {
   const order = raw.map(x => ({ x, k: Math.random() })).sort((a, b) => a.k - b.k).map(o => o.x);
   const cards: Destiny[] = order.map((x, i) => {
     const via: Via = VIAS.includes(x.via as Via) ? x.via as Via : "new";
-    const t = (x.trigger ?? {}) as { type?: string; subject?: string; grade?: string; place?: string; times?: number; level?: number };
+    const t = (x.trigger ?? {}) as { type?: string; subject?: string; grade?: string; place?: string; times?: number; level?: number; min?: string; count?: number; mbti?: string; role?: string; gender?: string; top?: number; bottom?: number; month?: number; birthday?: boolean; event?: string };
     let trigger: Trigger = { type: "time" };
     if (t.type === "grade" && SUBJECTS.some(s => s.id === t.subject) && ["C", "B", "A"].includes(String(t.grade))) trigger = { type: "grade", subject: t.subject as Subject, grade: t.grade as "C" | "B" | "A" };
     if (t.type === "place" && t.place && places.includes(t.place)) trigger = { type: "place", place: t.place, times: Math.max(2, Math.min(4, Number(t.times) || 2)) };
     if (t.type === "fame") trigger = { type: "fame", level: Math.max(15, Math.min(60, Number(t.level) || 25)) };
+    if (t.type === "people") trigger = {
+      type: "people", min: (RELATIONS as readonly string[]).includes(String(t.min)) && RELATIONS.indexOf(t.min as typeof RELATIONS[number]) >= RELATIONS.indexOf("认识") ? t.min as Relation : "朋友",
+      count: Math.max(1, Math.min(3, Number(t.count) || 1)),
+      ...(t.mbti && /^[EINSTFJP]{1,4}$/i.test(t.mbti) ? { mbti: t.mbti.toUpperCase() } : {}),
+      ...(t.role ? { role: String(t.role).slice(0, 10) } : {}),
+      ...(t.gender === "男" || t.gender === "女" ? { gender: t.gender } : {}),
+    };
+    if (t.type === "dated") trigger = { type: "dated", times: Math.max(1, Math.min(3, Number(t.times) || 1)) };
+    if (t.type === "rank" && (t.top || t.bottom)) trigger = { type: "rank", ...(t.top ? { top: Math.max(1, Math.min(10, Number(t.top))) } : { bottom: Math.max(1, Math.min(10, Number(t.bottom))) }) };
+    if (t.type === "season" && (t.birthday || (Number(t.month) >= 1 && Number(t.month) <= 12))) trigger = { type: "season", ...(t.birthday ? { birthday: true } : { month: Number(t.month) }) };
+    if (t.type === "after" && ["debut_team", "someone_left", "selection_failed"].includes(String(t.event))) trigger = { type: "after", event: t.event as "debut_team" | "someone_left" | "selection_failed" };
     const place = via === "stage" ? (places.includes(String(x.place)) ? String(x.place) : "便利店") : undefined;
     const meet = x.meet && x.meet.title ? { title: String(x.meet.title), place: String(x.meet.place || ""), days: Math.max(1, Math.min(14, Number(x.meet.days) || 3)), hour: Math.max(8, Math.min(22, Number(x.meet.hour) || 19)) } : undefined;
     return {
@@ -191,7 +213,26 @@ function placeVisits(place: string): number {
   } catch { return 0; }
 }
 function fameNow(): number {
-  try { return Number((JSON.parse(kvGet("idol_events_v1") || "null") as { fame?: number } | null)?.fame) || 0; } catch { return 0; }
+  try { return fameTotal(); } catch { return 0; }
+}
+function lastRank(): { rank: number; total: number } | null {
+  try {
+    const months = (JSON.parse(kvGet("idol_ledger_v1") || "null") as { months?: { rank: number; total: number }[] } | null)?.months ?? [];
+    return months[months.length - 1] ?? null;
+  } catch { return null; }
+}
+function peopleMatch(t: Extract<Trigger, { type: "people" }>): boolean {
+  const need = RELATIONS.indexOf(t.min as typeof RELATIONS[number]);
+  const hits = Object.values(loadProfiles()).filter(p => {
+    const r = relationOf(p);
+    const lv = r === "前任" ? RELATIONS.indexOf("熟人") : RELATIONS.indexOf(r as typeof RELATIONS[number]);
+    if (lv < need) return false;
+    if (t.mbti && !t.mbti.split("").every(ch => (p.mbti ?? "").toUpperCase().includes(ch))) return false;
+    if (t.role && !`${p.role}${p.group}`.includes(t.role)) return false;
+    if (t.gender && p.gender !== t.gender) return false;
+    return true;
+  });
+  return hits.length >= t.count;
 }
 function met(c: Destiny): boolean {
   const t = c.trigger;
@@ -199,6 +240,23 @@ function met(c: Destiny): boolean {
   if (t.type === "grade") { const g = loadGrades().find(x => x.id === t.subject); return Boolean(g && "FDCBA".indexOf(g.grade) >= "FDCBA".indexOf(t.grade)); }
   if (t.type === "place") return placeVisits(t.place) >= t.times;
   if (t.type === "fame") return fameNow() >= t.level;
+  if (t.type === "people") return peopleMatch(t);
+  if (t.type === "dated") return Object.values(loadProfiles()).filter(p => { const r = relationOf(p); return r === "恋人" || r === "前任"; }).length >= t.times;
+  if (t.type === "rank") { const r = lastRank(); return Boolean(r && (t.top ? r.rank <= t.top : r.rank > r.total - (t.bottom ?? 0))); }
+  if (t.type === "season") {
+    const now = new Date();
+    if (t.month) return now.getMonth() + 1 === t.month;
+    const b = loadTraineeCard()?.birthday;
+    if (!b) return true;
+    const bd = new Date(now.getFullYear(), +b.slice(5, 7) - 1, +b.slice(8, 10)).getTime();
+    return Math.abs(now.getTime() - bd) <= 3 * DAY;
+  }
+  if (t.type === "after") {
+    const career = loadCareer();
+    if (t.event === "debut_team") return Boolean(career.debut && ["selected", "named", "debuted"].includes(career.debut.status));
+    if (t.event === "selection_failed") return Boolean(career.debut && career.debut.attempt > 1);
+    return Object.values(loadProfiles()).some(p => p.leave?.phase === "left");
+  }
   return false;
 }
 

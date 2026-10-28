@@ -125,8 +125,17 @@ export function placeFullName(key: string): string {
 }
 
 /** 提醒事项里写的地点（「LOOKS 公司 练习室」这种）对到地图上的地点 */
+/** 提醒事项里常见、地图上没有的叫法 → 用哪个地点的背景和音乐 */
+const PLACE_ALIASES: [RegExp, string][] = [
+  [/试镜室|考核室|오디션룸|大练习室|舞蹈室|声乐室/, "公司·练习室"],
+  [/办公室|面谈/, "公司·老师办公室"],
+  [/公司大楼$|사옥$|大楼$/, "公司·大厅"],
+  [/老家/, "家"],
+];
+
 export function placeKeyFromText(text: string): string {
   const t = text.replace(/\s+/g, "");
+  for (const [re, key] of PLACE_ALIASES) if (re.test(t)) return key;
   const scored = allScenePlaces()
     .map(pl => ({ pl, hit: t.includes(pl.label) ? pl.label.length + (pl.key.includes("·") && t.includes(pl.key.split("·")[0]) ? 5 : 0) : 0 }))
     .filter(x => x.hit > 0)
@@ -285,11 +294,11 @@ export function worldVnSession(): VnSession {
 }
 
 /** 开一场：新的一章 + 记下时间地点。不写开场，等她说第一句 */
-export function startStageScene(opts: { placeKey: string; meetIds?: string[]; avoid?: string[]; nodeId?: string; premise?: string }): { chapterIndex: number; scene: StageScene } | null {
+export function startStageScene(opts: { placeKey: string; placeName?: string; meetIds?: string[]; avoid?: string[]; nodeId?: string; premise?: string }): { chapterIndex: number; scene: StageScene } | null {
   ensureWorldCharacter();
   const session = worldVnSession();
   const node = opts.nodeId ? nodeById(opts.nodeId) : undefined;
-  const place = placeFullName(opts.placeKey);
+  const place = opts.placeName?.trim() || placeFullName(opts.placeKey);
   const title = node ? node.title : (placeByKey(opts.placeKey)?.label ?? opts.placeKey);
   const ch = startNewChapter(session.id, title, `${fmtWorld(Date.now()).slice(5)} · ${place}`);
   if (!ch) return null;
@@ -314,7 +323,7 @@ export function startNodeStage(node: CareerNode): { chapterIndex: number; scene:
     const s = getStageScene(ch.id);
     if (s && s.nodeId === node.id && !s.ended) return { chapterIndex: ch.index, scene: s };
   }
-  return startStageScene({ placeKey: placeKeyFromText(node.place), nodeId: node.id, premise });
+  return startStageScene({ placeKey: placeKeyFromText(node.place), placeName: node.place, nodeId: node.id, premise });
 }
 
 function frameText(raw: string, role: string): string {

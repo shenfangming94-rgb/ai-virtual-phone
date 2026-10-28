@@ -364,6 +364,7 @@ export function starPromptBlock(): string {
   const leaveToday = s.leaves.filter(l => l.date === dayKey(now));
   return [
     `【她的课】工作日白天在公司上课（${[...new Set(s.slots.map(x => `${WEEK[x.dow]} ${x.start}`))].length} 节/周，大多 10:00～18:30，个别晚上）。平常约她尽量排在晚上或周末。`,
+    "【课以课表为准】公司内部档案里如果写了别的课，以这里的课表为准。",
     todays.length ? `【今天的课】${todays.map(c => `${c.slot.label} ${c.slot.start}～${c.slot.end}`).join("、")}` : "",
     leaveToday.length ? `【今天请假】她今天${leaveToday.some(l => !l.subject) ? "请了一整天的假" : `请假没去${leaveToday.map(l => subjectOf(l.subject)?.cls).join("、")}`}，室长批了的。` : "",
     recent.length ? `【她最近的变化】${recent.map(x => `${x.sub.zh}${x.last!.dir === "up" ? "最近明显进步了" : "最近有点退步"}`).join("；")}（只说变化，不代表她和别人比的水平；她的水平以她自己在戏里怎么写为准）` : "",

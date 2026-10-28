@@ -474,3 +474,101 @@ Flora 要一个专门玩「爱豆模拟器」的小手机：她是想当爱豆�
 - 公司 id：sm / jyp / yg / hybe / starship / cube
 - 还没做：重 roll 旧版本翻页；语言开关之外的「名片国籍」（10-28 早说要做，被此刻插队）；真 API 试玩（她还没用真模型玩过此刻，先报模型等她点头）
 - 定稿别动：钉子 A 样式+思源宋体、地图日期框、场景左上角 C 大时间、开场卡、字体（京华老宋+名字思源宋体加粗）
+
+
+### 2026-10-28 公司地图预览选择（Codex 记录）
+- Flora 确认 YG / SM / Starship / JYP 四家公司全部采用最新 B 版（按各自楼体调整位置）。预览在 `/Users/flora/work/idol-settings-preview/`，单张 `yg/sm/starship/jyp-map-preview-b-v1.png`，对应 HTML 同名；A/B 对比为 `公司名-map-comparison-v1.png`。
+- 钉子坐标完整保存在该目录 `build-company-previews.py` 的各公司 adjusted 列表；B 版为最终选择。顶部图标沿用项目 Lucide 原图标与尺寸，保留已定稿粉色钉子与字体。
+- 截至本记录只生成项目外预览，尚未把这四家公司图片和 DEFAULT_MAPS 写进功能代码。CUBE 最新预览为 `cube-map-preview-v2.png`。
+- 接下来 Flora 发江南和场馆图，由 Codex 按图片自行摆钉，继续先预览、她认可再实施。
+- 江南六处：商场、烤肉店、KTV、电影院、餐厅、咖啡店。场馆五处：场馆外、观众席、化妆间、后台、舞台；后三处保留出道解锁限制。
+
+
+### 2026-10-28 八张小地图已实施（Codex）
+- Flora 确认预览后授权实施。已在 lib/idol-stage.ts 的 DEFAULT_MAPS 加入 company@cube/yg/sm/starship/jyp、gangnam、arena、tv，图片在 public/idol/maps/ 对应 jpg。HYBE 原配置保留。
+- 四家公司按 B 版，CUBE 按 v2；江南/场馆/电视台按 v1。沿用 mapLookKey 随签约公司选择；保留用户自己的图片和钉子覆盖，以及出道解锁。
+- 验证：tsc --noEmit --incremental false、git diff --check 通过。独立浏览器虚构存档实测六家公司分别加载对应图片且各7钉；江南6钉，场馆5钉含3锁，电视台5钉含4锁，图片均成功加载、pageerror为空。实际截图在预览目录 actual-company-*.png、actual-gangnam/arena/tv.png。测试脚本 verify-added-maps.mjs 位于预览目录。
+- 本地实施，未上线。
+
+
+### 2026-10-28 地图返回挤在一起修复（Codex）
+- 原因：MapImage 在不同地图间复用，竖图 tall 状态与 centered ref 没重置，返回首尔时仍按竖图宽度缩放。
+- 修复：stage-home.tsx 的 MapImage 以 lookKey + mapUrl 为 React key，切图时重新初始化布局和居中状态。
+- 验证：verify-map-return.mjs 六家公司与三张地点地图走完后返回首尔，tall=false，图片宽1244/视口390，17个钉子；无页面错误，tsc通过。截图 actual-map-return-fixed.png 在预览目录。
+
+
+### 2026-10-28 音乐面板讨论中（Codex）
+- Flora 要剧情中随时切换音乐、音乐自定义分组。已同意：换地点自动改播新地点绑定音乐。
+- 只做独立预览 stage-music-panel-v1.html/png，位于 idol-settings-preview；尚未实施功能，等待确认。预览歌名分组为示例。
+- Flora 另报大地图「家」被顶部遮挡，明确要求下次实施时将家的钉子下移；尚未改，别漏。
+
+
+### 2026-10-28 剧情中音乐面板 + 分组（Codex 已实施）
+- Flora 授权，在原音乐功能基础上实施。vn-player 顶部原音乐按钮（位置图标样式不改）打开 StageMusicPanel；支持播放暂停、下一首、音量、列表/单曲/随机，音乐分组新建/改名/删除、歌曲移动。分组整个此刻共用，删除组保留歌曲。
+- 添加音乐直接复用 stage-home 的 SongPicker（仅导出组件），保留本地上传/音乐库、网易云登录后的搜索和我的歌单；不要再误说用户手填歌曲ID。
+- 新增 lib/idol-music-library.ts，kv idol_stage_music_library_v1；已有地点配乐自动并入可选歌曲，原配乐绑定不改。新面板选歌只临时覆盖当前地点，换地点自动恢复新地点绑定/地图兜底音乐。播放器用 generation 防止异步取URL后旧歌抢播，离开app停止。
+- 默认首尔「家」y从14.5下移到25；用户自己保存的钉子仍优先。
+- 验证：tsc通过；独立浏览器真本地wav验证批量上传两首、选歌播放/暂停恢复/下一首、分组新建/改名/移动/删除保留歌曲、重新打开保留、网易云原登录提示，pageerror为空。脚本 verify-stage-music.mjs；实际截图 stage-music-actual-v1.png（预览目录）。verify-music-location.cjs 验证手动选歌后同地图新地点恢复默认、不同地点配乐切换与停止清理。没有使用真实网易云账户测在线歌曲。
+- 所有改动本地，未上线。
+
+
+### 2026-10-28 分组新建 HTTP 兼容修复（Codex）
+- Flora 手机新建分组在 onSubmit 的 crypto.randomUUID() 报错。音乐为空不应影响新建。已为分组ID添加 globalThis.crypto?.randomUUID?.() 的可选调用及时间+随机后备，适配局域网HTTP缺少此接口。
+- verify-music-http.mjs 模拟移除 Crypto.prototype.randomUUID，覆盖空音乐库新建组及后续操作。旧背景上传另有直接randomUUID调用，本次未改其范围，测试去掉无关背景上传步骤。
+
+
+### 2026-10-28 提醒事项公司邀请全文（Codex 修复）
+- 问题：列表 note 两行截断，而 rowFor.onInfo 对 offerId 直接跳过详情，公司邀请没有全文入口。
+- 已允许公司邀请点正文/左滑详情进入 Detail；invite 详情以保留换行的可滚动正文显示「通知全文」，不再用可编辑备注框承载通知；详情内保留去试镜/婉拒（普通邀请报名/不了），查看返回不改变回复状态。沿用原接受/拒绝逻辑。
+- verify-invitation-detail.mjs 独立虚构存档验证35段SM长邀请末尾完整、正文可滚动（2257/844）、阅读返回仍待回复、详情接受/拒绝可用，页面无错误；tsc通过。截图 reminder-invitation-full-v1.png 在预览目录。
+
+
+### 2026-10-28 此刻只读重播 + 历史整理（Codex 已实施）
+- Flora 确认后授权实现。结束这一场成功页新增「重播这一场」；地图 ··· → 以前的场景，每条有重播/回顾，进行中另有继续。
+- 新增 components/vn/stage-replay.tsx、styles/stage-replay.css。独立只读播放器，仅读选中章节消息并解析帧；跳过场外指令，按顺序播放用户/AI/旁白，用户名字显示「你」，保留双语翻译、背景切换/已有背景布局及此刻字体。逐字、手动下一条、自动播放、进度、结束后再看/返回；随时退出，清理计时器。无发送/重roll/结算/总结/时间记号执行入口，未复制剧情存档。
+- VnApp 负责切换重播视图，VnPlayer 只新增结束页入口。重播退出回地图。
+- 历史按世界 startAt 倒序，全部/进行中/已结束筛选，搜索地点/事情/日期/总结，每批20条。仅列表元数据筛选，只有选中章节解析播放帧。注意宿主 vn-storage 本来就全量缓存文字（hydrateVnStorage），本次没有把原存储系统改成分页，不要声称总内存永不增长；重播不另复制所有章节，图片音频仍占存储。
+- 验证脚本 /Users/flora/work/idol-settings-preview/verify-stage-replay.mjs：45场虚构数据分页20→40、分类、搜索；用户发言/翻译、手动/自动/播完再看/退出；重播前后 sessions/messages/场景元数据完全一致，0次额外AI调用；结束页重播入口也测过，没有二次结算，pageerror空。类型检查与diff检查通过。截图 stage-replay-actual-v1.png、stage-history-actual-v1.png 在同目录。
+- 本地修改，未上线。
+
+
+### 2026-10-28 天气 App 爱豆世界适配第一版（Codex；真实联网待验证）
+- 用户要求保留 fish 原天气 UI，改用世界日期对应的首尔历史天气，不让 AI 生成天气。原文件 Downloads/天气-by fish-1.4.1.zip 和 天气配套插件-by fish.js 只读未覆盖。
+- 已新增 lib/idol-weather.ts：Open-Meteo archive 按月缓存在 kv idol_weather_month_v1:坐标:年月；同请求合并、失败冷却、网络20秒超时、世界小时选数据、月末跨月补足最多10天。数据没有的预报概率/AQI/UV等不混用现实数据；超出现有历史范围不伪造天气。缓存目前没有自动清理策略。
+- 已适配原 index.html 并打包 public/idol/weather/weather-idol-v1.zip（版本1.4.1-idol.1），项目外副本 /Users/flora/work/idol-settings-preview/天气-爱豆世界版-v1.zip。保持原 UI/SDK/卡片工具；默认首尔，移除现实定位，读取世界日期；不再写原实时天气记忆。旧界面的一些来源/别名设置仍保留，但实际数据固定用世界历史天气，后续可按需要整理说明，不必重画UI。
+- lib/custom-app-host-api.ts 仅对 manifest weather.aurora + archive-api.open-meteo.com/v1/archive + idol_world=1 的请求接入共享服务，仍先校验网络域名；其余自定义App请求不变。
+- lib/idol-weather-install.ts 在桌面初始化时通过原自定义App安装系统装入 bundled zip，已有同manifest副本保留runtime ID、图标和原数据；components/desktop-shell.tsx 接入安装与缓存预热。更新安装有失败时静默catch，目前尚无用户可见重试入口，可手动导入项目外zip。
+- worldWeatherHint 已接入 lib/idol-world.ts、lib/chat-engine.ts、lib/idol-events.ts、lib/idol-casual.ts；共享首尔当前天气，不凭空补缓存未命中的旧天气。角色反应借已有生成请求，不新增天气LLM。尚未实现初雪识别/初雪专项消息或动态/世界未来年份替代规则。
+- 最终验证完成：verify-world-weather.mjs 独立浏览器模拟气象API，自动安装/实际打开天气App、首尔原界面12℃、世界从2015-03-28 21点跳至29日9点后共享提示变小雪4℃，无页面错误；tsc --noEmit --incremental false通过。截图 weather-app-world-v1.png 在预览目录，测试温度均为虚构数据。
+- 真实联网卡点：curl默认DNS失败，提权后Open-Meteo archive SSL_ERROR_SYSCALL；web.open同接口也失败。未验证真实天气返回，不能声称实网取数成功。已停止重复等待。用户明确要求不要重扫项目，沿现有进度只补必要验证。
+- 全部本地，未上线。原实时天气伴侣插件不要安装到爱豆版（可能与世界天气冲突）；目前未改/安装该插件。
+
+
+### 2026-10-28 天气实网卡点已解决（Codex，以上未验证状态已过时）
+- 用户追问后继续排查：终端curl的SSL错误不能代表浏览器。独立Chrome直连 archive-api.open-meteo.com 与 api.open-meteo.com 均HTTP200，之前将终端失败视为整个App阻塞的判断过早。
+- verify-world-weather-live.mjs 不拦截/伪造任何气象请求，在独立虚构存档中实测原天气App安装、打开、真实历史数据与提示一致：首尔2015-03-28 21点气温6.5℃（界面按原逻辑四舍五入7°），体感3.6℃，大致晴朗、夜间；世界跳至2015-03-29 9点后为阴、8℃。所有完整历史字段正常返回，pageerror为空。
+- 实网截图 /Users/flora/work/idol-settings-preview/weather-app-live-v1.png。weather-app-world-v1.png仍是模拟数据测试截图，勿混淆。
+- 因此第一版App+共享天气底座已通过真实浏览器验证，可在本地使用；初雪专项识别/自动照片动态等仍未实施，不是技术上不能做。
+
+
+### 2026-10-28 天气融入生活 + 初雪（Codex 已实施）
+- 用户明确要求普通天气自然融入生活，不每逢雨雪就全员惊叹/反复强调。worldWeatherHint 强化这个分寸；已有世界排事情提示也禁止为普通天气专门排事件，禁止重复排初雪（专项服务负责）。不增加普通天气主动消息或LLM请求。
+- 此刻原开场卡地点下面加小号淡色天气，如「晴 · 12℃」，读取开场时间对应缓存，数据到达后刷新，不改其余布局。缺失则不伪造。新增 worldWeatherLabel。
+- seasonFirstSnow 从9月1日到世界当天查询首尔历史日降雪/天气码，找到最早降雪日再用小时资料确认时间；按9月至次年8月同一季缓存。当天未来小时不能提前宣布，确认后跨年不重复。数据缺失不猜初雪。
+- 新增 lib/idol-weather-life.ts：一季至多一条朋友圈动态（可带待生成照片描述）+可选一条群/私聊，作者只选已见过的好友、排除教师管理。结合人物完整设定，最多一次成功的小JSON文案生成，失败10分钟冷却；天气与照片均不调用模型生成，图片需用户手动生成。
+- 剧情/重播正在看时不发，等退出再检查；距初雪超过6小时仅保留初雪发生时的历史动态，不补过期消息；早于开局日期不补。生成期间切档、跳时或进剧情则丢弃本次结果。季节状态 kv idol_weather_life_v1；气象证明 idol_weather_first_snow_v1:季节年份。不强制提醒，不弹初雪横幅。
+- 验证 verify-weather-life.cjs：未到初雪时刻不剧透、季节证明缓存/跨年、普通天气静默、不打断场景、至多1帖1消息、同季重复tick不增模型调用、照片仅描述、跳过一天仅原日期动态。verify-weather-opening.mjs 实际浏览器开场天气与共享数据一致且无页面错误（模拟晴12℃），截图 stage-opening-weather-v1.png。tsc与diff检查通过。
+- 文案分寸由提示约束，不能保证任何用户模型都绝不主动多谈天气；代码保证普通天气不由该服务触发消息、初雪数量与时机受限。本地修改未上线。
+
+
+### 2026-10-28 天气桌面图标缺失（Codex 修复）
+- 原因：ensureIdolWeatherApp只安装包和注册资源，没有发 CUSTOM_APP_PLACE_DESKTOP_EVENT，所以App可通过运行器打开但桌面没有快捷图标。此前测试绕过了桌面，漏测。
+- 现已补：新安装和已安装同版本两个分支都请求放置桌面；沿用现有放置函数（已有桌面/dock/文件夹图标不重复、不挪其他图标，缺失则填空位）。安装调用移到desktopReady后，避免布局尚未载入覆盖快捷入口。安装失败改成显示真实原因。
+- 独立浏览器 verify-weather-desktop.mjs 已确认图标真实出现在桌面、数量1、点击图标可打开原天气UI（模拟天气）；截图 weather-desktop-shortcut-v1.png。脚本最后刷新验证因宿主自动恢复上次打开的天气App而等待桌面超时，不代表图标消失；不声称该最后断言通过。tsc通过。
+
+
+### 2026-10-28 本轮 Git 存档点（Codex）
+- Flora 明确要求在继续下一项前保存存档点。本轮地图、音乐分组、只读重播、邀请全文、世界天气及生活反应与桌面入口一起存档。
+- checkpoint 标签：`checkpoint/idol-maps-music-replay-weather-20261028`（对应提交号另记在项目外 CODEX-HANDOFF.md）。本地存档，不push、不上线。
+- 当前出现了不属于 Codex 本轮新增的未跟踪文件 docs/idol/destiny.md；原样保留，不混进本次提交。
+- 项目外预览和测试文件继续保留在 /Users/flora/work/idol-settings-preview/，不纳入项目仓库。

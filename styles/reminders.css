@@ -103,3 +103,6 @@
 .rm-rank-edit button.p { background: #0a84ff !important; color: #fff !important; }
 .rm-viewer { position: absolute; inset: 0; z-index: 30; background: rgba(0, 0, 0, 0.92); overflow-y: auto; padding: 60px 12px 40px; }
 .rm-viewer img { width: 100%; display: block; }
+
+.rm-invitation-text { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 15px; line-height: 1.65; }
+.rm-invitation-text + .rm-invitation-text { margin-top: 14px; }

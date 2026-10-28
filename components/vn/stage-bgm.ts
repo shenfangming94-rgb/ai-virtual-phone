@@ -1,104 +1,83 @@
 "use client";
-
-/**
- * 此刻的 BGM：地图首页放地图的歌，进了地点放地点的歌（没配就接着放所在地图的）。
- * 同一套歌接着放不重来；换一套淡出再淡入；没配歌就淡出停掉。播放方式：列表循环 / 单曲循环 / 随机。
- */
-
-import { useEffect, useRef } from "react";
+import { useEffect, useState } from "react";
 import { getAudioBlob } from "@/lib/music-storage";
 import { getNeteasePlayUrl } from "@/lib/music-service";
-import { loadStageSettings, resolveBgm, type BgmSong } from "@/lib/idol-stage";
+import { loadStageSettings, resolveBgm, type BgmSong, type BgmMode } from "@/lib/idol-stage";
 import { kvGet, kvSet } from "@/lib/kv-db";
-
-const FADE_MS = 900;
+const EVENT = "idol-stage-music-change";
 const MUTE_KEY = "idol_stage_bgm_muted_v1";
-
-export function loadBgmMuted(): boolean {
-  return kvGet(MUTE_KEY) === "1";
+export function loadBgmMuted(): boolean { return kvGet(MUTE_KEY) === "1"; }
+export function saveBgmMuted(v: boolean): void { kvSet(MUTE_KEY, v ? "1" : "0"); }
+let current: { audio: HTMLAudioElement; url: string; song: BgmSong } | null = null;
+let generation = 0;
+let place = "";
+let signature = "";
+let queue: BgmSong[] = [];
+let mode: BgmMode = "list";
+let index = 0;
+let manual = false;
+let error = "";
+const notify = () => window.dispatchEvent(new Event(EVENT));
+export function getStageMusicState() { return { song: current?.song, paused: !current || current.audio.paused, mode, error }; }
+export function useStageMusicState() {
+  const [state, setState] = useState(getStageMusicState);
+  useEffect(() => { const update = () => setState(getStageMusicState()); window.addEventListener(EVENT, update); update(); return () => window.removeEventListener(EVENT, update); }, []);
+  return state;
 }
-export function saveBgmMuted(v: boolean): void {
-  kvSet(MUTE_KEY, v ? "1" : "0");
+function clearAudio() {
+  if (current) { current.audio.pause(); current.audio.onended = null; if (current.url.startsWith("blob:")) URL.revokeObjectURL(current.url); current = null; }
 }
-
-async function songUrl(song: BgmSong): Promise<string | null> {
-  if (song.src === "local") {
-    const blob = await getAudioBlob(song.id);
-    return blob ? URL.createObjectURL(blob) : null;
-  }
-  return getNeteasePlayUrl(song.id).catch(() => null);
-}
-
-function fade(audio: HTMLAudioElement, to: number, done?: () => void): void {
-  const from = audio.volume;
-  const start = performance.now();
-  const step = (t: number) => {
-    const k = Math.min(1, (t - start) / FADE_MS);
-    audio.volume = Math.max(0, Math.min(1, from + (to - from) * k));
-    if (k < 1) requestAnimationFrame(step);
-    else done?.();
+async function playAt(i: number, tries = 0): Promise<void> {
+  const token = ++generation;
+  clearAudio(); error = "";
+  if (!queue.length) { notify(); return; }
+  index = ((i % queue.length) + queue.length) % queue.length;
+  const song = queue[index];
+  notify();
+  let url: string | null = null;
+  try { if (song.src === "local") { const blob = await getAudioBlob(song.id); url = blob ? URL.createObjectURL(blob) : null; } else url = await getNeteasePlayUrl(song.id); } catch { /* shown below */ }
+  if (token !== generation) { if (url?.startsWith("blob:")) URL.revokeObjectURL(url); return; }
+  const failed = () => {
+    if (token !== generation) return;
+    if (tries + 1 < queue.length) void playAt(index + 1, tries + 1);
+    else { clearAudio(); error = "这些音乐暂时无法播放，请检查连接或音乐文件"; notify(); }
   };
-  requestAnimationFrame(step);
+  if (!url) { failed(); return; }
+  const audio = new Audio(url);
+  audio.volume = Math.max(0, Math.min(100, loadStageSettings().volume)) / 100;
+  audio.loop = mode === "one";
+  current = { audio, url, song };
+  audio.onended = () => { if (token === generation) nextStageMusic(); };
+  audio.onerror = failed;
+  try { await audio.play(); } catch { if (token === generation) error = "未能播放，点播放重试或换一首"; }
+  if (token === generation) notify();
 }
-
-/** 整个此刻共用一个播放器：地图页和场景页来回切也不断 */
-let current: { audio: HTMLAudioElement; key: string; sig: string; url: string } | null = null;
-const lastIdx: Record<string, number> = {};
-
-function stopCurrent(): void {
-  const c = current;
-  current = null;
-  if (!c) return;
-  fade(c.audio, 0, () => { c.audio.pause(); if (c.url.startsWith("blob:")) URL.revokeObjectURL(c.url); });
+export function nextStageMusic(): void {
+  const n = mode === "one" ? index : mode === "shuffle" && queue.length > 1 ? (index + 1 + Math.floor(Math.random() * (queue.length - 1))) % queue.length : index + 1;
+  void playAt(n);
 }
-
-export function stopStageBgm(): void {
-  if (!current) return;
-  current.audio.pause();
-  if (current.url.startsWith("blob:")) URL.revokeObjectURL(current.url);
-  current = null;
+export function chooseStageMusic(songs: BgmSong[], at: number, playbackMode: BgmMode): void {
+  manual = true; signature = ""; queue = songs; mode = playbackMode; saveBgmMuted(false); void playAt(at);
 }
-
+export function setStageMusicMode(value: BgmMode): void { mode = value; if (current) current.audio.loop = value === "one"; notify(); }
+export function toggleStageMusic(): void {
+  if (!current) { if (queue.length) { saveBgmMuted(false); void playAt(index); } return; }
+  if (current.audio.paused) { saveBgmMuted(false); void current.audio.play().then(notify).catch(() => { error = "未能播放，请换一首或检查连接"; notify(); }); }
+  else { current.audio.pause(); saveBgmMuted(true); notify(); }
+}
+export function stopStageBgm(): void { ++generation; clearAudio(); place = ""; signature = ""; manual = false; queue = []; notify(); }
 export function useStageBgm(placeKey: string, muted: boolean, ver = 0): void {
-  const tokenRef = useRef(0);
   useEffect(() => {
-    if (muted || !placeKey) { if (muted) stopCurrent(); return; }
-    const { key, songs, mode } = resolveBgm(placeKey);
-    const sig = `${key}|${mode}|${songs.map(s => `${s.src}:${s.id}`).join(",")}`;
-    if (current && current.sig === sig) return;
-    stopCurrent();
-    if (!songs.length) return;
-    const token = ++tokenRef.current;
-    const volume = Math.max(0, Math.min(100, loadStageSettings().volume)) / 100;
-
-    const next = (i: number) => (mode === "one" ? i : mode === "shuffle" && songs.length > 1 ? (i + 1 + Math.floor(Math.random() * (songs.length - 1))) % songs.length : (i + 1) % songs.length);
-    const playAt = async (i: number, tries = 0): Promise<void> => {
-      const url = await songUrl(songs[i % songs.length]);
-      if (token !== tokenRef.current) { if (url?.startsWith("blob:")) URL.revokeObjectURL(url); return; }
-      if (!url) {
-        // 放不了（网易云 VIP、文件没了）就试下一首，一圈都不行就算了
-        if (tries + 1 < songs.length) void playAt((i + 1) % songs.length, tries + 1);
-        return;
-      }
-      const a = new Audio(url);
-      a.volume = 0;
-      a.loop = mode === "one";
-      a.onended = () => {
-        if (current?.audio !== a) return;
-        if (url.startsWith("blob:")) URL.revokeObjectURL(url);
-        current = null;
-        lastIdx[key] = next(i);
-        void playAt(lastIdx[key]);
-      };
-      current = { audio: a, key, sig, url };
-      lastIdx[key] = i;
-      a.play().then(() => fade(a, volume)).catch(() => undefined);
-    };
-    void playAt(mode === "shuffle" && lastIdx[key] === undefined ? Math.floor(Math.random() * songs.length) : lastIdx[key] ?? 0);
+    if (!placeKey) return;
+    const changed = place !== placeKey;
+    if (changed) { manual = false; place = placeKey; }
+    if (muted) { ++generation; clearAudio(); signature = ""; notify(); return; }
+    if (manual && !changed) return;
+    const resolved = resolveBgm(placeKey);
+    const sig = `${resolved.key}|${resolved.mode}|${resolved.songs.map(s => `${s.src}:${s.id}`).join(",")}`;
+    if (signature === sig && current) return;
+    signature = sig; queue = resolved.songs; mode = resolved.mode;
+    void playAt(mode === "shuffle" ? Math.floor(Math.random() * queue.length) : 0);
   }, [placeKey, muted, ver]);
 }
-
-/** 音量改了马上生效 */
-export function setStageBgmVolume(v: number): void {
-  if (current) current.audio.volume = Math.max(0, Math.min(100, v)) / 100;
-}
+export function setStageBgmVolume(v: number): void { if (current) current.audio.volume = Math.max(0, Math.min(100, v)) / 100; }

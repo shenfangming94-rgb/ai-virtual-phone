@@ -2,6 +2,8 @@
 
 import { GlobalCallHost } from "./chat/global-call-host";
 import { AlbumApp } from "./album/album-app";
+import { worldWeatherTick } from "@/lib/idol-weather";
+import { ensureIdolWeatherApp } from "@/lib/idol-weather-install";
 import { ClockApp } from "./clock-app";
 import { ContactsApp } from "./contacts/contacts-app";
 import { CareerApp } from "./career/career-app";
@@ -1125,6 +1127,7 @@ export function DesktopShell({ initialThemeProfile, initialThemeAssets }: Deskto
       if (!isChatStorageHydrated()) { void hydrateChatStorage(); return; }
       // 正在切档/开新档：别往里写东西
       if ((window as unknown as { __idolSwitching?: boolean }).__idolSwitching) return;
+      worldWeatherTick();
       try { careerTick(idolNotify); } catch { /* 发动机出错不挡着用手机 */ }
       try { kakaoTick(idolNotify); } catch { /* 同上 */ }
       try { reminderTick(idolNotify); } catch { /* 同上 */ }
@@ -1144,6 +1147,7 @@ export function DesktopShell({ initialThemeProfile, initialThemeAssets }: Deskto
     run();
     // 开发时给测试脚本用（线上没有）
     if (process.env.NODE_ENV !== "production") {
+      void Promise.all([import("@/lib/idol-weather"), import("@/lib/custom-app-storage"), import("@/lib/idol-weather-life")]).then(([w, apps, life]) => { (window as unknown as { __idolWeatherTest?: unknown }).__idolWeatherTest = { w, apps, life }; });
       void import("@/lib/idol-reminders").then(m => { (window as unknown as { __idol?: unknown }).__idol = { checkNode: m.checkNode, leaveNode: m.leaveNode, run }; });
       void Promise.all([import("@/lib/idol-leave"), import("@/lib/chat-storage"), import("@/lib/idol-casual")]).then(([l, cs, ca]) => { (window as unknown as { __idolLeave?: unknown }).__idolLeave = { casual: ca.casualTick, nudge: l.nudgeLeave, afterRank: l.afterMonthlyRank, tick: l.leaveTick, dm: (id: string) => { const s = cs.createOrGetSession(id); cs.pushChatMessage({ sessionId: s.id, role: "assistant", content: "嗨", status: "sent" }); }, group: (name: string, ids: string[]) => cs.createGroupSession(name, ids).id }; });
       void Promise.all([import("@/lib/settings-storage"), import("@/lib/idol-people"), import("@/lib/idol-world"), import("@/lib/story-storage"), import("@/lib/chat-storage"), import("@/lib/follow-up-service"), import("@/lib/idol-career")]).then(([settings, people, world, story, chat, follow, career]) => { (window as unknown as { __idolTest?: unknown }).__idolTest = { settings, people, world, story, chat, follow, career }; });
@@ -1698,6 +1702,12 @@ export function DesktopShell({ initialThemeProfile, initialThemeAssets }: Deskto
     window.addEventListener(CUSTOM_APP_PLACE_DESKTOP_EVENT, placeHandler);
     return () => window.removeEventListener(CUSTOM_APP_PLACE_DESKTOP_EVENT, placeHandler);
   }, []);
+
+  // Wait for the saved desktop layout before repairing the bundled weather shortcut.
+  useEffect(() => {
+    if (!desktopReady) return;
+    void ensureIdolWeatherApp().catch(error => setNotice(`天气应用安装失败：${error instanceof Error ? error.message : String(error)}`));
+  }, [desktopReady]);
 
   // 站点自带的 APP（如微博）：没装就装上，有新版就换包
   useEffect(() => { void syncBundledCustomApps(); }, []);

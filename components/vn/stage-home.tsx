@@ -5,6 +5,7 @@
  * 地图图片、钉子位置、每个地点的背景和 BGM 都是她自己配。
  */
 
+import "@/styles/stage-replay.css";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ChevronLeft, MoreHorizontal, X, Lock, Music2, VolumeX, Image as ImageIcon, Check, Search, Play } from "lucide-react";
 import {
@@ -32,7 +33,7 @@ function useWorldNow(): number {
   return now;
 }
 
-type Props = { onClose: () => void; onPlay: (chapterIndex: number) => void };
+type Props = { onClose: () => void; onPlay: (chapterIndex: number) => void; onReplay: (chapterIndex: number) => void };
 
 const WEEK = ["日", "一", "二", "三", "四", "五", "六"];
 
@@ -46,7 +47,7 @@ function pickImage(): Promise<File | null> {
   });
 }
 
-export function StageHome({ onClose, onPlay }: Props) {
+export function StageHome({ onClose, onPlay, onReplay }: Props) {
   const now = useWorldNow();
   const [mapId, setMapId] = useState("seoul");
   const [looks, setLooks] = useState<Record<string, MapLook>>(() => loadMapLooks());
@@ -137,7 +138,7 @@ export function StageHome({ onClose, onPlay }: Props) {
       </div>
 
       {mapUrl ? (
-        <MapImage url={mapUrl} places={map.places} look={look} editing={pinEdit} onTap={tapPlace}
+        <MapImage key={`${lookKey}:${mapUrl}`} url={mapUrl} places={map.places} look={look} editing={pinEdit} onTap={tapPlace}
           onPlace={(x, y) => { if (pinEdit) { updateLook({ ...saved, pins: { ...saved.pins, [pinEdit]: { x, y } } }); setPinEdit(""); } }} />
       ) : (
         <div className="stg-grid-wrap" style={{ ["--stg-under" as string]: `url(${DEFAULT_MAPS.seoul.image})` }}>
@@ -262,7 +263,7 @@ export function StageHome({ onClose, onPlay }: Props) {
         </div>
       ) : null}
 
-      {pastOpen ? <PastSheet onClose={() => setPastOpen(false)} onPlay={i => { setPastOpen(false); onPlay(i); }} /> : null}
+      {pastOpen ? <PastSheet onReplay={i => { setPastOpen(false); onReplay(i); }} onClose={() => setPastOpen(false)} onPlay={i => { setPastOpen(false); onPlay(i); }} /> : null}
     </div>
   );
 }
@@ -488,7 +489,7 @@ function SettingsSheet({ onClose }: { onClose: () => void }) {
 
 // ── 加歌：自己传的 mp3 / 网易云 ──
 
-function SongPicker({ chosen, onClose, onAdd }: { chosen: BgmSong[]; onClose: () => void; onAdd: (s: BgmSong) => void }) {
+export function SongPicker({ chosen, onClose, onAdd }: { chosen: BgmSong[]; onClose: () => void; onAdd: (s: BgmSong) => void }) {
   const [tab, setTab] = useState<"local" | "netease">("local");
   const [tracks, setTracks] = useState<MusicTrack[]>([]);
   const [q, setQ] = useState("");
@@ -588,30 +589,18 @@ function SongPicker({ chosen, onClose, onAdd }: { chosen: BgmSong[]; onClose: ()
 
 // ── 以前的场景 ──
 
-function PastSheet({ onClose, onPlay }: { onClose: () => void; onPlay: (i: number) => void }) {
-  const list = pastStageScenes();
-  const open = openStageScenes();
-  return (
-    <div className="stg-mask" onClick={onClose}>
-      <div className="stg-sheet stg-picker" onClick={e => e.stopPropagation()}>
-        <div className="stg-picker-head">
-          <b>{STAGE_APP_NAME} · 以前的场景</b>
-          <button type="button" className="stg-done" onClick={onClose}>完成</button>
-        </div>
-        <ul className="stg-tracks">
-          {open.map(s => (
-            <li key={s.chapterIndex} onClick={() => onPlay(s.chapterIndex)}>
-              <span>{s.title}<small>{s.subtitle} · 还没结束</small></span>
-            </li>
-          ))}
-          {list.map(s => (
-            <li key={s.chapterIndex} onClick={() => onPlay(s.chapterIndex)}>
-              <span>{s.title}<small>{s.subtitle}{s.scene.summary ? ` · ${s.scene.summary}` : ""}</small></span>
-            </li>
-          ))}
-        </ul>
-        {!list.length && !open.length ? <p className="stg-empty">还没有过场景</p> : null}
-      </div>
-    </div>
-  );
+function PastSheet({ onClose, onPlay, onReplay }: { onClose: () => void; onPlay: (i: number) => void; onReplay: (i: number) => void }) {
+  const [query, setQuery] = useState("");
+  const [filter, setFilter] = useState<"all" | "open" | "ended">("all");
+  const [limit, setLimit] = useState(20);
+  const scenes = useMemo(() => [...openStageScenes().map(s => ({ ...s, ended: false })), ...pastStageScenes().map(s => ({ ...s, ended: true }))].sort((a, b) => b.scene.startAt - a.scene.startAt), []);
+  const matching = scenes.filter(s => (filter === "all" || (filter === "ended") === s.ended) && `${s.title} ${s.subtitle || ""} ${s.scene.place} ${s.scene.summary || ""} ${new Date(s.scene.startAt).toLocaleDateString("zh-CN")}`.toLowerCase().includes(query.trim().toLowerCase()));
+  return <div className="stg-mask" onClick={onClose}><div className="stg-sheet stg-picker" onClick={e => e.stopPropagation()}>
+    <div className="stg-picker-head"><b>{STAGE_APP_NAME} · 以前的场景</b><button type="button" className="stg-done" onClick={onClose}>完成</button></div>
+    <div className="stg-search"><Search size={15} /><input aria-label="搜索场景" value={query} placeholder="搜索地点、事情、日期" onChange={e => { setQuery(e.target.value); setLimit(20); }} /></div>
+    <div className="stg-history-filters">{([["all", "全部"], ["open", "进行中"], ["ended", "已结束"]] as const).map(([key, name]) => <button key={key} data-on={filter === key || undefined} onClick={() => { setFilter(key); setLimit(20); }}>{name}</button>)}</div>
+    {matching.slice(0, limit).map(s => <div className="stg-history-card" key={s.chapterIndex}><b>{s.title}</b><small>{new Date(s.scene.startAt).toLocaleString("zh-CN", { year: "numeric", month: "long", day: "numeric", hour: "2-digit", minute: "2-digit" })} · {s.scene.place} · {s.ended ? "已结束" : "进行中"}</small>{s.scene.summary ? <p>{s.scene.summary}</p> : null}<div className="stg-history-actions">{!s.ended ? <button onClick={() => onPlay(s.chapterIndex)}>继续这一场</button> : null}<button onClick={() => onReplay(s.chapterIndex)}>重播这一场</button><button onClick={() => onPlay(s.chapterIndex)}>回顾</button></div></div>)}
+    {matching.length > limit ? <button className="stg-history-more" onClick={() => setLimit(n => n + 20)}>加载更多（还有 {matching.length - limit} 场）</button> : null}
+    {!matching.length ? <p className="stg-empty">{scenes.length ? "没有找到符合条件的场景" : "还没有过场景"}</p> : null}
+  </div></div>;
 }

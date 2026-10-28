@@ -1,3 +1,4 @@
+import { worldWeatherHint } from "./idol-weather";
 /**
  * 爱豆小手机：事情发动机。
  *
@@ -160,6 +161,7 @@ function recentHers(): string {
 
 const PLAN_RULES = `你在给一出韩国娱乐圈练习生的戏排接下来几天世界里会发生的事。主角是「她」。只输出 JSON，不要别的字。
 规矩：
+- 普通晴阴雨雪只作生活背景，不专门为每次天气变化排事情或动态，不让所有人谈天气；初雪由其他系统处理，你不要另外排初雪事件或初雪动态。
 - 小事两三天一件，大事一两周一件；一天最多一两件，可以有一天什么都没有。
 - 事情分三种：别人身上的事（她旁观或之后听说）；找上她的事（别人主动联系她、通知她、约她）；她做过的事的后果（只能来自下面「她最近做过的事」）。
 - 不替她决定她的表现、心情和身体，不写她说了什么、做了什么；她的失误类事情只发生在别人身上。
@@ -204,6 +206,7 @@ async function plan(from: number, to: number): Promise<void> {
     `时间段：${fmt(from)} 到 ${fmt(to)}${from < now - HOUR ? `（${fmt(from)} 到 ${fmt(now)} 是她跳过的日子，那几天照常过，只写别人身上的事和群里的话）` : ""}`,
     `【她是谁】\n${card ? describeTrainee(card) : "一个想当爱豆的女生"}\n关注度：${fameWord(s.fame)}${s.health && s.health.until > now ? `\n身体：${s.health.what}` : ""}`,
     careerPromptBlock(),
+    worldWeatherHint() ? `【此刻的天气，仅代表现在，不代表未来三天】${worldWeatherHint()}` : "",
     `【名单】\n${rosterBlock() || "（还没有）"}`,
     `【地点名单】${allScenePlaces().filter(x => !placeLocked(x)).map(x => x.key).join("、")}`,
     crowd ? `【练习生群里的路人】${crowd}` : "",

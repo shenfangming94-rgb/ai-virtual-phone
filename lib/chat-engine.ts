@@ -1,3 +1,4 @@
+import { worldWeatherHint } from "./idol-weather";
 // lib/chat-engine.ts
 
 import { buildAlipayChatHint } from "./alipay-chat";
@@ -1909,7 +1910,7 @@ export async function buildChatPromptMessages(
         hint: buildChatPluginPromptFragments(session.id),
     });
     const pluginPromptHint = pluginPrompt.hint?.trim() ? `\n\n### 扩展插件\n${pluginPrompt.hint.trim()}\n` : "";
-    const customAppRichMediaDirectives = formatCustomAppChatDirectivesForPrompt() + buildScreenEffectPromptHint() + buildAlipayChatHint(character.id, !!session.isGroup) + buildIdolChatHint(character.id, !!session.isGroup) + buildMeituanChatHint(!!session.isGroup) + pluginPromptHint;
+    const customAppRichMediaDirectives = formatCustomAppChatDirectivesForPrompt() + "\n" + worldWeatherHint() + buildScreenEffectPromptHint() + buildAlipayChatHint(character.id, !!session.isGroup) + buildIdolChatHint(character.id, !!session.isGroup) + buildMeituanChatHint(!!session.isGroup) + pluginPromptHint;
     const toolsPrompt = toolsEnabled && !usesNativeActions ? formatToolsForPrompt(enabledTools) : "";
     const chatBilingualInstruction = !session.isGroup
         ? buildChatBilingualInstruction(session.bilingualTranslationEnabled !== false, "single", session.bilingualTranslationPrompt)

@@ -1,0 +1,72 @@
+{
+  "sdkVersion": "1.0",
+  "id": "weather.aurora",
+  "name": "天气",
+  "version": "1.4.1-idol.1",
+  "author": "Claude & fish",
+  "description": "fish 天气原界面 · 爱豆世界适配版：首尔历史天气随世界时间变化；天气由气象数据提供，不由AI生成。需爱豆二改宿主。",
+  "icon": "icon.png",
+  "entry": "index.html",
+  "permissions": [
+    "app.data.read",
+    "app.data.write",
+    "geo.read",
+    "network.fetch",
+    "chat.tools",
+    "chat.sendCard",
+    "chat.requestReply",
+    "memory.write",
+    "user.profile.read",
+    "characters.read",
+    "ui.toast"
+  ],
+  "network": {
+    "mode": "direct",
+    "allowedDomains": [
+      "api.open-meteo.com",
+      "geocoding-api.open-meteo.com",
+      "air-quality-api.open-meteo.com",
+      "api.bigdatacloud.net",
+      "api.weatherapi.com",
+      "archive-api.open-meteo.com"
+    ]
+  },
+  "extensions": {
+    "tools": [
+      {
+        "id": "weather-card",
+        "name": "查询天气",
+        "description": "在聊天里给用户发一张天气卡片（可指定城市）。注意：你平时已经能从记忆里知道用户那边的地点和天气，不需要为了「知道天气」而调用；只有当你想让用户看一眼天气卡片时才调用，比如用户问起天气、你想提醒TA带伞、或者关心TA那边的天气变化时。不要每次都发。卡片会自动出现在聊天里，你只需用自己的口吻自然接话。",
+        "visibility": "shared",
+        "handler": "weatherCard",
+        "timeoutMs": 60000,
+        "parameterSchema": {
+          "type": "object",
+          "properties": {
+            "city": {
+              "type": "string",
+              "description": "可选。要查的城市名；不填就查用户当前所在地"
+            },
+            "sendCard": {
+              "type": "boolean",
+              "description": "是否在聊天里发天气卡片，默认 true；只想自己了解天气时填 false"
+            }
+          }
+        }
+      }
+    ],
+    "chat": {
+      "plusActions": [
+        {
+          "id": "share-my-weather",
+          "label": "天气",
+          "entry": "share-weather",
+          "presentation": "panel",
+          "panelHeight": "66vh",
+          "description": "把我这边的天气卡片发给TA"
+        }
+      ]
+    }
+  },
+  "idolWeatherVersion": 1
+}

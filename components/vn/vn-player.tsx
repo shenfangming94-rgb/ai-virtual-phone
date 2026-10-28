@@ -31,6 +31,8 @@ import { jumpWorld } from "@/lib/idol-reminders";
 import { fmtWorld } from "@/lib/idol-scenes";
 import { subscribeWorldClock } from "@/lib/world-clock";
 import type { SceneCloseResult } from "@/lib/idol-world";
+import { worldWeatherLabel } from "@/lib/idol-weather";
+import { StageMusicPanel } from "./stage-music-panel";
 import { loadBgmMuted, saveBgmMuted, useStageBgm } from "./stage-bgm";
 import { forgetRetryHint, loadRetryHints, rememberRetryHint } from "@/lib/reply-versions";
 import { playAudioBlobViaMediaElement, resolveVoiceConfig, synthesizeSpeech, unlockAudioPlayback } from "@/lib/tts-service";
@@ -43,6 +45,7 @@ interface VnPlayerProps {
   vnTheme?: string;
   /** 场景 app：「世界」的一场戏（一章 = 一场） */
   stage?: boolean;
+  onStageReplay?: () => void;
 }
 
 type AssetLoadStatus = "ready" | "failed";
@@ -99,11 +102,14 @@ async function dataUrlToBlob(dataUrl: string): Promise<Blob> {
   return response.blob();
 }
 
-export function VnPlayer({ characterId, chapterIndex, onClose, onChapterEnd, vnTheme, stage }: VnPlayerProps) {
+export function VnPlayer({ characterId, chapterIndex, onClose, onChapterEnd, vnTheme, stage, onStageReplay }: VnPlayerProps) {
   const stageScene = useMemo(() => (stage ? getStageScene(chapterIdOf(chapterIndex) ?? "") : null), [stage, chapterIndex]);
   const [stageOpening, setStageOpening] = useState(false);
   const [stageEnd, setStageEnd] = useState<null | "working" | SceneCloseResult | { error: string }>(null);
   const [stageToast, setStageToast] = useState("");
+  const [, setWeatherVersion] = useState(0);
+  useEffect(() => { if (!stage) return; const update = () => setWeatherVersion(v => v + 1); window.addEventListener("idol-weather-updated", update); return () => window.removeEventListener("idol-weather-updated", update); }, [stage]);
+  const [musicOpen, setMusicOpen] = useState(false);
   const [bgmMuted, setBgmMuted] = useState(() => loadBgmMuted());
   const [notesOpen, setNotesOpen] = useState(false);
   const [clockOpen, setClockOpen] = useState(false);
@@ -1058,6 +1064,8 @@ export function VnPlayer({ characterId, chapterIndex, onClose, onChapterEnd, vnT
       {/* ── Atmospheric Overlay ── */}
       <div className="vn-atmosphere" />
 
+      {stage && musicOpen ? <StageMusicPanel onClose={() => setMusicOpen(false)} onPlay={() => { setBgmMuted(false); saveBgmMuted(false); }} /> : null}
+
       {/* ── Top Bar ── */}
       <div className="vn-topbar" onClick={(e) => e.stopPropagation()}>
         <div className="vn-topbar-safe-area" />
@@ -1068,7 +1076,7 @@ export function VnPlayer({ characterId, chapterIndex, onClose, onChapterEnd, vnT
 
         <div className="vn-topbar-right">
           {stage && (
-            <button className="vn-topbar-btn" onClick={() => { const v = !bgmMuted; setBgmMuted(v); saveBgmMuted(v); }} title={bgmMuted ? "打开音乐" : "关掉音乐"}>
+            <button className="vn-topbar-btn" onClick={() => setMusicOpen(true)} title="音乐">
               {bgmMuted ? <VolumeX size={18} /> : <Music2 size={18} />}
             </button>
           )}
@@ -1644,6 +1652,7 @@ export function VnPlayer({ characterId, chapterIndex, onClose, onChapterEnd, vnT
         <div className="vn-stage-open" onClick={(e) => { e.stopPropagation(); setStageOpening(false); }}>
           <div className="vn-stage-open-time">{fmtWorld(stageScene.startAt).replace(/^\d+年/, "")}</div>
           <div className="vn-stage-open-place">{stageScene.place}</div>
+          {worldWeatherLabel(stageScene.startAt) ? <div className="vn-stage-open-weather">{worldWeatherLabel(stageScene.startAt)}</div> : null}
           {stageScene.nodeId ? <div className="vn-stage-open-title">{session.chapters[chapterIndex]?.title}</div> : null}
           <div className="vn-stage-open-hint">点一下，说你的第一句</div>
         </div>
@@ -1678,6 +1687,7 @@ export function VnPlayer({ characterId, chapterIndex, onClose, onChapterEnd, vnT
                 catch (err) { showStageToast(err instanceof Error ? err.message : String(err)); }
                 finally { setNoteBusy(""); }
               }}>{noteBusy || "把小总结合成一段大总结"}</button>
+              {onStageReplay ? <button className="vn-end-btn vn-stage-merge" onClick={onStageReplay}>重播这一场</button> : null}
               <div className="vn-stage-jumps">
                 <button className="vn-end-btn" onClick={() => { onChapterEnd(); }}>就这样</button>
                 <button className="vn-end-btn" onClick={() => { jumpWorld(Date.now() + 3600e3); onChapterEnd(); }}>过 1 小时</button>

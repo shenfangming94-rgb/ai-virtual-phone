@@ -1,0 +1,1655 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,maximum-scale=1,user-scalable=no">
+<title>天气</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+:root{
+  --safe-t:var(--ai-phone-app-safe-top,env(safe-area-inset-top,0px));
+  --safe-b:var(--ai-phone-app-safe-bottom,env(safe-area-inset-bottom,0px));
+  --bar-t:var(--ai-phone-app-bar-top,calc(var(--safe-t) - 38px));
+  --bar-h:var(--ai-phone-app-bar-height,30px);
+  --ink:#fff;
+  --dim:rgba(255,255,255,.62);
+  --hair:rgba(255,255,255,.22);
+  --glass:linear-gradient(180deg,rgba(255,255,255,.17),rgba(255,255,255,.11));
+  --sky-1:#2e6fd6;--sky-2:#4a9be8;--sky-3:#8fc6f0;
+  --accent:#ffd479;
+}
+html,body{height:100%;overflow:hidden;}
+body{
+  font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","PingFang SC","Helvetica Neue",Helvetica,Arial,sans-serif;
+  color:var(--ink);background:#20518f;
+  -webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility;
+  font-variant-numeric:tabular-nums;
+  user-select:none;-webkit-user-select:none;
+}
+button{font:inherit;color:inherit;background:none;border:0;cursor:pointer;}
+input{font:inherit;color:inherit;background:none;border:0;outline:none;}
+.hide{display:none!important;}
+
+/* ── 背景 ───────────────────────────── */
+#sky{position:fixed;inset:0;z-index:0;overflow:hidden;background:linear-gradient(180deg,var(--sky-1) 0%,var(--sky-2) 52%,var(--sky-3) 100%);transition:background 1.2s ease;}
+#sky .orb{position:absolute;width:40vmin;height:40vmin;border-radius:50%;opacity:.9;
+  background:radial-gradient(circle at 50% 50%,rgba(255,238,190,.95),rgba(255,214,130,.55) 42%,rgba(255,200,110,0) 70%);
+  top:-12vmin;right:-12vmin;transition:opacity 1s;}
+#sky .halo{position:absolute;inset:-20%;background:radial-gradient(60% 45% at 78% 6%,rgba(255,235,190,.35),rgba(255,235,190,0) 70%);}
+#sky .cloud{position:absolute;border-radius:50%;background:radial-gradient(closest-side,rgba(255,255,255,.55),rgba(255,255,255,.22) 55%,rgba(255,255,255,0));animation:drift linear infinite;will-change:transform;}
+#sky .stars i{position:absolute;width:2px;height:2px;border-radius:50%;background:#fff;opacity:.85;animation:twinkle ease-in-out infinite;}
+#sky .fall{position:absolute;top:-12%;width:1.6px;height:14vh;border-radius:2px;background:linear-gradient(180deg,rgba(255,255,255,0),rgba(255,255,255,.55));animation:rain linear infinite;}
+#sky .flake{position:absolute;top:-6%;width:5px;height:5px;border-radius:50%;background:rgba(255,255,255,.9);filter:blur(.3px);animation:snow linear infinite;}
+#sky .veil{position:absolute;inset:0;background:linear-gradient(180deg,rgba(10,20,40,0) 40%,rgba(8,16,32,.35) 100%);}
+@keyframes drift{from{transform:translate3d(-30vw,0,0)}to{transform:translate3d(110vw,0,0)}}
+@keyframes twinkle{0%,100%{opacity:.15}50%{opacity:.95}}
+@keyframes rain{from{transform:translate3d(0,-20vh,0)}to{transform:translate3d(-6vw,120vh,0)}}
+@keyframes snow{from{transform:translate3d(0,-10vh,0)}to{transform:translate3d(4vw,115vh,0)}}
+@media (prefers-reduced-motion:reduce){#sky *{animation:none!important;}}
+body.paused #sky *{animation-play-state:paused!important;}
+
+/* ── 分页 ───────────────────────────── */
+#pages{position:relative;z-index:1;height:100%;display:flex;overflow-x:auto;overflow-y:hidden;scroll-snap-type:x mandatory;scrollbar-width:none;}
+#pages::-webkit-scrollbar{display:none;}
+.page{flex:0 0 100%;height:100%;scroll-snap-align:center;overflow-y:auto;overflow-x:hidden;scrollbar-width:none;
+  padding:calc(var(--safe-t) + 6px) 18px calc(var(--safe-b) + 86px);-webkit-overflow-scrolling:touch;}
+.page::-webkit-scrollbar{display:none;}
+
+/* ── 头部 ───────────────────────────── */
+.hero{text-align:center;padding:18px 0 14px;min-height:34vh;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;}
+.hero .place{font-size:33px;font-weight:400;letter-spacing:.2px;line-height:1.2;text-shadow:0 1px 12px rgba(0,0,0,.18);}
+.hero .sub{margin-top:2px;font-size:13px;color:var(--dim);letter-spacing:.4px;}
+.hero .temp{font-size:96px;font-weight:200;line-height:1.02;letter-spacing:-4px;margin:2px 0 0 10px;text-shadow:0 2px 20px rgba(0,0,0,.14);}
+.hero .cond{font-size:21px;font-weight:500;color:rgba(255,255,255,.88);margin-top:-2px;}
+.hero .range{font-size:19px;color:rgba(255,255,255,.9);margin-top:4px;letter-spacing:.2px;}
+.hero.collapsed{min-height:0;}
+
+.topbar{position:sticky;top:calc(var(--safe-t) * -1 - 6px);z-index:5;display:flex;align-items:center;justify-content:center;gap:8px;height:0;opacity:0;pointer-events:none;overflow:hidden;margin:0 -18px;padding:0 18px;transition:opacity .2s;}
+.topbar.on{opacity:1;padding-top:calc(var(--safe-t) + 4px);background:linear-gradient(180deg,var(--sky-top,#2c5ea8) 0%,var(--sky-top,#2c5ea8) 72%,rgba(0,0,0,0) 100%);}
+.topbar .t-place{font-size:17px;font-weight:600;}
+.topbar .t-temp{font-size:17px;font-weight:400;color:rgba(255,255,255,.85);}
+
+/* ── 卡片 ───────────────────────────── */
+.card{position:relative;margin-top:14px;padding:12px 14px 14px;border-radius:22px;background:var(--glass);
+  border:1px solid var(--hair);
+  box-shadow:0 8px 26px rgba(10,20,45,.12);overflow:hidden;}
+.card h3{display:flex;align-items:center;gap:6px;font-size:12.5px;font-weight:600;letter-spacing:.6px;color:rgba(255,255,255,.72);text-transform:none;}
+.card h3 svg{width:14px;height:14px;opacity:.85;}
+.card .note{margin:8px 0 2px;font-size:14.5px;line-height:1.45;color:rgba(255,255,255,.92);}
+.rule{height:1px;background:rgba(255,255,255,.18);margin:10px -14px 4px;}
+
+/* 逐小时 */
+.hours{display:flex;gap:2px;overflow-x:auto;scrollbar-width:none;margin:0 -14px;padding:6px 10px 2px;}
+.hours::-webkit-scrollbar{display:none;}
+.hour{flex:0 0 auto;width:60px;display:flex;flex-direction:column;align-items:center;gap:7px;padding:6px 0;border-radius:16px;}
+.hour.now{background:rgba(255,255,255,.14);}
+.hour .h-t{font-size:14px;font-weight:600;color:rgba(255,255,255,.92);}
+.hour .h-ic{width:26px;height:26px;}
+.hour .h-p{font-size:11px;font-weight:600;color:#9ad8ff;margin-top:-6px;height:12px;}
+.hour .h-v{font-size:19px;font-weight:500;}
+
+/* 10 天 */
+.days{margin-top:2px;}
+.day{display:grid;grid-template-columns:46px 30px 34px 1fr 34px;align-items:center;gap:8px;padding:7px 0;border-top:1px solid rgba(255,255,255,.16);}
+.day:first-child{border-top:0;}
+.day .d-n{font-size:17px;font-weight:500;}
+.day .d-ic{width:26px;height:26px;justify-self:center;}
+.day .d-lo{font-size:17px;color:rgba(255,255,255,.58);text-align:right;}
+.day .d-hi{font-size:17px;text-align:right;}
+.bar{position:relative;height:4px;border-radius:99px;background:rgba(255,255,255,.22);overflow:visible;}
+.bar span{position:absolute;top:0;bottom:0;border-radius:99px;background:linear-gradient(90deg,#8ad4ff,#ffd979,#ff9e6d);}
+.bar i{position:absolute;top:50%;width:7px;height:7px;margin-top:-3.5px;margin-left:-3.5px;border-radius:50%;background:#fff;box-shadow:0 0 0 1.5px rgba(0,0,0,.12);}
+
+/* 详情方块 */
+.tiles{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:14px;}
+.tile{aspect-ratio:1/1;padding:12px 14px;border-radius:22px;background:var(--glass);border:1px solid var(--hair);
+  display:flex;flex-direction:column;box-shadow:0 8px 26px rgba(10,20,45,.14);overflow:hidden;}
+.tile h4{display:flex;align-items:center;gap:6px;font-size:12.5px;font-weight:600;letter-spacing:.5px;color:rgba(255,255,255,.72);}
+.tile h4 svg{width:14px;height:14px;opacity:.85;}
+.tile .big{font-size:33px;font-weight:300;letter-spacing:-.5px;margin-top:6px;line-height:1.15;}
+.tile .mid{font-size:19px;font-weight:500;margin-top:2px;}
+.tile .foot{margin-top:auto;font-size:13px;line-height:1.35;color:rgba(255,255,255,.82);}
+.uvbar{height:5px;border-radius:99px;margin:10px 0 4px;background:linear-gradient(90deg,#4cd964,#ffd60a,#ff9500,#ff3b30,#af52de);position:relative;}
+.uvbar i{position:absolute;top:50%;width:9px;height:9px;margin-top:-4.5px;margin-left:-4.5px;border-radius:50%;background:#fff;box-shadow:0 0 0 1.5px rgba(0,0,0,.18);}
+.aqibar{height:5px;border-radius:99px;margin:10px 0 4px;background:linear-gradient(90deg,#4cd964,#ffd60a,#ff9500,#ff3b30,#af52de,#8e6e53);position:relative;}
+.aqibar i{position:absolute;top:50%;width:9px;height:9px;margin-top:-4.5px;margin-left:-4.5px;border-radius:50%;background:#fff;box-shadow:0 0 0 1.5px rgba(0,0,0,.18);}
+.sunarc{flex:1;margin-top:6px;position:relative;}
+.sunarc svg{width:100%;height:100%;overflow:visible;}
+.compass{flex:1;display:flex;align-items:center;justify-content:center;margin-top:4px;}
+.compass svg{width:78px;height:78px;}
+.wrows{margin-top:6px;font-size:14px;}
+.wrow{display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-top:1px solid rgba(255,255,255,.16);}
+.wrow:first-child{border-top:0;}
+.wrow b{font-weight:500;}
+.wrow span{color:rgba(255,255,255,.72);}
+
+.credit{margin:16px 0 4px;text-align:center;font-size:11.5px;color:rgba(255,255,255,.55);line-height:1.6;}
+
+/* 下拉刷新 */
+.refresh{position:absolute;left:0;right:0;top:calc(var(--safe-t) + 4px);display:flex;justify-content:center;pointer-events:none;opacity:0;transition:opacity .2s;z-index:6;}
+.refresh.on{opacity:1;}
+.spin{width:18px;height:18px;border-radius:50%;border:2px solid rgba(255,255,255,.35);border-top-color:#fff;animation:spin .8s linear infinite;}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* ── 底栏 ───────────────────────────── */
+#bottom{position:fixed;left:0;right:0;bottom:0;z-index:8;display:flex;align-items:center;justify-content:space-between;
+  padding:10px 20px calc(var(--safe-b) + 10px);gap:14px;
+  background:linear-gradient(180deg,rgba(8,16,34,0),rgba(8,16,34,.34));}
+#bottom .spacer{width:26px;}
+.dots{display:flex;gap:7px;align-items:center;justify-content:center;flex:1;}
+.dots b{width:7px;height:7px;border-radius:50%;background:rgba(255,255,255,.4);transition:background .2s,transform .2s;}
+.dots b.on{background:#fff;transform:scale(1.1);}
+.dots .loc{width:9px;height:9px;opacity:.55;}
+.dots .loc.on{opacity:1;}
+#bottom .ico{width:26px;height:26px;opacity:.92;}
+
+/* ── 城市列表 ───────────────────────── */
+#sheet{position:fixed;inset:0;z-index:20;background:#0f1c33;transform:translateY(100%);transition:transform .32s cubic-bezier(.24,.9,.3,1);display:flex;flex-direction:column;}
+#sheet.on{transform:none;}
+#sheet .sh-top{padding:calc(var(--safe-t) + 14px) 18px 6px;}
+#sheet .sh-title{display:flex;align-items:center;justify-content:space-between;}
+#sheet .sh-title h2{font-size:30px;font-weight:700;letter-spacing:.2px;}
+#sheet .sh-acts{display:flex;align-items:center;gap:14px;}
+#sheet .sh-acts button{font-size:15px;color:#7fc0ff;}
+.search{margin-top:12px;display:flex;align-items:center;gap:8px;background:rgba(255,255,255,.12);border-radius:12px;padding:9px 11px;}
+.search svg{width:16px;height:16px;opacity:.6;}
+.search input{flex:1;font-size:16px;}
+.search input::placeholder{color:rgba(255,255,255,.5);}
+#sheet .list{flex:1;overflow-y:auto;padding:8px 18px calc(var(--safe-b) + 28px);scrollbar-width:none;}
+#sheet .list::-webkit-scrollbar{display:none;}
+.pcard{position:relative;margin-top:12px;border-radius:20px;padding:14px 16px;min-height:104px;display:flex;justify-content:space-between;
+  background:linear-gradient(140deg,var(--c1,#3d7fd8),var(--c2,#7fb6ea));box-shadow:0 8px 22px rgba(0,0,0,.24);overflow:hidden;}
+.pcard .l{display:flex;flex-direction:column;justify-content:space-between;}
+.pcard .r{display:flex;flex-direction:column;align-items:flex-end;justify-content:space-between;}
+.pcard .p-n{font-size:22px;font-weight:600;line-height:1.2;}
+.pcard .p-s{font-size:13px;color:rgba(255,255,255,.78);margin-top:2px;}
+.pcard .p-c{font-size:13px;color:rgba(255,255,255,.9);}
+.pcard .p-t{font-size:44px;font-weight:200;letter-spacing:-2px;line-height:1;}
+.pcard .p-r{font-size:12.5px;color:rgba(255,255,255,.85);}
+.pcard .del{position:absolute;right:10px;top:10px;width:26px;height:26px;border-radius:50%;background:rgba(0,0,0,.28);display:flex;align-items:center;justify-content:center;opacity:0;transition:opacity .2s;}
+.pcard.editing .del{opacity:1;}
+.pcard .pin{width:13px;height:13px;margin-right:4px;vertical-align:-1px;}
+.res{display:flex;align-items:center;justify-content:space-between;padding:13px 2px;border-bottom:1px solid rgba(255,255,255,.12);}
+.res .r-n{font-size:17px;}
+.res .r-s{font-size:13px;color:rgba(255,255,255,.55);margin-top:2px;}
+.res .add{font-size:22px;color:#7fc0ff;padding:0 6px;}
+.empty{padding:40px 10px;text-align:center;color:rgba(255,255,255,.5);font-size:14px;line-height:1.7;}
+
+/* ── 设置 ───────────────────────────── */
+#setting{position:fixed;inset:0;z-index:30;background:#0f1c33;transform:translateY(100%);transition:transform .32s cubic-bezier(.24,.9,.3,1);overflow-y:auto;padding:0 18px calc(var(--safe-b) + 30px);}
+#setting.on{transform:none;}
+#setting h2{font-size:26px;font-weight:700;margin-bottom:6px;}
+.grp{margin-top:18px;border-radius:16px;background:rgba(255,255,255,.1);overflow:hidden;}
+.grp .gt{padding:12px 14px 4px;font-size:12px;letter-spacing:.6px;color:rgba(255,255,255,.55);}
+.row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:13px 14px;border-top:1px solid rgba(255,255,255,.1);font-size:15.5px;}
+.row:first-of-type{border-top:0;}
+.row input[type=text],.row input[type=password],.row input[type=datetime-local]{flex:1;min-width:0;text-align:right;font-size:15px;color-scheme:dark;}
+.row.sub{padding-top:10px;padding-bottom:10px;}
+.row.off{opacity:.4;pointer-events:none;}
+.row input::placeholder{color:rgba(255,255,255,.4);}
+.seg{display:flex;background:rgba(255,255,255,.12);border-radius:9px;padding:2px;}
+.seg button{padding:5px 12px;border-radius:7px;font-size:14px;color:rgba(255,255,255,.7);}
+.seg button.on{background:rgba(255,255,255,.9);color:#12213c;font-weight:600;}
+.tip{margin-top:10px;font-size:12.5px;line-height:1.7;color:rgba(255,255,255,.55);}
+.btn{display:block;width:100%;margin-top:18px;padding:13px;border-radius:14px;background:rgba(255,255,255,.14);font-size:16px;font-weight:600;text-align:center;}
+.set-head{position:sticky;top:0;z-index:3;margin:0 -18px 6px;padding:calc(var(--safe-t) + 8px) 18px 10px;background:#0f1c33;display:flex;align-items:center;justify-content:space-between;}
+.set-head h2{margin:0;}
+.close{height:34px;padding:0 16px;border-radius:99px;background:rgba(255,255,255,.16);display:flex;align-items:center;justify-content:center;gap:6px;font-size:15px;font-weight:600;color:#fff;}
+.close:active{background:rgba(255,255,255,.26);}
+.toastbox{position:fixed;left:50%;bottom:calc(var(--safe-b) + 90px);transform:translateX(-50%) translateY(10px);z-index:60;
+  background:rgba(12,20,36,.9);color:#fff;font-size:14px;padding:9px 16px;border-radius:99px;opacity:0;transition:opacity .25s,transform .25s;pointer-events:none;}
+.toastbox.on{opacity:1;transform:translateX(-50%);}
+.skel{opacity:.55;}
+
+/* ── 按角色设置 ── */
+#charset{position:fixed;inset:0;z-index:35;background:#0f1c33;transform:translateY(100%);transition:transform .3s cubic-bezier(.24,.9,.3,1);overflow-y:auto;padding:0 18px calc(var(--safe-b) + 30px);}
+#charset.on{transform:none;}
+.crow{margin-top:10px;border-radius:16px;background:rgba(255,255,255,.08);overflow:hidden;}
+.crow .ch{display:flex;align-items:center;gap:12px;padding:11px 14px;cursor:pointer;}
+.crow .av{width:38px;height:38px;border-radius:50%;flex:0 0 auto;background:rgba(255,255,255,.14) center/cover no-repeat;display:flex;align-items:center;justify-content:center;font-weight:700;}
+.crow .cn{flex:1;min-width:0;font-size:16px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.crow .cm{font-size:13px;color:rgba(255,255,255,.55);white-space:nowrap;max-width:45%;overflow:hidden;text-overflow:ellipsis;}
+.crow .ce{display:none;border-top:1px solid rgba(255,255,255,.1);}
+.crow.open .ce{display:block;}
+.crow .ce .row{border-top:1px solid rgba(255,255,255,.08);}
+.crow .ce .row:first-child{border-top:0;}
+
+/* ── 聊天 + 号面板：分享我的天气 ── */
+#share{position:fixed;inset:0;z-index:40;background:#0f1c33;display:flex;flex-direction:column;padding:max(14px,var(--safe-t)) 16px calc(var(--safe-b) + 14px);}
+#share .s-title{font-size:17px;font-weight:700;text-align:center;margin:2px 0 12px;}
+#share .s-prev{position:relative;border-radius:18px;overflow:hidden;background:rgba(255,255,255,.06);min-height:120px;}
+#share #s-frame{display:block;width:100%;min-height:222px;pointer-events:none;}
+#share .s-load{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;}
+#share .chips{display:flex;gap:8px;overflow-x:auto;scrollbar-width:none;margin:12px -16px 0;padding:0 16px 2px;}
+#share .chips::-webkit-scrollbar{display:none;}
+#share .chip{flex:0 0 auto;padding:7px 13px;border-radius:99px;background:rgba(255,255,255,.1);font-size:14px;color:rgba(255,255,255,.85);}
+#share .chip.on{background:#fff;color:#12213c;font-weight:600;}
+#share .chip svg{width:12px;height:12px;vertical-align:-1px;margin-right:3px;}
+#share .s-row{display:flex;align-items:center;justify-content:space-between;margin-top:14px;font-size:15px;color:rgba(255,255,255,.85);}
+#share .s-send{margin-top:auto;padding:14px;border-radius:16px;background:linear-gradient(135deg,#3d8bff,#5fb0ff);font-size:17px;font-weight:700;text-align:center;box-shadow:0 8px 20px rgba(40,120,255,.3);}
+#share .s-send:disabled{opacity:.5;}
+#share .s-note{margin-top:8px;text-align:center;font-size:12px;color:rgba(255,255,255,.45);}
+</style>
+</head>
+<body>
+<svg style="position:absolute;width:0;height:0" aria-hidden="true">
+  <defs>
+    <linearGradient id="g-sun" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffe27a"/><stop offset="1" stop-color="#ffab3f"/></linearGradient>
+    <linearGradient id="g-moon" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#fdfdff"/><stop offset="1" stop-color="#cfd8ea"/></linearGradient>
+    <linearGradient id="g-cloud" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffffff"/><stop offset="1" stop-color="#d7e2f0"/></linearGradient>
+    <linearGradient id="g-dark" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#cfd8e6"/><stop offset="1" stop-color="#9aa8bd"/></linearGradient>
+    <linearGradient id="g-rain" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#8fd4ff"/><stop offset="1" stop-color="#4aa8f0"/></linearGradient>
+    <linearGradient id="g-bolt" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffe680"/><stop offset="1" stop-color="#ffb327"/></linearGradient>
+  </defs>
+
+  <symbol id="i-sun" viewBox="0 0 32 32">
+    <g stroke="url(#g-sun)" stroke-width="2.2" stroke-linecap="round">
+      <path d="M16 2.6v3.2M16 26.2v3.2M29.4 16h-3.2M5.8 16H2.6M25.5 6.5l-2.3 2.3M8.8 23.2l-2.3 2.3M25.5 25.5l-2.3-2.3M8.8 8.8L6.5 6.5"/>
+    </g>
+    <circle cx="16" cy="16" r="7.2" fill="url(#g-sun)"/>
+  </symbol>
+  <symbol id="i-moon" viewBox="0 0 32 32">
+    <path d="M25.5 20.4A10.8 10.8 0 0 1 12.1 6.8a10.9 10.9 0 1 0 13.4 13.6z" fill="url(#g-moon)"/>
+  </symbol>
+  <symbol id="i-cloud-sun" viewBox="0 0 32 32">
+    <circle cx="11.5" cy="10.5" r="5" fill="url(#g-sun)"/>
+    <g stroke="url(#g-sun)" stroke-width="1.8" stroke-linecap="round"><path d="M11.5 2.4v2.2M3.4 10.5H1.4M19.2 3.4l-1.5 1.5M4.9 3.4l1.5 1.5"/></g>
+    <path d="M12.6 26.6h11.6a4.9 4.9 0 0 0 .6-9.8 7 7 0 0 0-13.3-1.4 5.6 5.6 0 0 0 1.1 11.2z" fill="url(#g-cloud)"/>
+  </symbol>
+  <symbol id="i-cloud-moon" viewBox="0 0 32 32">
+    <path d="M20.6 12.4A7.6 7.6 0 0 1 11.9 3a7.7 7.7 0 1 0 9.4 9.6z" fill="url(#g-moon)"/>
+    <path d="M12.6 27h11.6a4.9 4.9 0 0 0 .6-9.8 7 7 0 0 0-13.3-1.4A5.6 5.6 0 0 0 12.6 27z" fill="url(#g-cloud)"/>
+  </symbol>
+  <symbol id="i-cloud" viewBox="0 0 32 32">
+    <path d="M9.6 26.4h13.8a5.6 5.6 0 0 0 .7-11.2 8 8 0 0 0-15.2-1.6 6.4 6.4 0 0 0 .7 12.8z" fill="url(#g-cloud)"/>
+  </symbol>
+  <symbol id="i-clouds" viewBox="0 0 32 32">
+    <path d="M20 14.6a6.4 6.4 0 0 0-12-1.3 5.1 5.1 0 0 0 .6 10.2h11a4.5 4.5 0 0 0 .4-8.9z" fill="url(#g-dark)" opacity=".8"/>
+    <path d="M14.4 27.2h10.9a4.7 4.7 0 0 0 .5-9.3 6.7 6.7 0 0 0-12.6-1.3 5.3 5.3 0 0 0 1.2 10.6z" fill="url(#g-cloud)"/>
+  </symbol>
+  <symbol id="i-rain" viewBox="0 0 32 32">
+    <path d="M9.8 20.4h13.4a5.4 5.4 0 0 0 .6-10.8A7.7 7.7 0 0 0 9.2 8.1a6.2 6.2 0 0 0 .6 12.3z" fill="url(#g-cloud)"/>
+    <g stroke="url(#g-rain)" stroke-width="2.4" stroke-linecap="round"><path d="M11.4 23.4l-1.6 4.4M17 23.4l-1.6 4.4M22.6 23.4L21 27.8"/></g>
+  </symbol>
+  <symbol id="i-drizzle" viewBox="0 0 32 32">
+    <path d="M9.8 20.4h13.4a5.4 5.4 0 0 0 .6-10.8A7.7 7.7 0 0 0 9.2 8.1a6.2 6.2 0 0 0 .6 12.3z" fill="url(#g-cloud)"/>
+    <g stroke="url(#g-rain)" stroke-width="2.3" stroke-linecap="round"><path d="M12 24.2l-.9 2.4M17.4 24.2l-.9 2.4M22.8 24.2l-.9 2.4"/></g>
+  </symbol>
+  <symbol id="i-showers" viewBox="0 0 32 32">
+    <circle cx="10.6" cy="8.6" r="4.2" fill="url(#g-sun)"/>
+    <path d="M12.4 21.4h11.3a4.8 4.8 0 0 0 .5-9.6 6.8 6.8 0 0 0-12.8-1.4 5.4 5.4 0 0 0 1 11z" fill="url(#g-cloud)"/>
+    <g stroke="url(#g-rain)" stroke-width="2.3" stroke-linecap="round"><path d="M14.6 24.2l-1.3 3.6M20.8 24.2l-1.3 3.6"/></g>
+  </symbol>
+  <symbol id="i-thunder" viewBox="0 0 32 32">
+    <path d="M9.8 19.6h13.4a5.4 5.4 0 0 0 .6-10.8A7.7 7.7 0 0 0 9.2 7.3a6.2 6.2 0 0 0 .6 12.3z" fill="url(#g-dark)"/>
+    <path d="M17.6 20.2l-5.4 6.6h3.6l-1.4 4.6 5.8-7h-3.6z" fill="url(#g-bolt)"/>
+  </symbol>
+  <symbol id="i-snow" viewBox="0 0 32 32">
+    <path d="M9.8 20.4h13.4a5.4 5.4 0 0 0 .6-10.8A7.7 7.7 0 0 0 9.2 8.1a6.2 6.2 0 0 0 .6 12.3z" fill="url(#g-cloud)"/>
+    <g fill="#eaf4ff"><circle cx="12" cy="25.4" r="1.7"/><circle cx="17.4" cy="27.2" r="1.7"/><circle cx="22.4" cy="25.4" r="1.7"/></g>
+  </symbol>
+  <symbol id="i-sleet" viewBox="0 0 32 32">
+    <path d="M9.8 20.4h13.4a5.4 5.4 0 0 0 .6-10.8A7.7 7.7 0 0 0 9.2 8.1a6.2 6.2 0 0 0 .6 12.3z" fill="url(#g-cloud)"/>
+    <g stroke="url(#g-rain)" stroke-width="2.3" stroke-linecap="round"><path d="M12.4 23.6l-1.4 3.8M21.6 23.6l-1.4 3.8"/></g>
+    <circle cx="16.6" cy="26.4" r="1.8" fill="#eaf4ff"/>
+  </symbol>
+  <symbol id="i-fog" viewBox="0 0 32 32">
+    <path d="M9.8 17.6h13.4a5.4 5.4 0 0 0 .6-10.8A7.7 7.7 0 0 0 9.2 5.3a6.2 6.2 0 0 0 .6 12.3z" fill="url(#g-cloud)"/>
+    <g stroke="rgba(255,255,255,.78)" stroke-width="2.3" stroke-linecap="round"><path d="M7 22h18M9.4 26.4h13.4"/></g>
+  </symbol>
+  <symbol id="i-wind" viewBox="0 0 32 32">
+    <g stroke="rgba(255,255,255,.9)" stroke-width="2.2" stroke-linecap="round" fill="none">
+      <path d="M4 11h13.2a3.6 3.6 0 1 0-3.5-4.4"/><path d="M4 17.4h18.6a3.7 3.7 0 1 1-3.6 4.6"/><path d="M4 24h9"/>
+    </g>
+  </symbol>
+  <symbol id="i-hail" viewBox="0 0 32 32">
+    <path d="M9.8 20.4h13.4a5.4 5.4 0 0 0 .6-10.8A7.7 7.7 0 0 0 9.2 8.1a6.2 6.2 0 0 0 .6 12.3z" fill="url(#g-dark)"/>
+    <g fill="#dbeeff"><circle cx="12.6" cy="25.4" r="1.9"/><circle cx="18.4" cy="27" r="1.9"/><circle cx="23" cy="24.6" r="1.9"/></g>
+  </symbol>
+  <symbol id="i-search" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round"><circle cx="10.6" cy="10.6" r="6.6"/><path d="M15.6 15.6L20.5 20.5"/></g></symbol>
+  <symbol id="i-list" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4.5 7h15M4.5 12h15M4.5 17h15"/></g></symbol>
+  <symbol id="i-map" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s7-6.2 7-11.2A7 7 0 1 0 5 9.8C5 14.8 12 21 12 21z"/><circle cx="12" cy="9.8" r="2.6"/></g></symbol>
+  <symbol id="i-clock" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><circle cx="12" cy="12" r="8.4"/><path d="M12 7.4V12l3 1.8"/></g></symbol>
+  <symbol id="i-cal" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><rect x="3.6" y="5" width="16.8" height="15.4" rx="3"/><path d="M3.6 9.6h16.8M8 3.4v3M16 3.4v3"/></g></symbol>
+  <symbol id="i-leaf" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><path d="M5 19c8.5 1 14-4.2 14-14-7 0-13.4 1.6-14 8-.3 3.2 0 6 0 6z"/><path d="M9.5 14.5L5 19"/></g></symbol>
+  <symbol id="i-uv" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><circle cx="12" cy="12" r="4.2"/><path d="M12 2.8v2.4M12 18.8v2.4M21.2 12h-2.4M5.2 12H2.8M18.5 5.5l-1.7 1.7M7.2 16.8l-1.7 1.7M18.5 18.5l-1.7-1.7M7.2 7.2L5.5 5.5"/></g></symbol>
+  <symbol id="i-drop" viewBox="0 0 24 24"><path d="M12 3.2s6 6.6 6 10.6a6 6 0 1 1-12 0c0-4 6-10.6 6-10.6z" fill="none" stroke="currentColor" stroke-width="1.9"/></symbol>
+  <symbol id="i-eye" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.9"><path d="M2.4 12S6 5.8 12 5.8 21.6 12 21.6 12 18 18.2 12 18.2 2.4 12 2.4 12z"/><circle cx="12" cy="12" r="2.9"/></g></symbol>
+  <symbol id="i-gauge" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><path d="M4 17a8.6 8.6 0 1 1 16 0"/><path d="M12 17l4-4.6"/></g></symbol>
+  <symbol id="i-therm" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><path d="M10 13.6V5.6a2.4 2.4 0 1 1 4.8 0v8a4.4 4.4 0 1 1-4.8 0z"/></g></symbol>
+  <symbol id="i-sunrise" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><path d="M3.4 18.4h17.2M7.6 13.8a4.4 4.4 0 0 1 8.8 0"/><path d="M12 3.4v3.2M5.2 7.4l1.8 1.8M18.8 7.4L17 9.2"/></g></symbol>
+  <symbol id="i-x" viewBox="0 0 24 24"><g stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6.5 6.5l11 11M17.5 6.5l-11 11"/></g></symbol>
+  <symbol id="i-gear" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3.1"/><path d="M19.4 14.2a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 1 1-2.9 2.9l-.1-.1a1.7 1.7 0 0 0-2.9 1.2v.3a2 2 0 1 1-4 0v-.2a1.7 1.7 0 0 0-3-1.2l-.1.1a2 2 0 1 1-2.9-2.9l.1-.1a1.7 1.7 0 0 0-1.2-2.9H2.6a2 2 0 1 1 0-4h.2a1.7 1.7 0 0 0 1.2-3l-.1-.1a2 2 0 1 1 2.9-2.9l.1.1a1.7 1.7 0 0 0 1.9.3h.1a1.7 1.7 0 0 0 1-1.6V2.6a2 2 0 1 1 4 0v.2a1.7 1.7 0 0 0 2.9 1.2l.1-.1a2 2 0 1 1 2.9 2.9l-.1.1a1.7 1.7 0 0 0 1.2 2.9h.3a2 2 0 1 1 0 4h-.2a1.7 1.7 0 0 0-1.6 1z"/></g></symbol>
+</svg>
+
+<div id="sky">
+  <div class="halo"></div>
+  <div class="orb"></div>
+  <div class="stars"></div>
+  <div class="clouds"></div>
+  <div class="drops"></div>
+  <div class="veil"></div>
+</div>
+
+<div id="pages"></div>
+
+<div class="refresh" id="refresh"><div class="spin"></div></div>
+
+<div id="bottom">
+  <button class="ico" id="btn-gear" aria-label="设置"><svg viewBox="0 0 24 24" width="24" height="24"><use href="#i-gear"/></svg></button>
+  <div class="dots" id="dots"></div>
+  <button class="ico" id="btn-list" aria-label="城市列表"><svg viewBox="0 0 24 24" width="24" height="24"><use href="#i-list"/></svg></button>
+</div>
+
+<div id="sheet">
+  <div class="sh-top">
+    <div class="sh-title">
+      <h2>天气</h2>
+      <div class="sh-acts">
+        <button id="sh-edit">编辑</button>
+        <button id="sh-done">完成</button>
+      </div>
+    </div>
+    <div class="search">
+      <svg viewBox="0 0 24 24"><use href="#i-search"/></svg>
+      <input id="q" type="text" placeholder="搜索城市或机场" autocomplete="off" spellcheck="false">
+      <button id="q-clear" class="hide"><svg viewBox="0 0 24 24" width="16" height="16"><use href="#i-x"/></svg></button>
+    </div>
+  </div>
+  <div class="list" id="sh-list"></div>
+</div>
+
+<div id="setting">
+  <div class="set-head">
+    <h2>设置</h2>
+    <button class="close" id="set-close">完成</button>
+  </div>
+  <div class="grp">
+    <div class="gt">单位</div>
+    <div class="row"><span>温度</span>
+      <div class="seg" id="seg-unit"><button data-v="c">°C</button><button data-v="f">°F</button></div>
+    </div>
+    <div class="row"><span>风速</span>
+      <div class="seg" id="seg-wind"><button data-v="kmh">km/h</button><button data-v="ms">m/s</button></div>
+    </div>
+  </div>
+  <div class="grp">
+    <div class="gt">数据源</div>
+    <div class="row"><span>天气数据</span>
+      <div class="seg" id="seg-src"><button data-v="om">Open-Meteo</button><button data-v="wapi">WeatherAPI</button></div>
+    </div>
+    <div class="row"><span>WeatherAPI Key</span>
+      <input id="apikey" type="password" placeholder="填入后可切换使用" autocomplete="off"></div>
+    <div class="row"><span>实况用小手机内置天气工具</span>
+      <div class="seg" id="seg-tool"><button data-v="off">关</button><button data-v="on">开</button></div>
+    </div>
+  </div>
+  <div class="tip" id="src-tip"></div>
+  <div class="grp">
+    <div class="gt">角色视角</div>
+    <div class="row"><span>让角色自然知道我这边的天气</span>
+      <div class="seg" id="seg-aware"><button data-v="off">关</button><button data-v="on">开</button></div>
+    </div>
+    <div class="row"><span>地点改名（全局）</span>
+      <div class="seg" id="seg-virt"><button data-v="off">关</button><button data-v="on">开</button></div>
+    </div>
+    <div class="row sub v-dep"><span>地点名称</span><input id="vplace" type="text" placeholder="如：海雾镇" maxlength="24"></div>
+    <div class="row sub v-dep"><span>日期称呼</span><input id="vdate" type="text" placeholder="可不填，如：天启三年·霜月" maxlength="24"></div>
+    <div class="row" id="open-charset" style="cursor:pointer"><span>按角色单独设置</span><span id="charset-sum" style="color:rgba(255,255,255,.55);font-size:14px">›</span></div>
+  </div>
+  <div class="tip" id="virt-tip"></div>
+  <button class="btn" id="btn-refresh-all">立即刷新全部城市</button>
+  <div class="credit" id="about"></div>
+</div>
+
+<div id="charset">
+  <div class="set-head"><h2 style="font-size:22px">按角色设置</h2><button class="close" id="charset-close">完成</button></div>
+  <div class="tip" style="margin-top:0">每个角色的世界观不一样，可以给 TA 单独起名字。名字只是 TA 口中你所在地方的叫法，TA 真正感知到的天气、白天黑夜、几点钟，始终是世界所在地和世界时间。没有单独设置的角色跟随全局。</div>
+  <div id="charset-list"></div>
+</div>
+<div id="share" class="hide">
+  <div class="s-title">分享我的天气</div>
+  <div class="s-prev"><div id="s-frame"></div><div class="s-load" id="s-load"><div class="spin"></div></div></div>
+  <div class="chips" id="s-chips"></div>
+  <div class="s-row"><span>发完让 TA 回应一下</span><div class="seg" id="seg-reply"><button data-v="off">关</button><button data-v="on">开</button></div></div>
+  <button class="s-send" id="s-send">发送给 TA</button>
+  <div class="s-note" id="s-note"></div>
+</div>
+<div class="toastbox" id="toast"></div>
+<script>
+"use strict";
+const AP = window.AiPhone || window.AiPhoneApp || null;
+
+/* ───────────── 宿主能力封装（在小手机外单独打开时退化成浏览器实现，方便预览） ───────────── */
+const host = {
+  async dbList(col){
+    if (AP) { try { return (await AP.db.list(col, { limit: 200 })) || []; } catch(e){ return []; } }
+    try { return JSON.parse(localStorage.getItem("wx:"+col) || "[]"); } catch(e){ return []; }
+  },
+  _locks: {},
+  dbSave(col, rows){
+    // 同一集合的保存排队执行，避免两次保存交错写出重复记录
+    const prev = host._locks[col] || Promise.resolve();
+    const run = prev.catch(() => {}).then(() => host._dbSave(col, rows));
+    host._locks[col] = run;
+    return run;
+  },
+  async _dbSave(col, rows){
+    if (AP) {
+      const old = await host.dbList(col);
+      for (const r of old) { try { await AP.db.delete(col, r.id); } catch(e){} }
+      const out = [];
+      for (const r of rows) { const { id, ...rest } = r; out.push(await AP.db.create(col, rest)); }
+      return out;
+    }
+    localStorage.setItem("wx:"+col, JSON.stringify(rows));
+    return rows;
+  },
+  async fetchJSON(url, query, opt){
+    if (AP) {
+      const res = await AP.network.fetch(Object.assign({ url, query, timeoutMs: 15000 }, opt || {}));
+      if (!res || res.ok === false) throw new Error("请求失败" + (res && res.status ? " " + res.status : ""));
+      return res.json || JSON.parse(res.text || "{}");
+    }
+    const u = new URL(url);
+    for (const k in (query||{})) if (query[k] != null) u.searchParams.set(k, query[k]);
+    const r = await fetch(u); if (!r.ok) throw new Error("请求失败 " + r.status); return await r.json();
+  },
+  async geo(opt){
+    if (AP) return await AP.geo.get(Object.assign({ highAccuracy: true, timeoutMs: 12000 }, opt || {}));
+    return await new Promise((res, rej) => navigator.geolocation
+      ? navigator.geolocation.getCurrentPosition(p => res({ lat: p.coords.latitude, lng: p.coords.longitude }), e => rej(new Error(e.message)), { enableHighAccuracy: true, timeout: 12000 })
+      : rej(new Error("不支持定位")));
+  },
+  async invokeTool(name, args){ if (!AP) throw new Error("需在小手机中运行"); return await AP.tools.invoke(name, args); },
+};
+
+/* ───────────── 天气代码 → 文案 / 图标 / 主题 ───────────── */
+const WMO = {
+  0:["晴","sun","moon"], 1:["大致晴朗","sun","moon"], 2:["多云","cloud-sun","cloud-moon"], 3:["阴","clouds","clouds"],
+  45:["雾","fog","fog"], 48:["雾凇","fog","fog"],
+  51:["小毛毛雨","drizzle","drizzle"], 53:["毛毛雨","drizzle","drizzle"], 55:["大毛毛雨","drizzle","drizzle"],
+  56:["冻毛毛雨","sleet","sleet"], 57:["冻毛毛雨","sleet","sleet"],
+  61:["小雨","rain","rain"], 63:["中雨","rain","rain"], 65:["大雨","rain","rain"],
+  66:["冻雨","sleet","sleet"], 67:["冻雨","sleet","sleet"],
+  71:["小雪","snow","snow"], 73:["中雪","snow","snow"], 75:["大雪","snow","snow"], 77:["雪粒","snow","snow"],
+  80:["阵雨","showers","rain"], 81:["阵雨","showers","rain"], 82:["强阵雨","rain","rain"],
+  85:["阵雪","snow","snow"], 86:["强阵雪","snow","snow"],
+  95:["雷阵雨","thunder","thunder"], 96:["雷阵雨伴冰雹","hail","hail"], 99:["强雷雨伴冰雹","hail","hail"],
+};
+const codeText = c => (WMO[c] || ["未知","cloud","cloud"])[0];
+const codeIcon = (c, day) => (WMO[c] || ["未知","cloud","cloud"])[day === false ? 2 : 1];
+const isWet = c => (c >= 51 && c <= 67) || (c >= 80 && c <= 82) || c >= 95;
+const isSnowy = c => (c >= 71 && c <= 77) || c === 85 || c === 86;
+
+const THEMES = {
+  clearDay:  ["#1d61c4","#3f93e0","#9ed0f2"],
+  clearNight:["#070f26","#13224a","#2c4272"],
+  cloudDay:  ["#3a6ea8","#6d9cc6","#b7cfe2"],
+  cloudNight:["#0b1224","#1b2743","#36445f"],
+  greyDay:   ["#5a6d80","#7f909f","#b3bdc6"],
+  greyNight: ["#12161f","#232a36","#3c4552"],
+  rainDay:   ["#2f4f70","#4f728f","#8aa3b5"],
+  rainNight: ["#0a1020","#16233a","#2c3b53"],
+  snowDay:   ["#59718f","#8ba2bb","#cbd8e6"],
+  snowNight: ["#0d1420","#1e2a3c","#3b4a60"],
+  stormDay:  ["#232c42","#3d4763","#6b7490"],
+  stormNight:["#060912","#141a2c","#2a3148"],
+};
+function themeOf(code, day){
+  const n = day === false ? "Night" : "Day";
+  if (code >= 95) return THEMES["storm"+n];
+  if (isSnowy(code)) return THEMES["snow"+n];
+  if (isWet(code)) return THEMES["rain"+n];
+  if (code === 3 || code === 45 || code === 48) return THEMES["grey"+n];
+  if (code === 1 || code === 2) return THEMES["cloud"+n];
+  return THEMES["clear"+n];
+}
+
+/* ───────────── 小工具 ───────────── */
+const $ = s => document.querySelector(s);
+const el = (tag, cls, html) => { const d = document.createElement(tag); if (cls) d.className = cls; if (html != null) d.innerHTML = html; return d; };
+const esc = s => String(s == null ? "" : s).replace(/[&<>"]/g, m => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;" }[m]));
+const svg = (id, size) => `<svg class="ic" viewBox="0 0 32 32" width="${size||26}" height="${size||26}"><use href="#i-${id}"/></svg>`;
+const uiIcon = (id, size) => `<svg viewBox="0 0 24 24" width="${size||14}" height="${size||14}"><use href="#i-${id}"/></svg>`;
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+function toast(msg){ const t = $("#toast"); t.textContent = msg; t.classList.add("on"); clearTimeout(toast._t); toast._t = setTimeout(() => t.classList.remove("on"), 2200); }
+
+let S = { unit:"c", wind:"kmh", src:"om", key:"", useTool:"off", virt:"off", vPlace:"", vDate:"", aware:"on", charViews:{} };
+const cv = v => v == null ? null : (S.unit === "f" ? v * 9/5 + 32 : v);
+const tp = v => v == null ? "--" : Math.round(cv(v)) + "°";
+const tpn = v => v == null ? "--" : String(Math.round(cv(v)));
+const wsp = v => v == null ? "--" : (S.wind === "ms" ? (v/3.6).toFixed(1) + " m/s" : Math.round(v) + " km/h");
+const DIRS = ["北","东北偏北","东北","东北偏东","东","东南偏东","东南","东南偏南","南","西南偏南","西南","西南偏西","西","西北偏西","西北","西北偏北"];
+const dirName = d => DIRS[Math.round(((d||0) % 360) / 22.5) % 16];
+const hourLabel = s => { const h = Number(String(s).slice(11,13)); return h + "时"; };
+const dayName = (s, i) => { if (i === 0) return "今天"; const [y,m,d] = String(s).slice(0,10).split("-").map(Number); return "周" + "日一二三四五六"[new Date(y, m-1, d).getDay()]; };
+const hm = s => String(s).slice(11,16);
+
+function localInputValue(d){
+  const p2 = n => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${p2(d.getMonth()+1)}-${p2(d.getDate())}T${p2(d.getHours())}:${p2(d.getMinutes())}`;
+}
+function fmtFull(d){
+  const p2 = n => String(n).padStart(2, "0");
+  return `${d.getMonth()+1}月${d.getDate()}日 周${"日一二三四五六"[d.getDay()]} ${p2(d.getHours())}:${p2(d.getMinutes())}`;
+}
+/** 某个角色实际生效的「叫法」：单独设置了就用自己的，没设置就跟随全局。
+ *  注意：这只是名字。天气、几点钟、白天黑夜跟随世界日期。 */
+function viewFor(characterId){
+  const b = characterId && S.charViews ? S.charViews[characterId] : null;
+  if (b && b.mode === "alias") return { virt: true, place: b.place || "", dateAlias: b.dateAlias || "", src: "char" };
+  if (b && b.mode === "real") return { virt: false, place: "", dateAlias: "", src: "char" };
+  return { virt: S.virt === "on", place: S.vPlace || "", dateAlias: S.vDate || "", src: "global" };
+}
+/** 角色视角：给卡片/角色看的「地点名 + 时间」。只换名字，时间和天气跟随世界日期 */
+function perceived(place, d, characterId){
+  const V = viewFor(characterId);
+  let time = new Date();
+  if (d && d.localTime) time = perceived._real(d);
+  return {
+    virtual: V.virt && !!V.place,
+    name: V.virt && V.place ? V.place : place.name,
+    realName: place.name,
+    dateAlias: V.virt ? V.dateAlias : "",
+    time,
+    shiftH: 0,
+  };
+}
+/** 显示用时间：有日期称呼就用「称呼 + 世界钟点」，否则用真实日期 */
+function fmtView(v){
+  const p2 = n => String(n).padStart(2, "0");
+  return fmtFull(v.time);
+}
+perceived._real = d => { const [a, b] = d.localTime.split("T"); const [y,m,dd] = a.split("-").map(Number); const [hh,mi] = b.split(":").map(Number); return new Date(y, m-1, dd, hh, mi); };
+
+function aqiLabel(v){
+  if (v == null) return ["--",""];
+  if (v <= 50) return ["优","空气质量令人满意，适合户外活动。"];
+  if (v <= 100) return ["良","空气质量可接受，敏感人群注意。"];
+  if (v <= 150) return ["轻度污染","敏感人群应减少户外剧烈运动。"];
+  if (v <= 200) return ["中度污染","建议减少长时间户外活动。"];
+  if (v <= 300) return ["重度污染","尽量待在室内，外出请戴口罩。"];
+  return ["严重污染","请留在室内并关闭门窗。"];
+}
+function uvLabel(v){
+  if (v == null) return ["--",""];
+  if (v < 3) return ["低","今天可以放心出门。"];
+  if (v < 6) return ["中等","中午前后注意防晒。"];
+  if (v < 8) return ["高","建议涂防晒并戴帽子。"];
+  if (v < 11) return ["很高","尽量避免正午暴晒。"];
+  return ["极高","请做好严格防晒措施。"];
+}
+function visLabel(km){
+  if (km == null) return "";
+  if (km >= 16) return "视野非常开阔。";
+  if (km >= 10) return "能见度良好。";
+  if (km >= 4) return "有轻微雾霭。";
+  return "能见度较低，注意行车安全。";
+}
+</script>
+<script>
+/* ───────────── 取数据 ───────────── */
+async function loadOpenMeteo(p){
+  const d = await host.fetchJSON("https://archive-api.open-meteo.com/v1/archive", {
+    latitude: p.lat, longitude: p.lon, idol_world: 1,
+    current: "temperature_2m,apparent_temperature,relative_humidity_2m,is_day,precipitation,weather_code,pressure_msl,wind_speed_10m,wind_direction_10m,wind_gusts_10m",
+    hourly: "temperature_2m,weather_code,precipitation_probability,is_day,visibility,uv_index",
+    daily: "weather_code,temperature_2m_max,temperature_2m_min,sunrise,sunset,uv_index_max,precipitation_probability_max,precipitation_sum",
+  });
+  const c = d.current || {}, H = d.hourly || {}, D = d.daily || {};
+  const nowKey = String(c.time || "").slice(0, 13);
+  let idx = (H.time || []).findIndex(t => String(t).slice(0, 13) >= nowKey);
+  if (idx < 0) idx = 0;
+  const hourly = [];
+  for (let i = idx; i < Math.min(idx + 25, (H.time || []).length); i++) {
+    hourly.push({ time: H.time[i], t: H.temperature_2m?.[i], code: H.weather_code?.[i], day: H.is_day?.[i] !== 0, pop: H.precipitation_probability?.[i] });
+  }
+  const daily = (D.time || []).map((t, i) => ({
+    time: t, code: D.weather_code?.[i], hi: D.temperature_2m_max?.[i], lo: D.temperature_2m_min?.[i],
+    sunrise: D.sunrise?.[i], sunset: D.sunset?.[i], uv: D.uv_index_max?.[i], pop: D.precipitation_probability_max?.[i], rain: D.precipitation_sum?.[i],
+  }));
+  return {
+    src: "Open-Meteo 历史天气（世界日期）", tz: d.timezone, localTime: c.time,
+    current: {
+      t: c.temperature_2m, feels: c.apparent_temperature, code: c.weather_code, day: c.is_day !== 0,
+      humidity: c.relative_humidity_2m, wind: c.wind_speed_10m, gust: c.wind_gusts_10m, dir: c.wind_direction_10m,
+      pressure: c.pressure_msl, precip: c.precipitation,
+      uv: H.uv_index?.[idx], vis: H.visibility?.[idx] == null ? null : H.visibility[idx] / 1000,
+    },
+    hourly, daily,
+  };
+}
+
+async function loadAQI(p){
+  try {
+    const d = await host.fetchJSON("https://air-quality-api.open-meteo.com/v1/air-quality", {
+      latitude: p.lat, longitude: p.lon, timezone: "auto", current: "us_aqi,pm2_5",
+    });
+    return { us: d.current?.us_aqi, pm25: d.current?.pm2_5 };
+  } catch (e) { return null; }
+}
+
+async function loadWeatherAPI(p){
+  if (!S.key) throw new Error("请先在设置里填入 WeatherAPI Key");
+  const d = await host.fetchJSON("https://api.weatherapi.com/v1/forecast.json", {
+    key: S.key, q: p.lat + "," + p.lon, days: 10, aqi: "yes", lang: "zh", alerts: "no",
+  });
+  const c = d.current || {}, days = d.forecast?.forecastday || [];
+  const wcode = (cond, isDay) => {
+    const txt = String(cond?.text || "");
+    if (/雷/.test(txt)) return 95;
+    if (/冰雹/.test(txt)) return 96;
+    if (/雪|雨夹雪/.test(txt)) return 73;
+    if (/大雨|暴雨/.test(txt)) return 65;
+    if (/阵雨/.test(txt)) return 80;
+    if (/小雨|细雨|毛毛/.test(txt)) return 61;
+    if (/雨/.test(txt)) return 63;
+    if (/雾|霾/.test(txt)) return 45;
+    if (/阴/.test(txt)) return 3;
+    if (/多云|局部|少云/.test(txt)) return 2;
+    return 0;
+  };
+  const hourly = [];
+  const nowH = String(c.last_updated || "").slice(0, 13);
+  for (const day of days) for (const h of (day.hour || [])) {
+    if (String(h.time).slice(0, 13) < nowH) continue;
+    if (hourly.length >= 25) break;
+    hourly.push({ time: h.time.replace(" ", "T"), t: h.temp_c, code: wcode(h.condition), day: h.is_day !== 0, pop: h.chance_of_rain });
+  }
+  return {
+    src: "WeatherAPI", tz: d.location?.tz_id, localTime: (c.last_updated || "").replace(" ", "T"),
+    name: d.location?.name,
+    current: {
+      t: c.temp_c, feels: c.feelslike_c, code: wcode(c.condition, c.is_day), day: c.is_day !== 0,
+      humidity: c.humidity, wind: c.wind_kph, gust: c.gust_kph, dir: c.wind_degree,
+      pressure: c.pressure_mb, precip: c.precip_mm, uv: c.uv, vis: c.vis_km,
+      text: c.condition?.text,
+    },
+    hourly,
+    daily: days.map(day => ({
+      time: day.date + "T00:00", code: wcode(day.day?.condition), hi: day.day?.maxtemp_c, lo: day.day?.mintemp_c,
+      sunrise: day.date + "T" + to24(day.astro?.sunrise), sunset: day.date + "T" + to24(day.astro?.sunset),
+      uv: day.day?.uv, pop: day.day?.daily_chance_of_rain, rain: day.day?.totalprecip_mm,
+    })),
+    aqi: c.air_quality ? { us: c.air_quality["us-epa-index"] ? [0, 25, 75, 125, 175, 250, 350][c.air_quality["us-epa-index"]] : null, pm25: c.air_quality.pm2_5 } : null,
+  };
+}
+function to24(s){
+  if (!s) return "06:00";
+  const m = String(s).match(/(\d+):(\d+)\s*(AM|PM)?/i);
+  if (!m) return "06:00";
+  let h = Number(m[1]); const mm = m[2]; const ap = (m[3] || "").toUpperCase();
+  if (ap === "PM" && h < 12) h += 12;
+  if (ap === "AM" && h === 12) h = 0;
+  return String(h).padStart(2, "0") + ":" + mm;
+}
+
+/* 用小手机内置「天气查询」工具补充实况 */
+async function loadBuiltinTool(p, data){
+  try {
+    const r = await host.invokeTool("天气查询", { q: p.lat + "," + p.lon });
+    const raw = r?.result ?? r?.data ?? r;
+    const j = typeof raw === "string" ? JSON.parse(raw) : raw;
+    const c = j?.current;
+    if (!c) return data;
+    data.current.t = c.temp_c ?? data.current.t;
+    data.current.feels = c.feelslike_c ?? data.current.feels;
+    data.current.humidity = c.humidity ?? data.current.humidity;
+    data.current.wind = c.wind_kph ?? data.current.wind;
+    data.current.uv = c.uv ?? data.current.uv;
+    data.current.vis = c.vis_km ?? data.current.vis;
+    data.toolOk = true;
+  } catch (e) { data.toolErr = String(e.message || e); }
+  return data;
+}
+
+function worldHour(){ const d=new Date(); return `${d.getFullYear()}-${d.getMonth()+1}-${d.getDate()}-${d.getHours()}`; }
+async function loadWeather(p){
+  const data = await loadOpenMeteo(p);
+  data.at = Date.now(); data.worldHour = worldHour();
+  return data;
+}
+
+/* 地点搜索 / 反查 */
+async function searchPlaces(q){
+  const d = await host.fetchJSON("https://geocoding-api.open-meteo.com/v1/search", { name: q, count: 12, language: "zh", format: "json" });
+  return (d.results || []).map(r => ({
+    key: r.latitude.toFixed(3) + "," + r.longitude.toFixed(3),
+    name: r.name, lat: r.latitude, lon: r.longitude,
+    region: [r.admin1, r.country].filter(Boolean).join(" · "),
+  }));
+}
+async function reverseName(lat, lon){
+  try {
+    const d = await host.fetchJSON("https://api.bigdatacloud.net/data/reverse-geocode-client", { latitude: lat, longitude: lon, localityLanguage: "zh" });
+    const name = d.locality || d.city || d.principalSubdivision || "当前位置";
+    const region = [d.principalSubdivision, d.countryName].filter(Boolean).join(" · ");
+    return { name, region };
+  } catch (e) { return { name: "当前位置", region: "" }; }
+}
+</script>
+<script>
+/* ───────────── 状态 ───────────── */
+let places = [];              // [{key,name,region,lat,lon,here}]
+const cache = new Map();      // key → weather
+let pageIdx = 0;
+let editing = false;
+
+/* ───────────── 背景 ───────────── */
+let skySig = "";
+function applySky(code, day){
+  const th = themeOf(code == null ? 0 : code, day);
+  const sky = $("#sky");
+  sky.style.background = `linear-gradient(180deg,${th[0]} 0%,${th[1]} 52%,${th[2]} 100%)`;
+  document.documentElement.style.setProperty("--sky-top", th[0]);
+  const sig = (day ? "d" : "n") + "|" + (code >= 95 ? "storm" : isSnowy(code) ? "snow" : isWet(code) ? "rain" : code >= 3 ? "grey" : code >= 1 ? "cloud" : "clear");
+  if (sig === skySig) return;
+  skySig = sig;
+  const stars = sky.querySelector(".stars"), clouds = sky.querySelector(".clouds"), drops = sky.querySelector(".drops");
+  const orb = sky.querySelector(".orb"), halo = sky.querySelector(".halo");
+  stars.textContent = ""; clouds.textContent = ""; drops.textContent = "";
+  orb.style.opacity = day ? (code >= 3 ? ".25" : "1") : ".1";
+  halo.style.opacity = day ? "1" : "0";
+  if (!day) {
+    let h = "";
+    for (let i = 0; i < 28; i++) {
+      h += `<i style="left:${(Math.random()*100).toFixed(1)}%;top:${(Math.random()*62).toFixed(1)}%;animation-duration:${(2.4+Math.random()*3.6).toFixed(1)}s;animation-delay:${(Math.random()*3).toFixed(1)}s"></i>`;
+    }
+    stars.innerHTML = h;
+  }
+  const cloudCount = code >= 3 ? 5 : code >= 1 ? 3 : 1;
+  let ch = "";
+  for (let i = 0; i < cloudCount; i++) {
+    const w = 44 + Math.random() * 46, top = 4 + Math.random() * 46;
+    ch += `<div class="cloud" style="width:${w}vw;height:${(w*0.42).toFixed(0)}vw;top:${top}vh;opacity:${day?0.34:0.16};animation-duration:${(46+Math.random()*40).toFixed(0)}s;animation-delay:-${(Math.random()*40).toFixed(0)}s"></div>`;
+  }
+  clouds.innerHTML = ch;
+  if (isWet(code)) {
+    let r = "";
+    const n = code >= 95 || code === 65 || code === 82 ? 30 : 18;
+    for (let i = 0; i < n; i++) r += `<div class="fall" style="left:${(Math.random()*104).toFixed(1)}%;height:${(8+Math.random()*10).toFixed(0)}vh;animation-duration:${(0.55+Math.random()*0.5).toFixed(2)}s;animation-delay:-${(Math.random()*2).toFixed(2)}s;opacity:${(0.35+Math.random()*0.45).toFixed(2)}"></div>`;
+    drops.innerHTML = r;
+  } else if (isSnowy(code)) {
+    let r = "";
+    for (let i = 0; i < 22; i++) r += `<div class="flake" style="left:${(Math.random()*100).toFixed(1)}%;animation-duration:${(7+Math.random()*7).toFixed(1)}s;animation-delay:-${(Math.random()*9).toFixed(1)}s;opacity:${(0.5+Math.random()*0.5).toFixed(2)}"></div>`;
+    drops.innerHTML = r;
+  }
+}
+
+/* ───────────── 单页渲染 ───────────── */
+function pageShell(place){
+  const page = el("div", "page");
+  page.dataset.key = place.key;
+  page.innerHTML = `
+    <div class="topbar"><span class="t-place"></span><span class="t-temp"></span></div>
+    <div class="hero">
+      <div class="place">${esc(place.name)}</div>
+      <div class="sub">${place.here ? "我的位置" : esc(place.region || "")}</div>
+      <div class="temp">--°</div>
+      <div class="cond">正在获取…</div>
+      <div class="range"></div>
+    </div>
+    <div class="body"></div>`;
+  return page;
+}
+
+function renderPage(page, place, d){
+  const hero = page.querySelector(".hero");
+  const body = page.querySelector(".body");
+  if (!d) { body.innerHTML = `<div class="card skel"><h3>正在加载天气…</h3></div>`; return; }
+  const c = d.current, today = d.daily[0] || {};
+  hero.querySelector(".place").textContent = place.name;
+  hero.querySelector(".sub").textContent = place.here ? "我的位置" : (place.region || "");
+  hero.querySelector(".temp").textContent = tp(c.t);
+  hero.querySelector(".cond").textContent = c.text || codeText(c.code);
+  hero.querySelector(".range").textContent = `最高${tp(today.hi)} 最低${tp(today.lo)}`;
+  page.querySelector(".t-place").textContent = place.name;
+  page.querySelector(".t-temp").textContent = tp(c.t) + " " + (c.text || codeText(c.code));
+
+  /* 概述 + 逐小时 */
+  const sum = summaryText(d);
+  let hoursHtml = "";
+  const sunEvents = [];
+  for (let i = 0; i < 2; i++) {
+    const day = d.daily[i]; if (!day) break;
+    if (day.sunrise) sunEvents.push({ time: day.sunrise, kind: "日出", icon: "sun" });
+    if (day.sunset) sunEvents.push({ time: day.sunset, kind: "日落", icon: "moon" });
+  }
+  d.hourly.forEach((h, i) => {
+    const prev = i === 0 ? null : d.hourly[i-1];
+    for (const ev of sunEvents) {
+      if (prev && ev.time > prev.time && ev.time <= h.time) {
+        hoursHtml += `<div class="hour"><div class="h-t">${hm(ev.time)}</div>${svg(ev.icon, 26)}<div class="h-p"></div><div class="h-v" style="font-size:12.5px;opacity:.85">${ev.kind}</div></div>`;
+      }
+    }
+    hoursHtml += `<div class="hour${i===0?" now":""}">
+      <div class="h-t">${i === 0 ? "现在" : hourLabel(h.time)}</div>
+      ${svg(codeIcon(h.code, h.day), 26)}
+      <div class="h-p">${h.pop >= 30 ? h.pop + "%" : ""}</div>
+      <div class="h-v">${tp(h.t)}</div></div>`;
+  });
+
+  /* 10 天 */
+  const lows = d.daily.map(x => x.lo).filter(v => v != null);
+  const highs = d.daily.map(x => x.hi).filter(v => v != null);
+  const min = Math.min(...lows), max = Math.max(...highs), span = Math.max(1, max - min);
+  const daysHtml = d.daily.map((x, i) => {
+    const l = ((x.lo - min) / span) * 100, w = ((x.hi - x.lo) / span) * 100;
+    const nowPos = i === 0 && c.t != null ? clamp(((c.t - min) / span) * 100, 0, 100) : null;
+    return `<div class="day">
+      <div class="d-n">${dayName(x.time, i)}</div>
+      ${svg(codeIcon(x.code, true), 26).replace('class="ic"','class="ic d-ic"')}
+      <div class="d-lo">${tpn(x.lo)}°</div>
+      <div class="bar"><span style="left:${l.toFixed(1)}%;width:${Math.max(6,w).toFixed(1)}%"></span>${nowPos == null ? "" : `<i style="left:${nowPos.toFixed(1)}%"></i>`}</div>
+      <div class="d-hi">${tpn(x.hi)}°</div></div>`;
+  }).join("");
+
+  /* 详情方块 */
+  const aqi = d.aqi || {}, [aqiName, aqiDesc] = aqiLabel(aqi.us);
+  const [uvName, uvDesc] = uvLabel(c.uv);
+  const sunPct = sunProgress(d);
+  const rainToday = today.rain != null ? today.rain.toFixed(1) : "0.0";
+  const tiles = `
+    <div class="tile">
+      <h4>${uiIcon("leaf")}空气质量</h4>
+      <div class="big">${aqi.us != null ? Math.round(aqi.us) : "--"}</div>
+      <div class="mid" style="font-size:15px;margin-top:0">${aqiName}</div>
+      <div class="aqibar"><i style="left:${clamp((aqi.us || 0) / 350 * 100, 0, 100)}%"></i></div>
+      <div class="foot">${aqiDesc || "暂无数据"}</div>
+    </div>
+    <div class="tile">
+      <h4>${uiIcon("uv")}紫外线指数</h4>
+      <div class="big">${c.uv != null ? Math.round(c.uv) : "--"}</div>
+      <div class="mid" style="font-size:15px;margin-top:0">${uvName}</div>
+      <div class="uvbar"><i style="left:${clamp((c.uv || 0) / 11 * 100, 0, 100)}%"></i></div>
+      <div class="foot">${uvDesc}</div>
+    </div>
+    <div class="tile">
+      <h4>${uiIcon("sunrise")}日出</h4>
+      <div class="big" style="font-size:28px">${today.sunrise ? hm(today.sunrise) : "--"}</div>
+      <div class="sunarc">
+        <svg viewBox="0 0 120 54" preserveAspectRatio="none">
+          <path d="M6 46 A 54 40 0 0 1 114 46" fill="none" stroke="rgba(255,255,255,.28)" stroke-width="2" stroke-dasharray="3 4"/>
+          <path d="M6 46 A 54 40 0 0 1 114 46" fill="none" stroke="#ffd479" stroke-width="2.4" stroke-linecap="round"
+            style="stroke-dasharray:140;stroke-dashoffset:${(140 * (1 - sunPct)).toFixed(1)}"/>
+          <circle cx="${(6 + 108 * sunPct).toFixed(1)}" cy="${sunArcY(sunPct).toFixed(1)}" r="4.4" fill="#fff"/>
+          <line x1="0" y1="46" x2="120" y2="46" stroke="rgba(255,255,255,.35)" stroke-width="1"/>
+        </svg>
+      </div>
+      <div class="foot">日落：${today.sunset ? hm(today.sunset) : "--"}</div>
+    </div>
+    <div class="tile">
+      <h4>${uiIcon("wind")}风</h4>
+      <div class="compass">
+        <svg viewBox="0 0 80 80">
+          <circle cx="40" cy="40" r="33" fill="none" stroke="rgba(255,255,255,.25)" stroke-width="1.5"/>
+          <g stroke="rgba(255,255,255,.45)" stroke-width="1.4" stroke-linecap="round">
+            <path d="M40 7v5M40 68v5M7 40h5M68 40h5"/>
+          </g>
+          <text x="40" y="17" text-anchor="middle" font-size="8" fill="rgba(255,255,255,.72)">北</text>
+          <g transform="rotate(${(c.dir || 0) + 180} 40 40)">
+            <path d="M40 12 L45.4 27 L40 23.6 L34.6 27 Z" fill="#fff"/>
+            <line x1="40" y1="55" x2="40" y2="66" stroke="rgba(255,255,255,.7)" stroke-width="2" stroke-linecap="round"/>
+          </g>
+          <circle cx="40" cy="40" r="15" fill="rgba(10,22,44,.34)"/>
+          <text x="40" y="39.5" text-anchor="middle" font-size="13" font-weight="600" fill="#fff">${c.wind == null ? "--" : Math.round(S.wind === "ms" ? c.wind/3.6 : c.wind)}</text>
+          <text x="40" y="48.5" text-anchor="middle" font-size="7.5" fill="rgba(255,255,255,.75)">${S.wind === "ms" ? "m/s" : "km/h"}</text>
+        </svg>
+      </div>
+      <div class="foot">${dirName(c.dir)}风 · 阵风 ${wsp(c.gust)}</div>
+    </div>
+    <div class="tile">
+      <h4>${uiIcon("therm")}体感温度</h4>
+      <div class="big">${tp(c.feels)}</div>
+      <div class="foot">${feelText(c)}</div>
+    </div>
+    <div class="tile">
+      <h4>${uiIcon("drop")}湿度</h4>
+      <div class="big">${c.humidity != null ? Math.round(c.humidity) + "%" : "--"}</div>
+      <div class="foot">今日降水 ${rainToday} 毫米${today.pop != null ? ` · 降水概率 ${today.pop}%` : ""}</div>
+    </div>
+    <div class="tile">
+      <h4>${uiIcon("eye")}能见度</h4>
+      <div class="big">${c.vis != null ? Math.round(c.vis) + " 公里" : "--"}</div>
+      <div class="foot">${visLabel(c.vis)}</div>
+    </div>
+    <div class="tile">
+      <h4>${uiIcon("gauge")}气压</h4>
+      <div class="big">${c.pressure != null ? Math.round(c.pressure) : "--"}</div>
+      <div class="mid" style="font-size:14px;margin-top:0;color:rgba(255,255,255,.75)">百帕</div>
+      <div class="foot">${c.pressure == null ? "" : c.pressure >= 1013 ? "气压偏高，天气趋于稳定。" : "气压偏低，天气可能转差。"}</div>
+    </div>`;
+
+  body.innerHTML = `
+    <div class="card">
+      <h3>${uiIcon("clock")}逐小时预报</h3>
+      <div class="note">${esc(sum)}</div>
+      <div class="rule"></div>
+      <div class="hours">${hoursHtml}</div>
+    </div>
+    <div class="card">
+      <h3>${uiIcon("cal")}10 天历史走势</h3>
+      <div class="days">${daysHtml}</div>
+    </div>
+    <div class="tiles">${tiles}</div>
+    <div class="credit">数据来源：${esc(d.src)}${d.aqi ? " · 空气质量 Open-Meteo" : ""}${d.toolOk ? " · 实况由小手机内置天气工具提供" : ""}<br>更新于 ${new Date(d.at).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" })}</div>`;
+}
+
+function sunArcY(p){
+  // 与 path "M6 46 A 54 40 0 0 1 114 46" 近似同形的抛物线
+  const x = clamp(p, 0, 1);
+  return 46 - Math.sin(x * Math.PI) * 38;
+}
+function sunProgress(d){
+  const t = d.localTime || "";
+  const day = d.daily[0] || {};
+  if (!day.sunrise || !day.sunset || !t) return 0.5;
+  const mins = s => Number(String(s).slice(11,13)) * 60 + Number(String(s).slice(14,16));
+  const now = mins(t), a = mins(day.sunrise), b = mins(day.sunset);
+  return clamp((now - a) / Math.max(1, b - a), 0, 1);
+}
+function feelText(c){
+  if (c.feels == null || c.t == null) return "";
+  const diff = c.feels - c.t;
+  if (diff <= -3) return "有风，体感比实际更冷。";
+  if (diff >= 3) return "湿度较高，体感比实际更热。";
+  return "与实际温度接近。";
+}
+function summaryText(d){
+  const c = d.current, today = d.daily[0] || {};
+  const wet = d.hourly.find(h => isWet(h.code) || isSnowy(h.code));
+  const base = `${c.text || codeText(c.code)}，最高${tp(today.hi)}、最低${tp(today.lo)}。`;
+  if (wet) {
+    const i = d.hourly.indexOf(wet);
+    if (i === 0) return `${codeText(wet.code)}中，预计将持续一段时间。`;
+    return `${base}预计 ${hourLabel(wet.time)}前后转为${codeText(wet.code)}。`;
+  }
+  if (today.pop >= 40) return `${base}今天有 ${today.pop}% 的降水概率。`;
+  return base;
+}
+</script>
+<script>
+/* ───────────── 页面容器 / 滚动 / 分页 ───────────── */
+const pagesEl = $("#pages");
+
+function rebuildPages(){
+  pagesEl.textContent = "";
+  for (const p of places) {
+    const page = pageShell(p);
+    pagesEl.appendChild(page);
+    renderPage(page, p, cache.get(p.key));
+    bindPageScroll(page);
+  }
+  renderDots();
+  applyCurrentSky();
+}
+
+function bindPageScroll(page){
+  const hero = page.querySelector(".hero");
+  const top = page.querySelector(".topbar");
+  let tick = false;
+  page.addEventListener("scroll", () => {
+    if (tick) return;
+    tick = true;
+    requestAnimationFrame(() => {
+      tick = false;
+      const y = page.scrollTop;
+      const k = clamp(y / 150, 0, 1);
+      hero.style.transform = `translate3d(0,${(-y * 0.32).toFixed(1)}px,0) scale(${(1 - k * 0.14).toFixed(3)})`;
+      hero.style.opacity = String(1 - k);
+      top.classList.toggle("on", y > 130);
+      top.style.height = y > 130 ? "calc(var(--safe-t) + 38px)" : "0px";
+    });
+  }, { passive: true });
+}
+
+function renderDots(){
+  const box = $("#dots");
+  box.textContent = "";
+  places.forEach((p, i) => {
+    let b;
+    if (p.here) { b = el("span", "loc" + (i === pageIdx ? " on" : ""), `<svg viewBox="0 0 24 24" width="11" height="11"><use href="#i-map"/></svg>`); }
+    else { b = el("b", i === pageIdx ? "on" : ""); }
+    box.appendChild(b);
+  });
+}
+
+function applyCurrentSky(){
+  const p = places[pageIdx];
+  const d = p && cache.get(p.key);
+  if (d) applySky(d.current.code, d.current.day);
+}
+
+pagesEl.addEventListener("scroll", () => {
+  const i = Math.round(pagesEl.scrollLeft / Math.max(1, pagesEl.clientWidth));
+  if (i !== pageIdx && i >= 0 && i < places.length) { pageIdx = i; renderDots(); applyCurrentSky(); }
+}, { passive: true });
+
+function gotoPage(i, smooth){
+  pageIdx = clamp(i, 0, Math.max(0, places.length - 1));
+  pagesEl.scrollTo({ left: pageIdx * pagesEl.clientWidth, behavior: smooth ? "smooth" : "auto" });
+  renderDots(); applyCurrentSky();
+}
+
+/* 下拉刷新 */
+let pullY = 0, pulling = false;
+pagesEl.addEventListener("touchstart", e => {
+  const page = pagesEl.children[pageIdx];
+  pulling = page && page.scrollTop <= 0;
+  pullY = e.touches[0].clientY;
+}, { passive: true });
+pagesEl.addEventListener("touchmove", e => {
+  if (!pulling) return;
+  const dy = e.touches[0].clientY - pullY;
+  $("#refresh").classList.toggle("on", dy > 40);
+}, { passive: true });
+pagesEl.addEventListener("touchend", e => {
+  if (!pulling) return;
+  const dy = (e.changedTouches[0] || {}).clientY - pullY;
+  pulling = false;
+  if (dy > 70) refreshPlace(places[pageIdx], true);
+  else $("#refresh").classList.remove("on");
+}, { passive: true });
+
+/* ───────────── 数据刷新 ───────────── */
+async function refreshPlace(p, force){
+  if (!p) return;
+  const old = cache.get(p.key);
+  if (!force && old && old.worldHour === worldHour() && Date.now() - old.at >= 0 && Date.now() - old.at < 10 * 60 * 1000) return old;
+  $("#refresh").classList.add("on");
+  try {
+    const d = await loadWeather(p);
+    cache.set(p.key, d);
+    const page = [...pagesEl.children].find(x => x.dataset.key === p.key);
+    if (page) renderPage(page, p, d);
+    if (places[pageIdx] && places[pageIdx].key === p.key) applySky(d.current.code, d.current.day);
+    saveCache();
+
+    return d;
+  } catch (e) {
+    toast(String(e.message || e).slice(0, 60));
+  } finally {
+    setTimeout(() => $("#refresh").classList.remove("on"), 260);
+  }
+}
+async function refreshAll(force){
+  for (const p of places) await refreshPlace(p, force);
+  if ($("#sheet").classList.contains("on")) renderSheet();
+}
+
+/* ───────────── 存储 ───────────── */
+let stateLoaded = false;
+async function loadState(){
+  stateLoaded = true;
+  const rows = await host.dbList("places");
+  const seen = new Set();
+  places = rows.filter(r => r && r.key && r.lat != null).sort((a, b) => (a.order || 0) - (b.order || 0))
+    .filter(r => (seen.has(r.key) ? false : (seen.add(r.key), true)));
+  const st = (await host.dbList("settings"))[0];
+  if (st) S = Object.assign(S, {
+    unit: st.unit || "c", wind: st.wind || "kmh", src: st.src || "om", key: st.key || "", useTool: st.useTool || "off",
+    virt: st.virt || "off", vPlace: st.vPlace || "", vDate: st.vDate || "", aware: st.aware || "on", charViews: (st.charViews && typeof st.charViews === "object") ? st.charViews : {},
+  });
+  const cc = (await host.dbList("cache"))[0];
+  if (cc && cc.items) { try { for (const [k, v] of Object.entries(JSON.parse(cc.items))) if (v && v.worldHour === worldHour()) cache.set(k, v); } catch (e) {} }
+}
+let saveTimer = null;
+function savePlaces(){ clearTimeout(saveTimer); saveTimer = setTimeout(() => host.dbSave("places", places.map((p, i) => ({ ...p, order: i }))), 400); }
+function saveSettings(){ host.dbSave("settings", [{ ...S }]); }
+let cacheTimer = null;
+function saveCache(){
+  clearTimeout(cacheTimer);
+  cacheTimer = setTimeout(() => {
+    const obj = {};
+    for (const [k, v] of cache) obj[k] = v;
+    host.dbSave("cache", [{ items: JSON.stringify(obj) }]);
+  }, 1200);
+}
+
+/* ───────────── 城市列表 ───────────── */
+const sheet = $("#sheet");
+function openSheet(){ sheet.classList.add("on"); renderSheet(); }
+function closeSheet(){ sheet.classList.remove("on"); editing = false; $("#q").value = ""; $("#q-clear").classList.add("hide"); }
+
+function cardTheme(d){
+  const th = themeOf(d ? d.current.code : 0, d ? d.current.day : true);
+  return `--c1:${th[0]};--c2:${th[1]}`;
+}
+function renderSheet(list){
+  const box = $("#sh-list");
+  box.textContent = "";
+  if (list) {
+    if (!list.length) { box.appendChild(el("div", "empty", "没有找到匹配的城市")); return; }
+    for (const r of list) {
+      const row = el("div", "res", `<div><div class="r-n">${esc(r.name)}</div><div class="r-s">${esc(r.region || "")}</div></div><button class="add">+</button>`);
+      row.querySelector(".add").onclick = () => addPlace(r);
+      row.onclick = ev => { if (!ev.target.closest(".add")) addPlace(r); };
+      box.appendChild(row);
+    }
+    return;
+  }
+  if (!places.length) { box.appendChild(el("div", "empty", "还没有城市<br>搜索城市名把它加进来")); return; }
+  places.forEach((p, i) => {
+    const d = cache.get(p.key);
+    const c = el("div", "pcard" + (editing && !p.here ? " editing" : ""));
+    c.setAttribute("style", cardTheme(d));
+    c.innerHTML = `
+      <div class="l">
+        <div>
+          <div class="p-n">${p.here ? `<svg class="pin" viewBox="0 0 24 24"><use href="#i-map"/></svg>` : ""}${esc(p.name)}</div>
+          <div class="p-s">${p.here ? "我的位置 · " + esc(p.region || "") : esc(p.region || "")}</div>
+          <div class="p-s" style="margin-top:1px">${d && d.localTime ? hm(d.localTime) : ""}</div>
+        </div>
+        <div class="p-c">${d ? esc(d.current.text || codeText(d.current.code)) : "加载中…"}</div>
+      </div>
+      <div class="r">
+        <div class="p-t">${d ? svg(codeIcon(d.current.code, d.current.day), 22).replace('class="ic"','class="ic" style="vertical-align:-3px;margin-right:6px;opacity:.95"') : ""}${d ? tp(d.current.t) : "--°"}</div>
+        <div class="p-r">${d && d.daily[0] ? `最高${tp(d.daily[0].hi)} 最低${tp(d.daily[0].lo)}` : ""}</div>
+      </div>
+      <button class="del"><svg viewBox="0 0 24 24" width="13" height="13"><use href="#i-x"/></svg></button>`;
+    c.querySelector(".del").onclick = ev => { ev.stopPropagation(); removePlace(i); };
+    c.onclick = ev => { if (ev.target.closest(".del")) return; closeSheet(); gotoPage(i, false); };
+    box.appendChild(c);
+  });
+}
+
+async function addPlace(r){
+  if (places.some(p => p.key === r.key)) { toast("已经添加过了"); closeSheet(); gotoPage(places.findIndex(p => p.key === r.key), true); return; }
+  places.push({ key: r.key, name: r.name, region: r.region, lat: r.lat, lon: r.lon });
+  savePlaces();
+  rebuildPages();
+  $("#q").value = ""; $("#q-clear").classList.add("hide");
+  renderSheet();
+  const p = places[places.length - 1];
+  await refreshPlace(p, true);
+  renderSheet();
+}
+function removePlace(i){
+  const p = places[i];
+  if (!p || p.here) return;
+  places.splice(i, 1);
+  cache.delete(p.key);
+  savePlaces();
+  if (pageIdx >= places.length) pageIdx = Math.max(0, places.length - 1);
+  rebuildPages();
+  renderSheet();
+}
+
+let qTimer = null;
+$("#q").addEventListener("input", e => {
+  const v = e.target.value.trim();
+  $("#q-clear").classList.toggle("hide", !v);
+  clearTimeout(qTimer);
+  if (!v) { renderSheet(); return; }
+  qTimer = setTimeout(async () => {
+    try { renderSheet(await searchPlaces(v)); }
+    catch (err) { renderSheet([]); }
+  }, 280);
+});
+$("#q-clear").onclick = () => { $("#q").value = ""; $("#q-clear").classList.add("hide"); renderSheet(); };
+$("#sh-edit").onclick = () => { editing = !editing; $("#sh-edit").textContent = editing ? "完成编辑" : "编辑"; renderSheet(); };
+$("#sh-done").onclick = closeSheet;
+$("#btn-list").onclick = openSheet;
+
+/* ───────────── 设置 ───────────── */
+const setting = $("#setting");
+$("#btn-gear").onclick = () => { setting.classList.add("on"); syncSettingUI(); };
+$("#set-close").onclick = () => setting.classList.remove("on");
+function seg(id, key, after){
+  const box = $(id);
+  box.querySelectorAll("button").forEach(b => {
+    b.onclick = () => { S[key] = b.dataset.v; syncSettingUI(); saveSettings(); if (after) after(); };
+  });
+}
+seg("#seg-unit", "unit", () => { rebuildPages(); renderSheet(); });
+seg("#seg-wind", "wind", () => rebuildPages());
+seg("#seg-src", "src", () => refreshAll(true));
+seg("#seg-tool", "useTool", () => refreshAll(true));
+seg("#seg-virt", "virt");
+seg("#seg-aware", "aware");
+// Key 输入框：边输边记（iOS 上点别的按钮不一定触发 change，只靠 change 会丢），停手后保存并按新 Key 刷新
+let keyTimer = null;
+const commitKey = () => { clearTimeout(keyTimer); saveSettings(); if (S.src === "wapi") refreshAll(true); };
+$("#apikey").addEventListener("input", e => { S.key = e.target.value.trim(); clearTimeout(keyTimer); keyTimer = setTimeout(commitKey, 800); });
+$("#apikey").addEventListener("change", e => { S.key = e.target.value.trim(); commitKey(); syncSettingUI(); });
+$("#vplace").addEventListener("change", e => { S.vPlace = e.target.value.trim(); saveSettings(); syncSettingUI(); });
+$("#vdate").addEventListener("change", e => { S.vDate = e.target.value.trim(); saveSettings(); syncSettingUI(); });
+$("#open-charset").onclick = () => { $("#charset").classList.add("on"); renderCharset(); };
+$("#charset-close").onclick = () => { $("#charset").classList.remove("on"); syncSettingUI(); };
+$("#btn-refresh-all").onclick = () => { refreshAll(true); toast("正在刷新…"); };
+function syncSettingUI(){
+  const mark = (id, v) => $(id).querySelectorAll("button").forEach(b => b.classList.toggle("on", b.dataset.v === v));
+  mark("#seg-unit", S.unit); mark("#seg-wind", S.wind); mark("#seg-src", S.src); mark("#seg-tool", S.useTool);
+  if (document.activeElement !== $("#apikey")) $("#apikey").value = S.key || "";
+  mark("#seg-virt", S.virt); mark("#seg-aware", S.aware);
+  if (document.activeElement !== $("#vplace")) $("#vplace").value = S.vPlace || "";
+  if (document.activeElement !== $("#vdate")) $("#vdate").value = S.vDate || "";
+  document.querySelectorAll(".v-dep").forEach(r => r.classList.toggle("off", S.virt !== "on"));
+  const nBound = Object.values(S.charViews || {}).filter(b => b && b.mode && b.mode !== "global").length;
+  $("#charset-sum").textContent = nBound ? `${nBound} 个角色单独设置 ›` : "›";
+  $("#virt-tip").innerHTML = "「地点改名」只是换一个叫法：角色说起你在哪时用这个名字（比如在 TA 的世界观里你住在「海雾镇」），但 TA 真正感知到的天气、白天黑夜、几点钟，始终是你的<b>世界所在地和世界时间</b>。日期称呼也一样，只替换日期的叫法，钟点照旧。";
+  $("#virt-tip").innerHTML += S.aware === "on"
+    ? "<br><br>爱豆世界已统一共享天气，无需额外安装原版实时天气插件。天气读取世界日期对应的历史气象数据；角色可以结合场景自然回应，不会每次都报天气。"
+    : "";
+  $("#src-tip").innerHTML = S.src === "wapi"
+    ? "WeatherAPI 需要自己的 Key（weatherapi.com 免费注册，免费额度含 3 天预报）。没填 Key 时会自动用 Open-Meteo。"
+    : "Open-Meteo 免费、无需 Key，提供 10 天历史走势、逐小时、紫外线与空气质量，推荐直接用它。";
+  $("#about").innerHTML = "「实况用小手机内置天气工具」打开后，当前温度等实况会改由小手机设置里的「天气查询」工具获取（走你自己的 WeatherAPI Key），预报部分仍来自上面选择的数据源。<br>需要先在小手机 设置 → 工具箱 里启用「天气查询」并填好 Key。";
+}
+</script>
+<script>
+/* ───────────── 给角色用：查天气 + 在聊天里发天气卡片 ───────────── */
+const CARD_COLORS = { "g-sun":"#ffc53d", "g-moon":"#eef2fb", "g-cloud":"#ffffff", "g-dark":"#c3cddc", "g-rain":"#7cc8ff", "g-bolt":"#ffc53d" };
+function standaloneIcon(key, size){
+  // 把页面里的 <symbol> 转成独立 SVG（聊天卡片是单独的沙盒页面，引用不到这里的 defs）
+  const sym = document.getElementById("i-" + key);
+  if (!sym) return "";
+  let inner = sym.innerHTML.replace(/url\(#(g-[a-z]+)\)/g, (_, id) => CARD_COLORS[id] || "#fff");
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="${size}" height="${size}">${inner}</svg>`;
+}
+
+function buildCardHTML(view, d){
+  const c = d.current, today = d.daily[0] || {};
+  const th = themeOf(c.code, c.day);
+  const cond = c.text || codeText(c.code);
+  const hours = d.hourly.slice(0, 6).map((h, i) => {
+    let label = "现在";
+    if (i > 0) label = ((view.time.getHours() + i) % 24) + "时";
+    return `<div class="h"><div class="ht">${label}</div>${standaloneIcon(codeIcon(h.code, h.day), 22)}<div class="hv">${tp(h.t)}</div></div>`;
+  }).join("");
+  const aqi = d.aqi && d.aqi.us != null ? `空气${aqiLabel(d.aqi.us)[0]}` : "";
+  const extra = [`体感${tp(c.feels)}`, c.humidity != null ? `湿度${Math.round(c.humidity)}%` : "", today.pop != null ? `降水${today.pop}%` : "", aqi].filter(Boolean).join(" · ");
+  return `<style>
+*{margin:0;padding:0;box-sizing:border-box}
+.w{position:relative;min-height:222px;padding:14px 16px 12px;border-radius:18px;overflow:hidden;color:#fff;
+  font:14px/1.35 -apple-system,BlinkMacSystemFont,"PingFang SC","Helvetica Neue",sans-serif;
+  background:linear-gradient(165deg,${th[0]} 0%,${th[1]} 62%,${th[2]} 130%);}
+.w:before{content:"";position:absolute;right:-40px;top:-50px;width:160px;height:160px;border-radius:50%;
+  background:radial-gradient(closest-side,${c.day ? "rgba(255,236,180,.5)" : "rgba(210,225,255,.18)"},rgba(255,255,255,0));}
+.top{position:relative;display:flex;justify-content:space-between;align-items:flex-start}
+.pl{font-size:16px;font-weight:600;letter-spacing:.2px}
+.pl svg{width:11px;height:11px;margin-left:3px;vertical-align:0}
+.tm{font-size:11.5px;opacity:.78;margin-top:2px}
+.t{font-size:46px;font-weight:200;letter-spacing:-2px;line-height:1;margin-top:6px}
+.ic{position:relative;text-align:right}
+.cd{font-size:13px;font-weight:600;margin-top:4px}
+.rg{font-size:12px;opacity:.85}
+.hr{position:relative;display:flex;justify-content:space-between;margin-top:12px;padding-top:10px;border-top:1px solid rgba(255,255,255,.22)}
+.h{display:flex;flex-direction:column;align-items:center;gap:4px;width:16%}
+.ht{font-size:11px;opacity:.85;font-weight:600}
+.hv{font-size:13px;font-weight:500}
+.ft{position:relative;margin-top:10px;font-size:11px;opacity:.78;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+</style>
+<div class="w">
+  <div class="top">
+    <div>
+      <div class="pl">${esc(view.name)}${view.virtual ? "" : `<svg viewBox="0 0 24 24"><path d="M3 11.2 20.6 3.4 12.8 21 11 13z" fill="#fff"/></svg>`}</div>
+      <div class="tm">${esc(fmtView(view))}</div>
+      <div class="t">${tp(c.t)}</div>
+    </div>
+    <div class="ic">
+      ${standaloneIcon(codeIcon(c.code, c.day), 40)}
+      <div class="cd">${esc(cond)}</div>
+      <div class="rg">最高${tp(today.hi)} 最低${tp(today.lo)}</div>
+    </div>
+  </div>
+  <div class="hr">${hours}</div>
+  <div class="ft">${esc(extra)}</div>
+</div>`;
+}
+
+function weatherLine(view, d){
+  const c = d.current, today = d.daily[0] || {};
+  return `${view.name} ${fmtView(view)}：${c.text || codeText(c.code)}，${tp(c.t)}（体感${tp(c.feels)}），今天最高${tp(today.hi)}、最低${tp(today.lo)}${today.pop != null ? `，降水概率${today.pop}%` : ""}${d.aqi && d.aqi.us != null ? `，空气${aqiLabel(d.aqi.us)[0]}` : ""}。`;
+}
+/** 记住「哪张卡片对应哪个城市」，点卡片打开 APP 时直接跳过去 */
+async function rememberCard(res, place){
+  const id = res && (res.messageId || res.id);
+  if (!id) return;
+  const row = (await host.dbList("cards"))[0];
+  let map = {}; try { map = row && row.items ? JSON.parse(row.items) : {}; } catch (e) {}
+  map[id] = { key: place.key, name: place.name, region: place.region || "", lat: place.lat, lon: place.lon, here: !!place.here, t: Date.now() };
+  const keys = Object.keys(map).sort((a, b) => map[b].t - map[a].t).slice(0, 40);
+  const slim = {}; for (const k of keys) slim[k] = map[k];
+  await host.dbSave("cards", [{ items: JSON.stringify(slim) }]);
+}
+async function placeForCard(messageId){
+  const row = (await host.dbList("cards"))[0];
+  try { const map = row && row.items ? JSON.parse(row.items) : {}; return map[messageId] || null; } catch (e) { return null; }
+}
+
+function adviceOf(d){
+  const c = d.current, today = d.daily[0] || {};
+  const tips = [];
+  const wetSoon = d.hourly.slice(0, 12).some(h => isWet(h.code) || isSnowy(h.code) || h.pop >= 60);
+  if (wetSoon || today.pop >= 50) tips.push("出门记得带伞");
+  if (c.uv >= 6) tips.push("紫外线强，注意防晒");
+  if (c.feels != null && c.feels <= 5) tips.push("很冷，要穿厚外套");
+  else if (c.feels != null && c.feels <= 14) tips.push("有点凉，加件外套");
+  else if (c.feels != null && c.feels >= 30) tips.push("很热，注意补水");
+  if (d.aqi && d.aqi.us > 150) tips.push("空气不好，建议戴口罩");
+  if (today.hi != null && today.lo != null && today.hi - today.lo >= 10) tips.push("早晚温差大");
+  return tips;
+}
+
+async function resolveHere(quick){ return { key: 'here', here: true, lat:37.5665, lon:126.978, name:'首尔', region:'韩国 · 世界所在地' }; }
+
+async function weatherTool(args, context){
+  args = args || {}; context = context || {};
+  if (!stateLoaded) await loadState();
+  let place = null;
+  const city = String(args.city || "").trim();
+  if (city) {
+    const found = await searchPlaces(city).catch(() => []);
+    if (!found.length) return { success: false, error: `没有找到城市「${city}」` };
+    place = found[0];
+  } else {
+    place = await resolveHere();
+    if (!place) return { success: false, error: "还没有定位，请先打开天气 APP 允许定位" };
+  }
+  const d = await loadWeather(place);
+  cache.set(place.key, d); saveCache();
+  // 只有「用户自己的位置」才套用虚拟地点/时间；角色查别的城市时照实显示
+  const view = city ? { virtual: false, name: place.name, realName: place.name, time: perceived._real(d), shiftH: 0 } : perceived(place, d, context.characterId || args.characterId);
+  const c = d.current, today = d.daily[0] || {};
+  const cond = c.text || codeText(c.code);
+  const tips = adviceOf(d);
+  const next = d.hourly.slice(1, 7).map((h, i) => `${(view.time.getHours() + i + 1) % 24}时${codeText(h.code)}${Math.round(cv(h.t))}°`).join("，");
+  const line = weatherLine(view, d);
+
+  let cardSent = false;
+  const characterId = context.characterId || args.characterId;
+  if (args.sendCard !== false && characterId && AP && AP.chat && AP.chat.sendCard) {
+    try {
+      const sent = await AP.chat.sendCard({
+        characterId, sessionId: context.sessionId,
+        role: "assistant", historyRole: "system",
+        summary: `天气卡片：${line}`,
+        // 进入聊天历史 = 进入角色的短期记忆，之后角色也记得这次查到的天气
+        historyText: `[天气卡片：${line}${tips.length ? "建议：" + tips.join("、") + "。" : ""}]`,
+        card: { appLabel: "天气", height: 232, html: buildCardHTML(view, d) },
+      });
+      cardSent = true;
+      rememberCard(sent, place).catch(() => {});
+    } catch (e) { /* 发卡失败也把天气结果返回给角色 */ }
+  }
+  return {
+    success: true,
+    data: {
+      place: view.name,
+      time: fmtView(view),
+      condition: cond,
+      temperature: tp(c.t), feelsLike: tp(c.feels),
+      high: tp(today.hi), low: tp(today.lo),
+      humidity: c.humidity != null ? Math.round(c.humidity) + "%" : null,
+      rainChance: today.pop != null ? today.pop + "%" : null,
+      airQuality: d.aqi && d.aqi.us != null ? aqiLabel(d.aqi.us)[0] : null,
+      uv: c.uv != null ? Math.round(c.uv) : null,
+      wind: `${dirName(c.dir)}风 ${wsp(c.wind)}`,
+      nextHours: next,
+      advice: tips,
+      cardSent,
+      note: cardSent ? "天气卡片已经发到聊天里了，用自然的口吻接着聊，不要把数据再念一遍。" : "把天气用自然的口吻告诉用户。",
+    },
+    userNotice: cardSent ? "已发送天气卡片" : undefined,
+  };
+}
+if (AP && AP.tools && AP.tools.handle) AP.tools.handle("weatherCard", weatherTool);
+</script>
+<script>
+/* ───────────── 让角色「自然知道」你那边的天气（写进角色记忆） ───────────── */
+const AWARE_ID = "weather-now";
+const weatherClass = c => c.code >= 95 ? "storm" : isSnowy(c.code) ? "snow" : isWet(c.code) ? "rain" : c.code >= 3 ? "grey" : "fair";
+async function loadSync(){ const r = (await host.dbList("sync"))[0]; try { return r && r.items ? JSON.parse(r.items) : {}; } catch (e) { return {}; } }
+const saveSync = obj => host.dbSave("sync", [{ items: JSON.stringify(obj) }]);
+
+function awarenessText(userName, view, d){
+  const c = d.current, t = d.daily[0] || {};
+  let s = `${userName}那边（${view.name}）`;
+  if (view.dateAlias) s += `，现在是${fmtView(view)}，`;
+  s += `现在${c.text || codeText(c.code)}，${tp(c.t)}，体感${tp(c.feels)}；今天最高${tp(t.hi)}、最低${tp(t.lo)}`;
+  const wetNow = isWet(c.code) || isSnowy(c.code);
+  const soon = d.hourly.slice(1, 9).findIndex(h => isWet(h.code) || isSnowy(h.code) || h.pop >= 60);
+  if (wetNow) s += `，外面正在${codeText(c.code)}`;
+  else if (soon >= 0) s += `，大概${(view.time.getHours() + soon + 1) % 24}点左右可能会下雨`;
+  if (t.hi != null && t.lo != null && t.hi - t.lo >= 10) s += "，早晚温差大";
+  if (d.aqi && d.aqi.us > 150) s += "，空气质量不太好";
+  if (c.uv >= 8) s += "，紫外线很强";
+  s += "。（这是你本来就知道的、TA那边的实时情况：平时不用特意提天气；遇到下雨、降温、很热、空气差这类值得在意的变化，可以像真人一样顺口关心一句。想让TA看看天气时，才用「查询天气」发卡片。）";
+  return s;
+}
+
+async function syncAwareness(characterId, force){
+  return; // 世界天气由爱豆宿主统一注入，不写实时天气记忆。
+  if (!stateLoaded) await loadState();
+  if (S.aware === "off") return;
+  const sync = await loadSync();
+  const last = sync[characterId];
+  // 位置：用上次定位（后台不弹授权），顺手尝试一次省电的粗略定位，搬家/出差也能跟上
+  let here = places.find(p => p.here);
+  const fresh = await resolveHere(true);
+  if (fresh && fresh.here) {
+    if (!here || Math.abs(here.lat - fresh.lat) + Math.abs(here.lon - fresh.lon) > 0.02) {
+      const i = places.findIndex(p => p.here);
+      if (i >= 0) places[i] = fresh; else places.unshift(fresh);
+      savePlaces();
+    }
+    here = places.find(p => p.here);
+  }
+  if (!here) return;
+  let d = cache.get(here.key);
+  if (!d || Date.now() - d.at > 20 * 60 * 1000) {
+    try { d = await loadWeather(here); cache.set(here.key, d); saveCache(); } catch (e) { if (!d) return; }
+  }
+  const V = viewFor(characterId);
+  const cls = weatherClass(d.current) + "|" + Math.round((d.current.t || 0) / 4) + "|" + (V.virt ? V.place + "|" + V.dateAlias : "real");
+  // 天气没明显变化、半小时内同步过，就不重复写
+  if (!force && last && Date.now() - last.at < 30 * 60 * 1000 && last.cls === cls) return;
+  let userName = "用户";
+  try { const pr = await AP.user.getProfile({ characterId }); if (pr && pr.name) userName = pr.name; } catch (e) {}
+  const summary = awarenessText(userName, perceived(here, d, characterId), d);
+  // 同一个 appEventId：先删旧的再写新的，TA 的记忆里始终只有「最新的一条天气」
+  try { await AP.memory.deleteTimeline({ characterId, appEventId: AWARE_ID }); } catch (e) {}
+  await AP.memory.addTimeline({ characterId, appLabel: "天气", detail: "weather_now", appEventId: AWARE_ID, summary, createdAt: new Date().toISOString() });
+  sync[characterId] = { at: Date.now(), cls };
+  await saveSync(sync);
+}
+// 注意：1.4 起不再监听每条聊天消息（那会让小手机每条消息都在后台拉起一次本 APP，聊天变卡）。
+// 「角色自然知道天气」改由配套插件「天气伴侣」在组装提示词时注入，和日历节假日插件一样，零后台开销。
+// 这里只负责把旧版本写进角色记忆的天气条目清掉，避免和插件的信息重复。
+async function cleanupOldAwareness(){
+  if (!AP || !AP.memory || !AP.memory.deleteTimeline) return;
+  const sync = await loadSync();
+  const ids = Object.keys(sync);
+  if (!ids.length) return;
+  for (const cid of ids) { try { await AP.memory.deleteTimeline({ characterId: cid, appEventId: AWARE_ID }); } catch (e) {} }
+  await host.dbSave("sync", []);
+}
+
+/* ───────────── 按角色设置叫法 ───────────── */
+let charCache = null;
+async function renderCharset(){
+  const box = $("#charset-list");
+  if (!AP || !AP.characters || !AP.characters.list) { box.innerHTML = `<div class="empty">需要在小手机里打开才能读取角色列表</div>`; return; }
+  if (!charCache) {
+    box.innerHTML = `<div class="empty"><div class="spin" style="margin:0 auto"></div></div>`;
+    try { charCache = (await AP.characters.list()) || []; } catch (e) { box.innerHTML = `<div class="empty">读取角色失败：${esc(e.message || e)}</div>`; return; }
+  }
+  box.textContent = "";
+  if (!charCache.length) { box.innerHTML = `<div class="empty">还没有角色</div>`; return; }
+  for (const ch of charCache) {
+    const id = ch.id; if (!id) continue;
+    const b = S.charViews[id] || { mode: "global" };
+    const row = el("div", "crow");
+    const av = ch.avatar || ch.avatarUrl || "";
+    const label = b.mode === "alias" ? (b.place ? `叫「${b.place}」` : "单独起名（未填）") : b.mode === "real" ? "用真实地名" : "跟随全局";
+    row.innerHTML = `
+      <div class="ch">
+        <div class="av" ${av ? `style="background-image:url('${esc(av)}')"` : ""}>${av ? "" : esc((ch.name || "?").slice(0, 1))}</div>
+        <div class="cn">${esc(ch.name || "未命名角色")}</div>
+        <div class="cm">${esc(label)}</div>
+      </div>
+      <div class="ce">
+        <div class="row"><span>叫法</span>
+          <div class="seg"><button data-v="global">跟随全局</button><button data-v="alias">单独起名</button><button data-v="real">真实地名</button></div>
+        </div>
+        <div class="row sub a-dep"><span>地点名称</span><input type="text" class="a-place" placeholder="在 TA 的世界里你住在…" maxlength="24"></div>
+        <div class="row sub a-dep"><span>日期称呼</span><input type="text" class="a-date" placeholder="可不填" maxlength="24"></div>
+      </div>`;
+    const seg = row.querySelector(".seg"), ip = row.querySelector(".a-place"), idt = row.querySelector(".a-date");
+    const paint = () => {
+      const cur = S.charViews[id] || { mode: "global" };
+      seg.querySelectorAll("button").forEach(x => x.classList.toggle("on", x.dataset.v === (cur.mode || "global")));
+      row.querySelectorAll(".a-dep").forEach(r => r.classList.toggle("hide", cur.mode !== "alias"));
+      ip.value = cur.place || ""; idt.value = cur.dateAlias || "";
+      row.querySelector(".cm").textContent = cur.mode === "alias" ? (cur.place ? `叫「${cur.place}」` : "单独起名（未填）") : cur.mode === "real" ? "用真实地名" : "跟随全局";
+    };
+    const commit = patch => {
+      const cur = Object.assign({ mode: "global" }, S.charViews[id] || {}, patch);
+      if (cur.mode === "global") delete S.charViews[id]; else S.charViews[id] = cur;
+      saveSettings(); paint();
+    };
+    row.querySelector(".ch").onclick = () => row.classList.toggle("open");
+    seg.querySelectorAll("button").forEach(x => x.onclick = () => commit({ mode: x.dataset.v }));
+    ip.addEventListener("change", () => commit({ place: ip.value.trim() }));
+    idt.addEventListener("change", () => commit({ dateAlias: idt.value.trim() }));
+    paint();
+    box.appendChild(row);
+  }
+}
+
+/* ───────────── 聊天 + 号面板：把我的天气卡片发给 TA ───────────── */
+let shareLaunch = null, sharePlace = null, shareData = null, shareReply = "on";
+async function openShare(launch, tried){
+  shareLaunch = launch;
+  $("#share").classList.remove("hide");
+  $("#bottom").classList.add("hide");
+  $("#sky").style.display = "none";      // 面板是纯色底，背景动画没必要跑
+  $("#pages").style.display = "none";
+  const chips = $("#s-chips");
+  chips.textContent = "";
+  const list = places.length ? places : [];
+  list.forEach((p, i) => {
+    const b = el("button", "chip" + (i === 0 ? " on" : ""), (p.here ? `<svg viewBox="0 0 24 24"><use href="#i-map"/></svg>` : "") + esc(p.here && viewFor(launch.characterId).virt && viewFor(launch.characterId).place ? viewFor(launch.characterId).place : p.name));
+    b.onclick = () => { chips.querySelectorAll(".chip").forEach(x => x.classList.remove("on")); b.classList.add("on"); pickShare(p); };
+    chips.appendChild(b);
+  });
+  $("#seg-reply").querySelectorAll("button").forEach(b => {
+    b.classList.toggle("on", b.dataset.v === shareReply);
+    b.onclick = () => { shareReply = b.dataset.v; $("#seg-reply").querySelectorAll("button").forEach(x => x.classList.toggle("on", x === b)); };
+  });
+  $("#s-note").textContent = launch.characterName ? `会发到和 ${launch.characterName} 的聊天里` : "";
+  if (!tried && !places.some(p => p.here)) { await locateMe(true, true).catch(() => {}); return openShare(launch, true); }
+  if (!list.length) { $("#s-load").classList.add("hide"); $("#s-note").textContent = "还没有城市，请先打开天气 APP 定位或添加城市"; return; }
+  if (list[0]) pickShare(list[0]);
+}
+async function pickShare(p){
+  sharePlace = p;
+  let d = cache.get(p.key);
+  if (d) showShare(p, d);          // 先用缓存立刻显示，不等网络
+  else { shareData = null; $("#s-send").disabled = true; $("#s-load").classList.remove("hide"); }
+  if (!d || Date.now() - d.at > 20 * 60 * 1000) {
+    try { const fresh = await loadWeather(p); cache.set(p.key, fresh); saveCache(); if (sharePlace === p) showShare(p, fresh); }
+    catch (e) { if (!d) toast("获取天气失败"); }
+  }
+}
+function showShare(p, d){
+  shareData = d;
+  const view = p.here ? perceived(p, d, shareLaunch && shareLaunch.characterId) : { virtual: false, name: p.name, time: perceived._real(d), shiftH: 0 };
+  const host$ = $("#s-frame");
+  const root = host$.shadowRoot || host$.attachShadow({ mode: "open" });
+  root.innerHTML = buildCardHTML(view, d);
+  $("#s-load").classList.add("hide");
+  $("#s-send").disabled = false;
+}
+$("#s-send").onclick = async () => {
+  if (!shareData || !sharePlace || !shareLaunch) return;
+  const btn = $("#s-send"); btn.disabled = true; btn.textContent = "发送中…";
+  const p = sharePlace, d = shareData, L = shareLaunch;
+  const view = p.here ? perceived(p, d, shareLaunch && shareLaunch.characterId) : { virtual: false, name: p.name, time: perceived._real(d), shiftH: 0 };
+  let userName = "我";
+  try { const pr = await AP.user.getProfile({ characterId: L.characterId }); if (pr && pr.name) userName = pr.name; } catch (e) {}
+  const line = weatherLine(view, d);
+  try {
+    const sent = await AP.chat.sendCard({
+      characterId: L.characterId, sessionId: L.sessionId,
+      role: "user", historyRole: "user",
+      summary: `${userName}分享了天气：${line}`,
+      historyText: `[${userName}给你发了一张天气卡片：${line}]`,
+      card: { appLabel: "天气", height: 232, html: buildCardHTML(view, d) },
+    });
+    rememberCard(sent, p).catch(() => {});
+    // 请求回应不等角色生成完（那要好几秒），发出请求后马上收起面板
+    if (shareReply === "on" && AP.chat.requestReply) AP.chat.requestReply({ characterId: L.characterId, sessionId: L.sessionId }).catch(() => {});
+    setTimeout(() => AP.app.close(), 120);
+  } catch (e) {
+    toast("发送失败：" + String(e.message || e).slice(0, 40));
+    btn.disabled = false; btn.textContent = "发送给 TA";
+  }
+};
+</script>
+<script>
+/* ───────────── 定位 ───────────── */
+async function locateMe(silent, noUI){
+  const here = { key: "here", name: "首尔", region: "韩国 · 世界所在地", lat: 37.5665, lon: 126.978, here: true };
+  const i = places.findIndex(p => p.here);
+  if (i >= 0) places[i] = here; else places.unshift(here);
+  savePlaces();
+  if (!noUI) { rebuildPages(); await refreshPlace(here, false); renderSheet(); }
+}
+
+/* ───────────── 启动 ───────────── */
+async function boot(){
+  let launch = {};
+  try { launch = (AP && await AP.app.getLaunchContext()) || {}; } catch (e) {}
+  if (launch.origin === "custom_app_background" || launch.background === true || launch.source === "tool") {
+    // 角色在聊天里调用工具时的隐藏运行：只准备数据，不渲染界面、不做多余请求
+    if (!stateLoaded) await loadState();
+    return;
+  }
+  if (!stateLoaded) await loadState();
+  if (launch.source === "chat_plus_action") {
+    // 从聊天室 + 号打开：只显示「分享我的天气」面板
+    await openShare(launch);
+    return;
+  }
+  if (!places.length) {
+    // 首次打开：先放一个占位城市，随后尝试定位
+    places = [{ key: "here", name: "首尔", region: "韩国 · 世界所在地", lat: 37.5665, lon: 126.978, here: true }];
+    savePlaces();
+  }
+  // 从角色发的天气卡片点进来：直接跳到那张卡片对应的城市
+  if (launch.source === "chat_card" && launch.messageId) {
+    const cp = await placeForCard(launch.messageId);
+    if (cp) {
+      let i = places.findIndex(p => p.key === cp.key || (cp.here && p.here));
+      if (i < 0) { places.push({ key: cp.key, name: cp.name, region: cp.region, lat: cp.lat, lon: cp.lon }); savePlaces(); i = places.length - 1; toast(`已添加 ${cp.name}`); }
+      pageIdx = i;
+    }
+  }
+  rebuildPages();
+  syncSettingUI();
+  if (pageIdx) requestAnimationFrame(() => gotoPage(pageIdx, false));
+  // 先用缓存把界面点亮，再逐个刷新
+  applyCurrentSky();
+  refreshAll(false);
+  locateMe(true);
+  // Keep old timeline records untouched; the host supplies weather context.
+}
+boot();
+let lastWorldHour = worldHour();
+setInterval(() => { const h=worldHour(); if(h!==lastWorldHour){lastWorldHour=h;cache.clear();refreshAll(true);} },15000);
+
+/* 应用重新可见时，超过 15 分钟自动刷新一次 */
+document.addEventListener("visibilitychange", () => {
+  document.body.classList.toggle("paused", document.visibilityState !== "visible");
+  if (document.visibilityState !== "visible") return;
+  const p = places[pageIdx];
+  const d = p && cache.get(p.key);
+  if (!d || Date.now() - d.at > 15 * 60 * 1000) refreshPlace(p, true);
+});
+window.addEventListener("resize", () => gotoPage(pageIdx, false));
+</script>
+</body>
+</html>

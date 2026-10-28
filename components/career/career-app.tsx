@@ -200,7 +200,7 @@ export function CareerApp({ onClose, onNotice }: { onClose: () => void; onNotice
 
   const rowFor = (i: Item) => (
     <Row key={i.id} item={i} swiped={swipeId === i.id} onSwipe={open => setSwipeId(open ? i.id : null)} onNotice={onNotice}
-      onCheck={() => onCheck(i)} onInfo={() => { setSwipeId(null); if (!i.offerId) setDetailId(i.id); }}
+      onCheck={() => onCheck(i)} onInfo={() => { setSwipeId(null); setDetailId(i.id); }}
       onLeave={() => { setSwipeId(null); setLeaveId(i.id); }} onDelete={() => { setSwipeId(null); deleteNode(i.id); }} />
   );
 
@@ -210,7 +210,7 @@ export function CareerApp({ onClose, onNotice }: { onClose: () => void; onNotice
 
   let body: React.ReactNode;
   if (detail) {
-    body = <Detail item={detail} onBack={() => setDetailId(null)} onGo={() => go(detail)} onCheck={() => onCheck(detail)} onLeave={() => setLeaveId(detail.id)} onDelete={() => { deleteNode(detail.id); setDetailId(null); }} />;
+    body = <Detail item={detail} onAccept={() => { const n = acceptInvite(detail.id); setDetailId(null); if (n) onNotice?.(`${n.title}：${whenText(n.dueAt)}，写进日历了`); }} onDecline={() => { declineInvite(detail.id); setDetailId(null); onNotice?.(detail.offerId ? `婉拒了 ${detail.from}` : "回了不去"); }} onBack={() => setDetailId(null)} onGo={() => go(detail)} onCheck={() => onCheck(detail)} onLeave={() => setLeaveId(detail.id)} onDelete={() => { deleteNode(detail.id); setDetailId(null); }} />;
   } else if (page.p === "list") {
     const rows = pick(items, page.key);
     const secs = sections(rows, page.key);
@@ -388,7 +388,7 @@ function AddSheet({ onClose, onDone }: { onClose: () => void; onDone: (title: st
   );
 }
 
-function Detail({ item, onBack, onGo, onCheck, onLeave, onDelete }: { item: Item; onBack: () => void; onGo: () => void; onCheck: () => void; onLeave: () => void; onDelete: () => void }) {
+function Detail({ item, onBack, onGo, onCheck, onLeave, onDelete, onAccept, onDecline }: { onAccept: () => void; onDecline: () => void; item: Item; onBack: () => void; onGo: () => void; onCheck: () => void; onLeave: () => void; onDelete: () => void }) {
   const [wish, setWishText] = useState(item.wish ?? "");
   const [note, setNoteText] = useState(item.note ?? "");
   const open = item.status === "pending";
@@ -410,9 +410,15 @@ function Detail({ item, onBack, onGo, onCheck, onLeave, onDelete }: { item: Item
           <div className="rm-group"><input className="rm-in flat" value={wish} onChange={e => setWishText(e.target.value)} onBlur={() => setWish(item.id, wish)} placeholder="比如：前五（不写就看你演得怎么样）" /></div>
         </>
       ) : null}
-      <div className="rm-sec-s">备注</div>
-      <div className="rm-group"><textarea className="rm-in flat" rows={3} value={note} onChange={e => setNoteText(e.target.value)} onBlur={() => setNote(item.id, note)} placeholder="只有你看得到" /></div>
+      {item.status === "invite" ? <>
+        <div className="rm-sec-s">通知全文</div>
+        <div className="rm-group rm-pad"><div className="rm-invitation-text">{item.note || item.premise || "暂无补充说明"}</div>{item.note && item.premise && item.note !== item.premise ? <div className="rm-invitation-text">{item.premise}</div> : null}</div>
+      </> : <>
+        <div className="rm-sec-s">备注</div>
+        <div className="rm-group"><textarea className="rm-in flat" rows={3} value={note} onChange={e => setNoteText(e.target.value)} onBlur={() => setNote(item.id, note)} placeholder="只有你看得到" /></div>
+      </>}
       <div className="rm-dbtns">
+        {item.status === "invite" ? <><button type="button" className="p" onClick={onAccept}>{item.offerId ? "去试镜" : "报名"}</button><button type="button" onClick={onDecline}>{item.offerId ? "婉拒" : "不了"}</button></> : null}
         {playable ? <button type="button" className="p" onClick={() => { setWish(item.id, wish); onGo(); }}>去演</button> : null}
         {open ? <button type="button" onClick={onCheck}>打勾</button> : null}
         {playable ? <button type="button" onClick={onLeave}>{item.kind === "date" ? "去不了" : "请假"}</button> : null}

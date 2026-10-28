@@ -1047,3 +1047,5 @@
 .vn-stage-menu button:active { background: rgba(255,255,255,0.08); }
 .vn-stage-menu button[data-danger] { color: #ff8a9a; }
 .vn-clock-pop { top: calc(var(--page-header-safe-top, 44px) + 116px) !important; }
+
+.vn-stage-open-weather { color: rgba(255,255,255,.65); font-size: 13px; margin-top: 10px; letter-spacing: .5px; }

@@ -1506,6 +1506,13 @@ export async function fetchCustomAppNetwork(app: InstalledCustomApp, record: Rec
     if (value !== undefined && value !== null) url.searchParams.set(key, String(value));
   }
 
+  // The idol edition of fish's weather app shares the world's cached historical data.
+  if (app.manifest.id === "weather.aurora" && url.hostname === "archive-api.open-meteo.com" && url.pathname === "/v1/archive" && url.searchParams.get("idol_world") === "1") {
+    const { getWorldWeather } = await import("./idol-weather");
+    const data = await getWorldWeather(Number(url.searchParams.get("latitude")), Number(url.searchParams.get("longitude")), Date.now());
+    return { ok: true, status: 200, json: data, text: JSON.stringify(data), headers: {} };
+  }
+
   const method = cleanText(record.method, 12).toUpperCase() || "GET";
   if (!NETWORK_FETCH_METHODS.has(method)) {
     throw new Error(`network.fetch 不支持请求方法：${method}`);

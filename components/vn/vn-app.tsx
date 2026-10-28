@@ -5,6 +5,7 @@ import "@chinese-fonts/jhlst/dist/京華老宋体v2_002/result.css";
 import "@chinese-fonts/syst/dist/SourceHanSerifCN/result.css";
 
 import { useCallback, useEffect, useState } from "react";
+import { StageReplay } from "./stage-replay";
 import { VnPlayer } from "./vn-player";
 import { StageHome } from "./stage-home";
 import { WORLD_CHAR_ID, ensureWorldCharacter } from "@/lib/idol-world";
@@ -27,6 +28,7 @@ interface VnAppProps {
 
 /** 爱豆小手机的场景 app（原漫卷）：不选人，打开就是地图；一场戏 = 「世界」会话里的一章 */
 export function VnApp({ onClose }: VnAppProps) {
+  const [replay, setReplay] = useState<number | null>(null);
   const [chapter, setChapter] = useState<number | null>(null);
   useEffect(() => { ensureWorldCharacter(); preloadStageFonts(); return () => stopStageBgm(); }, []);
 
@@ -35,6 +37,8 @@ export function VnApp({ onClose }: VnAppProps) {
     setChapter(chapterIndex);
   }, []);
 
+  if (replay !== null) return <StageReplay key={replay} chapterIndex={replay} onClose={() => { setReplay(null); setChapter(null); }} />;
+
   if (chapter !== null) {
     return (
       <VnPlayer
@@ -42,6 +46,7 @@ export function VnApp({ onClose }: VnAppProps) {
         characterId={WORLD_CHAR_ID}
         chapterIndex={chapter}
         stage
+        onStageReplay={() => setReplay(chapter)}
         onClose={() => setChapter(null)}
         onChapterEnd={() => setChapter(null)}
         vnTheme="default"
@@ -49,5 +54,5 @@ export function VnApp({ onClose }: VnAppProps) {
     );
   }
 
-  return <StageHome onClose={onClose} onPlay={play} />;
+  return <StageHome onClose={onClose} onPlay={play} onReplay={setReplay} />;
 }

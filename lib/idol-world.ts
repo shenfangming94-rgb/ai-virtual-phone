@@ -1,3 +1,4 @@
+import { worldWeatherHint } from "./idol-weather";
 /**
  * 爱豆小手机：剧情 app 的「世界」模式。
  *
@@ -149,6 +150,7 @@ export function worldPromptFor(meta: SceneMeta | null, fallbackPlace: string, pa
     `【她是谁】\n${whoIsShe()}\n${kakaoPromptLine()}`,
     careerPromptBlock(),
     eventsPromptBlock(),
+    worldWeatherHint(),
     `【时间和地点】\n现在：${fmtWorld(Date.now())}\n地点：${meta?.place || fallbackPlace || "某个地方"}${meta?.premise ? `\n开头：${meta.premise}` : ""}`,
     `【在场的人】${people.length ? people.map(c => c.name).join("、") : "暂时只有她"}${peopleBlock ? `\n\n${peopleBlock}` : ""}`,
     meta?.open ? mightMeetBlock(participantIds, meta.place, meta.avoid) : "",

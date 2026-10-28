@@ -1,3 +1,4 @@
+import { worldWeatherHint } from "./idol-weather";
 /**
  * 爱豆小手机：平常日子有人来找你（KakaoTalk 私聊）。
  *
@@ -115,6 +116,7 @@ function instruction(charId: string, now: number, gapDays: number): string {
     others.length ? `${others.map(o => `${o.name}${o.days === 1 ? "明天" : `${o.days}天后`}过生日`).join("、")}（你认识的话可以提，比如商量一起准备）` : "",
   ].filter(Boolean).join("；");
   return [
+    worldWeatherHint(),
     `平常的一天，现在${new Date(now).getHours()}点，你想在 KakaoTalk 上找${her}聊几句，没什么大事。`,
     `可以接着你们最近的事（${ev || "还没什么"}），可以说你自己今天的事（你最近：${p?.status?.text || "没写"}），${next ? `可以聊她接下来的「${next.title}」（${md(next.dueAt)}）` : ""}${lastDone ? `，可以问她刚过去的「${lastDone.title}」怎么样` : ""}。挑一个最自然的，不要全说。`,
     bday ? `快到的生日：${bday}。想提就提，可以别别扭扭地暗示，也可以直说。` : "",

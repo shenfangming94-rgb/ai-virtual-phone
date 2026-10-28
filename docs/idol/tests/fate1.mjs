@@ -28,7 +28,7 @@ await p.evaluate(async()=>{
 });
 const setT=async s=>p.evaluate(s=>{const wc=window.__worldClock; const t=new Date(s).getTime(); wc.offset=t-wc.RealDate.now(); localStorage.setItem("idol_world_clock_v1",JSON.stringify({real:false,offset:wc.offset,world:t}));},s);
 await setT("2015-03-03T20:00:00");
-await p.reload({waitUntil:"networkidle2"}); await sleep(9000);
+await p.reload({waitUntil:"networkidle2",timeout:300000}); await sleep(9000);
 const kv=async k=>p.evaluate(k=>new Promise(res=>{const r=indexedDB.open("AiPhoneKvDB");r.onsuccess=()=>{const g=r.result.transaction("entries").objectStore("entries").get(k);g.onsuccess=()=>res(g.result?.value)}}),k);
 let d=JSON.parse(await kv("idol_destiny_v1")||"null");
 console.log("generated", d?.cards.map(c=>c.title+"/"+c.via+"/"+new Date(c.earliestAt).toISOString().slice(0,10)).join(" | "));
@@ -38,12 +38,12 @@ await p.evaluate(async()=>{const db=await new Promise(res=>{const r=indexedDB.op
   for(const c of s.cards){ if(c.title==="便利店夜班") c.earliestAt=Date.now()-1000; else if(c.title==="巴黎时装秀") c.earliestAt=Date.now()-500; else c.earliestAt=Date.now()+90*864e5; }
   s.lastFiredAt=Date.now()-30*864e5;
   const tx=db.transaction("entries","readwrite"); tx.objectStore("entries").put({key:"idol_destiny_v1",value:JSON.stringify(s)}); await new Promise(r=>tx.oncomplete=r);});
-await p.reload({waitUntil:"networkidle2"}); await sleep(7000);
+await p.reload({waitUntil:"networkidle2",timeout:300000}); await sleep(7000);
 await p.screenshot({path:OUT+"/fate_banner.png"});
 d=JSON.parse(await kv("idol_destiny_v1"));
 console.log("fired", d.cards.filter(c=>c.firedAt).map(c=>c.no+" "+c.title+" "+c.via+" mark:"+(c.markUntil?new Date(c.markUntil).toISOString().slice(0,10):"")).join(" | "));
 // 跳到五天后，第二个来
-await setT("2015-03-09T20:00:00"); await p.reload({waitUntil:"networkidle2"}); await sleep(9000);
+await setT("2015-03-09T20:00:00"); await p.reload({waitUntil:"networkidle2",timeout:300000}); await sleep(9000);
 d=JSON.parse(await kv("idol_destiny_v1"));
 console.log("fired2", d.cards.filter(c=>c.firedAt).map(c=>c.no+" "+c.title+" "+c.via).join(" | "));
 const car=JSON.parse(await kv("idol_career_v1")); console.log("invites", car.nodes.filter(n=>n.status==="invite").map(n=>n.title+" from "+n.from));

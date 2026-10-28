@@ -8,12 +8,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ChevronLeft, MoreHorizontal, X, Lock, Music2, VolumeX, Image as ImageIcon, Check, Search, Play } from "lucide-react";
 import {
-  DEFAULT_MAPS, addBackground, addCustomPlace, loadCustomPlaces, pickBackground, placeBackgrounds, removeBackground, removeCustomPlace, thumbsOf, STAGE_APP_NAME, STAGE_OPEN_EVENT, loadBgmMap, loadBgmModes, loadMapLooks, loadStageSettings, mapById, mapBgmKey, mapOfPlace, openStageScenes, pastStageScenes, placeLocked,
+  DEFAULT_MAPS, mapLookKey, addBackground, addCustomPlace, loadCustomPlaces, pickBackground, placeBackgrounds, removeBackground, removeCustomPlace, thumbsOf, STAGE_APP_NAME, STAGE_OPEN_EVENT, loadBgmMap, loadBgmModes, loadMapLooks, loadStageSettings, mapById, mapBgmKey, mapOfPlace, openStageScenes, pastStageScenes, placeLocked,
   saveBgmFor, saveBgmMode, saveMapLook, saveStageSettings, startNodeStage, startStageScene, takePendingStage, type BgmMode, type BgmSong, type MapLook, type StagePlace, type StageSettings,
 } from "@/lib/idol-stage";
 import { loadBgmMuted, saveBgmMuted, setStageBgmVolume, useStageBgm } from "./stage-bgm";
 import { WORLD_CHAR_ID } from "@/lib/idol-world";
-import { nodeById } from "@/lib/idol-career";
+import { companyOf, loadCareer, nodeById } from "@/lib/idol-career";
 import { loadProfiles, relationOf } from "@/lib/idol-people";
 import { loadAllCharacters } from "@/lib/character-storage";
 import { getThemeAssetMap, saveThemeAssetFromBlob } from "@/lib/theme-storage";
@@ -57,8 +57,9 @@ export function StageHome({ onClose, onPlay }: Props) {
   const [pastOpen, setPastOpen] = useState(false);
   const [, bump] = useState(0);
   const map = mapById(mapId);
-  const saved = looks[mapId] ?? { pins: {} };
-  const builtin = DEFAULT_MAPS[mapId];
+  const lookKey = mapLookKey(mapId);
+  const saved = looks[lookKey] ?? { pins: {} };
+  const builtin = DEFAULT_MAPS[lookKey];
   const usingBuiltin = !saved.imageAssetId && !saved.noImage && Boolean(builtin);
   // 用自带的图时：自带的钉子位置打底，她拖过的盖上去
   const look: MapLook = usingBuiltin ? { ...saved, pins: { ...builtin!.pins, ...saved.pins } } : saved;
@@ -101,7 +102,7 @@ export function StageHome({ onClose, onPlay }: Props) {
   }, [saved.imageAssetId, usingBuiltin, builtin]);
 
   const updateLook = (next: MapLook) => {
-    saveMapLook(mapId, next);
+    saveMapLook(lookKey, next);
     setLooks(loadMapLooks());
   };
 
@@ -120,7 +121,7 @@ export function StageHome({ onClose, onPlay }: Props) {
     <div className="stg">
       <div className="stg-hud">
         {!hideClock ? <span className="stg-pill stg-pill-date">{d.getFullYear()}<b>年</b>{d.getMonth() + 1}<b>月</b>{d.getDate()}<b>日</b><i>星期{WEEK[d.getDay()]}</i></span> : null}
-        <span className="stg-pill">{map.label}{!hideClock ? <><em>·</em>{clock}</> : null}</span>
+        <span className="stg-pill">{(mapId === "company" && companyOf(loadCareer().companyId)?.name) || map.label}{!hideClock ? <><em>·</em>{clock}</> : null}</span>
       </div>
       <div className="stg-bar">
         <button type="button" className="stg-ic" onClick={() => (map.parent ? setMapId(map.parent) : onClose())} aria-label="返回">
@@ -274,15 +275,19 @@ function MapImage({ url, places, look, editing, onTap, onPlace }: {
 }) {
   const scroller = useRef<HTMLDivElement>(null);
   const centered = useRef(false);
+  // 竖的图（公司大楼这种）比屏幕还窄：按宽铺满、上下拖
+  const [tall, setTall] = useState(false);
   return (
-    <div className="stg-map" ref={scroller}>
+    <div className="stg-map" ref={scroller} data-tall={tall ? "1" : undefined}>
       <div className="stg-map-inner" onClick={e => {
         if (!editing) return;
         const r = (e.currentTarget as HTMLDivElement).getBoundingClientRect();
         onPlace(((e.clientX - r.left) / r.width) * 100, ((e.clientY - r.top) / r.height) * 100);
       }}>
-        <img src={url} alt="" draggable={false} onLoad={() => {
+        <img src={url} alt="" draggable={false} onLoad={e => {
           const el = scroller.current;
+          const img = e.currentTarget;
+          if (el && img.naturalWidth / img.naturalHeight < el.clientWidth / el.clientHeight) { setTall(true); return; }
           if (el && !centered.current) { el.scrollLeft = (el.scrollWidth - el.clientWidth) / 2; centered.current = true; }
         }} />
         {places.map(pl => {

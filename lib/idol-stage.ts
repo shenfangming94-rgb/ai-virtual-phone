@@ -165,7 +165,22 @@ export const DEFAULT_MAPS: Record<string, { image: string; pins: MapLook["pins"]
       医院: { x: 12.5, y: 67.8 }, 仁川机场: { x: 80.8, y: 33.9 },
     },
   },
+  // 公司大楼照片按楼层钉（她说随便钉，看着像一栋楼就行）
+  "company@hybe": {
+    image: "/idol/maps/company-hybe.jpg",
+    pins: {
+      "公司·天台": { x: 48, y: 19 }, "公司·办公室": { x: 26, y: 28 }, "公司·会议室": { x: 56, y: 36 }, "公司·录音室": { x: 24, y: 45 },
+      "公司·练习室": { x: 58, y: 53 }, "公司·食堂": { x: 28, y: 63 }, "公司·大厅": { x: 16, y: 78 },
+    },
+  },
 };
+
+/** 公司小地图按签的公司分开：key「company@公司id」（每家一张楼，各自的钉子）；没签或没有就用「company」 */
+export function mapLookKey(mapId: string): string {
+  if (mapId !== "company") return mapId;
+  const id = loadCareer().companyId;
+  return id ? `company@${id}` : mapId;
+}
 
 /** 地点在哪张地图上 */
 export function mapOfPlace(key: string): StageMap | undefined {

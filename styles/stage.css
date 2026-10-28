@@ -59,6 +59,9 @@
 .stg-map::-webkit-scrollbar { display: none; }
 .stg-map-inner { position: relative; height: 100%; width: max-content; }
 .stg-map-inner img { height: 100%; width: auto; display: block; user-select: none; -webkit-user-select: none; }
+.stg-map[data-tall] { overflow-x: hidden; overflow-y: auto; }
+.stg-map[data-tall] .stg-map-inner { width: 100%; height: auto; }
+.stg-map[data-tall] .stg-map-inner img { width: 100%; height: auto; }
 .stg-mpin { position: absolute; transform: translate(-11px, -26px); display: flex; align-items: center; }
 .stg-mpin i { width: 22px; height: 22px; flex: none; position: relative; background: #ef6a86; border: 2.5px solid #fff; border-radius: 50% 50% 50% 0; transform: rotate(-45deg); box-shadow: 0 2px 4px rgba(0,0,0,0.35); }
 .stg-mpin i::after { content: ""; position: absolute; left: 50%; top: 50%; width: 7px; height: 7px; margin: -3.5px 0 0 -3.5px; border-radius: 50%; background: #fff; }

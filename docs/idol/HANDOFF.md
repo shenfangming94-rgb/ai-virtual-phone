@@ -572,3 +572,18 @@ Flora 要一个专门玩「爱豆模拟器」的小手机：她是想当爱豆�
 - checkpoint 标签：`checkpoint/idol-maps-music-replay-weather-20261028`（对应提交号另记在项目外 CODEX-HANDOFF.md）。本地存档，不push、不上线。
 - 当前出现了不属于 Codex 本轮新增的未跟踪文件 docs/idol/destiny.md；原样保留，不混进本次提交。
 - 项目外预览和测试文件继续保留在 /Users/flora/work/idol-settings-preview/，不纳入项目仓库。
+
+
+### 2.36 星路 + 命运图鉴（10-29 凌晨，Claude；设计全在 `docs/idol/destiny.md`）
+- **星路 app**（桌面 `starroad`，`components/starroad/star-road-app.tsx`、`styles/starroad.css`，字体自托管 `public/fonts/starroad/`，卡片素材 `public/idol/starroad/`）：手帐两页，成绩单（练习生证自动填，点等级字母弹小卡「离 X 还差 N 次加练」+ 加练按钮）、命运图鉴（八张，没翻开的是她给的暗红玫瑰原图）
+- **等级**（`lib/idol-starroad.ts`，kv `idol_starroad_v1`）：打勾的特长 B、其余 D；一档 26 分、一次加练 3 分；课按每周节数折算（每门每周合计约 1 分）；作业 8（好 10 坏 5）；加练 3、此刻里练 4；周评月考给唱跳 rap；同门两次升档至少隔 6 周；两个月没碰退一档（最低 D）。**给 AI 只有变化**（`starPromptBlock` 进 `careerPromptBlock`）
+- **课表**：签约时代码排（公司侧重不同，JYP 有体能/人性课，弱的那门多一节「加强」，两周一次的课单双周轮），91 天换一次。课不是 CareerNode，**跳时间不停**；`starroadTick` 事后判每节：请假 / 公假（公司日程撞上）/ 旷课（此刻场景在公司外开始、答应的约去了）/ 上了。提醒事项「公司 → 课表」页能看这周/上周/下周
+- **作业**：每周一 9 点 `kind: "homework"` 进提醒事项（周五 15 点交），室长 KakaoTalk 通知；没交不罚
+- **加练**：`kind: "practice"`（「我自己记的」），今晚/明晚 21 点，一天一次，过了不算缺席
+- **旷课**：第一次室长问；一个月第二次起叫去办公室 + 那门扣 3 分
+- **请课假**：室长私聊提示里列接下来几天的课；`[准假:10月30日]` 请整天、`[准假:10月30日 声乐课]` 请一节（`leaveFromMarker`）
+- **撞课提示**：提醒事项详情（约/自己记的）「撞课」一行；此刻地点卡「现在是X课，去这里算旷课」
+- **命运**（`lib/idol-destiny.ts`，kv `idol_destiny_v1`）：签约一天后 `destinyTick` 一次 AI 生成 8 个（失败 30 分钟后重试）；`earliestAt` 按练习生证「练多久」分散；两个之间至少 5 天；条件 time/grade/place/fame；三周没来保底；`destinyStops` 进 capJump。来法 new（进「新的朋友」，人物「你们的事」里写他为什么找她）/ friend / teacher / family（`queueMessage`）/ stage（地点钉子冒「!」挂 7 天 + 横幅「◐ 此刻：X好像有什么不一样」，点进去 `takeDestinyMark` 当开场）。有 meet 就建 `chance` 待回复。触发即翻卡
+- **管理老师 → 室长**：代码里所有说法都改了（旧存档里已经叫「管理老师」的人物名不动）
+- 测试：`docs/idol/tests/sr1.mjs`（课表、旷课、作业、加练、截图）、`fate1.mjs`（生成、翻卡、感叹号、陌生人、待回复）。都是假 AI
+- **还没做**：进出道组换课表；发动机临时调课/外聘老师；公司内部档案（AI 写的「一周作息」）可能跟代码课表对不上；命运 friend 来法 AI 选的人如果后来离开公司没处理；她真 API 没试过

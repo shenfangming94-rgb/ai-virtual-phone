@@ -1,0 +1,57 @@
+import puppeteer from "puppeteer-core";
+const OUT=process.argv[2]||".";
+const b=await puppeteer.launch({executablePath:"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",headless:"new"});
+const p=await b.newPage(); await p.setViewport({width:430,height:900,deviceScaleFactor:2});
+const errs=[]; p.on("pageerror",e=>errs.push(e.message));
+const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+const asks=[];
+const C=(title,en,via,extra={})=>({title,en,seed:`${title}的种子`,via,who:via==="stage"?null:{name:via==="family"?"妈妈":"李秀妍",role:"某人"},hello:via==="new"?"你好，我是在弘大见过你的那个人":"",place:via==="stage"?"便利店":"",meet:via==="new"?{title:"去她的工作室看看",place:"圣水洞",days:3,hour:15}:null,trigger:{type:"time"},...extra});
+const FATE={cards:[C("巴黎时装秀","paris","new"),C("便利店夜班","night shift","stage"),C("天台的前辈","on the roof","friend"),C("越洋来电","a far call","family"),C("借来的舞台","borrowed stage","teacher"),C("雨夜的出租车","rainy taxi","stage"),C("作曲家的工作室","the studio","new",{trigger:{type:"grade",subject:"compose",grade:"B"}}),C("旧相册里的人","old photograph","family")]};
+const CORS={"Access-Control-Allow-Origin":"*","Access-Control-Allow-Headers":"*","Access-Control-Allow-Methods":"POST, OPTIONS"};
+await p.setRequestInterception(true);
+p.on("request",r=>{ if(r.url().includes("mock.test")&&r.method()==="OPTIONS"){r.respond({status:204,headers:CORS});return;} if(r.url().includes("mock.test")){ const s=r.postData()||""; asks.push(s.slice(0,60));
+  const c= s.includes("命运里的八个彩蛋")?JSON.stringify(FATE) : s.includes("排接下来几天")?JSON.stringify({events:[],newPeople:[],status:[],posts:[]}) : s.includes("她想要的人")?JSON.stringify({name:"李秀妍",gender:"女",birthday:"03-02",mbti:"ENFP",role:"独立设计师",group:"时尚圈",age:"29",isIdol:false,publicLabels:[],publicText:"",privateLines:["说话很快"],speech:"",taboo:"",secret:""}) : "嗯嗯";
+  r.respond({status:200,headers:CORS,contentType:"application/json",body:JSON.stringify({choices:[{message:{role:"assistant",content:c},finish_reason:"stop"}]})}); } else r.continue(); });
+await p.goto("http://localhost:3031/",{waitUntil:"networkidle2",timeout:300000}); await sleep(2000);
+await p.evaluate(async()=>{
+  const now=new Date().toISOString();
+  const db=await new Promise((res,rej)=>{const r=indexedDB.open("AiPhoneKvDB");r.onsuccess=()=>res(r.result);r.onerror=rej;});
+  const tx=db.transaction("entries","readwrite"); const st=tx.objectStore("entries");
+  for (const k of ["idol_starroad_v1","idol_stage_scenes_v1","idol_reminders_v1","idol_destiny_v1","idol_destiny_v1_failed","idol_people_v1","idol_kakao_v1"]) st.delete(k);
+  st.put({key:"ai_phone_characters_v1",value:JSON.stringify([{id:"c3",name:"李秀妍",avatar:null,persona:"",wechatID:"x",tags:[],createdAt:now,updatedAt:now}])});
+  st.put({key:"ai_phone_api_configs_v1",value:JSON.stringify([{id:"m1",name:"mock",provider:"openai",apiKey:"x",baseUrl:"https://mock.test/v1",defaultModel:"m",enableImageRecognition:false,enableImageGeneration:false}])});
+  st.put({key:"ai_phone_user_identities_v1",value:JSON.stringify([{id:"identity-1",name:"金智允",bio:"",gender:"女",age:"16",occupation:"",customSettings:""}])});
+  st.put({key:"idol_trainee_card_v1",value:JSON.stringify({name:"金智允",photo:null,birthday:"2001-04-16",nationality:"中国",mbti:"",looks:"",start:"2015-03-01",trainLength:"一年半",family:"rich",familyCustom:"",familyNote:"",talents:["vocal"],talentNote:"",weakness:"",other:"",signature:null,company:"JYP",no:"x",createdAt:1})});
+  const t0=new Date("2015-03-01T09:00:00").getTime();
+  st.put({key:"idol_career_v1",value:JSON.stringify({stage:"trainee",companyId:"jyp",signedAt:t0,facts:[],offers:[],offersMadeAt:1,nodes:[{id:"n1",kind:"first_day",title:"进公司第一天",place:"JYP 公司大楼",premise:"",dueAt:t0+86400000,status:"done",companyId:"jyp",remindedEve:true,remindedDue:true}]})});
+  await new Promise(r=>tx.oncomplete=r);
+});
+const setT=async s=>p.evaluate(s=>{const wc=window.__worldClock; const t=new Date(s).getTime(); wc.offset=t-wc.RealDate.now(); localStorage.setItem("idol_world_clock_v1",JSON.stringify({real:false,offset:wc.offset,world:t}));},s);
+await setT("2015-03-03T20:00:00");
+await p.reload({waitUntil:"networkidle2"}); await sleep(9000);
+const kv=async k=>p.evaluate(k=>new Promise(res=>{const r=indexedDB.open("AiPhoneKvDB");r.onsuccess=()=>{const g=r.result.transaction("entries").objectStore("entries").get(k);g.onsuccess=()=>res(g.result?.value)}}),k);
+let d=JSON.parse(await kv("idol_destiny_v1")||"null");
+console.log("generated", d?.cards.map(c=>c.title+"/"+c.via+"/"+new Date(c.earliestAt).toISOString().slice(0,10)).join(" | "));
+// 让「便利店夜班」和「巴黎时装秀」现在就能来
+await p.evaluate(async()=>{const db=await new Promise(res=>{const r=indexedDB.open("AiPhoneKvDB");r.onsuccess=()=>res(r.result)});
+  const g=db.transaction("entries").objectStore("entries").get("idol_destiny_v1"); const v=await new Promise(r=>g.onsuccess=()=>r(g.result.value)); const s=JSON.parse(v);
+  for(const c of s.cards){ if(c.title==="便利店夜班") c.earliestAt=Date.now()-1000; else if(c.title==="巴黎时装秀") c.earliestAt=Date.now()-500; else c.earliestAt=Date.now()+90*864e5; }
+  s.lastFiredAt=Date.now()-30*864e5;
+  const tx=db.transaction("entries","readwrite"); tx.objectStore("entries").put({key:"idol_destiny_v1",value:JSON.stringify(s)}); await new Promise(r=>tx.oncomplete=r);});
+await p.reload({waitUntil:"networkidle2"}); await sleep(7000);
+await p.screenshot({path:OUT+"/fate_banner.png"});
+d=JSON.parse(await kv("idol_destiny_v1"));
+console.log("fired", d.cards.filter(c=>c.firedAt).map(c=>c.no+" "+c.title+" "+c.via+" mark:"+(c.markUntil?new Date(c.markUntil).toISOString().slice(0,10):"")).join(" | "));
+// 跳到五天后，第二个来
+await setT("2015-03-09T20:00:00"); await p.reload({waitUntil:"networkidle2"}); await sleep(9000);
+d=JSON.parse(await kv("idol_destiny_v1"));
+console.log("fired2", d.cards.filter(c=>c.firedAt).map(c=>c.no+" "+c.title+" "+c.via).join(" | "));
+const car=JSON.parse(await kv("idol_career_v1")); console.log("invites", car.nodes.filter(n=>n.status==="invite").map(n=>n.title+" from "+n.from));
+const kk=JSON.parse(await kv("idol_kakao_v1")||"null"); console.log("incoming", kk?.incoming?.map(i=>i.message));
+await p.evaluate(()=>document.querySelector(".lock-swipe")?.click()); await sleep(1200);
+await p.evaluate(()=>window.postMessage({type:"OS_CMD",action:"open_app",appId:"starroad"},"*")); await sleep(2000);
+await p.evaluate(()=>[...document.querySelectorAll(".sr-tabs button")][1].click()); await sleep(1500);
+await p.screenshot({path:OUT+"/fate_album.png"});
+await p.evaluate(()=>window.postMessage({type:"OS_CMD",action:"open_app",appId:"vnmode"},"*")); await sleep(3500);
+await p.screenshot({path:OUT+"/fate_map.png"});
+console.log("asks", asks.length, "errs", errs.slice(0,3)); await b.close();

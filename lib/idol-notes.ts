@@ -66,6 +66,10 @@ export function parseNotice(msg: string): Omit<LockNote, "id" | "at"> {
     const [title, rest] = split(stage[2]);
     return { app: "stage", title, text: rest, nodeId: stage[1] };
   }
+  if (text.startsWith("◐")) {
+    const [, rest] = split(text.replace(/^◐\s*/u, ""));
+    return { app: "stage", title: "", text: rest || text.replace(/^◐\s*/u, "") };
+  }
   if (text.startsWith("🌠")) {
     const [, rest] = split(text.replace(/^🌠\s*/u, ""));
     return { app: "starroad", title: "", text: rest || text.replace(/^🌠\s*/u, "") };

@@ -10,6 +10,7 @@ import { CareerApp } from "./career/career-app";
 import { IdolSearchApp } from "./idolsearch/idol-search-app";
 import { StarRoadApp } from "./starroad/star-road-app";
 import { starroadTick } from "@/lib/idol-starroad";
+import { destinyTick } from "@/lib/idol-destiny";
 import { InsApp } from "./ins/ins-app";
 import { insTick } from "@/lib/idol-ins";
 import { YoutubeApp } from "./youtube/youtube-app";
@@ -1136,6 +1137,7 @@ export function DesktopShell({ initialThemeProfile, initialThemeAssets }: Deskto
       try { eventsTick(idolNotify); } catch { /* 同上 */ }
       try { rankTick(idolNotify); } catch { /* 同上 */ }
       try { starroadTick(idolNotify); } catch { /* 同上 */ }
+      try { destinyTick(idolNotify); } catch { /* 同上 */ }
       try { debutTick(idolNotify); } catch { /* 同上 */ }
       try { yearlyTick(idolNotify); } catch { /* 同上 */ }
       try { searchTick(idolNotify); } catch { /* 同上 */ }
@@ -4469,6 +4471,7 @@ html,body{margin:0;padding:0;width:100%;height:100%;background:#121110;color:rgb
                     else if (app === "starroad") setActiveApp("starroad" as IconId);
                     else if (app === "mail") { const ic = mailAppIcon(); if (ic) openApp(ic as DesktopIconId); }
                     else if (app === "stage" && banner.nodeId) requestStageForNode(banner.nodeId);
+                    else if (app === "stage") setActiveApp("vnmode" as IconId);
                   }}
                 >
                   <span className="idol-note-ic" style={{ background: APP_LOOK[banner.app].bg, color: APP_LOOK[banner.app].fg }}>{APP_LOOK[banner.app].icon}</span>

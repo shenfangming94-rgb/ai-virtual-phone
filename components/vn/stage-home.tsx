@@ -6,6 +6,7 @@
  */
 
 import { classAt } from "@/lib/idol-starroad";
+import { destinyMarks, takeDestinyMark } from "@/lib/idol-destiny";
 import "@/styles/stage-replay.css";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ChevronLeft, MoreHorizontal, X, Lock, Music2, VolumeX, Image as ImageIcon, Check, Search, Play } from "lucide-react";
@@ -114,6 +115,8 @@ export function StageHome({ onClose, onPlay, onReplay }: Props) {
     setSheet(pl);
   };
 
+  const marks = destinyMarks(now);
+  const marked = (pl: StagePlace) => marks.some(m => m.place === pl.key || (pl.sub && mapOfPlace(m.place)?.id === pl.sub)) ? "1" : undefined;
   const openScenes = openStageScenes();
   const d = new Date(now);
   const clock = `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
@@ -139,7 +142,7 @@ export function StageHome({ onClose, onPlay, onReplay }: Props) {
       </div>
 
       {mapUrl ? (
-        <MapImage key={`${lookKey}:${mapUrl}`} url={mapUrl} places={map.places} look={look} editing={pinEdit} onTap={tapPlace}
+        <MapImage key={`${lookKey}:${mapUrl}`} url={mapUrl} places={map.places} look={look} editing={pinEdit} onTap={tapPlace} marked={marked}
           onPlace={(x, y) => { if (pinEdit) { updateLook({ ...saved, pins: { ...saved.pins, [pinEdit]: { x, y } } }); setPinEdit(""); } }} />
       ) : (
         <div className="stg-grid-wrap" style={{ ["--stg-under" as string]: `url(${DEFAULT_MAPS.seoul.image})` }}>
@@ -148,7 +151,7 @@ export function StageHome({ onClose, onPlay, onReplay }: Props) {
               const lock = placeLocked(pl);
               const photo = cardPhotos[pl.key];
               return (
-                <button key={pl.key} type="button" className="stg-card" data-lock={lock ? "1" : undefined} data-photo={photo ? "1" : undefined}
+                <button key={pl.key} type="button" className="stg-card" data-lock={lock ? "1" : undefined} data-photo={photo ? "1" : undefined} data-destiny={marked(pl)}
                   style={photo ? { backgroundImage: `url(${photo})` } : undefined} onClick={() => tapPlace(pl)}>
                   <span className="stg-card-name"><i className="stg-pin" />{pl.label}{pl.sub ? " ›" : ""}</span>
                   {lock ? <span className="stg-card-lock"><Lock size={11} /> {lock}</span> : null}
@@ -212,7 +215,8 @@ export function StageHome({ onClose, onPlay, onReplay }: Props) {
 
       {sheet ? (
         <PlaceSheet place={sheet} onClose={() => { setSheet(null); bump(n => n + 1); setBgmVer(v => v + 1); setPhotoVer(v => v + 1); }} onGo={(meet, avoid) => {
-          const r = startStageScene({ placeKey: sheet.key, meetIds: meet, avoid });
+          const fate = takeDestinyMark(sheet.key);
+          const r = startStageScene({ placeKey: sheet.key, meetIds: meet, avoid, ...(fate ? { premise: fate } : {}) });
           setSheet(null);
           if (r) onPlay(r.chapterIndex);
         }} />
@@ -271,7 +275,8 @@ export function StageHome({ onClose, onPlay, onReplay }: Props) {
 
 // ── 有图片的地图：竖着铺满、左右拖，钉子按百分比放 ──
 
-function MapImage({ url, places, look, editing, onTap, onPlace }: {
+function MapImage({ url, places, look, editing, onTap, onPlace, marked }: {
+  marked?: (pl: StagePlace) => string | undefined;
   url: string; places: StagePlace[]; look: MapLook; editing: string | null;
   onTap: (pl: StagePlace) => void; onPlace: (x: number, y: number) => void;
 }) {
@@ -297,7 +302,7 @@ function MapImage({ url, places, look, editing, onTap, onPlace }: {
           if (!pos) return null;
           const lock = placeLocked(pl);
           return (
-            <button key={pl.key} type="button" className="stg-mpin" data-lock={lock ? "1" : undefined} data-edit={editing === pl.key ? "1" : undefined}
+            <button key={pl.key} type="button" className="stg-mpin" data-lock={lock ? "1" : undefined} data-edit={editing === pl.key ? "1" : undefined} data-destiny={marked?.(pl)}
               style={{ left: `${pos.x}%`, top: `${pos.y}%` }}
               onClick={e => { e.stopPropagation(); onTap(pl); }}>
               <i />

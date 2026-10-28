@@ -12,6 +12,7 @@ import { ChevronLeft } from "lucide-react";
 import { STARROAD_EVENT, addPractice, loadGrades, practicedToday, starroadReady, type GradeView } from "@/lib/idol-starroad";
 import { CAREER_EVENT, companyOf, loadCareer } from "@/lib/idol-career";
 import { loadTraineeCard } from "@/lib/trainee-card";
+import { DESTINY_EVENT, destinyAlbum } from "@/lib/idol-destiny";
 
 type Notice = ((m: string) => void) | undefined;
 type Page = "transcript" | "destiny";
@@ -26,7 +27,8 @@ function useTick() {
     const f = () => set(x => x + 1);
     window.addEventListener(STARROAD_EVENT, f);
     window.addEventListener(CAREER_EVENT, f);
-    return () => { window.removeEventListener(STARROAD_EVENT, f); window.removeEventListener(CAREER_EVENT, f); };
+    window.addEventListener(DESTINY_EVENT, f);
+    return () => { window.removeEventListener(STARROAD_EVENT, f); window.removeEventListener(CAREER_EVENT, f); window.removeEventListener(DESTINY_EVENT, f); };
   }, []);
 }
 
@@ -147,7 +149,7 @@ function DestinyPage() {
     ro.observe(el);
     return () => ro.disconnect();
   }, []);
-  const cards: ({ title: string; en: string; color: string } | null)[] = Array.from({ length: 8 }, () => null);
+  const cards = destinyAlbum();
   const met = cards.filter(Boolean).length;
   return (
     <div className="sr-in sr-destiny" ref={ref}>
@@ -157,7 +159,7 @@ function DestinyPage() {
         {cards.map((c, i) => c ? (
           <div key={i} className="sr-card" style={{ background: c.color }}>
             <div className="d" /><div className="l" />
-            <div className="no">No.{String(i + 1).padStart(2, "0")}</div>
+            <div className="no">No.{String(c.no || i + 1).padStart(2, "0")}</div>
             <div className="t">{c.title}</div><div className="en">{c.en}</div>
           </div>
         ) : <div key={i} className="sr-card lock" />)}

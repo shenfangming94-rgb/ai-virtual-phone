@@ -29,7 +29,7 @@ import type { ChatMessage } from "./chat-storage";
 import type { VnFrame, VnOptions } from "./vn-types";
 import { simpleLLMCall } from "./api-helpers";
 import { WORLD_CHAR_ID, applySceneTagsTo, extractSceneTags } from "./idol-world";
-import { allScenePlaces, buildStagePrompt, chapterIdOf, stageHost } from "./idol-stage";
+import { allScenePlaces, buildStagePrompt, chapterIdOf, markLeft, normalizeStageRaw, stageHost } from "./idol-stage";
 
 export type VnGenerationResult = {
   rawText: string;
@@ -130,6 +130,8 @@ export async function generateVnCompletion(
   let idol: VnGenerationResult["idol"];
   let summary: string | undefined;
   if (isWorld && sceneChapter !== undefined) {
+    const left = [...rawOutput.matchAll(/\[离场[:：]\s*([^\]]+)\]/g)].map(m => m[1].trim());
+    rawOutput = rawOutput.replace(/\[离场[:：][^\]]*\]/g, "");
     const sm = rawOutput.match(/<summary>([\s\S]*?)<\/summary>/i);
     if (sm) summary = sm[1].trim();
     rawOutput = rawOutput.replace(/<summary>[\s\S]*?<\/summary>/gi, "").trim();
@@ -138,6 +140,15 @@ export async function generateVnCompletion(
     const chId = chapterIdOf(sceneChapter);
     const host = chId ? stageHost(chId) : null;
     idol = { ...(host ? applySceneTagsTo(host, ex.tags) : { added: [], notes: [] }), closing: ex.tags.closing };
+    rawOutput = normalizeStageRaw(rawOutput);
+    // 认识的人开口说话了但 AI 忘了写 [出场]：也算进这一场
+    if (host) {
+      const speakers = new Set(parseVnResponse(rawOutput).frames.map(f => f.speaker).filter(Boolean) as string[]);
+      const ids = host.ids();
+      const join = loadCharacters().filter(c => speakers.has(c.name) && !ids.includes(c.id) && c.id !== WORLD_CHAR_ID).map(c => c.id);
+      if (join.length) host.setIds([...ids, ...join]);
+    }
+    if (left.length) markLeft(sceneChapter, left);
   }
 
   const parsed = parseVnResponse(rawOutput);
@@ -175,7 +186,8 @@ async function buildVnPromptMessages(
     { userName: userIdentity?.name ?? "用户", history: historyMessages }
   );
 
-  const chatBilingualInstruction = buildVnBilingualInstruction(
+  // 此刻的语言规矩在 buildStagePrompt 里，不用漫卷原来的双语规则
+  const chatBilingualInstruction = stageChapter !== undefined ? "" : buildVnBilingualInstruction(
     loadVnConfig("bilingualTranslationEnabled") !== "0",
     loadVnConfig("bilingualTranslationPrompt"),
   );

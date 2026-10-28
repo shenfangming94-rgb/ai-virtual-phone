@@ -1,52 +1,100 @@
+// 此刻第三批（st3）：自带地图、地图音乐、设置、场外指令、台词兜底、长旁白切帧、离场。原 st1：首页地图（没图/有图）→ 点地点选碰见谁 → 开场卡 → 她说第一句 → 世界回（假 AI，带记号）→ 结束这一场记账；主线到点横幅 → 点进去开那一场
 import puppeteer from "puppeteer-core";
-const b=await puppeteer.launch({executablePath:"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",headless:"new"});
-const p=await b.newPage(); await p.setViewport({width:430,height:900,deviceScaleFactor:2});
-const errs=[]; p.on("pageerror",e=>errs.push(e.message)); p.on("console",m=>{ if(m.type()==="error"||m.type()==="warning") console.log("CONSOLE",m.type(),m.text().slice(0,300));});
-const sleep=ms=>new Promise(r=>setTimeout(r,ms));
-const replies=[
- "推开练习室的门，冷气一下子扑过来。镜子前已经坐着两个人。\n\n韩智元盘腿坐在地上拉筋，看到你进来，抬手挥了挥：「来啦？今天老师说八点开始，你还早着呢。」\n\n角落里一个扎低马尾的女生站起来，手里还抱着一摞新练习服，有点局促地朝你点头：「你好，我叫申多恩，今天刚来的。」\n[新人:申多恩|今天刚来的同期练习生]\n[时间:+5分钟]",
- "申多恩愣了一下，接过你递的水，釜山口音一下子冒出来：「哎呀谢谢，我早上太紧张，水都忘带了。」\n\n韩智元在旁边笑出声：「她刚才在门口转了三圈才敢进来。」\n\n八点到了，走廊传来管理老师的脚步声。\n[时间:+20分钟]\n[收尾]",
- JSON.stringify({summary:"第一天早上在练习室见到了新来的申多恩，你给她递了水，韩智元在旁边拆台。",people:[{name:"韩智元",event:"早上在练习室跟你和新来的申多恩一起等老师，拿申多恩开了玩笑",impression:""},{name:"申多恩",event:"刚来的第一天，你给她递了一瓶水",impression:"觉得你挺照顾人的"}]}),
-];
-let n=0; const prompts=[];
-const CORS={"Access-Control-Allow-Origin":"*","Access-Control-Allow-Headers":"*","Access-Control-Allow-Methods":"POST, OPTIONS"};
+const OUT = process.argv[2] || ".";
+const MAP = process.argv[3];
+const b = await puppeteer.launch({ executablePath: "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome", headless: "new" });
+const p = await b.newPage(); await p.setViewport({ width: 430, height: 932, deviceScaleFactor: 2 });
+const errs = []; p.on("pageerror", e => errs.push(e.message)); p.on("console", m => { if (m.type() === "error") errs.push(m.text().slice(0, 300)); });
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+const asked = [];
+function reply(s) {
+  if (s.includes("这一场的写法")) {
+    asked.push(s);
+    return `<content>
+<scene bg="汉江公园">
+江面上的风有点凉，草坪上零零散散坐着几拨人，远处的桥亮着一串灯。长椅那头的人摘下一只耳机，侧过脸来，是韩智元。他愣了一下，然后把放在身边的便利店袋子往自己那边挪了挪，空出半张长椅。
+韩智元笑着说：「坐吧，泡面还热着。」
+韩智元|"안 추워? 바람 많이 부는데.|不冷吗？风挺大的。"
+朴书雅从后面跑过来，拍了一下韩智元的肩膀。
+朴书雅|"我先回去了啊，明天见。"
+</scene>
+</content>
+[离场:朴书雅]
+<summary>Flora 在汉江边碰到韩智元，他让出半张长椅请她吃泡面。朴书雅路过打了个招呼先走了。</summary>`;
+  }
+  return "{}";
+}
+const CORS = { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers": "*", "Access-Control-Allow-Methods": "POST, OPTIONS" };
 await p.setRequestInterception(true);
-p.on("request",r=>{ if(r.url().includes("mock.test")&&r.method()==="OPTIONS"){r.respond({status:204,headers:CORS});return;} if(r.url().includes("mock.test")){ prompts.push(r.postData()); const content=replies[Math.min(n++,replies.length-1)]; r.respond({status:200,headers:CORS,contentType:"application/json",body:JSON.stringify({choices:[{message:{role:"assistant",content},finish_reason:"stop"}]})}); } else r.continue(); });
-await p.goto("http://localhost:3031/",{waitUntil:"networkidle2",timeout:180000}); await sleep(2000);
-await p.evaluate(async()=>{
-  const now=new Date().toISOString();
-  const mk=(id,name)=>({id,name,avatar:null,persona:"",wechatID:id,tags:[],createdAt:now,updatedAt:now});
-  const base={layer:"main",group:"同期练习生",role:"同期练习生 · 室友",age:"18",isIdol:false,publicLabels:[],publicText:"",face:"mixed",privateLines:["爱拆台","练习最认真"],speech:"说话快",taboo:"",withYou:"室友，嘴贫心软",met:true,events:[],note:""};
-  const db=await new Promise((res,rej)=>{const r=indexedDB.open("AiPhoneKvDB");r.onsuccess=()=>res(r.result);r.onerror=rej;});
-  const tx=db.transaction("entries","readwrite"); const st=tx.objectStore("entries");
-  st.put({key:"ai_phone_characters_v1",value:JSON.stringify([mk("c2","韩智元")])});
-  st.put({key:"idol_people_v1",value:JSON.stringify({c2:{...base,charId:"c2"}})});
-  st.put({key:"ai_phone_api_configs_v1",value:JSON.stringify([{id:"m1",name:"mock",provider:"openai",apiKey:"x",baseUrl:"https://mock.test/v1",defaultModel:"m",enableImageRecognition:false,enableImageGeneration:false}])});
-  st.put({key:"ai_phone_user_identities_v1",value:JSON.stringify([{id:"identity-1",name:"Flora",bio:"",gender:"女",age:"16",occupation:"",customSettings:""}])});
-  st.put({key:"idol_trainee_card_v1",value:JSON.stringify({name:"Flora",photo:null,birthday:"1998-04-11",nationality:"中国",mbti:"",looks:"",start:"2015-03-01",trainLength:"一年半",family:"child",familyCustom:"",familyNote:"",talents:["vocal"],talentNote:"",weakness:"",other:"",signature:null,company:"",no:"x",createdAt:1})});
-  await new Promise(r=>tx.oncomplete=r);
+p.on("request", r => {
+  if (r.url().includes("mock.test") && r.method() === "OPTIONS") { r.respond({ status: 204, headers: CORS }); return; }
+  if (r.url().includes("mock.test")) { asked.push(r.postData() || ""); const c = reply(r.postData() || ""); r.respond({ status: 200, headers: CORS, contentType: "application/json", body: JSON.stringify({ choices: [{ message: { role: "assistant", content: c }, finish_reason: "stop" }] }) }); }
+  else r.continue();
 });
-await p.reload({waitUntil:"networkidle2"}); await sleep(2500);
-await p.evaluate(()=>{const wc=window.__worldClock; wc.offset=new Date("2015-03-02T07:40:00").getTime()-wc.RealDate.now();});
-await p.evaluate(()=>document.querySelector(".lock-swipe")?.click()); await sleep(800);
-// 先在绑定里给剧情配上 API：直接写 binding 太麻烦，用全局默认
-await p.evaluate(()=>window.postMessage({type:"OS_CMD",action:"open_app",appId:"story"},"*")); await sleep(2500);
-await p.click('button[aria-label="开一场戏"]'); await sleep(500);
-await p.screenshot({path:"sw_new.png"});
-await p.type('.story-idol-field input',"公司地下二层 B 练习室");
-await p.type('.story-idol-field textarea',"进公司第二天，早上第一个到练习室");
-await p.evaluate(()=>[...document.querySelectorAll(".story-idol-picks button")].find(x=>x.textContent==="韩智元").click());
-await p.evaluate(()=>[...document.querySelectorAll(".story-dialog footer button")].find(x=>x.textContent==="开始").click()); await sleep(4000);
-await p.screenshot({path:"sw_1.png"});
-console.log("calls",n);
-await p.type(".story-composer textarea","我从包里拿出一瓶没开过的水递给申多恩：「给，我多带了一瓶。」");
-await p.click('button[aria-label="发送剧情输入"]'); await sleep(3500);
-await p.screenshot({path:"sw_2.png"});
-await p.evaluate(()=>[...document.querySelectorAll(".story-idol-bar button")].find(x=>x.textContent==="结束这场").click()); await sleep(500);
-await p.evaluate(()=>[...document.querySelectorAll(".story-dialog footer button")].find(x=>x.textContent==="结束这场").click()); await sleep(3000);
-await p.screenshot({path:"sw_3.png"});
-const all=await p.evaluate(()=>new Promise(res=>{const r=indexedDB.open("AiPhoneKvDB");r.onsuccess=()=>{const g=r.result.transaction("entries").objectStore("entries").get("idol_people_v1");g.onsuccess=()=>res(g.result?.value)}}));
-console.log(all.slice(0,600));
-console.log("sent prompt has scene block:", prompts.some(x=>x&&x.includes("这一场戏")), prompts.some(x=>x&&x.includes("韩智元"))); console.log(await p.evaluate(()=>{const b=document.querySelector(".story-idol-bar"); if(!b) return "no bar"; const r=b.getBoundingClientRect(); return JSON.stringify({x:r.x,y:r.y,w:r.width,h:r.height,parent:b.parentElement.className});}));
+await p.goto("http://localhost:3031/", { waitUntil: "networkidle2", timeout: 300000 }); await sleep(4000);
+const T0 = new Date("2015-03-28T21:00:00").getTime();
+await p.evaluate(async (t) => {
+  const now = new Date().toISOString();
+  const mk = (id, name) => ({ id, name, avatar: null, persona: "", wechatID: id, tags: [], createdAt: now, updatedAt: now });
+  const base = { layer: "main", group: "", age: "18", publicLabels: [], publicText: "", face: "mixed", privateLines: [], speech: "", taboo: "", withYou: "见过几次", met: true, events: [], note: "" };
+  const db = await new Promise(res => { const r = indexedDB.open("AiPhoneKvDB"); r.onsuccess = () => res(r.result); });
+  const tx = db.transaction("entries", "readwrite"); const st = tx.objectStore("entries");
+  st.put({ key: "ai_phone_characters_v1", value: JSON.stringify([mk("c1", "韩智元"), mk("c2", "金智妍"), mk("c3", "朴书雅")]) });
+  st.put({ key: "idol_people_v1", value: JSON.stringify({ c1: { ...base, charId: "c1", role: "同期练习生" }, c2: { ...base, charId: "c2", role: "室友" }, c3: { ...base, layer: "background", charId: "c3", role: "前辈练习生" } }) });
+  st.put({ key: "ai_phone_api_configs_v1", value: JSON.stringify([{ id: "m1", name: "mock", provider: "openai", apiKey: "x", baseUrl: "https://mock.test/v1", defaultModel: "m" }]) });
+  st.put({ key: "idol_trainee_card_v1", value: JSON.stringify({ name: "Flora", photo: null, birthday: "1999-04-12", nationality: "中国", mbti: "", looks: "", start: "2015-03-01", trainLength: "一年半", family: "normal", familyCustom: "", familyNote: "", talents: [], talentNote: "", weakness: "", other: "", signature: null, company: "JYP", no: "x", createdAt: 1 }) });
+  st.put({ key: "idol_career_v1", value: JSON.stringify({ stage: "trainee", companyId: "jyp", signedAt: t - 90 * 864e5, facts: [], offers: [], nodes: [
+    { id: "n_eval", kind: "eval", title: "周评", place: "JYP 公司 练习室", premise: "每周五晚上的周评，老师们坐成一排。", dueAt: t + 30 * 60e3, status: "pending", companyId: "jyp", remindedEve: true } ] }) });
+  await new Promise(r => tx.oncomplete = r);
+}, T0);
+const setClock = (ms) => p.evaluate((ms) => { const wc = window.__worldClock; wc.offset = ms - wc.RealDate.now(); }, ms);
+await p.reload({ waitUntil: "networkidle2" }); await sleep(2500);
+await setClock(T0);
+await p.evaluate(() => document.querySelector(".lock-swipe")?.click()); await sleep(800);
+await p.screenshot({ path: OUT + "/s0_desk.png" });
+await p.evaluate(() => window.postMessage({ type: "OS_CMD", action: "open_app", appId: "vnmode" }, "*")); await sleep(3000);
+
+await p.screenshot({ path: OUT + "/t1_home.png" });
+// 地图音乐
+await p.evaluate(() => document.querySelector('.stg-ic[aria-label="地图设置"]').click()); await sleep(300);
+await p.screenshot({ path: OUT + "/t2_menu.png" });
+await p.evaluate(() => [...document.querySelectorAll(".stg-menu button")].find(x => x.textContent.includes("地图的音乐")).click()); await sleep(500);
+await p.screenshot({ path: OUT + "/t3_mapmusic.png" });
+await p.evaluate(() => document.querySelector(".stg-sheet .stg-done").click()); await sleep(300);
+// 设置
+await p.evaluate(() => document.querySelector('.stg-ic[aria-label="地图设置"]').click()); await sleep(300);
+await p.evaluate(() => [...document.querySelectorAll(".stg-menu button")].find(x => x.textContent.includes("设置")).click()); await sleep(500);
+await p.screenshot({ path: OUT + "/t4_settings.png" });
+await p.evaluate(() => document.querySelector(".stg-done").click()); await sleep(300);
+// 点汉江公园钉子
+await p.evaluate(() => { const m = document.querySelector(".stg-map"); m.scrollLeft = m.scrollWidth * 0.3; }); await sleep(300);
+await p.evaluate(() => [...document.querySelectorAll(".stg-mpin")].find(x => x.textContent.includes("汉江公园")).click()); await sleep(500);
+await p.evaluate(() => { const c = [...document.querySelectorAll(".stg-chip")]; c.find(x => x.textContent.includes("韩智元")).click(); });
+await p.screenshot({ path: OUT + "/t5_sheet.png" });
+await p.evaluate(() => document.querySelector(".stg-go").click()); await sleep(1200);
+await p.evaluate(() => document.querySelector(".vn-stage-open").click()); await sleep(400);
+// 场外指令
+await p.evaluate(() => [...document.querySelectorAll(".vn-mode-btn")].find(x => x.textContent.includes("场外")).click()); await sleep(200);
+await p.evaluate(() => { const i = document.querySelector(".vn-input-field"); const set = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value").set; set.call(i, "让朴书雅路过一下然后走掉"); i.dispatchEvent(new Event("input", { bubbles: true })); });
+await p.screenshot({ path: OUT + "/t6_director.png" });
+await p.evaluate(() => [...document.querySelectorAll(".vn-send-btn")][1].click()); await sleep(3500);
+const frames = [];
+for (let i = 0; i < 8; i++) {
+  frames.push(await p.evaluate(() => [document.querySelector(".vn-name")?.textContent || "", document.querySelector(".vn-text")?.textContent || ""].join(" | ")));
+  await p.screenshot({ path: OUT + `/t7_f${i}.png` });
+  await p.evaluate(() => document.querySelector(".vn-shell").click()); await sleep(150);
+  await p.evaluate(() => document.querySelector(".vn-shell").click()); await sleep(600);
+}
+await p.evaluate(() => document.querySelector('.vn-topbar-btn[title="切换场景"]')?.click()); await sleep(500);
+await p.screenshot({ path: OUT + "/t8_places.png" });
+await p.evaluate(() => document.querySelector(".vn-history-close")?.click()); await sleep(300);
+await p.evaluate(() => document.querySelector('.vn-topbar-btn[title="回顾"]').click()); await sleep(500);
+await p.screenshot({ path: OUT + "/t9_history.png" });
+const stage = await p.evaluate(async () => {
+  const db = await new Promise(res => { const r = indexedDB.open("AiPhoneKvDB"); r.onsuccess = () => res(r.result); });
+  const v = await new Promise(res => { const r = db.transaction("entries").objectStore("entries").get("idol_stage_scenes_v1"); r.onsuccess = () => res(r.result?.value); });
+  return Object.values(JSON.parse(v || "{}")).map(x => ({ ids: x.ids, spans: x.spans }));
+});
+const vnReq = asked.find(a => a.includes("这一场的写法")) || "";
+console.log(JSON.stringify({ errs, frames, stage, hasDirector: vnReq.includes("场外指令：让朴书雅"), hasWords: vnReq.includes("大约 800 字"), noOldBilingual: !vnReq.includes("对白双语规则") }, null, 1));
 await b.close();
-console.log(errs.slice(0,5));

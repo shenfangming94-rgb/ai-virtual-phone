@@ -1,16 +1,16 @@
 "use client";
 
 /**
- * 场景 app 的 BGM：跟着背景（地点）换歌。同一个地点里接着放、放完换下一首；换地点淡出再淡入；这个地点没配歌就淡出停掉。
+ * 此刻的 BGM：地图首页放地图的歌，进了地点放地点的歌（没配就接着放所在地图的）。
+ * 同一套歌接着放不重来；换一套淡出再淡入；没配歌就淡出停掉。播放方式：列表循环 / 单曲循环 / 随机。
  */
 
 import { useEffect, useRef } from "react";
 import { getAudioBlob } from "@/lib/music-storage";
 import { getNeteasePlayUrl } from "@/lib/music-service";
-import { loadBgmMap, type BgmSong } from "@/lib/idol-stage";
+import { loadStageSettings, resolveBgm, type BgmSong } from "@/lib/idol-stage";
 import { kvGet, kvSet } from "@/lib/kv-db";
 
-const VOLUME = 0.55;
 const FADE_MS = 900;
 const MUTE_KEY = "idol_stage_bgm_muted_v1";
 
@@ -41,55 +41,64 @@ function fade(audio: HTMLAudioElement, to: number, done?: () => void): void {
   requestAnimationFrame(step);
 }
 
-export function useStageBgm(placeKey: string, muted: boolean): void {
-  const audioRef = useRef<HTMLAudioElement | null>(null);
-  const placeRef = useRef("");
-  const idxRef = useRef<Record<string, number>>({});
-  const urlRef = useRef<string | null>(null);
+/** 整个此刻共用一个播放器：地图页和场景页来回切也不断 */
+let current: { audio: HTMLAudioElement; key: string; sig: string; url: string } | null = null;
+const lastIdx: Record<string, number> = {};
 
+function stopCurrent(): void {
+  const c = current;
+  current = null;
+  if (!c) return;
+  fade(c.audio, 0, () => { c.audio.pause(); if (c.url.startsWith("blob:")) URL.revokeObjectURL(c.url); });
+}
+
+export function stopStageBgm(): void {
+  if (!current) return;
+  current.audio.pause();
+  if (current.url.startsWith("blob:")) URL.revokeObjectURL(current.url);
+  current = null;
+}
+
+export function useStageBgm(placeKey: string, muted: boolean, ver = 0): void {
+  const tokenRef = useRef(0);
   useEffect(() => {
-    if (muted) {
-      const a = audioRef.current;
-      if (a) fade(a, 0, () => a.pause());
-      placeRef.current = "";
-      return;
-    }
-    if (!placeKey || placeKey === placeRef.current) return;
-    const songs = loadBgmMap()[placeKey] ?? [];
-    const old = audioRef.current;
-    placeRef.current = placeKey;
-    let cancelled = false;
+    if (muted || !placeKey) { if (muted) stopCurrent(); return; }
+    const { key, songs, mode } = resolveBgm(placeKey);
+    const sig = `${key}|${mode}|${songs.map(s => `${s.src}:${s.id}`).join(",")}`;
+    if (current && current.sig === sig) return;
+    stopCurrent();
+    if (!songs.length) return;
+    const token = ++tokenRef.current;
+    const volume = Math.max(0, Math.min(100, loadStageSettings().volume)) / 100;
 
-    const playAt = async (i: number, tries = 0) => {
-      const song = songs[i % songs.length];
-      const url = await songUrl(song);
-      if (cancelled || placeRef.current !== placeKey) return;
+    const next = (i: number) => (mode === "one" ? i : mode === "shuffle" && songs.length > 1 ? (i + 1 + Math.floor(Math.random() * (songs.length - 1))) % songs.length : (i + 1) % songs.length);
+    const playAt = async (i: number, tries = 0): Promise<void> => {
+      const url = await songUrl(songs[i % songs.length]);
+      if (token !== tokenRef.current) { if (url?.startsWith("blob:")) URL.revokeObjectURL(url); return; }
       if (!url) {
         // 放不了（网易云 VIP、文件没了）就试下一首，一圈都不行就算了
-        if (tries + 1 < songs.length) void playAt(i + 1, tries + 1);
+        if (tries + 1 < songs.length) void playAt((i + 1) % songs.length, tries + 1);
         return;
       }
-      if (urlRef.current?.startsWith("blob:")) URL.revokeObjectURL(urlRef.current);
-      urlRef.current = url;
       const a = new Audio(url);
       a.volume = 0;
+      a.loop = mode === "one";
       a.onended = () => {
-        idxRef.current[placeKey] = (i + 1) % songs.length;
-        if (placeRef.current === placeKey) void playAt(i + 1);
+        if (current?.audio !== a) return;
+        if (url.startsWith("blob:")) URL.revokeObjectURL(url);
+        current = null;
+        lastIdx[key] = next(i);
+        void playAt(lastIdx[key]);
       };
-      audioRef.current = a;
-      a.play().then(() => fade(a, VOLUME)).catch(() => undefined);
+      current = { audio: a, key, sig, url };
+      lastIdx[key] = i;
+      a.play().then(() => fade(a, volume)).catch(() => undefined);
     };
+    void playAt(mode === "shuffle" && lastIdx[key] === undefined ? Math.floor(Math.random() * songs.length) : lastIdx[key] ?? 0);
+  }, [placeKey, muted, ver]);
+}
 
-    if (old) fade(old, 0, () => old.pause());
-    if (songs.length) void playAt(idxRef.current[placeKey] ?? 0);
-    else audioRef.current = null;
-    return () => { cancelled = true; };
-  }, [placeKey, muted]);
-
-  // 离开就停
-  useEffect(() => () => {
-    audioRef.current?.pause();
-    if (urlRef.current?.startsWith("blob:")) URL.revokeObjectURL(urlRef.current);
-  }, []);
+/** 音量改了马上生效 */
+export function setStageBgmVolume(v: number): void {
+  if (current) current.audio.volume = Math.max(0, Math.min(100, v)) / 100;
 }

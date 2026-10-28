@@ -6,11 +6,12 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ChevronLeft, MoreHorizontal, X, Lock, Music2, Image as ImageIcon, Check, Search, Play } from "lucide-react";
+import { ChevronLeft, MoreHorizontal, X, Lock, Music2, VolumeX, Image as ImageIcon, Check, Search, Play } from "lucide-react";
 import {
-  STAGE_APP_NAME, STAGE_OPEN_EVENT, loadBgmMap, loadMapLooks, mapById, openStageScenes, pastStageScenes, placeLocked,
-  saveBgmFor, saveMapLook, startNodeStage, startStageScene, takePendingStage, type BgmSong, type MapLook, type StagePlace,
+  DEFAULT_MAPS, STAGE_APP_NAME, STAGE_OPEN_EVENT, loadBgmMap, loadBgmModes, loadMapLooks, loadStageSettings, mapById, mapBgmKey, mapOfPlace, openStageScenes, pastStageScenes, placeLocked,
+  saveBgmFor, saveBgmMode, saveMapLook, saveStageSettings, startNodeStage, startStageScene, takePendingStage, type BgmMode, type BgmSong, type MapLook, type StagePlace, type StageSettings,
 } from "@/lib/idol-stage";
+import { loadBgmMuted, saveBgmMuted, setStageBgmVolume, useStageBgm } from "./stage-bgm";
 import { WORLD_CHAR_ID } from "@/lib/idol-world";
 import { nodeById } from "@/lib/idol-career";
 import { loadProfiles, relationOf } from "@/lib/idol-people";
@@ -57,7 +58,16 @@ export function StageHome({ onClose, onPlay }: Props) {
   const [pastOpen, setPastOpen] = useState(false);
   const [, bump] = useState(0);
   const map = mapById(mapId);
-  const look = looks[mapId] ?? { pins: {} };
+  const saved = looks[mapId] ?? { pins: {} };
+  const builtin = DEFAULT_MAPS[mapId];
+  const usingBuiltin = !saved.imageAssetId && !saved.noImage && Boolean(builtin);
+  // 用自带的图时：自带的钉子位置打底，她拖过的盖上去
+  const look: MapLook = usingBuiltin ? { ...saved, pins: { ...builtin!.pins, ...saved.pins } } : saved;
+  const [muted, setMuted] = useState(() => loadBgmMuted());
+  const [bgmVer, setBgmVer] = useState(0);
+  const [mapMusic, setMapMusic] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  useStageBgm(mapBgmKey(mapId), muted, bgmVer);
 
   // 别的 app 让这里开一场（提醒事项「去演」、横幅）
   useEffect(() => {
@@ -75,10 +85,10 @@ export function StageHome({ onClose, onPlay }: Props) {
 
   useEffect(() => {
     let off = false;
-    if (!look.imageAssetId) { setMapUrl(""); return; }
-    void getThemeAssetMap([look.imageAssetId]).then(m => { if (!off) setMapUrl(m[look.imageAssetId!] || ""); });
+    if (!saved.imageAssetId) { setMapUrl(usingBuiltin ? builtin!.image : ""); return; }
+    void getThemeAssetMap([saved.imageAssetId]).then(m => { if (!off) setMapUrl(m[saved.imageAssetId!] || ""); });
     return () => { off = true; };
-  }, [look.imageAssetId]);
+  }, [saved.imageAssetId, usingBuiltin, builtin]);
 
   const updateLook = (next: MapLook) => {
     saveMapLook(mapId, next);
@@ -105,6 +115,9 @@ export function StageHome({ onClose, onPlay }: Props) {
           <b>{map.label}</b>
           <span>{clock}</span>
         </div>
+        <button type="button" className="stg-ic" onClick={() => { const v = !muted; setMuted(v); saveBgmMuted(v); }} aria-label={muted ? "打开音乐" : "关掉音乐"}>
+          {muted ? <VolumeX size={20} /> : <Music2 size={20} />}
+        </button>
         <button type="button" className="stg-ic" onClick={() => setMenu(true)} aria-label="地图设置">
           <MoreHorizontal size={22} />
         </button>
@@ -112,7 +125,7 @@ export function StageHome({ onClose, onPlay }: Props) {
 
       {mapUrl ? (
         <MapImage url={mapUrl} places={map.places} look={look} editing={pinEdit} onTap={tapPlace}
-          onPlace={(x, y) => { if (pinEdit) { updateLook({ ...look, pins: { ...look.pins, [pinEdit]: { x, y } } }); setPinEdit(""); } }} />
+          onPlace={(x, y) => { if (pinEdit) { updateLook({ ...saved, pins: { ...saved.pins, [pinEdit]: { x, y } } }); setPinEdit(""); } }} />
       ) : (
         <div className="stg-grid-wrap">
           <div className="stg-grid">
@@ -165,22 +178,38 @@ export function StageHome({ onClose, onPlay }: Props) {
               const f = await pickImage();
               if (!f) return;
               const id = await saveThemeAssetFromBlob(f, "vn_scene");
-              updateLook({ ...look, imageAssetId: id });
-            }}>{look.imageAssetId ? "换地图图片" : "上传地图图片"}</button>
-            {look.imageAssetId ? <button type="button" onClick={() => { setMenu(false); setPinEdit(""); }}>摆地点的位置</button> : null}
-            {look.imageAssetId ? <button type="button" className="stg-danger" onClick={() => { setMenu(false); updateLook({ pins: look.pins }); }}>去掉地图图片</button> : null}
+              // 换成自己的图，钉子从头摆
+              updateLook({ imageAssetId: id, pins: {} });
+            }}>{mapUrl ? "换成我自己的地图图片" : "上传地图图片"}</button>
+            {mapUrl ? <button type="button" onClick={() => { setMenu(false); setPinEdit(""); }}>摆地点的位置</button> : null}
+            {builtin && (saved.imageAssetId || saved.noImage) ? <button type="button" onClick={() => { setMenu(false); updateLook({ pins: {} }); }}>换回自带的地图</button> : null}
+            {mapUrl ? <button type="button" className="stg-danger" onClick={() => { setMenu(false); updateLook({ pins: saved.imageAssetId ? {} : saved.pins, noImage: true }); }}>不用图片，用卡片</button> : null}
+            <button type="button" onClick={() => { setMenu(false); setMapMusic(true); }}>这张地图的音乐</button>
+            <button type="button" onClick={() => { setMenu(false); setSettingsOpen(true); }}>{STAGE_APP_NAME}设置</button>
             <button type="button" className="stg-cancel" onClick={() => setMenu(false)}>取消</button>
           </div>
         </div>
       ) : null}
 
       {sheet ? (
-        <PlaceSheet place={sheet} onClose={() => { setSheet(null); bump(n => n + 1); }} onGo={(meet, avoid) => {
+        <PlaceSheet place={sheet} onClose={() => { setSheet(null); bump(n => n + 1); setBgmVer(v => v + 1); }} onGo={(meet, avoid) => {
           const r = startStageScene({ placeKey: sheet.key, meetIds: meet, avoid });
           setSheet(null);
           if (r) onPlay(r.chapterIndex);
         }} />
       ) : null}
+
+      {mapMusic ? (
+        <div className="stg-mask" onClick={() => { setMapMusic(false); setBgmVer(v => v + 1); }}>
+          <div className="stg-sheet" onClick={e => e.stopPropagation()}>
+            <div className="stg-picker-head"><b>{map.label} · 地图音乐</b><button type="button" className="stg-done" onClick={() => { setMapMusic(false); setBgmVer(v => v + 1); }}>完成</button></div>
+            <p className="stg-tip stg-tip-l">逛这张地图时放；这张地图上没单独配歌的地方也放这些</p>
+            <div className="stg-sec stg-sec-set"><MusicEditor bgKey={mapBgmKey(mapId)} /></div>
+          </div>
+        </div>
+      ) : null}
+
+      {settingsOpen ? <SettingsSheet onClose={() => setSettingsOpen(false)} /> : null}
 
       {pastOpen ? <PastSheet onClose={() => setPastOpen(false)} onPlay={i => { setPastOpen(false); onPlay(i); }} /> : null}
     </div>
@@ -232,8 +261,6 @@ function PlaceSheet({ place, onClose, onGo }: { place: StagePlace; onClose: () =
   const lock = placeLocked(place);
   const [marks, setMarks] = useState<Record<string, Mark>>({});
   const [bgUrl, setBgUrl] = useState("");
-  const [songs, setSongs] = useState<BgmSong[]>(() => loadBgmMap()[place.key] ?? []);
-  const [picking, setPicking] = useState(false);
 
   const people = useMemo(() => {
     const profiles = loadProfiles();
@@ -256,7 +283,6 @@ function PlaceSheet({ place, onClose, onGo }: { place: StagePlace; onClose: () =
     return next;
   });
 
-  const setSongList = (list: BgmSong[]) => { setSongs(list); saveBgmFor(place.key, list); };
 
   return (
     <div className="stg-mask" onClick={onClose}>
@@ -302,24 +328,91 @@ function PlaceSheet({ place, onClose, onGo }: { place: StagePlace; onClose: () =
               loadBg();
             }}>{bgUrl ? "换一张" : "上传"}</button>
           </div>
-          <div className="stg-row">
-            <Music2 size={16} />
-            <span>音乐</span>
-            <button type="button" onClick={() => setPicking(true)}>加歌</button>
-          </div>
-          {songs.length ? (
-            <ul className="stg-songs">
-              {songs.map((s, i) => (
-                <li key={`${s.src}_${s.id}`}>
-                  <span>{s.title}{s.artist ? <small> · {s.artist}</small> : null}{s.src === "netease" ? <em>网易云</em> : null}</span>
-                  <button type="button" aria-label="去掉" onClick={() => setSongList(songs.filter((_, j) => j !== i))}><X size={14} /></button>
-                </li>
-              ))}
-            </ul>
-          ) : <p className="stg-empty">还没配歌，到这里就安安静静的</p>}
+          <MusicEditor bgKey={place.key} fallbackLabel={mapOfPlace(place.key)?.label} />
         </div>
       </div>
-      {picking ? <SongPicker chosen={songs} onClose={() => setPicking(false)} onAdd={s => setSongList([...songs, s])} /> : null}
+    </div>
+  );
+}
+
+// ── 一个地点 / 一张地图的歌：列表、播放方式、加歌 ──
+
+const MODES: [BgmMode, string][] = [["list", "列表循环"], ["one", "单曲循环"], ["shuffle", "随机"]];
+
+function MusicEditor({ bgKey, fallbackLabel }: { bgKey: string; fallbackLabel?: string }) {
+  const [songs, setSongs] = useState<BgmSong[]>(() => loadBgmMap()[bgKey] ?? []);
+  const [mode, setMode] = useState<BgmMode>(() => loadBgmModes()[bgKey] ?? "list");
+  const [picking, setPicking] = useState(false);
+  const setList = (list: BgmSong[]) => { setSongs(list); saveBgmFor(bgKey, list); };
+  return (
+    <>
+      <div className="stg-row">
+        <Music2 size={16} />
+        <span>音乐</span>
+        <button type="button" onClick={() => setPicking(true)}>加歌</button>
+      </div>
+      {songs.length ? (
+        <>
+          <ul className="stg-songs">
+            {songs.map((s, i) => (
+              <li key={`${s.src}_${s.id}`}>
+                <span>{s.title}{s.artist ? <small> · {s.artist}</small> : null}{s.src === "netease" ? <em>网易云</em> : null}</span>
+                <button type="button" aria-label="去掉" onClick={() => setList(songs.filter((_, j) => j !== i))}><X size={14} /></button>
+              </li>
+            ))}
+          </ul>
+          <div className="stg-seg stg-seg-mode">
+            {MODES.map(([m, label]) => (
+              <button key={m} type="button" data-on={mode === m ? "1" : undefined} onClick={() => { setMode(m); saveBgmMode(bgKey, m); }}>{label}</button>
+            ))}
+          </div>
+        </>
+      ) : <p className="stg-empty">{fallbackLabel ? `没单独配歌，放「${fallbackLabel}」地图的音乐` : "还没配歌，安安静静的"}</p>}
+      {picking ? <SongPicker chosen={songs} onClose={() => setPicking(false)} onAdd={s => setList([...songs, s])} /> : null}
+    </>
+  );
+}
+
+// ── 此刻设置 ──
+
+const LANGS: [StageSettings["lang"], string, string][] = [
+  ["ko-talk", "先韩后中", "旁白中文，外国人说母语，后面带中文翻译"],
+  ["ko-all", "全部韩语", "旁白也写韩语，都带中文翻译"],
+  ["zh", "全中文", "所有人都说中文"],
+];
+
+function SettingsSheet({ onClose }: { onClose: () => void }) {
+  const [st, setSt] = useState<StageSettings>(() => loadStageSettings());
+  const set = (patch: Partial<StageSettings>) => { const n = { ...st, ...patch }; setSt(n); saveStageSettings(n); };
+  return (
+    <div className="stg-mask" onClick={onClose}>
+      <div className="stg-sheet stg-picker" onClick={e => e.stopPropagation()}>
+        <div className="stg-picker-head"><b>{STAGE_APP_NAME}设置</b><button type="button" className="stg-done" onClick={onClose}>完成</button></div>
+        <div className="stg-sec">
+          <div className="stg-sec-head">每次写多少字<small>帧数不限，一帧最多 55 字</small></div>
+          <div className="stg-words">
+            <input type="number" min={200} max={3000} step={100} value={st.words} onChange={e => set({ words: Math.max(100, Number(e.target.value) || 800) })} />
+            <span>字左右</span>
+          </div>
+        </div>
+        <div className="stg-sec">
+          <div className="stg-sec-head">文风<small>写你想要的感觉，可以随时换；空着就按预设来</small></div>
+          <textarea className="stg-ta" rows={5} value={st.style} placeholder="比如：克制、多写动作和环境，少写形容词" onChange={e => set({ style: e.target.value })} />
+        </div>
+        <div className="stg-sec">
+          <div className="stg-sec-head">语言</div>
+          {LANGS.map(([v, label, desc]) => (
+            <button key={v} type="button" className="stg-opt" data-on={st.lang === v ? "1" : undefined} onClick={() => set({ lang: v })}>
+              <span><b>{label}</b><small>{desc}</small></span>
+              {st.lang === v ? <Check size={18} /> : null}
+            </button>
+          ))}
+        </div>
+        <div className="stg-sec">
+          <div className="stg-sec-head">音乐音量</div>
+          <input className="stg-range" type="range" min={0} max={100} value={st.volume} onChange={e => { set({ volume: Number(e.target.value) }); setStageBgmVolume(Number(e.target.value)); }} />
+        </div>
+      </div>
     </div>
   );
 }

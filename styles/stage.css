@@ -1,3 +1,10 @@
+@font-face {
+  font-family: "Stage Serif";
+  src: url("/fonts/stage-serif-black.woff2") format("woff2");
+  font-weight: 900;
+  font-display: swap;
+}
+
 /* ═══ 爱豆小手机：场景 app「此刻」首页（地图） ═══ */
 .stg {
   --stg-pink: #f27ba0;
@@ -38,11 +45,15 @@
 .stg-map::-webkit-scrollbar { display: none; }
 .stg-map-inner { position: relative; height: 100%; width: max-content; }
 .stg-map-inner img { height: 100%; width: auto; display: block; user-select: none; -webkit-user-select: none; }
-.stg-mpin { position: absolute; transform: translate(-9px, -100%); display: flex; align-items: center; gap: 4px; }
-.stg-mpin i { width: 18px; height: 23px; flex: none; background: var(--stg-pink); border: 2.5px solid #fff; border-radius: 50% 50% 50% 0; transform: rotate(-45deg) translate(-2px, 3px); box-shadow: 0 2px 5px rgba(0,0,0,0.3); }
-.stg-mpin b { display: flex; align-items: center; gap: 3px; padding: 4px 9px; border-radius: 6px; background: rgba(36,36,48,0.72); color: #fff; font-size: 13px; font-weight: 500; white-space: nowrap; }
+.stg-mpin { position: absolute; transform: translate(-11px, -26px); display: flex; align-items: center; }
+.stg-mpin i { width: 22px; height: 22px; flex: none; position: relative; background: #ef6a86; border: 2.5px solid #fff; border-radius: 50% 50% 50% 0; transform: rotate(-45deg); box-shadow: 0 2px 4px rgba(0,0,0,0.35); }
+.stg-mpin i::after { content: ""; position: absolute; left: 50%; top: 50%; width: 7px; height: 7px; margin: -3.5px 0 0 -3.5px; border-radius: 50%; background: #fff; }
+.stg-mpin b { display: flex; align-items: center; gap: 3px; margin-left: 5px; padding: 4px 26px 4px 9px; border-radius: 2px; color: #fff; white-space: nowrap;
+  font-family: "Stage Serif", "Noto Serif SC", "Songti SC", serif; font-weight: 900; font-size: 15px; letter-spacing: 0.5px;
+  text-shadow: 0 1px 0 #3b3b46, 0 2px 3px rgba(0,0,0,0.55);
+  background: linear-gradient(90deg, rgba(55,55,65,0.82) 0%, rgba(55,55,65,0.62) 65%, rgba(55,55,65,0) 100%); }
 .stg-mpin[data-lock] i { background: #a6a6ae; }
-.stg-mpin[data-edit] b { background: var(--stg-pink); }
+.stg-mpin[data-edit] b { background: linear-gradient(90deg, rgba(239,106,134,0.92) 0%, rgba(239,106,134,0.7) 65%, rgba(239,106,134,0) 100%); }
 
 /* 底部：继续 / 以前的场景 */
 .stg-dock { position: absolute; left: 16px; right: 16px; bottom: calc(env(safe-area-inset-bottom, 0px) + 20px); z-index: 5; display: flex; flex-direction: column; gap: 8px; align-items: stretch; }
@@ -123,3 +134,16 @@
 .stg-tracks li button { flex: none; padding: 4px 12px !important; border-radius: 999px; background: #f2f2f7 !important; color: #007aff !important; font-size: 13px; font-weight: 600; }
 .stg-tracks li > svg { color: var(--stg-pink); }
 .stg-sub { margin: 10px 0 2px; font-size: 12px; color: var(--stg-dim); }
+
+.stg-tip-l { margin: 0 16px; text-align: left; }
+.stg-seg-mode { margin: 4px 0 10px; width: fit-content; }
+.stg-words { display: flex; align-items: center; gap: 8px; font-size: 15px; }
+.stg-words input { width: 90px; padding: 8px 10px; border: 0; border-radius: 8px; background: #f2f2f7; font: inherit; font-size: 16px; text-align: center; }
+.stg-ta { width: 100%; box-sizing: border-box; padding: 10px; border: 0; border-radius: 10px; background: #f2f2f7; font: inherit; font-size: 15px; line-height: 1.5; resize: vertical; }
+.stg-opt { display: flex !important; align-items: center; justify-content: space-between; width: 100%; padding: 10px 0 !important; border-bottom: 0.5px solid var(--stg-line) !important; text-align: left; }
+.stg-opt:last-child { border-bottom: 0 !important; }
+.stg-opt span { display: flex; flex-direction: column; gap: 2px; }
+.stg-opt b { font-size: 15px; font-weight: 500; }
+.stg-opt small { font-size: 12px; color: var(--stg-dim); }
+.stg-opt svg { color: #007aff; flex: none; }
+.stg-range { width: 100%; accent-color: var(--stg-pink); }

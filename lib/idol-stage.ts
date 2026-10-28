@@ -17,6 +17,7 @@ import { parseVnResponse } from "./vn-parser";
 import { companyOf, loadCareer, nodeById, type CareerNode } from "./idol-career";
 import { fmtWorld } from "./idol-scenes";
 import { resolveUserIdentity } from "./settings-storage";
+import { loadAllCharacters } from "./character-storage";
 
 export const STAGE_APP_NAME = "此刻";
 
@@ -111,8 +112,26 @@ export function placeKeyFromText(text: string): string {
 
 // ── 地图图片和钉子（她自己传、自己摆） ──
 
-export type MapLook = { imageAssetId?: string; pins: Record<string, { x: number; y: number }> };
+export type MapLook = { imageAssetId?: string; pins: Record<string, { x: number; y: number }>; /** 默认图也不要，用卡片 */ noImage?: boolean };
 const LOOK_KEY = "idol_stage_maps_v1";
+
+/** 自带的地图（她挑的图，10-28 钉好的位置）；她上传了自己的图就用她的 */
+export const DEFAULT_MAPS: Record<string, { image: string; pins: MapLook["pins"] }> = {
+  seoul: {
+    image: "/idol/maps/seoul.jpg",
+    pins: {
+      家: { x: 16.1, y: 14.5 }, 宿舍: { x: 87.4, y: 76.5 }, 公司: { x: 74.6, y: 62 }, 便利店: { x: 49.6, y: 52.3 }, 汉江公园: { x: 51.9, y: 76.5 },
+      南山塔: { x: 37.1, y: 29 }, 弘大: { x: 22.7, y: 81.8 }, 明洞: { x: 21.6, y: 58.1 }, 圣水洞: { x: 45.4, y: 36.3 }, 清潭洞: { x: 49.9, y: 65.8 },
+      江南: { x: 73.6, y: 39.7 }, 梨泰院: { x: 63.1, y: 29 }, 唱片店: { x: 43.6, y: 59.5 }, 电视台: { x: 34.4, y: 44.5 }, 演唱会场馆: { x: 84.8, y: 22.3 },
+      医院: { x: 12.5, y: 67.8 }, 仁川机场: { x: 80.8, y: 33.9 },
+    },
+  },
+};
+
+/** 地点在哪张地图上 */
+export function mapOfPlace(key: string): StageMap | undefined {
+  return STAGE_MAPS.find(m => m.places.some(x => x.key === key && !x.sub));
+}
 
 export function loadMapLooks(): Record<string, MapLook> {
   try { return JSON.parse(kvGet(LOOK_KEY) || "{}") as Record<string, MapLook>; } catch { return {}; }
@@ -133,6 +152,47 @@ export function saveBgmFor(placeKey: string, songs: BgmSong[]): void {
   kvSet(BGM_KEY, JSON.stringify({ ...loadBgmMap(), [placeKey]: songs }));
 }
 
+/** 地图自己的音乐用 map:地图id 存；逛地图时放，没单独配歌的地点也放它 */
+export const mapBgmKey = (mapId: string) => `map:${mapId}`;
+
+export type BgmMode = "list" | "one" | "shuffle";
+const BGM_MODE_KEY = "idol_stage_bgm_mode_v1";
+export function loadBgmModes(): Record<string, BgmMode> {
+  try { return JSON.parse(kvGet(BGM_MODE_KEY) || "{}") as Record<string, BgmMode>; } catch { return {}; }
+}
+export function saveBgmMode(key: string, mode: BgmMode): void {
+  kvSet(BGM_MODE_KEY, JSON.stringify({ ...loadBgmModes(), [key]: mode }));
+}
+
+/** 这个地方实际放什么：自己配了就放自己的，没配就放所在地图的 */
+export function resolveBgm(key: string): { key: string; songs: BgmSong[]; mode: BgmMode } {
+  const map = loadBgmMap();
+  const modes = loadBgmModes();
+  if (key.startsWith("map:")) return { key, songs: map[key] ?? [], mode: modes[key] ?? "list" };
+  if (map[key]?.length) return { key, songs: map[key], mode: modes[key] ?? "list" };
+  const m = mapOfPlace(key);
+  const mk = m ? mapBgmKey(m.id) : "";
+  return { key: mk || key, songs: (mk && map[mk]) || [], mode: (mk && modes[mk]) || "list" };
+}
+
+// ── 此刻设置 ──
+
+export type StageLang = "zh" | "ko-talk" | "ko-all";
+export type StageSettings = { words: number; style: string; lang: StageLang; volume: number };
+const SETTINGS_KEY = "idol_stage_settings_v1";
+export const DEFAULT_STAGE_SETTINGS: StageSettings = { words: 800, style: "", lang: "ko-talk", volume: 55 };
+export function loadStageSettings(): StageSettings {
+  try { return { ...DEFAULT_STAGE_SETTINGS, ...(JSON.parse(kvGet(SETTINGS_KEY) || "{}") as Partial<StageSettings>) }; } catch { return DEFAULT_STAGE_SETTINGS; }
+}
+export function saveStageSettings(s: StageSettings): void {
+  kvSet(SETTINGS_KEY, JSON.stringify(s));
+}
+
+/** 她在这个世界里叫什么（总结里用这个名字） */
+export function herName(): string {
+  return resolveUserIdentity(WORLD_CHAR_ID, "vn")?.name?.trim() || "她";
+}
+
 // ── 一场戏 ──
 
 export type StageScene = SceneMeta & {
@@ -144,6 +204,8 @@ export type StageScene = SceneMeta & {
   avoid?: string[];
   /** 结束后她点了「合成大总结」：短期记忆里用这一段代替每段的小总结 */
   bigSummary?: string;
+  /** 每个人在第几段出场、第几段离场（段 = AI 的第几次回复，从 0 数）；只记得在场那几段 */
+  spans?: Record<string, { from: number; to?: number }>;
 };
 
 const SCENES_KEY = "idol_stage_scenes_v1";
@@ -196,7 +258,9 @@ export function startNodeStage(node: CareerNode): { chapterIndex: number; scene:
 }
 
 function frameText(raw: string, role: string): string {
-  const { frames } = parseVnResponse(raw);
+  const body = raw.replace(/（场外指令：[\s\S]*?）\s*$/, "").trim();
+  if (!body) return "";
+  const { frames } = parseVnResponse(body);
   const me = resolveUserIdentity(WORLD_CHAR_ID, "vn")?.name;
   return frames.filter(f => f.text).map(f => {
     if (role === "user") return f.speaker ? `她：「${f.text}」` : `她：${f.text}`;
@@ -214,7 +278,15 @@ export function stageHost(chapterId: string): SceneHost | null {
     meta: () => get(),
     saveMeta: m => { const cur = get(); if (cur) saveStageScene({ ...cur, ...m }); },
     ids: () => get()?.ids ?? [WORLD_CHAR_ID],
-    setIds: ids => { const cur = get(); if (cur) saveStageScene({ ...cur, ids }); },
+    setIds: ids => {
+      const cur = get();
+      if (!cur) return;
+      // 新进来的人从正在写的这一段算起
+      const seg = loadVnMessagesForChapter(session.id, ch.index).filter(m => m.role === "assistant").length;
+      const spans = { ...(cur.spans ?? {}) };
+      for (const id of ids) if (!cur.ids.includes(id) || spans[id]?.to !== undefined) spans[id] = { from: cur.ids.includes(id) ? spans[id]?.from ?? 0 : seg };
+      saveStageScene({ ...cur, ids, spans });
+    },
     transcript: () => loadVnMessagesForChapter(session.id, ch.index)
       .filter(m => m.role === "user" || m.role === "assistant")
       .map(m => frameText(m.rawContent, m.role))
@@ -238,16 +310,44 @@ export function buildStagePrompt(chapterIndex: number): string {
   return [
     base,
     scene.avoid?.length ? `【这一场不出场的人】${scene.avoid.join("、")}：这一场绝对不让他们出现，也不要有人提到他们正在附近。` : "",
-    `【这一场的写法】
-- 这是一帧一帧往下走的场景，不是小说。每次回复 4～10 帧：旁白写环境和动作，别人说话写成「名字|"台词"」。
-- 说话的人写他自己的名字，绝不写「世界」；没名字的路人写身份（店员、经纪人、粉丝）。
-- **绝不替她说话、不写她的动作和心理**。写到需要她回应的地方就停，最后一帧落在别人的话或一个需要她反应的情况上。
-- 剧情要自己往前走：别人有自己的目的和情绪，会主动开口、提要求、出状况，不要只是等她。
-- 这一场不用立绘：<scene> 里不写 sprite。
-- 这一场要写小总结（跟上面说的禁止 <summary> 相反，以这里为准）：</content> 后面另起一行写 <summary>…</summary>。${SUMMARY_RULE}
-- bg 写地点：只能从这些里选（写原样）：${places.join("、")}。她还在原地就不写 bg；她走去别处了，第一帧写新地点的 bg。
-- 她刚到「${scene.place}」${scene.premise ? `，这一场是：${scene.premise}` : ""}。${scene.open ? "这会儿谁在这里交给你按时间地点判断。" : ""}`,
+    stageWritingRules(scene, places),
   ].filter(Boolean).join("\n\n");
+}
+
+/** [离场:名字]：这个人走了，之后的段他不记得 */
+export function markLeft(chapterIndex: number, names: string[]): void {
+  const chId = chapterIdOf(chapterIndex);
+  const cur = chId ? getStageScene(chId) : null;
+  if (!cur || !names.length) return;
+  const seg = loadVnMessagesForChapter(worldVnSession().id, chapterIndex).filter(m => m.role === "assistant").length;
+  const spans = { ...(cur.spans ?? {}) };
+  for (const c of loadAllCharacters().filter(c => names.includes(c.name) && cur.ids.includes(c.id))) spans[c.id] = { from: spans[c.id]?.from ?? 0, to: seg };
+  saveStageScene({ ...cur, spans });
+}
+
+const LANG_RULE: Record<StageLang, string> = {
+  zh: "- 语言：全部用中文写。",
+  "ko-talk": "- 语言：旁白用中文。台词按说话人的国籍说他的母语（没写国籍的当韩国人），不是中文的台词写成 名字|\"原文|简体中文译文\"，中文台词照常写。",
+  "ko-all": "- 语言：旁白也用韩语写，每帧写成 \"韩语原文|简体中文译文\"（旁白不带名字，直接写这一句）。台词按说话人的国籍说他的母语（没写国籍的当韩国人），不是中文的写成 名字|\"原文|简体中文译文\"。",
+};
+
+function stageWritingRules(scene: StageScene, places: string[]): string {
+  const st = loadStageSettings();
+  return `【这一场的写法】（以这里为准，跟上面的漫卷格式冲突时听这里的）
+- 这是一帧一帧往下走的场景，像文字冒险游戏。每次回复大约 ${st.words} 字，帧数不限。
+- 一帧最多 55 个字，一两句就翻下一帧；一句话没说完可以下一帧接着写，不用凑满。
+- 旁白写环境、动作、神态；每句台词单独一帧，写成 名字|"台词"。旁白里不许出现带引号的台词；动作写在台词前面的括号里，比如 名字|"（笑着）坐吧。"
+- 说话的人写他自己的名字，绝不写「世界」；没名字的路人写身份（店员、经纪人、粉丝）。
+- 人称：旁白里用「你」称呼${herName()}（第二人称），其他人用名字或他/她（第三人称）。别人当面跟她说话时照常称呼她。
+- **绝不替你说话、不写你的动作和心理**。写到需要你回应的地方就停，最后一帧落在别人的话或一个需要你反应的情况上。
+- 剧情要自己往前走：别人有自己的目的和情绪，会主动开口、提要求、出状况，不要只是等你。
+${LANG_RULE[st.lang]}${st.style.trim() ? `\n- 文风：${st.style.trim()}` : ""}
+- 这一场不用立绘：<scene> 里不写 sprite。
+- 有人离开这里了，回复最后另起一行写 [离场:名字]。
+- 她发「（场外指令：…）」时那是她在场外跟你说话，照着安排剧情，不要让剧情里的人听到或回应这句话。
+- 这一场要写小总结（跟上面说的禁止 <summary> 相反，以这里为准）：</content> 后面另起一行写 <summary>…</summary>。${summaryRule()}
+- bg 写地点：只能从这些里选（写原样）：${places.join("、")}。还在原地就不写 bg；走去别处了，第一帧写新地点的 bg。
+- ${herName()}刚到「${scene.place}」${scene.premise ? `，这一场是：${scene.premise}` : ""}。${scene.open ? "这会儿谁在这里交给你按时间地点判断。" : ""}`;
 }
 
 /** 结束这一场：记账（关系、记忆、想走、视频、主线完成）+ 归档这一章 */
@@ -325,7 +425,7 @@ export async function writeSummaryFor(chapterIndex: number, messageId: string): 
   const text = [...before, frameText(msgs[i].rawContent, "assistant")].join("\n");
   const { apiConfig } = resolveVnConfigs(WORLD_CHAR_ID);
   const res = await simpleLLMCall(apiConfig, [
-    { role: "system", content: SUMMARY_RULE },
+    { role: "system", content: summaryRule() },
     { role: "user", content: text },
   ], { temperature: 0.3, label: "此刻小总结" });
   const out = (res.content ?? "").replace(/<\/?summary>/g, "").trim();
@@ -334,7 +434,10 @@ export async function writeSummaryFor(chapterIndex: number, messageId: string): 
   return out;
 }
 
-export const SUMMARY_RULE = "用两三句写这一段发生了什么：谁说了什么、做了什么，她说了什么、做了什么，气氛怎么变。第三人称（她、人名），写具体的话和动作，不写空泛的形容。只输出这段话。";
+export function summaryRule(): string {
+  const me = herName();
+  return `用两三句写这一段发生了什么：谁说了什么、做了什么，${me}说了什么、做了什么，气氛怎么变。所有人都用名字称呼（${me}也写名字，不写「她」「你」），写具体的话和动作，不写空泛的形容。只输出这段话。`;
+}
 
 /** 结束后：把这一场的小总结合成一段大总结，短期记忆里用它代替那些小的 */
 export async function mergeSummaries(chapterIndex: number): Promise<string> {
@@ -345,7 +448,7 @@ export async function mergeSummaries(chapterIndex: number): Promise<string> {
   if (!parts.length) throw new Error("这一场还没有小总结");
   const { apiConfig } = resolveVnConfigs(WORLD_CHAR_ID);
   const res = await simpleLLMCall(apiConfig, [
-    { role: "system", content: "把下面按顺序的几段小总结合成一段完整的总结，四到八句，保留关键的话、动作和关系变化，第三人称（她、人名）。只输出这段话。" },
+    { role: "system", content: `把下面按顺序的几段小总结合成一段完整的总结，四到八句，保留关键的话、动作和关系变化，所有人都用名字称呼（${herName()}也写名字）。只输出这段话。` },
     { role: "user", content: `地点：${scene.place}\n${parts.join("\n")}` },
   ], { temperature: 0.3, label: "此刻大总结" });
   const out = (res.content ?? "").trim();
@@ -380,7 +483,49 @@ export function loadStageProjectionEntries(characterId: string, options?: { afte
       push(`stage_projection_${ch.id}`, msgs[msgs.length - 1]?.createdAt ?? new Date(sc.startAt).toISOString(), sc.bigSummary);
       continue;
     }
-    for (const m of msgs) if (m.summary?.trim()) push(`stage_projection_${m.id}`, m.createdAt, m.summary.trim());
+    const span = sc.spans?.[characterId] ?? { from: 0 };
+    msgs.forEach((m, i) => {
+      if (i < span.from || (span.to !== undefined && i > span.to)) return;
+      if (m.summary?.trim()) push(`stage_projection_${m.id}`, m.createdAt, m.summary.trim());
+    });
   }
   return out.sort((a, b) => a.timestamp.localeCompare(b.timestamp));
+}
+
+// ── AI 写出来以后代码兜底：台词写进旁白的拆出来，太长的旁白在句号处切开 ──
+
+const QUOTE = /[「“"『]/;
+function splitLong(line: string, max = 55): string[] {
+  if (line.length <= max + 10) return [line];
+  const parts = line.match(/[^。！？!?…]+[。！？!?…」”"』]*/g) ?? [line];
+  const out: string[] = [];
+  let cur = "";
+  for (const p of parts) {
+    if (cur && (cur + p).length > max) { out.push(cur); cur = p; } else cur += p;
+  }
+  if (cur) out.push(cur);
+  return out;
+}
+
+/** 「韩智元笑着说：『坐吧。』」→ 韩智元|"（笑着）坐吧。"；超过 55 字的旁白切成几帧 */
+export function normalizeStageRaw(raw: string): string {
+  const names = loadAllCharacters().map(c => c.name).filter(n => n && n.length <= 8).sort((a, b) => b.length - a.length);
+  return raw.replace(/(<scene[^>]*>)([\s\S]*?)(<\/scene>)/gi, (_, open: string, body: string, close: string) => {
+    const lines = body.split("\n").flatMap(l => {
+      const t = l.trim();
+      if (!t) return [];
+      if (/^[^|｜]{1,12}[|｜]["“「]/.test(t)) return [t];
+      const who = names.find(n => t.startsWith(n));
+      if (who) {
+        const m = t.slice(who.length).match(/^([^：:「“"『]{0,14}?)(?:说道|说|道|问|喊|笑道|开口)?[：:，,]?\s*[「“"『](.+)[」”"』]$/);
+        if (m && !QUOTE.test(m[2])) {
+          const act = m[1].replace(/[，,\s]+$/, "").trim();
+          return [`${who}|"${act ? `（${act}）` : ""}${m[2]}"`];
+        }
+      }
+      if (/["“”]/.test(t) && t.includes("|")) return [t];
+      return splitLong(t);
+    });
+    return `${open}\n${lines.join("\n")}\n${close}`;
+  });
 }

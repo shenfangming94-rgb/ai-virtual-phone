@@ -26,7 +26,7 @@ import { resolveVnAssetMap, loadVnScenes, getVnSceneLayout, getVnSpriteLayout } 
 import { resolveUserIdentity } from "@/lib/settings-storage";
 import type { VnFrame, VnOptions, VnBeat } from "@/lib/vn-types";
 import { splitBilingualText } from "@/lib/bilingual-text";
-import { allScenePlaces, chapterIdOf, chapterSummaries, closeStageScene, editSummary, getStageScene, mergeSummaries, placeLocked, setBigSummary, writeSummaryFor } from "@/lib/idol-stage";
+import { STAGE_MAPS, chapterIdOf, chapterSummaries, closeStageScene, editSummary, getStageScene, mergeSummaries, placeLocked, setBigSummary, writeSummaryFor } from "@/lib/idol-stage";
 import { jumpWorld } from "@/lib/idol-reminders";
 import { fmtWorld } from "@/lib/idol-scenes";
 import type { SceneCloseResult } from "@/lib/idol-world";
@@ -60,11 +60,22 @@ function buildFramesFromMessages(messages: VnMessage[]): { frames: VnFrame[]; la
   const frames: VnFrame[] = [];
   let lastOptions: VnOptions | null = null;
   for (const message of messages) {
-    const parsed = parseVnResponse(message.rawContent);
+    // 场外指令不播
+    const raw = stripDirector(message.rawContent);
+    if (!raw.trim()) continue;
+    const parsed = parseVnResponse(raw);
     frames.push(...tagFramesWithMessage(parsed.frames, message));
     if (message.role === "assistant") lastOptions = parsed.options;
   }
   return { frames, lastOptions };
+}
+
+const DIRECTOR_RE = /（场外指令：[\s\S]*?）\s*$/;
+function stripDirector(raw: string): string {
+  return raw.replace(DIRECTOR_RE, "").trim();
+}
+function directorOf(raw: string): string {
+  return raw.match(/（场外指令：([\s\S]*?)）\s*$/)?.[1] ?? "";
 }
 
 function getFrameVoiceKey(frame: VnFrame | null | undefined): string | null {
@@ -111,7 +122,7 @@ export function VnPlayer({ characterId, chapterIndex, onClose, onChapterEnd, vnT
   const [waitingForInput, setWaitingForInput] = useState(false);
   const [currentOptions, setCurrentOptions] = useState<VnOptions | null>(null);
   const [inputText, setInputText] = useState("");
-  const [inputMode, setInputMode] = useState<"dialogue" | "narration">("dialogue");
+  const [inputMode, setInputMode] = useState<"dialogue" | "narration" | "director">("dialogue");
   const [pendingActions, setPendingActions] = useState<{ type: "dialogue" | "narration" | "scene_switch"; text: string }[]>([]);
   const [isGenerating, setIsGenerating] = useState(false);
   const [showArchiveConfirm, setShowArchiveConfirm] = useState(false);
@@ -160,10 +171,12 @@ export function VnPlayer({ characterId, chapterIndex, onClose, onChapterEnd, vnT
   const userName = useMemo(() => resolveUserIdentity(characterId, "vn")?.name ?? "我", [characterId]);
   const availableScenes = useMemo(() => loadVnScenes(characterId), [characterId]);
   const sceneAssetNames = useMemo(() => new Set(availableScenes.map((scene) => scene.name)), [availableScenes]);
+  /** 双语（原文|译文）：此刻里一直开着，旁白写了「|」也算（全部韩语模式） */
+  const isBi = useCallback((f: VnFrame | null | undefined) => Boolean(f && (stage || bilingualTranslationEnabled) && (f.speaker || (stage && f.text.includes("|")))), [stage, bilingualTranslationEnabled]);
   const getTypingSourceText = useCallback((nextFrame: VnFrame | null | undefined) => {
-    if (!nextFrame?.speaker || !bilingualTranslationEnabled) return nextFrame?.text || "";
-    return splitBilingualText(nextFrame.text)?.original || nextFrame.text;
-  }, [bilingualTranslationEnabled]);
+    if (!isBi(nextFrame)) return nextFrame?.text || "";
+    return splitBilingualText(nextFrame!.text)?.original || nextFrame!.text;
+  }, [isBi]);
 
   const applyFrameAudioToState = useCallback((messageId: string, frameIndex: number, audio: VnFrameAudio) => {
     const patch = (targetFrame: VnFrame) => (
@@ -668,7 +681,8 @@ export function VnPlayer({ characterId, chapterIndex, onClose, onChapterEnd, vnT
   // Add text to pending
   const handleTextSubmit = useCallback(() => {
     if (!inputText.trim()) return;
-    setPendingActions((prev) => [...prev, { type: inputMode, text: inputText.trim() }]);
+    if (inputMode === "director") return;
+    setPendingActions((prev) => [...prev, { type: inputMode as "dialogue" | "narration", text: inputText.trim() }]);
     setInputText("");
   }, [inputText, inputMode]);
 
@@ -700,9 +714,10 @@ export function VnPlayer({ characterId, chapterIndex, onClose, onChapterEnd, vnT
 
   // Send all pending actions as one message
   const handleSendAll = useCallback(async () => {
-    const actions = stage && inputText.trim() ? [...pendingActions, { type: inputMode, text: inputText.trim() }] : pendingActions;
-    if (actions.length === 0 || isGenerating) return;
-    const packaged = packageMultiActions(actions, userName);
+    const director = stage && inputMode === "director" ? inputText.trim() : "";
+    const actions = stage && inputText.trim() && inputMode !== "director" ? [...pendingActions, { type: inputMode as "dialogue" | "narration", text: inputText.trim() }] : pendingActions;
+    if ((actions.length === 0 && !director) || isGenerating) return;
+    const packaged = [actions.length ? packageMultiActions(actions, userName) : "", director ? `（场外指令：${director}）` : ""].filter(Boolean).join("\n");
     setPendingActions([]);
     if (stage) setInputText("");
     // Reuse handleSubmit-like logic but with pre-packaged content
@@ -718,7 +733,7 @@ export function VnPlayer({ characterId, chapterIndex, onClose, onChapterEnd, vnT
     });
     updateChapterStartMessageId(session.id, chapterIndex, userMsg.id);
 
-    const userParsed = parseVnResponse(packaged);
+    const userParsed = parseVnResponse(stripDirector(packaged) || "<content></content>");
     const userTextFrames = tagFramesWithMessage(userParsed.frames, userMsg).filter((f) => f.text);
     const newFrames = [...allFrames, ...userTextFrames];
     setAllFrames(newFrames);
@@ -766,7 +781,7 @@ export function VnPlayer({ characterId, chapterIndex, onClose, onChapterEnd, vnT
       }
 
       const aiStartIdx = newFrames.length;
-      if (stage && aiFrames.length > 0) {
+      if (stage && aiFrames.length > 0 && userTextFrames.length > 0) {
         // 场景 app：她那几句播完会自己接上（见上面的自动往下走）
       } else if (aiFrames.length > 0) {
         setFrameIdx(aiStartIdx);
@@ -930,8 +945,8 @@ export function VnPlayer({ characterId, chapterIndex, onClose, onChapterEnd, vnT
   const sceneStyle = resolveSceneBg(renderedScene, canUseRenderedSceneImage);
   const spriteStyle = resolveSpriteBg(currentSprite);
   const sceneVisualReady = !currentScene || Boolean(renderedScene);
-  const currentDialogueText = frame?.speaker ? (isTyping ? displayedText : frame.text) : displayedText;
-  const replayDialogueText = replayFrame?.speaker ? (isTyping ? displayedText : replayFrame.text) : displayedText;
+  const currentDialogueText = isBi(frame) ? (isTyping ? displayedText : frame!.text) : displayedText;
+  const replayDialogueText = isBi(replayFrame) ? (isTyping ? displayedText : replayFrame!.text) : displayedText;
   const renderFrameVoiceButton = (targetFrame: VnFrame | null | undefined) => {
     const key = getFrameVoiceKey(targetFrame);
     // 旁白帧（无 speaker）不提供配音按钮
@@ -1068,7 +1083,7 @@ export function VnPlayer({ characterId, chapterIndex, onClose, onChapterEnd, vnT
                 {renderFrameVoiceButton(replayFrame)}
                 {replayFrame.speaker && <div className="vn-name">{nameOf(replayFrame)}</div>}
                 <div className={`vn-text ${!replayFrame.speaker ? "vn-text-narration" : ""}`}>
-                  {replayFrame.speaker && bilingualTranslationEnabled ? (
+                  {isBi(replayFrame) ? (
                     <BilingualTextBlock text={replayDialogueText} mode="plain" defaultExpanded={defaultTranslationExpanded} />
                   ) : (
                     replayDialogueText
@@ -1086,7 +1101,7 @@ export function VnPlayer({ characterId, chapterIndex, onClose, onChapterEnd, vnT
                 {renderFrameVoiceButton(frame)}
                 {frame.speaker && <div className="vn-name">{nameOf(frame)}</div>}
                 <div className={`vn-text ${isNarration ? "vn-text-narration" : ""}`}>
-                  {frame.speaker && bilingualTranslationEnabled ? (
+                  {isBi(frame) ? (
                     <BilingualTextBlock text={currentDialogueText} mode="plain" defaultExpanded={defaultTranslationExpanded} />
                   ) : (
                     currentDialogueText
@@ -1156,18 +1171,27 @@ export function VnPlayer({ characterId, chapterIndex, onClose, onChapterEnd, vnT
                     <BookOpen size={10} style={{ marginRight: 4, display: "inline" }} />
                     旁白
                   </button>
+                  {stage && (
+                    <button
+                      className="vn-mode-btn"
+                      data-active={inputMode === "director" ? "true" : undefined}
+                      onClick={() => setInputMode("director")}
+                    >
+                      场外
+                    </button>
+                  )}
                 </div>
                 <div className="vn-input-row">
                   <textarea
                     ref={inputRef}
                     className="vn-input-field"
-                    placeholder={inputMode === "dialogue" ? "说些什么..." : "描述一个动作或场景..."}
+                    placeholder={inputMode === "dialogue" ? "说些什么..." : inputMode === "director" ? "悄悄告诉 AI，比如：让朴书雅从拐角出来" : "描述一个动作或场景..."}
                     value={inputText}
                     onChange={(e) => setInputText(e.target.value)}
                     onKeyDown={(e) => {}}
                     rows={1}
                   />
-                  <button className="vn-send-btn" disabled={!inputText.trim()} onClick={handleTextSubmit} title="添加">
+                  <button className="vn-send-btn" disabled={!inputText.trim() || inputMode === "director"} onClick={handleTextSubmit} title="添加">
                     +
                   </button>
                   <button
@@ -1221,8 +1245,9 @@ export function VnPlayer({ characterId, chapterIndex, onClose, onChapterEnd, vnT
             {historyMessages.map((msg) => {
               const roleLabel = msg.role === "user" ? "用户" : msg.role === "assistant" ? "AI" : "系统";
               // Parse for display preview
-              const parsed = parseVnResponse(msg.rawContent);
+              const parsed = parseVnResponse(stripDirector(msg.rawContent) || "<content></content>");
               const frames = parsed.frames.filter((f) => f.text);
+              const directorLine = directorOf(msg.rawContent);
 
               return (
                 <div
@@ -1253,10 +1278,11 @@ export function VnPlayer({ characterId, chapterIndex, onClose, onChapterEnd, vnT
                     </div>
                   ) : (
                     <div className="vn-history-msg-text">
+                      {directorLine ? <div className="vn-hmsg-director">场外：{directorLine}</div> : null}
                       {frames.length > 0 ? frames.map((f, fi) => (
                         <div key={fi} className={f.speaker ? "vn-hmsg-dialogue" : "vn-hmsg-narration"}>
                           {f.speaker && <span className="vn-hmsg-speaker">{nameOf(f, msg.role)}</span>}
-                          {f.speaker && bilingualTranslationEnabled ? (
+                          {isBi(f) ? (
                             <div className="vn-hmsg-bilingual">
                               <BilingualTextBlock text={f.text} mode="plain" defaultExpanded={defaultTranslationExpanded} />
                             </div>
@@ -1296,17 +1322,26 @@ export function VnPlayer({ characterId, chapterIndex, onClose, onChapterEnd, vnT
             </button>
             <div className="vn-scene-picker-title">{stage ? "去别的地方" : "切换场景"}</div>
             {stage ? (
-              allScenePlaces().filter(pl => !placeLocked(pl)).map((pl) => (
-                <button
-                  key={pl.key}
-                  className="vn-scene-picker-item"
-                  data-active={currentScene === pl.key ? "true" : undefined}
-                  onClick={() => handleSceneSwitch(pl.key)}
-                >
-                  <div className="vn-scene-picker-dot" />
-                  <span className="vn-scene-picker-name">{pl.key.replace("·", " · ")}</span>
-                </button>
-              ))
+              STAGE_MAPS.map(m => {
+                const list = m.places.filter(pl => !pl.sub && !placeLocked(pl));
+                if (!list.length) return null;
+                return (
+                  <div key={m.id} className="vn-scene-picker-group">
+                    <div className="vn-scene-picker-gname">{m.label}</div>
+                    {list.map((pl) => (
+                      <button
+                        key={pl.key}
+                        className="vn-scene-picker-item"
+                        data-active={currentScene === pl.key ? "true" : undefined}
+                        onClick={() => handleSceneSwitch(pl.key)}
+                      >
+                        <div className="vn-scene-picker-dot" />
+                        <span className="vn-scene-picker-name">{pl.label}</span>
+                      </button>
+                    ))}
+                  </div>
+                );
+              })
             ) : availableScenes.length === 0 ? (
               <div className="vn-scene-picker-empty">暂无场景，请在资源库中上传</div>
             ) : (

@@ -968,3 +968,6 @@
 .vn-note-edit button { padding: 5px 14px; border-radius: 999px; border: 1px solid rgba(255,255,255,0.15); background: none; color: inherit; cursor: pointer; }
 .vn-note-edit button[data-save] { background: rgba(201,184,255,0.25); border-color: transparent; }
 .vn-stage-merge { margin-top: 18px !important; font-size: calc(13px*var(--app-text-scale,1)); }
+.vn-hmsg-director { font-size: calc(12px*var(--app-text-scale,1)); color: var(--vn-ui-text-dim); opacity: 0.7; font-style: italic; margin-bottom: 4px; }
+.vn-scene-picker-gname { margin: 14px 0 4px; font-size: calc(11.5px*var(--app-text-scale,1)); letter-spacing: 0.15em; color: var(--vn-ui-text-dim); }
+.vn-scene-picker-group:first-of-type .vn-scene-picker-gname { margin-top: 4px; }

@@ -25,7 +25,6 @@ import { addFame, eventsPromptBlock } from "./idol-events";
 import { recordPerformance } from "./idol-ledger";
 import { KAKAO_TAG_RULES, afterNodeScene, applyKakaoTags, extractKakaoTags, genKakaoId, kakaoPromptLine, type KakaoTags } from "./idol-kakao";
 import { loadApiConfigs, loadBindingConfig, resolveBinding } from "./settings-storage";
-import { saveMemoryEntry } from "./memory-storage";
 
 export const WORLD_CHAR_ID = HIDDEN_WORLD_CHAR_ID;
 const META_KEY = "idol_scene_meta_v1";
@@ -266,7 +265,7 @@ function chatConfig() {
 
 const uid = (p: string) => `${p}_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
 
-/** 这场结束：每个在场的人记一笔，第一次见的写第一印象，主要人物存长期记忆 */
+/** 这场结束：每个在场的人在档案里记一笔，第一次见的写第一印象。不写长期记忆（每段的小总结进短期，攒多了宿主自己总结进长期） */
 export type SceneCloseResult = { summary: string; recorded: string[]; firstMeet: string[]; milestone?: string };
 
 export async function closeWorldScene(groupId: string, sessionId: string): Promise<SceneCloseResult> {
@@ -274,7 +273,6 @@ export async function closeWorldScene(groupId: string, sessionId: string): Promi
 }
 
 export async function closeSceneWith(host: SceneHost): Promise<SceneCloseResult> {
-  const groupId = host.key;
   const meta = host.meta() ?? { place: host.fallbackPlace, premise: "", startAt: Date.now(), newFaces: [] };
   const chars = loadCharacters();
   const present = host.ids().filter(id => id !== WORLD_CHAR_ID).map(id => chars.find(c => c.id === id)).filter((c): c is Character => Boolean(c));
@@ -311,20 +309,6 @@ export async function closeSceneWith(host: SceneHost): Promise<SceneCloseResult>
       if (!p.withYou && item.impression) next.withYou = String(item.impression);
       saveProfile(next);
       if (item.stay === "leave" || item.stay === "stay") nudgeLeave(c.id, item.stay === "leave" ? 1 : -1, String(item.stayWhy || event || `在${meta.place}`), meta.startAt);
-      if (event && p.layer === "main") {
-        const now = new Date().toISOString();
-        await saveMemoryEntry({
-          id: uid(`scene_mem_${c.id}`),
-          characterId: c.id,
-          sourceApp: "story",
-          type: "long_term",
-          content: `${fmtDay(meta.startAt)}在${meta.place}：${event}`,
-          importance: 0.6,
-          createdAt: now,
-          updatedAt: now,
-          metadata: { origin: "idol_scene", groupId },
-        }).catch(() => undefined);
-      }
     }
   }
   host.saveMeta({ ...meta, ended: true, summary });

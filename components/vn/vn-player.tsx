@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { ArrowLeft, ArrowRight, Clock, EyeOff, Play, Pause, Volume2, VolumeX, Music2, Square, Eye, ChevronDown, Send, MessageSquare, BookOpen, Archive, MapPin, RotateCcw, ListOrdered, Plus, Trash2, ChevronRight, Loader2 } from "lucide-react";
+import { ArrowLeft, ArrowRight, Clock, EyeOff, Play, Pause, Volume2, VolumeX, Music2, Square, NotebookPen, Eye, ChevronDown, Send, MessageSquare, BookOpen, Archive, MapPin, RotateCcw, ListOrdered, Plus, Trash2, ChevronRight, Loader2 } from "lucide-react";
 import { BilingualTextBlock } from "@/components/chat/message-bubble";
 import {
   createOrGetVnSession,
@@ -26,7 +26,7 @@ import { resolveVnAssetMap, loadVnScenes, getVnSceneLayout, getVnSpriteLayout } 
 import { resolveUserIdentity } from "@/lib/settings-storage";
 import type { VnFrame, VnOptions, VnBeat } from "@/lib/vn-types";
 import { splitBilingualText } from "@/lib/bilingual-text";
-import { allScenePlaces, chapterIdOf, closeStageScene, getStageScene, placeLocked } from "@/lib/idol-stage";
+import { allScenePlaces, chapterIdOf, chapterSummaries, closeStageScene, editSummary, getStageScene, mergeSummaries, placeLocked, setBigSummary, writeSummaryFor } from "@/lib/idol-stage";
 import { jumpWorld } from "@/lib/idol-reminders";
 import { fmtWorld } from "@/lib/idol-scenes";
 import type { SceneCloseResult } from "@/lib/idol-world";
@@ -92,6 +92,13 @@ export function VnPlayer({ characterId, chapterIndex, onClose, onChapterEnd, vnT
   const [stageEnd, setStageEnd] = useState<null | "working" | SceneCloseResult | { error: string }>(null);
   const [stageToast, setStageToast] = useState("");
   const [bgmMuted, setBgmMuted] = useState(() => loadBgmMuted());
+  const [notesOpen, setNotesOpen] = useState(false);
+  const [notesVer, setNotesVer] = useState(0);
+  const [noteEdit, setNoteEdit] = useState<{ id: string; text: string } | null>(null);
+  const [noteBusy, setNoteBusy] = useState("");
+  /** 场景 app 里她说的话名字条写「你」 */
+  const nameOf = (f: { speaker?: string; sourceRole?: string } | null | undefined, role?: string) =>
+    stage && (f?.sourceRole === "user" || role === "user") && f?.speaker ? "你" : f?.speaker;
   const [allFrames, setAllFrames] = useState<VnFrame[]>([]);
   const [frameIdx, setFrameIdx] = useState(0);
   const [displayedText, setDisplayedText] = useState("");
@@ -555,6 +562,14 @@ export function VnPlayer({ characterId, chapterIndex, onClose, onChapterEnd, vnT
     return () => { if (autoRef.current) clearTimeout(autoRef.current); };
   }, [autoMode, isTyping, showArchiveConfirm, waitingForInput, advance]);
 
+  // 场景 app：她说的那几句播完自己往下走，AI 那段回来了就接着播
+  useEffect(() => {
+    if (!stage || isTyping || waitingForInput || isReplaying || !frame || frame.sourceRole !== "user") return;
+    if (frameIdx >= allFrames.length - 1) return;
+    const t = window.setTimeout(() => goToFrame(frameIdx + 1), 700);
+    return () => window.clearTimeout(t);
+  }, [stage, isTyping, waitingForInput, isReplaying, frame, frameIdx, allFrames.length, goToFrame]);
+
   // ── Submit user input ──
   const handleSubmit = useCallback(async (text: string, type: "dialogue" | "narration" | "choice") => {
     if (!text.trim() || isGenerating) return;
@@ -603,6 +618,7 @@ export function VnPlayer({ characterId, chapterIndex, onClose, onChapterEnd, vnT
         role: "assistant",
         rawContent: result.rawText,
         chapterIndex,
+        ...(result.summary ? { summary: result.summary } : {}),
       });
 
       // Update start message ID if needed
@@ -684,9 +700,11 @@ export function VnPlayer({ characterId, chapterIndex, onClose, onChapterEnd, vnT
 
   // Send all pending actions as one message
   const handleSendAll = useCallback(async () => {
-    if (pendingActions.length === 0 || isGenerating) return;
-    const packaged = packageMultiActions(pendingActions, userName);
+    const actions = stage && inputText.trim() ? [...pendingActions, { type: inputMode, text: inputText.trim() }] : pendingActions;
+    if (actions.length === 0 || isGenerating) return;
+    const packaged = packageMultiActions(actions, userName);
     setPendingActions([]);
+    if (stage) setInputText("");
     // Reuse handleSubmit-like logic but with pre-packaged content
     setIsGenerating(true);
     setWaitingForInput(false);
@@ -712,7 +730,7 @@ export function VnPlayer({ characterId, chapterIndex, onClose, onChapterEnd, vnT
       const f = userTextFrames[0];
       if (f.bg) setCurrentScene(f.bg);
       if (f.sprite) setCurrentSprite(f.sprite);
-      if (userTextFrames.length === 1) {
+      if (userTextFrames.length === 1 && !stage) {
         // Single frame — show statically
         setDisplayedText(getTypingSourceText(f));
         setIsTyping(false);
@@ -725,7 +743,7 @@ export function VnPlayer({ characterId, chapterIndex, onClose, onChapterEnd, vnT
       const allMessages = loadVnMessages(session.id);
       const result = await generateVnCompletion(characterId, allMessages);
       handleStageResult(result.idol);
-      const aiMsg = pushVnMessage({ sessionId: session.id, role: "assistant", rawContent: result.rawText, chapterIndex });
+      const aiMsg = pushVnMessage({ sessionId: session.id, role: "assistant", rawContent: result.rawText, chapterIndex, ...(result.summary ? { summary: result.summary } : {}) });
       updateChapterStartMessageId(session.id, chapterIndex, userMsg.id);
 
       const aiFrames = tagFramesWithMessage(result.frames, aiMsg);
@@ -748,7 +766,9 @@ export function VnPlayer({ characterId, chapterIndex, onClose, onChapterEnd, vnT
       }
 
       const aiStartIdx = newFrames.length;
-      if (aiFrames.length > 0) {
+      if (stage && aiFrames.length > 0) {
+        // 场景 app：她那几句播完会自己接上（见上面的自动往下走）
+      } else if (aiFrames.length > 0) {
         setFrameIdx(aiStartIdx);
         const f = aiFrames[0];
         if (f.bg) setCurrentScene(f.bg);
@@ -764,7 +784,7 @@ export function VnPlayer({ characterId, chapterIndex, onClose, onChapterEnd, vnT
       setIsGenerating(false);
       setInputText("");
     }
-  }, [pendingActions, userName, isGenerating, allFrames, assetMap, characterId, chapterIndex, session.id, startTyping, getTypingSourceText, handleStageResult]);
+  }, [pendingActions, userName, isGenerating, stage, inputText, inputMode, allFrames, assetMap, characterId, chapterIndex, session.id, startTyping, getTypingSourceText, handleStageResult]);
 
   // ── History message actions ──
   const rebuildFrames = useCallback(() => {
@@ -830,7 +850,7 @@ export function VnPlayer({ characterId, chapterIndex, onClose, onChapterEnd, vnT
       const allMessages = loadVnMessages(session.id);
       const result = await generateVnCompletion(characterId, allMessages);
       handleStageResult(result.idol);
-      const aiMsg = pushVnMessage({ sessionId: session.id, role: "assistant", rawContent: result.rawText, chapterIndex });
+      const aiMsg = pushVnMessage({ sessionId: session.id, role: "assistant", rawContent: result.rawText, chapterIndex, ...(result.summary ? { summary: result.summary } : {}) });
       rebuildFrames();
       // Play new AI frames
       const newMsgs = loadVnMessagesForChapter(session.id, chapterIndex);
@@ -945,7 +965,7 @@ export function VnPlayer({ characterId, chapterIndex, onClose, onChapterEnd, vnT
 
   return (
     <div className="vn-shell" ref={vnShellRef} data-vn-theme={vnTheme || "default"} onClick={() => {
-      if (historyOpen || showArchiveConfirm || showReplayConfirm || showScenePicker || showBeatsPanel || stageEnd) return;
+      if (historyOpen || showArchiveConfirm || showReplayConfirm || showScenePicker || showBeatsPanel || stageEnd || notesOpen) return;
       if (stageOpening) { setStageOpening(false); return; }
       if (isReplaying) { advanceReplay(); return; }
       if (waitingForInput && !isArchived) { setWaitingForInput(false); return; }
@@ -1019,6 +1039,11 @@ export function VnPlayer({ characterId, chapterIndex, onClose, onChapterEnd, vnT
               <MapPin size={18} />
             </button>
           )}
+          {stage && (
+            <button className="vn-topbar-btn" onClick={() => { setNotesVer(v => v + 1); setNotesOpen(true); }} title="每段总结">
+              <NotebookPen size={18} />
+            </button>
+          )}
           <button className="vn-topbar-btn" onClick={() => setHistoryOpen(true)} title="回顾">
             <Clock size={18} />
           </button>
@@ -1041,7 +1066,7 @@ export function VnPlayer({ characterId, chapterIndex, onClose, onChapterEnd, vnT
             {isReplaying && replayFrame && (
               <>
                 {renderFrameVoiceButton(replayFrame)}
-                {replayFrame.speaker && <div className="vn-name">{replayFrame.speaker}</div>}
+                {replayFrame.speaker && <div className="vn-name">{nameOf(replayFrame)}</div>}
                 <div className={`vn-text ${!replayFrame.speaker ? "vn-text-narration" : ""}`}>
                   {replayFrame.speaker && bilingualTranslationEnabled ? (
                     <BilingualTextBlock text={replayDialogueText} mode="plain" defaultExpanded={defaultTranslationExpanded} />
@@ -1059,7 +1084,7 @@ export function VnPlayer({ characterId, chapterIndex, onClose, onChapterEnd, vnT
             {!isReplaying && !waitingForInput && frame && (
               <>
                 {renderFrameVoiceButton(frame)}
-                {frame.speaker && <div className="vn-name">{frame.speaker}</div>}
+                {frame.speaker && <div className="vn-name">{nameOf(frame)}</div>}
                 <div className={`vn-text ${isNarration ? "vn-text-narration" : ""}`}>
                   {frame.speaker && bilingualTranslationEnabled ? (
                     <BilingualTextBlock text={currentDialogueText} mode="plain" defaultExpanded={defaultTranslationExpanded} />
@@ -1081,9 +1106,11 @@ export function VnPlayer({ characterId, chapterIndex, onClose, onChapterEnd, vnT
             {/* ── Input mode ── */}
             {!isReplaying && waitingForInput && !isGenerating && (
               <>
-                <div className="vn-name">
-                  {userName}
-                </div>
+                {!stage && (
+                  <div className="vn-name">
+                    {userName}
+                  </div>
+                )}
 
                 {/* Choices from AI */}
                 {currentOptions && currentOptions.choices.length > 0 && pendingActions.length === 0 && (
@@ -1145,10 +1172,10 @@ export function VnPlayer({ characterId, chapterIndex, onClose, onChapterEnd, vnT
                   </button>
                   <button
                     className="vn-send-btn"
-                    disabled={pendingActions.length === 0}
+                    disabled={pendingActions.length === 0 && !(stage && inputText.trim())}
                     onClick={handleSendAll}
                     title="发送"
-                    style={pendingActions.length > 0 ? { background: "rgba(160,140,240,0.3)", color: "rgba(255,255,255,0.9)" } : undefined}
+                    style={pendingActions.length > 0 || (stage && inputText.trim()) ? { background: "rgba(160,140,240,0.3)", color: "rgba(255,255,255,0.9)" } : undefined}
                   >
                     <Send size={14} />
                   </button>
@@ -1228,7 +1255,7 @@ export function VnPlayer({ characterId, chapterIndex, onClose, onChapterEnd, vnT
                     <div className="vn-history-msg-text">
                       {frames.length > 0 ? frames.map((f, fi) => (
                         <div key={fi} className={f.speaker ? "vn-hmsg-dialogue" : "vn-hmsg-narration"}>
-                          {f.speaker && <span className="vn-hmsg-speaker">{f.speaker}</span>}
+                          {f.speaker && <span className="vn-hmsg-speaker">{nameOf(f, msg.role)}</span>}
                           {f.speaker && bilingualTranslationEnabled ? (
                             <div className="vn-hmsg-bilingual">
                               <BilingualTextBlock text={f.text} mode="plain" defaultExpanded={defaultTranslationExpanded} />
@@ -1399,6 +1426,56 @@ export function VnPlayer({ characterId, chapterIndex, onClose, onChapterEnd, vnT
         </div>
       )}
 
+      {/* ── 场景 app：每段的小总结（进短期记忆，能改） ── */}
+      {stage && notesOpen && (() => {
+        void notesVer;
+        const list = chapterSummaries(chapterIndex);
+        const big = getStageScene(chapterIdOf(chapterIndex) ?? "")?.bigSummary;
+        return (
+          <div className="vn-history-overlay" onClick={(e) => { e.stopPropagation(); setNotesOpen(false); setNoteEdit(null); }}>
+            <div className="vn-notes" onClick={(e) => e.stopPropagation()}>
+              <div className="vn-notes-head">
+                <b>每段总结</b>
+                <button onClick={() => { setNotesOpen(false); setNoteEdit(null); }}>完成</button>
+              </div>
+              <p className="vn-notes-tip">每段都会进在场每个人的短期记忆，改了就是改记忆</p>
+              {big !== undefined && big ? (
+                <div className="vn-note vn-note-big">
+                  <div className="vn-note-meta"><span>大总结（代替下面这些小的）</span>
+                    <button onClick={() => { setBigSummary(chapterIndex, null); setNotesVer(v => v + 1); }}>撤销</button>
+                  </div>
+                  {noteEdit?.id === "big" ? (
+                    <NoteEditor text={noteEdit.text} onChange={t => setNoteEdit({ id: "big", text: t })} onCancel={() => setNoteEdit(null)}
+                      onSave={() => { setBigSummary(chapterIndex, noteEdit.text); setNoteEdit(null); setNotesVer(v => v + 1); }} />
+                  ) : <p onClick={() => setNoteEdit({ id: "big", text: big })}>{big}</p>}
+                </div>
+              ) : null}
+              {list.length === 0 ? <p className="vn-notes-tip">还没有，你说第一句以后这里会一段一段多起来</p> : null}
+              {list.map((n, i) => (
+                <div key={n.id} className="vn-note" data-off={big ? "1" : undefined}>
+                  <div className="vn-note-meta">
+                    <span>第 {i + 1} 段 · {new Date(n.at).getHours().toString().padStart(2, "0")}:{new Date(n.at).getMinutes().toString().padStart(2, "0")}</span>
+                    {!n.summary ? (
+                      <button disabled={Boolean(noteBusy)} onClick={async () => {
+                        setNoteBusy(n.id);
+                        try { await writeSummaryFor(chapterIndex, n.id); setNotesVer(v => v + 1); }
+                        catch (err) { showStageToast(err instanceof Error ? err.message : String(err)); }
+                        finally { setNoteBusy(""); }
+                      }}>{noteBusy === n.id ? "补写中…" : "补写总结"}</button>
+                    ) : null}
+                  </div>
+                  {noteEdit?.id === n.id ? (
+                    <NoteEditor text={noteEdit.text} onChange={t => setNoteEdit({ id: n.id, text: t })} onCancel={() => setNoteEdit(null)}
+                      onSave={() => { editSummary(n.id, noteEdit.text); setNoteEdit(null); setNotesVer(v => v + 1); }} />
+                  ) : n.summary ? <p onClick={() => setNoteEdit({ id: n.id, text: n.summary })}>{n.summary}</p>
+                    : <p className="vn-note-empty">这一段没写总结：{n.preview}…</p>}
+                </div>
+              ))}
+            </div>
+          </div>
+        );
+      })()}
+
       {/* ── 场景 app：开场卡 ── */}
       {stage && stageOpening && stageScene && (
         <div className="vn-stage-open" onClick={(e) => { e.stopPropagation(); setStageOpening(false); }}>
@@ -1432,6 +1509,12 @@ export function VnPlayer({ characterId, chapterIndex, onClose, onChapterEnd, vnT
               {stageEnd.summary ? <div className="vn-stage-sum">{stageEnd.summary}</div> : null}
               {stageEnd.recorded.length ? <div className="vn-stage-sub">{stageEnd.recorded.join("、")}{stageEnd.recorded.length > 1 ? "各" : ""}记了一笔{stageEnd.firstMeet.length ? `；${stageEnd.firstMeet.join("、")}是第一次见你` : ""}</div> : null}
               {stageEnd.milestone ? <div className="vn-stage-sub">🎉 {stageEnd.milestone}</div> : null}
+              <button className="vn-end-btn vn-stage-merge" disabled={Boolean(noteBusy)} onClick={async () => {
+                setNoteBusy("合成中…");
+                try { await mergeSummaries(chapterIndex); setNotesVer(v => v + 1); setNotesOpen(true); }
+                catch (err) { showStageToast(err instanceof Error ? err.message : String(err)); }
+                finally { setNoteBusy(""); }
+              }}>{noteBusy || "把小总结合成一段大总结"}</button>
               <div className="vn-stage-jumps">
                 <button className="vn-end-btn" onClick={() => { onChapterEnd(); }}>就这样</button>
                 <button className="vn-end-btn" onClick={() => { jumpWorld(Date.now() + 3600e3); onChapterEnd(); }}>过 1 小时</button>
@@ -1482,6 +1565,18 @@ export function VnPlayer({ characterId, chapterIndex, onClose, onChapterEnd, vnT
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+function NoteEditor({ text, onChange, onSave, onCancel }: { text: string; onChange: (t: string) => void; onSave: () => void; onCancel: () => void }) {
+  return (
+    <div className="vn-note-edit">
+      <textarea value={text} autoFocus rows={4} onChange={(e) => onChange(e.target.value)} />
+      <div>
+        <button onClick={onCancel}>取消</button>
+        <button data-save="true" onClick={onSave}>保存</button>
+      </div>
     </div>
   );
 }

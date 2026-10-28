@@ -61,6 +61,8 @@ export type VnMessage = {
   chapterIndex: number;
   createdAt: string;
   frameAudio?: Record<number, VnFrameAudio>;
+  /** 场景 app：这一段的小总结（进在场每个人的短期记忆，侧边栏能改） */
+  summary?: string;
 };
 
 export type VnFrameAudio = {

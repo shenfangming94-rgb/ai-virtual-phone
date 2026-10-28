@@ -8,7 +8,8 @@ const errs = []; p.on("pageerror", e => errs.push(e.message)); p.on("console", m
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const asked = [];
 function reply(s) {
-  if (s.includes("把这场戏记下来")) return JSON.stringify({ summary: "她在汉江边碰到了韩智元，两个人坐着吃了泡面，聊了月考。", people: [{ name: "韩智元", event: "在汉江边和她一起吃泡面，聊月考压力", impression: "", relation: "up", heart: "same", secretLearned: "", status: "", kakao: "", stay: "stay", stayWhy: "跟她聊完轻松了点" }], video: null });
+  if (s.includes("把这场戏记下来")) return JSON.stringify({ summary: "她在汉江边碰到了韩智元，两个人坐着吃了泡面，聊了月考。", segments: ["晚上九点多，她拎着便利店的袋子走到汉江边，长椅上坐着一个人在听歌，是韩智元。他摘下一只耳机，往旁边挪了挪给她让座。", "韩智元的泡面还热着，问她听没听说这次月考要加 vocal 单项。她说听说了，有点慌，他笑了一下说自己更慌，高音一直上不去。", "两个人对着江面吃完了泡面。临走他说明天早上要不要一起去练习室占个位置，她答应了。"], people: [{ name: "韩智元", event: "在汉江边碰到她，把长椅让了一半给她，一起吃泡面。聊到月考加 vocal 单项，他承认自己高音上不去，约她明早一起去练习室占位置。", impression: "", relation: "up", heart: "same", secretLearned: "", status: "", kakao: "", stay: "stay", stayWhy: "跟她聊完轻松了点" }], video: null });
+  if (s.includes("合成一段完整的总结")) return "晚上她在汉江边碰到一个人听歌的韩智元，他让出半张长椅，分了她泡面。两个人聊到月考要加 vocal 单项，韩智元说自己高音一直上不去，比她还慌。吃完他约她明早一起去练习室占位置，她答应了。";
   if (s.includes("这一场的写法")) {
     asked.push(s);
     return `<content>
@@ -19,6 +20,7 @@ function reply(s) {
 韩智元|"坐吧，泡面还热着。月考的事，你听说了没？"
 </scene>
 </content>
+<summary>她拎着便利店袋子走到汉江边，碰到一个人坐着听歌的韩智元。他摘下耳机让出半张长椅，说泡面还热着，问她有没有听说月考的事。</summary>
 [时间:+20分钟]`;
   }
   return "{}";
@@ -64,25 +66,35 @@ await p.screenshot({ path: OUT + "/s2_sheet.png" });
 await p.evaluate(() => document.querySelector(".stg-go").click()); await sleep(1500);
 await p.screenshot({ path: OUT + "/s3_open.png" });
 await p.evaluate(() => document.querySelector(".vn-stage-open").click()); await sleep(500);
-// 输入第一句
-await p.evaluate(() => { const i = document.querySelector(".vn-input-field"); const set = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value").set; set.call(i, "拎着便利店的袋子走到江边"); i.dispatchEvent(new Event("input", { bubbles: true })); });
-await p.evaluate(() => document.querySelector('.vn-mode-btn:nth-child(2)').click());
-await p.evaluate(() => { const i = document.querySelector(".vn-input-field"); const set = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value").set; set.call(i, "拎着便利店的袋子走到江边"); i.dispatchEvent(new Event("input", { bubbles: true })); });
-await p.evaluate(() => [...document.querySelectorAll(".vn-send-btn")][0].click()); await sleep(200);
+// 输入第一句：打字直接发
+await p.evaluate(() => { const i = document.querySelector(".vn-input-field"); const set = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value").set; set.call(i, "……智元？你怎么一个人在这儿。"); i.dispatchEvent(new Event("input", { bubbles: true })); });
 await p.screenshot({ path: OUT + "/s4_input.png" });
-await p.evaluate(() => [...document.querySelectorAll(".vn-send-btn")][1].click()); await sleep(3500);
+await p.evaluate(() => [...document.querySelectorAll(".vn-send-btn")][1].click()); await sleep(500);
+await p.screenshot({ path: OUT + "/s4b_me.png" });
+await sleep(3500);
 await p.screenshot({ path: OUT + "/s5_reply.png" });
 for (let i = 0; i < 6; i++) { await p.evaluate(() => document.querySelector(".vn-shell").click()); await sleep(1400); }
 await p.screenshot({ path: OUT + "/s6_reply2.png" });
+await p.evaluate(() => document.querySelector('.vn-topbar-btn[title="每段总结"]').click()); await sleep(500);
+await p.screenshot({ path: OUT + "/s6b_notes.png" });
+await p.evaluate(() => [...document.querySelectorAll(".vn-notes-head button")][0].click()); await sleep(300);
 // 结束这一场
 await p.evaluate(() => document.querySelector('.vn-topbar-btn[title="结束这一场"]').click()); await sleep(300);
 await p.evaluate(() => [...document.querySelectorAll(".vn-end-btn")].find(x => x.textContent.includes("确认")).click()); await sleep(2500);
 await p.screenshot({ path: OUT + "/s7_end.png" });
+await p.evaluate(() => document.querySelector(".vn-stage-merge").click()); await sleep(1500);
+await p.screenshot({ path: OUT + "/s7b_big.png" });
+await p.evaluate(() => [...document.querySelectorAll(".vn-notes-head button")][0].click()); await sleep(300);
 await p.evaluate(() => [...document.querySelectorAll(".vn-end-btn")].find(x => x.textContent.includes("就这样")).click()); await sleep(800);
 const people = await p.evaluate(async () => {
   const db = await new Promise(res => { const r = indexedDB.open("AiPhoneKvDB"); r.onsuccess = () => res(r.result); });
   const v = await new Promise(res => { const r = db.transaction("entries").objectStore("entries").get("idol_people_v1"); r.onsuccess = () => res(r.result?.value); });
   return JSON.parse(v || "{}").c1?.events;
+});
+const stm = await p.evaluate(async () => {
+  const db = await new Promise(res => { const r = indexedDB.open("AiPhoneKvDB"); r.onsuccess = () => res(r.result); });
+  const v = await new Promise(res => { const r = db.transaction("entries").objectStore("entries").get("idol_stage_scenes_v1"); r.onsuccess = () => res(r.result?.value); });
+  return Object.values(JSON.parse(v || "{}")).map(x => ({ ids: x.ids, n: x.segments?.length }));
 });
 // 有地图图片：上传 + 摆两个钉子
 if (MAP) {
@@ -120,5 +132,5 @@ await p.screenshot({ path: OUT + "/s13_songs.png" });
 await p.evaluate(() => [...document.querySelectorAll(".stg-seg button")][1].click()); await sleep(500);
 await p.screenshot({ path: OUT + "/s14_netease.png" });
 const icons = await p.evaluate(() => { const all = [...document.querySelectorAll("*")].filter(e => e.children.length === 0 && e.textContent.trim() === "此刻"); return all.length; });
-console.log(JSON.stringify({ icons, errs, people, promptHasAvoid: asked.find(a => a.includes("这一场的写法"))?.includes("【这一场不出场的人】金智妍"), promptHasHan: asked.find(a => a.includes("这一场的写法"))?.includes("## 韩智元"), asked: asked.map(a => a.slice(0, 120)) }, null, 1));
+console.log(JSON.stringify({ stm, icons, errs, people, promptHasAvoid: asked.find(a => a.includes("这一场的写法"))?.includes("【这一场不出场的人】金智妍"), promptHasHan: asked.find(a => a.includes("这一场的写法"))?.includes("## 韩智元"), asked: asked.map(a => a.slice(0, 120)) }, null, 1));
 await b.close();

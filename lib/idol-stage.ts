@@ -9,7 +9,10 @@
 
 import { kvGet, kvSet } from "./kv-db";
 import { WORLD_CHAR_ID, closeSceneWith, ensureWorldCharacter, worldPromptFor, type SceneCloseResult, type SceneHost, type SceneMeta } from "./idol-world";
-import { createOrGetVnSession, loadVnMessagesForChapter, startNewChapter, archiveChapter, type VnSession } from "./vn-storage";
+import { createOrGetVnSession, loadVnMessagesForChapter, startNewChapter, archiveChapter, updateVnMessageSummary, type VnSession } from "./vn-storage";
+import { simpleLLMCall } from "./api-helpers";
+import { resolveVnConfigs } from "./vn-engine";
+import { formatChatTimestamp } from "./llm-prompt-assembler";
 import { parseVnResponse } from "./vn-parser";
 import { companyOf, loadCareer, nodeById, type CareerNode } from "./idol-career";
 import { fmtWorld } from "./idol-scenes";
@@ -139,6 +142,8 @@ export type StageScene = SceneMeta & {
   ids: string[];
   /** 不想碰见的人（名字） */
   avoid?: string[];
+  /** 结束后她点了「合成大总结」：短期记忆里用这一段代替每段的小总结 */
+  bigSummary?: string;
 };
 
 const SCENES_KEY = "idol_stage_scenes_v1";
@@ -239,6 +244,7 @@ export function buildStagePrompt(chapterIndex: number): string {
 - **绝不替她说话、不写她的动作和心理**。写到需要她回应的地方就停，最后一帧落在别人的话或一个需要她反应的情况上。
 - 剧情要自己往前走：别人有自己的目的和情绪，会主动开口、提要求、出状况，不要只是等她。
 - 这一场不用立绘：<scene> 里不写 sprite。
+- 这一场要写小总结（跟上面说的禁止 <summary> 相反，以这里为准）：</content> 后面另起一行写 <summary>…</summary>。${SUMMARY_RULE}
 - bg 写地点：只能从这些里选（写原样）：${places.join("、")}。她还在原地就不写 bg；她走去别处了，第一帧写新地点的 bg。
 - 她刚到「${scene.place}」${scene.premise ? `，这一场是：${scene.premise}` : ""}。${scene.open ? "这会儿谁在这里交给你按时间地点判断。" : ""}`,
   ].filter(Boolean).join("\n\n");
@@ -293,4 +299,88 @@ export function takePendingStage(): { nodeId: string } | null {
   } catch {
     return null;
   }
+}
+
+// ── 每段的小总结 ──
+
+/** 这一章每段（AI 的每次回复）和它的小总结 */
+export function chapterSummaries(chapterIndex: number): { id: string; at: string; summary: string; preview: string }[] {
+  const session = worldVnSession();
+  return loadVnMessagesForChapter(session.id, chapterIndex)
+    .filter(m => m.role === "assistant")
+    .map(m => ({ id: m.id, at: m.createdAt, summary: (m.summary ?? "").trim(), preview: frameText(m.rawContent, "assistant").replace(/\s+/g, " ").slice(0, 60) }));
+}
+
+export function editSummary(messageId: string, text: string): void {
+  updateVnMessageSummary(messageId, text.trim());
+}
+
+/** 补写某一段的小总结（模型忘了写的时候） */
+export async function writeSummaryFor(chapterIndex: number, messageId: string): Promise<string> {
+  const session = worldVnSession();
+  const msgs = loadVnMessagesForChapter(session.id, chapterIndex);
+  const i = msgs.findIndex(m => m.id === messageId);
+  if (i < 0) throw new Error("找不到这一段");
+  const before = msgs.slice(Math.max(0, i - 1), i).filter(m => m.role === "user").map(m => frameText(m.rawContent, "user"));
+  const text = [...before, frameText(msgs[i].rawContent, "assistant")].join("\n");
+  const { apiConfig } = resolveVnConfigs(WORLD_CHAR_ID);
+  const res = await simpleLLMCall(apiConfig, [
+    { role: "system", content: SUMMARY_RULE },
+    { role: "user", content: text },
+  ], { temperature: 0.3, label: "此刻小总结" });
+  const out = (res.content ?? "").replace(/<\/?summary>/g, "").trim();
+  if (!out) throw new Error(res.error || "AI 没回");
+  updateVnMessageSummary(messageId, out);
+  return out;
+}
+
+export const SUMMARY_RULE = "用两三句写这一段发生了什么：谁说了什么、做了什么，她说了什么、做了什么，气氛怎么变。第三人称（她、人名），写具体的话和动作，不写空泛的形容。只输出这段话。";
+
+/** 结束后：把这一场的小总结合成一段大总结，短期记忆里用它代替那些小的 */
+export async function mergeSummaries(chapterIndex: number): Promise<string> {
+  const chId = chapterIdOf(chapterIndex);
+  const scene = chId ? getStageScene(chId) : null;
+  if (!scene) throw new Error("找不到这一场");
+  const parts = chapterSummaries(chapterIndex).map(x => x.summary).filter(Boolean);
+  if (!parts.length) throw new Error("这一场还没有小总结");
+  const { apiConfig } = resolveVnConfigs(WORLD_CHAR_ID);
+  const res = await simpleLLMCall(apiConfig, [
+    { role: "system", content: "把下面按顺序的几段小总结合成一段完整的总结，四到八句，保留关键的话、动作和关系变化，第三人称（她、人名）。只输出这段话。" },
+    { role: "user", content: `地点：${scene.place}\n${parts.join("\n")}` },
+  ], { temperature: 0.3, label: "此刻大总结" });
+  const out = (res.content ?? "").trim();
+  if (!out) throw new Error(res.error || "AI 没回");
+  saveStageScene({ ...scene, bigSummary: out });
+  return out;
+}
+
+export function setBigSummary(chapterIndex: number, text: string | null): void {
+  const chId = chapterIdOf(chapterIndex);
+  const scene = chId ? getStageScene(chId) : null;
+  if (!scene) return;
+  const next = { ...scene };
+  if (text?.trim()) next.bigSummary = text.trim(); else delete next.bigSummary;
+  saveStageScene(next);
+}
+
+/** 短期记忆：她和这个人一起过的场景，每段小总结一条（跟剧情 app 一样）；合成过大总结的那一场只放大总结 */
+export function loadStageProjectionEntries(characterId: string, options?: { afterTimestamp?: string }): { id: string; timestamp: string; content: string }[] {
+  const all = loadScenes();
+  const session = worldVnSession();
+  const out: { id: string; timestamp: string; content: string }[] = [];
+  for (const ch of session.chapters) {
+    const sc = all[ch.id];
+    if (!sc || !sc.ids.includes(characterId)) continue;
+    const msgs = loadVnMessagesForChapter(session.id, ch.index).filter(m => m.role === "assistant");
+    const push = (id: string, ts: string, text: string) => {
+      if (options?.afterTimestamp && ts <= options.afterTimestamp) return;
+      out.push({ id, timestamp: ts, content: `[事件 ${formatChatTimestamp(ts)}] 在${sc.place}：${text}` });
+    };
+    if (sc.bigSummary) {
+      push(`stage_projection_${ch.id}`, msgs[msgs.length - 1]?.createdAt ?? new Date(sc.startAt).toISOString(), sc.bigSummary);
+      continue;
+    }
+    for (const m of msgs) if (m.summary?.trim()) push(`stage_projection_${m.id}`, m.createdAt, m.summary.trim());
+  }
+  return out.sort((a, b) => a.timestamp.localeCompare(b.timestamp));
 }

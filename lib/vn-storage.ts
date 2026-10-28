@@ -167,6 +167,14 @@ export function pushVnMessage(
   return message;
 }
 
+export function updateVnMessageSummary(messageId: string, summary: string): void {
+  const idx = _messagesCache.findIndex((m) => m.id === messageId);
+  if (idx === -1) return;
+  const next = { ..._messagesCache[idx], summary };
+  _messagesCache[idx] = next;
+  vnDb.messages.put(next).catch(() => undefined);
+}
+
 export function deleteVnMessage(messageId: string): void {
   _messagesCache = _messagesCache.filter((m) => m.id !== messageId);
   vnDb.messages.delete(messageId).catch(() => undefined);

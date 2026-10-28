@@ -14,6 +14,7 @@ import { estimateTokens } from "./token-counter";
 import { loadStoryProjectionEntries } from "./story-storage";
 import { buildTwoLevelMomentThreads } from "./moments-comment-threading";
 import { loadVnProjectionEntries } from "./vn-storage";
+import { loadStageProjectionEntries } from "./idol-stage";
 import { loadMapProjectionEntries, loadMapSharedProjectionEntries } from "./map-storage";
 import { loadGameProjectionEntries } from "./game-storage";
 import { loadDiaryEntries } from "./diary-entry-storage";
@@ -595,6 +596,21 @@ export function loadNativeTimeline(
             content: formatStoredPromptEventContent(vnEntry.content, {
                 label: "事件",
                 timestamp: vnEntry.timestamp,
+                timeAware,
+                timestampOptions,
+            }),
+        });
+    }
+
+    // ── 场景 app「此刻」：她和他一起过的场景，按段进记忆 ──
+    for (const stageEntry of loadStageProjectionEntries(characterId, { afterTimestamp: options?.afterTimestamp })) {
+        entries.push({
+            id: stageEntry.id,
+            sourceApp: "vn",
+            timestamp: stageEntry.timestamp,
+            content: formatStoredPromptEventContent(stageEntry.content, {
+                label: "事件",
+                timestamp: stageEntry.timestamp,
                 timeAware,
                 timestampOptions,
             }),

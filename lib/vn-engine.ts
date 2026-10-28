@@ -40,6 +40,8 @@ export type VnGenerationResult = {
   presetName: string;
   /** 场景 app（「世界」）：新加的人、给她看的提示、这一场是不是收尾了 */
   idol?: { added: string[]; notes: string[]; closing: boolean };
+  /** 场景 app：这一段的小总结 */
+  summary?: string;
 };
 
 function buildVnBilingualInstruction(enabled: boolean, customPrompt?: string): string {
@@ -126,7 +128,11 @@ export async function generateVnCompletion(
   });
 
   let idol: VnGenerationResult["idol"];
+  let summary: string | undefined;
   if (isWorld && sceneChapter !== undefined) {
+    const sm = rawOutput.match(/<summary>([\s\S]*?)<\/summary>/i);
+    if (sm) summary = sm[1].trim();
+    rawOutput = rawOutput.replace(/<summary>[\s\S]*?<\/summary>/gi, "").trim();
     const ex = extractSceneTags(rawOutput);
     rawOutput = ex.text;
     const chId = chapterIdOf(sceneChapter);
@@ -137,6 +143,7 @@ export async function generateVnCompletion(
   const parsed = parseVnResponse(rawOutput);
   return {
     idol,
+    summary,
     rawText: parsed.rawText,
     frames: parsed.frames,
     options: parsed.options,

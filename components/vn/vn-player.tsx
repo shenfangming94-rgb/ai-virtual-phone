@@ -29,6 +29,7 @@ import { splitBilingualText } from "@/lib/bilingual-text";
 import { addBackground, addCustomPlace, allMaps, pickBackground, placeBackgrounds, resolveStageBgMap, thumbsOf, chapterIdOf, chapterSummaries, closeStageScene, editSummary, getStageScene, mergeSummaries, placeLocked, setBigSummary, writeSummaryFor } from "@/lib/idol-stage";
 import { jumpWorld } from "@/lib/idol-reminders";
 import { fmtWorld } from "@/lib/idol-scenes";
+import { subscribeWorldClock } from "@/lib/world-clock";
 import type { SceneCloseResult } from "@/lib/idol-world";
 import { loadBgmMuted, saveBgmMuted, useStageBgm } from "./stage-bgm";
 import { forgetRetryHint, loadRetryHints, rememberRetryHint } from "@/lib/reply-versions";
@@ -105,6 +106,14 @@ export function VnPlayer({ characterId, chapterIndex, onClose, onChapterEnd, vnT
   const [stageToast, setStageToast] = useState("");
   const [bgmMuted, setBgmMuted] = useState(() => loadBgmMuted());
   const [notesOpen, setNotesOpen] = useState(false);
+  const [clockOpen, setClockOpen] = useState(false);
+  const [worldNow, setWorldNow] = useState(() => Date.now());
+  useEffect(() => {
+    if (!stage) return;
+    const t = window.setInterval(() => setWorldNow(Date.now()), 15e3);
+    const off = subscribeWorldClock(() => setWorldNow(Date.now()));
+    return () => { window.clearInterval(t); off(); };
+  }, [stage]);
   const [retryTarget, setRetryTarget] = useState<string | null>(null);
   const [retryHint, setRetryHint] = useState("");
   const [retryHints, setRetryHints] = useState<string[]>([]);
@@ -994,7 +1003,8 @@ export function VnPlayer({ characterId, chapterIndex, onClose, onChapterEnd, vnT
   };
 
   return (
-    <div className="vn-shell" ref={vnShellRef} data-vn-theme={vnTheme || "default"} onClick={() => {
+    <div className="vn-shell" ref={vnShellRef} data-vn-theme={vnTheme || "default"} data-stage={stage ? "true" : undefined} onClick={() => {
+      if (clockOpen) { setClockOpen(false); return; }
       if (historyOpen || showArchiveConfirm || showReplayConfirm || showScenePicker || showBeatsPanel || stageEnd || notesOpen || retryTarget) return;
       if (stageOpening) { setStageOpening(false); return; }
       if (isReplaying) { advanceReplay(); return; }
@@ -1053,6 +1063,12 @@ export function VnPlayer({ characterId, chapterIndex, onClose, onChapterEnd, vnT
         <button className="vn-topbar-btn" onClick={onClose}>
           <ArrowLeft size={20} />
         </button>
+        {stage && (
+          <button className="vn-clock" onClick={() => setClockOpen(v => !v)} title="世界时间">
+            <b>{String(new Date(worldNow).getHours()).padStart(2, "0")}:{String(new Date(worldNow).getMinutes()).padStart(2, "0")}</b>
+            <span>{new Date(worldNow).getMonth() + 1}月{new Date(worldNow).getDate()}日 周{"日一二三四五六"[new Date(worldNow).getDay()]}</span>
+          </button>
+        )}
         <div className="vn-topbar-right">
           {stage && (
             <button className="vn-topbar-btn" onClick={() => { const v = !bgmMuted; setBgmMuted(v); saveBgmMuted(v); }} title={bgmMuted ? "打开音乐" : "关掉音乐"}>
@@ -1585,6 +1601,18 @@ export function VnPlayer({ characterId, chapterIndex, onClose, onChapterEnd, vnT
               <button onClick={() => { const id = retryTarget; setRetryTarget(null); void handleMsgRetry(id); }}>直接重roll</button>
               <button data-main="true" disabled={!retryHint.trim()} onClick={() => { const id = retryTarget; const h = retryHint; setRetryTarget(null); void handleMsgRetry(id, h); }}>按这个改</button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── 场景 app：手动拨时间 ── */}
+      {stage && clockOpen && (
+        <div className="vn-clock-pop" onClick={(e) => e.stopPropagation()}>
+          <span>剧情里过了多久？</span>
+          <div>
+            {[[5, "+5 分"], [15, "+15 分"], [30, "+30 分"], [60, "+1 小时"], [180, "+3 小时"]].map(([m, label]) => (
+              <button key={m} onClick={() => { const msg = jumpWorld(Date.now() + Number(m) * 60e3); setWorldNow(Date.now()); setClockOpen(false); if (msg) showStageToast(msg); }}>{label}</button>
+            ))}
           </div>
         </div>
       )}

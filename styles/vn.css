@@ -996,3 +996,41 @@
 .vn-place-custom input { flex: 1; min-width: 0; padding: 10px 12px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.15); background: rgba(255,255,255,0.06); color: var(--vn-ui-text); font: inherit; font-size: calc(14px*var(--app-text-scale,1)); }
 .vn-place-custom button { padding: 0 16px; border-radius: 10px; border: 0; background: rgba(201,184,255,0.28); color: var(--vn-ui-text); cursor: pointer; }
 .vn-place-custom button:disabled { opacity: 0.4; }
+
+/* 此刻的字：旁白台词京华老宋体（摆正、带一点发光），名字思源宋体加粗 */
+.vn-shell[data-stage] .vn-text,
+.vn-shell[data-stage] .vn-text * {
+  font-family: "KingHwa_OldSong", "Songti SC", "STSong", serif;
+  font-style: normal;
+  font-weight: 400;
+  text-shadow: 0 0 8px rgba(255,255,255,0.28), 0 1px 2px rgba(0,0,0,0.65);
+}
+.vn-shell[data-stage] .vn-text-narration { font-style: normal; }
+.vn-shell[data-stage] .vn-name {
+  font-family: "Source Han Serif CN VF", "Songti SC", serif;
+  font-weight: 900;
+  text-shadow: 0 0 8px rgba(255,255,255,0.28), 0 1px 2px rgba(0,0,0,0.65);
+}
+
+/* 此刻的字：旁白台词京华老宋体（摆正、带一点发光），名字思源宋体加粗 */
+.vn-shell[data-stage] .vn-text,
+.vn-shell[data-stage] .vn-text * {
+  font-family: "KingHwa_OldSong", "Songti SC", "STSong", serif;
+  font-style: normal;
+  font-weight: 400;
+  text-shadow: 0 0 8px rgba(255,255,255,0.28), 0 1px 2px rgba(0,0,0,0.65);
+}
+.vn-shell[data-stage] .vn-text-narration { font-style: normal; }
+.vn-shell[data-stage] .vn-name {
+  font-family: "Source Han Serif CN VF", "Songti SC", serif;
+  font-weight: 900;
+  text-shadow: 0 0 8px rgba(255,255,255,0.28), 0 1px 2px rgba(0,0,0,0.65);
+}
+
+/* 此刻：左上角世界时间（美化之后再说） */
+.vn-clock { display: flex; flex-direction: column; align-items: flex-start; margin-left: 6px; padding: 2px 8px; border: 0; border-radius: 10px; background: rgba(0,0,0,0.22); color: #fff; cursor: pointer; line-height: 1.15; text-shadow: 0 1px 2px rgba(0,0,0,0.5); }
+.vn-clock b { font-size: calc(17px*var(--app-text-scale,1)); font-weight: 600; letter-spacing: 0.04em; }
+.vn-clock span { font-size: calc(10.5px*var(--app-text-scale,1)); opacity: 0.85; }
+.vn-clock-pop { position: absolute; z-index: 22; left: 16px; top: calc(var(--page-header-safe-top, 44px) + 54px); padding: 12px; border-radius: 14px; background: rgba(24,20,32,0.94); color: var(--vn-ui-text); display: flex; flex-direction: column; gap: 8px; font-size: calc(12px*var(--app-text-scale,1)); animation: vn-stage-fade 0.2s ease; }
+.vn-clock-pop div { display: flex; flex-wrap: wrap; gap: 6px; max-width: 230px; }
+.vn-clock-pop button { padding: 6px 12px; border-radius: 999px; border: 1px solid rgba(255,255,255,0.18); background: none; color: inherit; font-size: calc(13px*var(--app-text-scale,1)); cursor: pointer; }

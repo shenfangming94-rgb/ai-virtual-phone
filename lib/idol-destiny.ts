@@ -2,7 +2,7 @@
  * 爱豆小手机：命运（星路图鉴）。规矩见 docs/idol/destiny.md 第 3 节。
  *
  * - 签了公司以后一次 AI 调用写好 8 个，练习生时期就这 8 个，不补。清单她看不到
- * - 每个是彩蛋：平常练习生生活碰不到的机会。触发条件从代码给的几种里选，节奏代码管（分散到整个练习生时期，三周没来就保底推一个）
+ * - 每个是彩蛋：平常练习生生活碰不到的机会。触发条件从代码给的几种里选，节奏代码管（分散到整个练习生时期，两个至少隔一个月，再多两周没来就保底推一个）
  * - 来法：KakaoTalk（陌生人加她 / 认识的人私聊 / 室长 / 家里人）或此刻地图上冒「!」（发横幅，挂一周）
  * - 触发那一刻图鉴就翻开（去不去都翻）；要她去哪儿就进提醒事项待回复
  */
@@ -26,8 +26,10 @@ const MIN = 60e3;
 const HOUR = 60 * MIN;
 const DAY = 24 * HOUR;
 export const DESTINY_EVENT = "idol-destiny-changed";
-/** 三周一个都没来就保底 */
-const DROUGHT = 21 * DAY;
+/** 两个命运至少隔多久：一个月；练习生时期太短（八个排不下）就缩，最短半个月 */
+function gapDays(): number { return Math.max(15, Math.min(30, Math.floor(traineeSpan() / DAY / 9))) * DAY; }
+/** 隔了这么久还一个都没来就保底 */
+const drought = () => gapDays() + 14 * DAY;
 
 export const CARD_COLORS = ["#E4E0AA", "#E8CBC5", "#C9DCC6", "#C6D4E0", "#D4CCE1", "#EBD4B6", "#CCD3B2", "#DED6CB"];
 
@@ -328,9 +330,9 @@ export function destinyStops(): { at: number; title: string }[] {
   if (!s || loadCareer().stage !== "trainee") return [];
   const left = s.cards.filter(c => !c.firedAt);
   if (!left.length) return [];
-  const timed = left.filter(c => c.trigger.type === "time").map(c => Math.max(c.earliestAt, s.lastFiredAt + 5 * DAY));
-  const drought = Math.max(s.lastFiredAt + DROUGHT, Math.min(...left.map(c => c.earliestAt)));
-  const at = Math.min(...timed, drought);
+  const timed = left.filter(c => c.trigger.type === "time").map(c => Math.max(c.earliestAt, s.lastFiredAt + gapDays()));
+  const late = Math.max(s.lastFiredAt + drought(), Math.min(...left.map(c => c.earliestAt)));
+  const at = Math.min(...timed, late);
   return Number.isFinite(at) ? [{ at, title: "好像有什么事要发生" }] : [];
 }
 
@@ -352,10 +354,10 @@ export function destinyTick(notify: (m: string) => void): void {
     return;
   }
   const left = s.cards.filter(c => !c.firedAt && c.earliestAt <= now);
-  // 两个命运之间至少隔五天
-  if (!left.length || now - s.lastFiredAt < 5 * DAY) return;
+  // 两个命运之间至少隔一个月（练习生时期短的最短半个月）
+  if (!left.length || now - s.lastFiredAt < gapDays()) return;
   let pick = left.filter(met).sort((a, b) => a.earliestAt - b.earliestAt)[0];
-  if (!pick && now - s.lastFiredAt >= DROUGHT) pick = left.sort((a, b) => a.earliestAt - b.earliestAt)[0];
+  if (!pick && now - s.lastFiredAt >= drought()) pick = left.sort((a, b) => a.earliestAt - b.earliestAt)[0];
   if (!pick) return;
   busy = true;
   void fire(pick, s, notify).catch(() => undefined).finally(() => { busy = false; });

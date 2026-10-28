@@ -586,4 +586,4 @@ Flora 要一个专门玩「爱豆模拟器」的小手机：她是想当爱豆�
 - **命运**（`lib/idol-destiny.ts`，kv `idol_destiny_v1`）：签约一天后 `destinyTick` 一次 AI 生成 8 个（失败 30 分钟后重试）；`earliestAt` 按练习生证「练多久」分散；两个之间至少 5 天；条件 time/grade/place/fame；三周没来保底；`destinyStops` 进 capJump。来法 new（进「新的朋友」，人物「你们的事」里写他为什么找她）/ friend / teacher / family（`queueMessage`）/ stage（地点钉子冒「!」挂 7 天 + 横幅「◐ 此刻：X好像有什么不一样」，点进去 `takeDestinyMark` 当开场）。有 meet 就建 `chance` 待回复。触发即翻卡
 - **管理老师 → 室长**：代码里所有说法都改了（旧存档里已经叫「管理老师」的人物名不动）
 - 测试：`docs/idol/tests/sr1.mjs`（课表、旷课、作业、加练、截图）、`fate1.mjs`（生成、翻卡、感叹号、陌生人、待回复）。都是假 AI
-- **还没做**：进出道组换课表；发动机临时调课/外聘老师；公司内部档案（AI 写的「一周作息」）可能跟代码课表对不上；命运 friend 来法 AI 选的人如果后来离开公司没处理；她真 API 没试过
+- **还没做**：进出道组换课表；发动机临时调课/外聘老师；命运 friend 来法 AI 选的人如果后来离开公司没处理；她真 API 没试过

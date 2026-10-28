@@ -18,6 +18,7 @@ import { createPerson, draftPerson, draftFields, emptyProfile, getProfile, rollF
 import { genKakaoId, queueFriendRequest } from "./idol-kakao";
 import { loadGrades, SUBJECTS, type Subject } from "./idol-starroad";
 import { allScenePlaces } from "./idol-stage";
+import { ENGINE_EVENTS } from "./idol-events";
 
 const KEY = "idol_destiny_v1";
 const MIN = 60e3;
@@ -38,6 +39,8 @@ export type Trigger =
 
 export type Destiny = {
   id: string;
+  /** big 改变走向 / mid 新的人或圈子 / small 小确幸 */
+  size?: "big" | "mid" | "small";
   title: string;
   en: string;
   /** 给触发时的 AI 看的一句 */
@@ -128,8 +131,12 @@ async function generate(): Promise<State | null> {
   const res = await simpleLLMCall(chatConfig(), [
     { role: "system", content: [
       "你在给一个韩国练习生女孩写她练习生时期命运里的八个彩蛋。只输出 JSON：{\"cards\":[…8 个…]}",
-      "每个彩蛋是一次她照平常练习生生活根本碰不到、自己也想不到的机会或奇遇，要从她的家境、公司、特长、性格里长出来，换一个人就不会发生。",
-      "不许写练习进步、加关注度、升级、排名、出道组、伴舞、录 demo 这类顺理成章的事；不许决定她能不能出道；八个味道互不相同，有的大有的小，有暖有险。",
+      "彩蛋是她照平常练习生的日子根本碰不到、自己去哪儿找谁都安排不出来的意想不到的事，要从她的家境、公司、特长、性格里长出来，换一个人就不会发生。",
+      "八个分三种，size 写清楚：big 两个，会改变她这段练习生日子的走向，牵出持续几个月的一条线；mid 三个，给她带来一个练习生圈子以外的重要的人或一个新的圈子，之后会来往好几周；small 三个，小确幸，分量不大但温暖、让人记很久。",
+      "big 和 mid 必须是一扇门，之后还能接着往下走，不是见一面聊一次就完。",
+      `下面这些是她平常日子里本来就会发生的事，跟这些重了、或者只是换个说法的都不算彩蛋：${ENGINE_EVENTS}`,
+      "也不许写练习进步、升级、排名、出道组、关注度上涨，不许决定她能不能出道。画风跟这部戏一致，写实的韩国娱乐圈和首尔日常。",
+      "先在心里想十二个，只输出其中最意想不到、最只属于她的八个，八个互不相同。",
       "每个字段：",
       "title：卡片标题，中文 2～8 个字，像小卡上的名字，不写过程",
       "en：配一行英文，2～4 个词，小写",
@@ -139,7 +146,8 @@ async function generate(): Promise<State | null> {
       "hello：via=new 时他加她说的第一句，其余写空",
       `place：via=stage 时从这些地点里选一个（照原样）：${places.join("、")}；其余写空`,
       "meet：要约她去哪儿见谁就写 {\"title\":\"提醒事项里的标题\",\"place\":\"地点\",\"days\":几天后,\"hour\":几点}，不用约就写 null",
-      `trigger：从这几种里选最合适的：{"type":"time"}（到时候就来）、{"type":"grade","subject":"${SUBJECTS.map(s => s.id).join("/")}","grade":"C/B/A"}（某门课升到某档）、{"type":"place","place":"上面的地点","times":2～4}（去过某地几次）、{"type":"fame","level":20～60}（有了一点名气）。time 占一半左右`,
+      "size：big / mid / small",
+      `trigger：从这几种里选最合适的：{"type":"time"}（到时候就来）、{"type":"grade","subject":"${SUBJECTS.map(s => s.id).join("/")}","grade":"C/B/A"}（某门课升到某档）、{"type":"place","place":"上面的地点","times":2～4}（去过某地几次）、{"type":"fame","level":20～60}（有了一点名气）。time 占一半左右；选 place 的，这件事必须跟那个地方本身有关系`,
     ].join("\n") },
     { role: "user", content: [
       describeTrainee(card),
@@ -165,7 +173,7 @@ async function generate(): Promise<State | null> {
     const place = via === "stage" ? (places.includes(String(x.place)) ? String(x.place) : "便利店") : undefined;
     const meet = x.meet && x.meet.title ? { title: String(x.meet.title), place: String(x.meet.place || ""), days: Math.max(1, Math.min(14, Number(x.meet.days) || 3)), hour: Math.max(8, Math.min(22, Number(x.meet.hour) || 19)) } : undefined;
     return {
-      id: uid("fate"), title: String(x.title).slice(0, 12), en: String(x.en || "").toLowerCase().slice(0, 30), seed: String(x.seed),
+      id: uid("fate"), size: (["big", "mid", "small"].includes(String(x.size)) ? x.size : "mid") as Destiny["size"], title: String(x.title).slice(0, 12), en: String(x.en || "").toLowerCase().slice(0, 30), seed: String(x.seed),
       via, who: via === "stage" ? undefined : { name: String(x.who?.name || ""), role: String(x.who?.role || "") },
       hello: x.hello ? String(x.hello) : undefined, place, meet, trigger,
       earliestAt: start + 14 * DAY + ((i + 0.4) / 8) * span + (Math.random() - 0.5) * 12 * DAY,

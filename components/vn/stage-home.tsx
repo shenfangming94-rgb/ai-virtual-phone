@@ -8,7 +8,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ChevronLeft, MoreHorizontal, X, Lock, Music2, VolumeX, Image as ImageIcon, Check, Search, Play } from "lucide-react";
 import {
-  DEFAULT_MAPS, STAGE_APP_NAME, STAGE_OPEN_EVENT, loadBgmMap, loadBgmModes, loadMapLooks, loadStageSettings, mapById, mapBgmKey, mapOfPlace, openStageScenes, pastStageScenes, placeLocked,
+  DEFAULT_MAPS, addBackground, addCustomPlace, loadCustomPlaces, pickBackground, placeBackgrounds, removeBackground, removeCustomPlace, thumbsOf, STAGE_APP_NAME, STAGE_OPEN_EVENT, loadBgmMap, loadBgmModes, loadMapLooks, loadStageSettings, mapById, mapBgmKey, mapOfPlace, openStageScenes, pastStageScenes, placeLocked,
   saveBgmFor, saveBgmMode, saveMapLook, saveStageSettings, startNodeStage, startStageScene, takePendingStage, type BgmMode, type BgmSong, type MapLook, type StagePlace, type StageSettings,
 } from "@/lib/idol-stage";
 import { loadBgmMuted, saveBgmMuted, setStageBgmVolume, useStageBgm } from "./stage-bgm";
@@ -16,7 +16,6 @@ import { WORLD_CHAR_ID } from "@/lib/idol-world";
 import { nodeById } from "@/lib/idol-career";
 import { loadProfiles, relationOf } from "@/lib/idol-people";
 import { loadAllCharacters } from "@/lib/character-storage";
-import { addVnScene, deleteVnScene, loadVnScenes, resolveVnAssetMap } from "@/lib/vn-asset-storage";
 import { getThemeAssetMap, saveThemeAssetFromBlob } from "@/lib/theme-storage";
 import { generateTrackId, getAudioDuration, loadAllTracks, parseFilename, saveTrack, type MusicTrack } from "@/lib/music-storage";
 import { getPlaylistTracks, getUserPlaylists, isNeteaseConfigured, searchNetease, type NeteasePlaylist, type NeteaseSearchResult } from "@/lib/music-service";
@@ -67,6 +66,8 @@ export function StageHome({ onClose, onPlay }: Props) {
   const [bgmVer, setBgmVer] = useState(0);
   const [mapMusic, setMapMusic] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [writing, setWriting] = useState<string | null>(null);
+  const [mineOpen, setMineOpen] = useState(false);
   useStageBgm(mapBgmKey(mapId), muted, bgmVer);
 
   // 别的 app 让这里开一场（提醒事项「去演」、横幅）
@@ -166,7 +167,6 @@ export function StageHome({ onClose, onPlay }: Props) {
               <span><b>继续：{s.title}</b><small>{s.subtitle}</small></span>
             </button>
           ))}
-          <button type="button" className="stg-past-btn" onClick={() => setPastOpen(true)}>以前的场景</button>
         </div>
       )}
 
@@ -186,6 +186,9 @@ export function StageHome({ onClose, onPlay }: Props) {
             {mapUrl ? <button type="button" className="stg-danger" onClick={() => { setMenu(false); updateLook({ pins: saved.imageAssetId ? {} : saved.pins, noImage: true }); }}>不用图片，用卡片</button> : null}
             <button type="button" onClick={() => { setMenu(false); setMapMusic(true); }}>这张地图的音乐</button>
             <button type="button" onClick={() => { setMenu(false); setSettingsOpen(true); }}>{STAGE_APP_NAME}设置</button>
+            <button type="button" onClick={() => { setMenu(false); setWriting(""); }}>自己写一个地点</button>
+            {loadCustomPlaces().length ? <button type="button" onClick={() => { setMenu(false); setMineOpen(true); }}>我的地点</button> : null}
+            <button type="button" onClick={() => { setMenu(false); setPastOpen(true); }}>以前的场景</button>
             <button type="button" className="stg-cancel" onClick={() => setMenu(false)}>取消</button>
           </div>
         </div>
@@ -210,6 +213,40 @@ export function StageHome({ onClose, onPlay }: Props) {
       ) : null}
 
       {settingsOpen ? <SettingsSheet onClose={() => setSettingsOpen(false)} /> : null}
+
+      {writing !== null ? (
+        <div className="stg-mask" onClick={() => setWriting(null)}>
+          <form className="stg-sheet stg-write" onClick={e => e.stopPropagation()} onSubmit={e => {
+            e.preventDefault();
+            if (!writing.trim()) return;
+            const pl = addCustomPlace(writing);
+            setWriting(null);
+            setSheet(pl);
+          }}>
+            <div className="stg-picker-head"><b>自己写一个地点</b><button type="submit" className="stg-done" disabled={!writing.trim()}>下一步</button></div>
+            <p className="stg-tip stg-tip-l">写好会存进「我的地点」，不会放到地图上</p>
+            <input className="stg-write-in" value={writing} onChange={e => setWriting(e.target.value)} placeholder="比如：智元家楼下、济州岛的民宿" maxLength={20} autoFocus />
+          </form>
+        </div>
+      ) : null}
+
+      {mineOpen ? (
+        <div className="stg-mask" onClick={() => setMineOpen(false)}>
+          <div className="stg-sheet stg-picker" onClick={e => e.stopPropagation()}>
+            <div className="stg-picker-head"><b>我的地点</b><button type="button" className="stg-done" onClick={() => setMineOpen(false)}>完成</button></div>
+            <ul className="stg-tracks">
+              {loadCustomPlaces().map(pl => (
+                <li key={pl.key} onClick={() => { setMineOpen(false); setSheet(pl); }}>
+                  <span>{pl.label}</span>
+                  <button type="button" onClick={e => { e.stopPropagation(); removeCustomPlace(pl.key); bump(n => n + 1); }}>删掉</button>
+                </li>
+              ))}
+            </ul>
+            {!loadCustomPlaces().length ? <p className="stg-empty">还没有</p> : null}
+            <button type="button" className="stg-upload" onClick={() => { setMineOpen(false); setWriting(""); }}>＋ 再写一个</button>
+          </div>
+        </div>
+      ) : null}
 
       {pastOpen ? <PastSheet onClose={() => setPastOpen(false)} onPlay={i => { setPastOpen(false); onPlay(i); }} /> : null}
     </div>
@@ -270,8 +307,14 @@ function PlaceSheet({ place, onClose, onGo }: { place: StagePlace; onClose: () =
       .sort((a, b) => (b.p.layer === "main" ? 1 : 0) - (a.p.layer === "main" ? 1 : 0) || (b.p.events.length - a.p.events.length));
   }, []);
 
+  const [bgs, setBgs] = useState<{ id: string; url: string; on: boolean }[]>([]);
   const loadBg = useCallback(() => {
-    void resolveVnAssetMap([place.key], "scene", WORLD_CHAR_ID).then(m => setBgUrl(m[place.key] || ""));
+    const list = placeBackgrounds(place.key);
+    void thumbsOf(list.map(x => x.assetId)).then(urls => {
+      const items = list.filter(x => urls[x.assetId]).map(x => ({ id: x.id, url: urls[x.assetId], on: x.on }));
+      setBgs(items);
+      setBgUrl(items.find(x => x.on)?.url || "");
+    });
   }, [place.key]);
   useEffect(loadBg, [loadBg]);
 
@@ -290,7 +333,7 @@ function PlaceSheet({ place, onClose, onGo }: { place: StagePlace; onClose: () =
         <div className="stg-sheet-cover" style={bgUrl ? { backgroundImage: `url(${bgUrl})` } : undefined}>
           <button type="button" className="stg-sheet-x" onClick={onClose} aria-label="关闭"><X size={18} /></button>
           <div className="stg-sheet-name">{place.label}</div>
-          {place.key.includes("·") ? <div className="stg-sheet-area">{place.key.split("·")[0]}</div> : null}
+          {place.key.includes("·") && !place.key.startsWith("我的·") ? <div className="stg-sheet-area">{place.key.split("·")[0]}</div> : null}
         </div>
 
         {lock ? <p className="stg-sheet-lock"><Lock size={13} /> {lock}</p> : (
@@ -323,12 +366,20 @@ function PlaceSheet({ place, onClose, onGo }: { place: StagePlace; onClose: () =
             <button type="button" onClick={async () => {
               const f = await pickImage();
               if (!f) return;
-              for (const s of loadVnScenes(WORLD_CHAR_ID).filter(s => s.name === place.key)) await deleteVnScene(s.id);
-              await addVnScene(WORLD_CHAR_ID, place.key, f);
+              await addBackground(place.key, f);
               loadBg();
-            }}>{bgUrl ? "换一张" : "上传"}</button>
+            }}>加一张</button>
           </div>
-          <MusicEditor bgKey={place.key} fallbackLabel={mapOfPlace(place.key)?.label} />
+          {bgs.length ? (
+            <div className="stg-bgs">
+              {bgs.map(b => (
+                <div key={b.id} className="stg-bg" data-on={b.on ? "1" : undefined} style={{ backgroundImage: `url(${b.url})` }} onClick={() => { pickBackground(place.key, b.id); loadBg(); }}>
+                  <button type="button" aria-label="删掉这张" onClick={async e => { e.stopPropagation(); await removeBackground(b.id); loadBg(); }}><X size={12} /></button>
+                </div>
+              ))}
+            </div>
+          ) : <p className="stg-empty">还没有背景，点「加一张」。可以存好几张，点哪张用哪张</p>}
+          <MusicEditor bgKey={place.key} fallbackLabel={place.key.startsWith("我的·") ? "首尔" : mapOfPlace(place.key)?.label} />
         </div>
       </div>
     </div>

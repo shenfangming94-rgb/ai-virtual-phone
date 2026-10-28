@@ -17,6 +17,8 @@ import { parseVnResponse } from "./vn-parser";
 import { companyOf, loadCareer, nodeById, type CareerNode } from "./idol-career";
 import { fmtWorld } from "./idol-scenes";
 import { resolveUserIdentity } from "./settings-storage";
+import { addVnScene, deleteVnScene, loadVnScenes } from "./vn-asset-storage";
+import { getThemeAssetMap } from "./theme-storage";
 import { loadAllCharacters } from "./character-storage";
 
 export const STAGE_APP_NAME = "此刻";
@@ -72,12 +74,35 @@ export function mapById(id: string): StageMap {
 }
 
 /** 能走进去的地点（不含只是入口的公司/江南这种） */
+// ── 我的地点：她自己写的，不上地图，存在「我的地点」里 ──
+
+const CUSTOM_KEY = "idol_stage_custom_places_v1";
+export const MINE_MAP_ID = "mine";
+export function loadCustomPlaces(): StagePlace[] {
+  try { return (JSON.parse(kvGet(CUSTOM_KEY) || "[]") as string[]).map(n => ({ key: `我的·${n}`, label: n })); } catch { return []; }
+}
+export function addCustomPlace(name: string): StagePlace {
+  const n = name.trim().replace(/·/g, " ").slice(0, 20);
+  const list = loadCustomPlaces().map(x => x.label);
+  if (!list.includes(n)) kvSet(CUSTOM_KEY, JSON.stringify([...list, n]));
+  return { key: `我的·${n}`, label: n };
+}
+export function removeCustomPlace(key: string): void {
+  kvSet(CUSTOM_KEY, JSON.stringify(loadCustomPlaces().filter(x => x.key !== key).map(x => x.label)));
+}
+
+/** 地图 + 我的地点（我的地点不当地图显示，只在列表里） */
+export function allMaps(): StageMap[] {
+  const mine = loadCustomPlaces();
+  return mine.length ? [...STAGE_MAPS, { id: MINE_MAP_ID, label: "我的地点", places: mine }] : STAGE_MAPS;
+}
+
 export function allScenePlaces(): StagePlace[] {
-  return STAGE_MAPS.flatMap(m => m.places).filter(x => !x.sub);
+  return allMaps().flatMap(m => m.places).filter(x => !x.sub);
 }
 
 export function placeByKey(key: string): StagePlace | undefined {
-  return STAGE_MAPS.flatMap(m => m.places).find(x => x.key === key);
+  return allMaps().flatMap(m => m.places).find(x => x.key === key);
 }
 
 export function placeLocked(place: StagePlace): string | null {
@@ -94,6 +119,7 @@ export function placeFullName(key: string): string {
   const label = place?.label ?? key;
   if (key.startsWith("公司·")) return c ? `${c.name} 公司 ${label}` : `公司 ${label}`;
   if (key === "宿舍") return c ? `${c.name} 宿舍` : "宿舍";
+  if (key.startsWith("我的·")) return label;
   if (key.includes("·")) return `${key.split("·")[0]} ${label}`;
   return label;
 }
@@ -130,7 +156,7 @@ export const DEFAULT_MAPS: Record<string, { image: string; pins: MapLook["pins"]
 
 /** 地点在哪张地图上 */
 export function mapOfPlace(key: string): StageMap | undefined {
-  return STAGE_MAPS.find(m => m.places.some(x => x.key === key && !x.sub));
+  return allMaps().find(m => m.places.some(x => x.key === key && !x.sub));
 }
 
 export function loadMapLooks(): Record<string, MapLook> {
@@ -138,6 +164,39 @@ export function loadMapLooks(): Record<string, MapLook> {
 }
 export function saveMapLook(mapId: string, look: MapLook): void {
   kvSet(LOOK_KEY, JSON.stringify({ ...loadMapLooks(), [mapId]: look }));
+}
+
+// ── 背景：每个地点可以存好几张，点一张就换成它，别的不删 ──
+
+const BG_PICK_KEY = "idol_stage_bg_pick_v1";
+function loadBgPicks(): Record<string, string> {
+  try { return JSON.parse(kvGet(BG_PICK_KEY) || "{}") as Record<string, string>; } catch { return {}; }
+}
+export function placeBackgrounds(key: string): { id: string; assetId: string; on: boolean }[] {
+  const list = loadVnScenes(WORLD_CHAR_ID).filter(x => x.name === key);
+  const pick = loadBgPicks()[key];
+  const cur = list.find(x => x.id === pick) ?? list[list.length - 1];
+  return list.map(x => ({ id: x.id, assetId: x.assetId, on: x.id === cur?.id }));
+}
+export function pickBackground(key: string, id: string): void {
+  kvSet(BG_PICK_KEY, JSON.stringify({ ...loadBgPicks(), [key]: id }));
+}
+export async function addBackground(key: string, blob: Blob): Promise<void> {
+  const a = await addVnScene(WORLD_CHAR_ID, key, blob);
+  pickBackground(key, a.id);
+}
+export async function removeBackground(id: string): Promise<void> {
+  await deleteVnScene(id);
+}
+/** 场景里要用的背景：每个地点用它现在选中的那张 */
+export async function resolveStageBgMap(names: string[]): Promise<Record<string, string>> {
+  const chosen = names.map(n => [n, placeBackgrounds(n).find(x => x.on)?.assetId] as const).filter((x): x is readonly [string, string] => Boolean(x[1]));
+  if (!chosen.length) return {};
+  const m = await getThemeAssetMap(chosen.map(x => x[1]));
+  return Object.fromEntries(chosen.filter(x => m[x[1]]).map(x => [x[0], m[x[1]]]));
+}
+export async function thumbsOf(ids: string[]): Promise<Record<string, string>> {
+  return ids.length ? getThemeAssetMap(ids) : {};
 }
 
 // ── BGM：每个地点勾几首歌，轮着放。歌可以是她传的 mp3（宿主音乐库），也可以是网易云的歌 ──
@@ -170,7 +229,8 @@ export function resolveBgm(key: string): { key: string; songs: BgmSong[]; mode: 
   const modes = loadBgmModes();
   if (key.startsWith("map:")) return { key, songs: map[key] ?? [], mode: modes[key] ?? "list" };
   if (map[key]?.length) return { key, songs: map[key], mode: modes[key] ?? "list" };
-  const m = mapOfPlace(key);
+  // 我的地点没有自己的地图，跟首尔
+  const m = key.startsWith("我的·") ? mapById("seoul") : mapOfPlace(key);
   const mk = m ? mapBgmKey(m.id) : "";
   return { key: mk || key, songs: (mk && map[mk]) || [], mode: (mk && modes[mk]) || "list" };
 }

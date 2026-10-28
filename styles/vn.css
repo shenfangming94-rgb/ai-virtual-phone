@@ -971,3 +971,28 @@
 .vn-hmsg-director { font-size: calc(12px*var(--app-text-scale,1)); color: var(--vn-ui-text-dim); opacity: 0.7; font-style: italic; margin-bottom: 4px; }
 .vn-scene-picker-gname { margin: 14px 0 4px; font-size: calc(11.5px*var(--app-text-scale,1)); letter-spacing: 0.15em; color: var(--vn-ui-text-dim); }
 .vn-scene-picker-group:first-of-type .vn-scene-picker-gname { margin-top: 4px; }
+
+/* 此刻：重 roll 弹窗 */
+.vn-retry-wrap { display: flex; align-items: center; justify-content: center; padding: 0 20px; }
+.vn-retry { width: 100%; max-width: 340px; padding: 18px 16px 14px; border-radius: 18px; background: rgba(24, 20, 32, 0.96); color: var(--vn-ui-text); display: flex; flex-direction: column; gap: 10px; }
+.vn-retry b { font-size: calc(16px*var(--app-text-scale,1)); }
+.vn-retry textarea { width: 100%; box-sizing: border-box; padding: 10px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.15); background: rgba(255,255,255,0.06); color: inherit; font: inherit; font-size: calc(14px*var(--app-text-scale,1)); resize: none; }
+.vn-retry-recent { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: calc(12px*var(--app-text-scale,1)); color: var(--vn-ui-text-dim); }
+.vn-retry-chip { display: inline-flex; align-items: center; border-radius: 999px; background: rgba(255,255,255,0.08); }
+.vn-retry-chip button { background: none; border: 0; color: var(--vn-ui-text); padding: 4px 4px 4px 10px; font-size: inherit; cursor: pointer; }
+.vn-retry-chip button + button { padding: 4px 8px 4px 2px; color: var(--vn-ui-text-dim); }
+.vn-retry-btns { display: flex; justify-content: flex-end; gap: 8px; }
+.vn-retry-btns button { padding: 7px 14px; border-radius: 999px; border: 1px solid rgba(255,255,255,0.15); background: none; color: inherit; font-size: calc(13px*var(--app-text-scale,1)); cursor: pointer; }
+.vn-retry-btns button[data-main] { background: rgba(201,184,255,0.28); border-color: transparent; }
+.vn-retry-btns button:disabled { opacity: 0.4; }
+
+/* 此刻：📍 里的背景条、自己写地点 */
+.vn-bg-strip { margin-bottom: 4px; }
+.vn-bg-row { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 6px; scrollbar-width: none; }
+.vn-bg-thumb { flex: none; width: 64px; height: 88px; border-radius: 10px; border: 2px solid transparent; background: rgba(255,255,255,0.06) center/cover; cursor: pointer; }
+.vn-bg-thumb[data-on] { border-color: #c9b8ff; }
+.vn-bg-add { display: grid; place-items: center; color: var(--vn-ui-text-dim); font-size: 22px; border: 1px dashed rgba(255,255,255,0.25); }
+.vn-place-custom { display: flex; gap: 8px; margin: 14px 0 6px; }
+.vn-place-custom input { flex: 1; min-width: 0; padding: 10px 12px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.15); background: rgba(255,255,255,0.06); color: var(--vn-ui-text); font: inherit; font-size: calc(14px*var(--app-text-scale,1)); }
+.vn-place-custom button { padding: 0 16px; border-radius: 10px; border: 0; background: rgba(201,184,255,0.28); color: var(--vn-ui-text); cursor: pointer; }
+.vn-place-custom button:disabled { opacity: 0.4; }

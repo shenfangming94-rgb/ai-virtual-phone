@@ -147,3 +147,10 @@
 .stg-opt small { font-size: 12px; color: var(--stg-dim); }
 .stg-opt svg { color: #007aff; flex: none; }
 .stg-range { width: 100%; accent-color: var(--stg-pink); }
+.stg-bgs { display: flex; gap: 8px; overflow-x: auto; padding: 0 0 12px; scrollbar-width: none; }
+.stg-bg { position: relative; flex: none; width: 72px; height: 100px; border-radius: 10px; background: #f2f2f7 center/cover; border: 2.5px solid transparent; cursor: pointer; }
+.stg-bg[data-on] { border-color: var(--stg-pink); }
+.stg-bg button { position: absolute; top: 4px; right: 4px; width: 20px; height: 20px; border-radius: 50%; display: grid; place-items: center; background: rgba(0,0,0,0.45) !important; color: #fff !important; }
+.stg-write { padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 24px); }
+.stg-write-in { display: block; width: calc(100% - 32px); margin: 12px 16px 0; padding: 12px 14px; border: 0; border-radius: 12px; background: #fff; font: inherit; font-size: 16px; box-sizing: border-box; }
+.stg-done:disabled { opacity: 0.4; }

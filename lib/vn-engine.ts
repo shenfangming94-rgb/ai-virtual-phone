@@ -106,7 +106,8 @@ export function resolveVnConfigs(characterId: string): {
 
 export async function generateVnCompletion(
   characterId: string,
-  history: VnMessage[]
+  history: VnMessage[],
+  opts?: { retryHint?: string },
 ): Promise<VnGenerationResult> {
   const character = loadCharacters().find((c) => c.id === characterId);
   if (!character) {
@@ -119,6 +120,10 @@ export async function generateVnCompletion(
   const sceneChapter = history[history.length - 1]?.chapterIndex;
   const ctx = isWorld ? history.filter(m => m.chapterIndex === sceneChapter) : history;
   const llmMessages = await buildVnPromptMessages(characterId, ctx, preset, regexes, worldBooks, isWorld ? sceneChapter : undefined);
+  // 重 roll 的修正要求：只跟这一次走，不存
+  if (opts?.retryHint?.trim()) {
+    llmMessages.push({ role: "system", content: `重新写这一段：她对刚才那版不满意，这次按她的要求来：${opts.retryHint.trim()}。直接按要求重新写，不要在剧情里提到这条要求。` });
+  }
 
   let rawOutput = await sendLLMRequest(apiConfig, preset, llmMessages, regexes, {
     characterName: character.name,

@@ -1,6 +1,7 @@
 // 此刻第三批（st3）：自带地图、地图音乐、设置、场外指令、台词兜底、长旁白切帧、离场。原 st1：首页地图（没图/有图）→ 点地点选碰见谁 → 开场卡 → 她说第一句 → 世界回（假 AI，带记号）→ 结束这一场记账；主线到点横幅 → 点进去开那一场
 import puppeteer from "puppeteer-core";
 const OUT = process.argv[2] || ".";
+const MAP2 = process.argv[3];
 const MAP = process.argv[3];
 const b = await puppeteer.launch({ executablePath: "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome", headless: "new" });
 const p = await b.newPage(); await p.setViewport({ width: 430, height: 932, deviceScaleFactor: 2 });
@@ -95,6 +96,27 @@ const stage = await p.evaluate(async () => {
   const v = await new Promise(res => { const r = db.transaction("entries").objectStore("entries").get("idol_stage_scenes_v1"); r.onsuccess = () => res(r.result?.value); });
   return Object.values(JSON.parse(v || "{}")).map(x => ({ ids: x.ids, spans: x.spans }));
 });
+// 重 roll（带要求）
+await p.evaluate(() => [...document.querySelectorAll(".vn-history-close")].forEach(b => b.click())); await sleep(300);
+await p.evaluate(() => document.querySelector('.vn-history-overlay')?.click()); await sleep(300);
+await p.evaluate(() => document.querySelector('.vn-ctrl-btn[title="重roll这段"]')?.click()); await sleep(400);
+await p.evaluate(() => { const i = document.querySelector(".vn-retry textarea"); const set = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value").set; set.call(i, "韩智元话少一点，更冷淡"); i.dispatchEvent(new Event("input", { bubbles: true })); });
+await p.screenshot({ path: OUT + "/t10_retry.png" });
+await p.evaluate(() => [...document.querySelectorAll(".vn-retry-btns button")].find(b => b.textContent.includes("按这个改")).click()); await sleep(3000);
+const retryAsked = asked.filter(a => a.includes("这一场的写法")).length;
+const retryHasHint = asked.some(a => a.includes("韩智元话少一点"));
+// 回到地图：菜单、自己写地点、多张背景
+await p.evaluate(() => document.querySelector('.vn-topbar-btn').click()); await sleep(800);
+await p.evaluate(() => document.querySelector('.stg-ic[aria-label="地图设置"]').click()); await sleep(300);
+await p.screenshot({ path: OUT + "/t11_menu.png" });
+await p.evaluate(() => [...document.querySelectorAll(".stg-menu button")].find(x => x.textContent.includes("自己写")).click()); await sleep(400);
+await p.evaluate(() => { const i = document.querySelector(".stg-write-in"); const set = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value").set; set.call(i, "智元家楼下"); i.dispatchEvent(new Event("input", { bubbles: true })); });
+await p.evaluate(() => document.querySelector(".stg-write .stg-done").click()); await sleep(600);
+for (const img of [MAP2, MAP2]) {
+  const [fc] = await Promise.all([p.waitForFileChooser(), p.evaluate(() => [...document.querySelectorAll(".stg-row button")].find(x => x.textContent.includes("加一张")).click())]);
+  await fc.accept([img]); await sleep(1500);
+}
+await p.screenshot({ path: OUT + "/t12_custom.png" });
 const vnReq = asked.find(a => a.includes("这一场的写法")) || "";
-console.log(JSON.stringify({ errs, frames, stage, hasDirector: vnReq.includes("场外指令：让朴书雅"), hasWords: vnReq.includes("大约 800 字"), noOldBilingual: !vnReq.includes("对白双语规则") }, null, 1));
+console.log(JSON.stringify({ retryAsked, retryHasHint, errs, frames, stage, hasDirector: vnReq.includes("场外指令：让朴书雅"), hasWords: vnReq.includes("大约 800 字"), noOldBilingual: !vnReq.includes("对白双语规则") }, null, 1));
 await b.close();

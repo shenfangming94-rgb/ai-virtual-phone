@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { ArrowLeft, ArrowRight, Clock, EyeOff, Play, Pause, Volume2, VolumeX, Music2, Square, NotebookPen, Eye, ChevronDown, Send, MessageSquare, BookOpen, Archive, MapPin, RotateCcw, ListOrdered, Plus, Trash2, ChevronRight, Loader2 } from "lucide-react";
+import { RefreshCw, ArrowLeft, ArrowRight, Clock, EyeOff, Play, Pause, Volume2, VolumeX, Music2, Square, NotebookPen, Eye, ChevronDown, Send, MessageSquare, BookOpen, Archive, MapPin, RotateCcw, ListOrdered, Plus, Trash2, ChevronRight, Loader2 } from "lucide-react";
 import { BilingualTextBlock } from "@/components/chat/message-bubble";
 import {
   createOrGetVnSession,
@@ -26,11 +26,12 @@ import { resolveVnAssetMap, loadVnScenes, getVnSceneLayout, getVnSpriteLayout } 
 import { resolveUserIdentity } from "@/lib/settings-storage";
 import type { VnFrame, VnOptions, VnBeat } from "@/lib/vn-types";
 import { splitBilingualText } from "@/lib/bilingual-text";
-import { STAGE_MAPS, chapterIdOf, chapterSummaries, closeStageScene, editSummary, getStageScene, mergeSummaries, placeLocked, setBigSummary, writeSummaryFor } from "@/lib/idol-stage";
+import { addBackground, addCustomPlace, allMaps, pickBackground, placeBackgrounds, resolveStageBgMap, thumbsOf, chapterIdOf, chapterSummaries, closeStageScene, editSummary, getStageScene, mergeSummaries, placeLocked, setBigSummary, writeSummaryFor } from "@/lib/idol-stage";
 import { jumpWorld } from "@/lib/idol-reminders";
 import { fmtWorld } from "@/lib/idol-scenes";
 import type { SceneCloseResult } from "@/lib/idol-world";
 import { loadBgmMuted, saveBgmMuted, useStageBgm } from "./stage-bgm";
+import { forgetRetryHint, loadRetryHints, rememberRetryHint } from "@/lib/reply-versions";
 import { playAudioBlobViaMediaElement, resolveVoiceConfig, synthesizeSpeech, unlockAudioPlayback } from "@/lib/tts-service";
 
 interface VnPlayerProps {
@@ -104,6 +105,13 @@ export function VnPlayer({ characterId, chapterIndex, onClose, onChapterEnd, vnT
   const [stageToast, setStageToast] = useState("");
   const [bgmMuted, setBgmMuted] = useState(() => loadBgmMuted());
   const [notesOpen, setNotesOpen] = useState(false);
+  const [retryTarget, setRetryTarget] = useState<string | null>(null);
+  const [retryHint, setRetryHint] = useState("");
+  const [retryHints, setRetryHints] = useState<string[]>([]);
+  const [bgThumbs, setBgThumbs] = useState<{ id: string; url: string; on: boolean }[]>([]);
+  const [customPlace, setCustomPlace] = useState("");
+  /** 背景：此刻里每个地点用它选中的那张 */
+  const resolveScenes = useCallback((names: string[]) => (stage ? resolveStageBgMap(names) : resolveVnAssetMap(names, "scene", characterId)), [stage, characterId]);
   const [notesVer, setNotesVer] = useState(0);
   const [noteEdit, setNoteEdit] = useState<{ id: string; text: string } | null>(null);
   const [noteBusy, setNoteBusy] = useState("");
@@ -328,7 +336,7 @@ export function VnPlayer({ characterId, chapterIndex, onClose, onChapterEnd, vnT
     if (allBgs.size === 0 && allSprites.size === 0) setAssetsReady(true);
     let cancelled = false;
     Promise.all([
-      resolveVnAssetMap([...allBgs], "scene", characterId),
+      resolveScenes([...allBgs]),
       resolveVnAssetMap([...allSprites], "sprite", characterId),
     ]).then(([sceneMap, spriteMap]) => {
       if (cancelled) return;
@@ -339,6 +347,12 @@ export function VnPlayer({ characterId, chapterIndex, onClose, onChapterEnd, vnT
   }, [session.id, chapterIndex, availableScenes, characterId, stageScene]);
 
   useStageBgm(stage ? currentScene : "", bgmMuted);
+
+  const loadBgThumbs = useCallback(async (key: string) => {
+    const list = placeBackgrounds(key);
+    const urls = await thumbsOf(list.map(x => x.assetId));
+    setBgThumbs(list.filter(x => urls[x.assetId]).map(x => ({ id: x.id, url: urls[x.assetId], on: x.on })));
+  }, []);
 
   const showStageToast = useCallback((msg: string) => {
     setStageToast(msg);
@@ -652,7 +666,7 @@ export function VnPlayer({ characterId, chapterIndex, onClose, onChapterEnd, vnT
       }
       if (newBgs.size > 0 || newSprites.size > 0) {
         const [sceneMap, spriteMap] = await Promise.all([
-          resolveVnAssetMap([...newBgs], "scene", characterId),
+          resolveScenes([...newBgs]),
           resolveVnAssetMap([...newSprites], "sprite", characterId),
         ]);
         setAssetMap((prev) => ({ ...prev, ...sceneMap, ...spriteMap }));
@@ -695,7 +709,7 @@ export function VnPlayer({ characterId, chapterIndex, onClose, onChapterEnd, vnT
   const handleSceneSwitch = useCallback((sceneName: string) => {
     setShowScenePicker(false);
     if (!assetMap[sceneName]) {
-      void resolveVnAssetMap([sceneName], "scene", characterId).then((sceneMap) => {
+      void resolveScenes([sceneName]).then((sceneMap) => {
         if (Object.keys(sceneMap).length > 0) {
           setAssetMap((prev) => ({ ...prev, ...sceneMap }));
         }
@@ -774,7 +788,7 @@ export function VnPlayer({ characterId, chapterIndex, onClose, onChapterEnd, vnT
       }
       if (newBgs.size > 0 || newSprites.size > 0) {
         const [sceneMap, spriteMap] = await Promise.all([
-          resolveVnAssetMap([...newBgs], "scene", characterId),
+          resolveScenes([...newBgs]),
           resolveVnAssetMap([...newSprites], "sprite", characterId),
         ]);
         setAssetMap((prev) => ({ ...prev, ...sceneMap, ...spriteMap }));
@@ -851,7 +865,8 @@ export function VnPlayer({ characterId, chapterIndex, onClose, onChapterEnd, vnT
     rebuildFrames();
   }, [editingMsgId, editingContent, rebuildFrames]);
 
-  const handleMsgRetry = useCallback(async (msgId: string) => {
+  const handleMsgRetry = useCallback(async (msgId: string, hint?: string) => {
+    if (hint?.trim()) rememberRetryHint(hint);
     const msgs = loadVnMessagesForChapter(session.id, chapterIndex);
     const msgIdx = msgs.findIndex((m) => m.id === msgId);
     if (msgIdx === -1 || msgs[msgIdx].role !== "assistant") return;
@@ -863,7 +878,7 @@ export function VnPlayer({ characterId, chapterIndex, onClose, onChapterEnd, vnT
     setWaitingForInput(false);
     try {
       const allMessages = loadVnMessages(session.id);
-      const result = await generateVnCompletion(characterId, allMessages);
+      const result = await generateVnCompletion(characterId, allMessages, { retryHint: hint });
       handleStageResult(result.idol);
       const aiMsg = pushVnMessage({ sessionId: session.id, role: "assistant", rawContent: result.rawText, chapterIndex, ...(result.summary ? { summary: result.summary } : {}) });
       rebuildFrames();
@@ -980,7 +995,7 @@ export function VnPlayer({ characterId, chapterIndex, onClose, onChapterEnd, vnT
 
   return (
     <div className="vn-shell" ref={vnShellRef} data-vn-theme={vnTheme || "default"} onClick={() => {
-      if (historyOpen || showArchiveConfirm || showReplayConfirm || showScenePicker || showBeatsPanel || stageEnd || notesOpen) return;
+      if (historyOpen || showArchiveConfirm || showReplayConfirm || showScenePicker || showBeatsPanel || stageEnd || notesOpen || retryTarget) return;
       if (stageOpening) { setStageOpening(false); return; }
       if (isReplaying) { advanceReplay(); return; }
       if (waitingForInput && !isArchived) { setWaitingForInput(false); return; }
@@ -1050,7 +1065,7 @@ export function VnPlayer({ characterId, chapterIndex, onClose, onChapterEnd, vnT
             </button>
           )}
           {!isArchived && (
-            <button className="vn-topbar-btn" onClick={() => setShowScenePicker(true)} title="切换场景">
+            <button className="vn-topbar-btn" onClick={() => { setShowScenePicker(true); if (stage && currentScene) void loadBgThumbs(currentScene); }} title="切换场景">
               <MapPin size={18} />
             </button>
           )}
@@ -1229,6 +1244,14 @@ export function VnPlayer({ characterId, chapterIndex, onClose, onChapterEnd, vnT
           >
             <Volume2 size={15} />
           </button>
+          {stage && !isArchived && (() => {
+            const last = [...loadVnMessagesForChapter(session.id, chapterIndex)].reverse().find(m => m.role === "assistant");
+            return last ? (
+              <button className="vn-ctrl-btn" title="重roll这段" onClick={() => { setRetryHint(""); setRetryHints(loadRetryHints()); setRetryTarget(last.id); }}>
+                <RefreshCw size={15} />
+              </button>
+            ) : null;
+          })()}
           <button className="vn-ctrl-btn" onClick={() => setShowReplayConfirm(true)} title="回放">
             <RotateCcw size={15} />
           </button>
@@ -1298,7 +1321,7 @@ export function VnPlayer({ characterId, chapterIndex, onClose, onChapterEnd, vnT
                       <div className="vn-ctx-menu" style={{ left: ctxMenuX, top: ctxMenuY, transform: "translateX(-50%)" }} onClick={(e) => e.stopPropagation()}>
                         <button className="vn-ctx-btn" onClick={() => handleMsgEditStart(msg)}>编辑</button>
                         {msg.role === "assistant" && (
-                          <button className="vn-ctx-btn vn-ctx-btn-danger" onClick={() => handleMsgRetry(msg.id)}>重试</button>
+                          <button className="vn-ctx-btn vn-ctx-btn-danger" onClick={() => { if (stage) { setCtxMenuMsgId(null); setRetryHint(""); setRetryHints(loadRetryHints()); setRetryTarget(msg.id); } else handleMsgRetry(msg.id); }}>重试</button>
                         )}
                         <button className="vn-ctx-btn vn-ctx-btn-danger" onClick={() => handleMsgDelete(msg.id)}>删除</button>
                         <button className="vn-ctx-btn vn-ctx-btn-danger" onClick={() => handleMsgDeleteFrom(msg.id)}>删除以下</button>
@@ -1321,8 +1344,32 @@ export function VnPlayer({ characterId, chapterIndex, onClose, onChapterEnd, vnT
               <ArrowRight size={16} />
             </button>
             <div className="vn-scene-picker-title">{stage ? "去别的地方" : "切换场景"}</div>
+            {stage && currentScene ? (
+              <div className="vn-bg-strip">
+                <div className="vn-scene-picker-gname">这里的背景</div>
+                <div className="vn-bg-row">
+                  {bgThumbs.map(t => (
+                    <button key={t.id} className="vn-bg-thumb" data-on={t.on ? "true" : undefined} style={{ backgroundImage: `url(${t.url})` }}
+                      onClick={async () => { pickBackground(currentScene, t.id); setAssetMap(prev => ({ ...prev, ...{ [currentScene]: t.url } })); setBgThumbs(b => b.map(x => ({ ...x, on: x.id === t.id }))); }} />
+                  ))}
+                  <button className="vn-bg-thumb vn-bg-add" onClick={() => {
+                    const input = document.createElement("input");
+                    input.type = "file"; input.accept = "image/*";
+                    input.onchange = async () => {
+                      const f = input.files?.[0];
+                      if (!f) return;
+                      await addBackground(currentScene, f);
+                      const m = await resolveStageBgMap([currentScene]);
+                      setAssetMap(prev => ({ ...prev, ...m }));
+                      void loadBgThumbs(currentScene);
+                    };
+                    input.click();
+                  }}>＋</button>
+                </div>
+              </div>
+            ) : null}
             {stage ? (
-              STAGE_MAPS.map(m => {
+              allMaps().map(m => {
                 const list = m.places.filter(pl => !pl.sub && !placeLocked(pl));
                 if (!list.length) return null;
                 return (
@@ -1341,7 +1388,12 @@ export function VnPlayer({ characterId, chapterIndex, onClose, onChapterEnd, vnT
                     ))}
                   </div>
                 );
-              })
+              }).concat(
+                <form key="custom" className="vn-place-custom" onSubmit={(e) => { e.preventDefault(); if (!customPlace.trim()) return; const pl = addCustomPlace(customPlace); setCustomPlace(""); handleSceneSwitch(pl.key); }}>
+                  <input value={customPlace} onChange={(e) => setCustomPlace(e.target.value)} placeholder="自己写一个地方" maxLength={20} />
+                  <button type="submit" disabled={!customPlace.trim()}>去</button>
+                </form>,
+              )
             ) : availableScenes.length === 0 ? (
               <div className="vn-scene-picker-empty">暂无场景，请在资源库中上传</div>
             ) : (
@@ -1510,6 +1562,32 @@ export function VnPlayer({ characterId, chapterIndex, onClose, onChapterEnd, vnT
           </div>
         );
       })()}
+
+      {/* ── 场景 app：重 roll（能写往哪改） ── */}
+      {stage && retryTarget && (
+        <div className="vn-history-overlay vn-retry-wrap" onClick={(e) => { e.stopPropagation(); setRetryTarget(null); }}>
+          <div className="vn-retry" onClick={(e) => e.stopPropagation()}>
+            <b>重roll这段</b>
+            <textarea value={retryHint} onChange={(e) => setRetryHint(e.target.value)} placeholder="想往哪个方向改？（只用这一次）" maxLength={300} rows={3} autoFocus />
+            {retryHints.length ? (
+              <div className="vn-retry-recent">
+                <span>最近用过</span>
+                {retryHints.map(h => (
+                  <span key={h} className="vn-retry-chip">
+                    <button onClick={() => setRetryHint(h)}>{h}</button>
+                    <button aria-label="删掉" onClick={() => { forgetRetryHint(h); setRetryHints(loadRetryHints()); }}>×</button>
+                  </span>
+                ))}
+              </div>
+            ) : null}
+            <div className="vn-retry-btns">
+              <button onClick={() => setRetryTarget(null)}>取消</button>
+              <button onClick={() => { const id = retryTarget; setRetryTarget(null); void handleMsgRetry(id); }}>直接重roll</button>
+              <button data-main="true" disabled={!retryHint.trim()} onClick={() => { const id = retryTarget; const h = retryHint; setRetryTarget(null); void handleMsgRetry(id, h); }}>按这个改</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── 场景 app：开场卡 ── */}
       {stage && stageOpening && stageScene && (

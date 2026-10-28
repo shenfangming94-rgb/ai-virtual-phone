@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { RefreshCw, ArrowLeft, ArrowRight, Clock, EyeOff, Play, Pause, Volume2, VolumeX, Music2, Square, NotebookPen, Eye, ChevronDown, Send, MessageSquare, BookOpen, Archive, MapPin, RotateCcw, ListOrdered, Plus, Trash2, ChevronRight, Loader2 } from "lucide-react";
+import { MoreHorizontal, RefreshCw, ArrowLeft, ArrowRight, Clock, EyeOff, Play, Pause, Volume2, VolumeX, Music2, Square, NotebookPen, Eye, ChevronDown, Send, MessageSquare, BookOpen, Archive, MapPin, RotateCcw, ListOrdered, Plus, Trash2, ChevronRight, Loader2 } from "lucide-react";
 import { BilingualTextBlock } from "@/components/chat/message-bubble";
 import {
   createOrGetVnSession,
@@ -26,7 +26,7 @@ import { resolveVnAssetMap, loadVnScenes, getVnSceneLayout, getVnSpriteLayout } 
 import { resolveUserIdentity } from "@/lib/settings-storage";
 import type { VnFrame, VnOptions, VnBeat } from "@/lib/vn-types";
 import { splitBilingualText } from "@/lib/bilingual-text";
-import { addBackground, addCustomPlace, allMaps, pickBackground, placeBackgrounds, resolveStageBgMap, thumbsOf, chapterIdOf, chapterSummaries, closeStageScene, editSummary, getStageScene, mergeSummaries, placeLocked, setBigSummary, writeSummaryFor } from "@/lib/idol-stage";
+import { loadStageSettings, placeByKey, saveStageSettings, addBackground, addCustomPlace, allMaps, pickBackground, placeBackgrounds, resolveStageBgMap, thumbsOf, chapterIdOf, chapterSummaries, closeStageScene, editSummary, getStageScene, mergeSummaries, placeLocked, setBigSummary, writeSummaryFor } from "@/lib/idol-stage";
 import { jumpWorld } from "@/lib/idol-reminders";
 import { fmtWorld } from "@/lib/idol-scenes";
 import { subscribeWorldClock } from "@/lib/world-clock";
@@ -107,6 +107,8 @@ export function VnPlayer({ characterId, chapterIndex, onClose, onChapterEnd, vnT
   const [bgmMuted, setBgmMuted] = useState(() => loadBgmMuted());
   const [notesOpen, setNotesOpen] = useState(false);
   const [clockOpen, setClockOpen] = useState(false);
+  const [stageMenu, setStageMenu] = useState(false);
+  const [hideClock, setHideClock] = useState(() => Boolean(loadStageSettings().hideClock));
   const [worldNow, setWorldNow] = useState(() => Date.now());
   useEffect(() => {
     if (!stage) return;
@@ -1004,7 +1006,7 @@ export function VnPlayer({ characterId, chapterIndex, onClose, onChapterEnd, vnT
 
   return (
     <div className="vn-shell" ref={vnShellRef} data-vn-theme={vnTheme || "default"} data-stage={stage ? "true" : undefined} onClick={() => {
-      if (clockOpen) { setClockOpen(false); return; }
+      if (clockOpen || stageMenu) { setClockOpen(false); setStageMenu(false); return; }
       if (historyOpen || showArchiveConfirm || showReplayConfirm || showScenePicker || showBeatsPanel || stageEnd || notesOpen || retryTarget) return;
       if (stageOpening) { setStageOpening(false); return; }
       if (isReplaying) { advanceReplay(); return; }
@@ -1063,12 +1065,7 @@ export function VnPlayer({ characterId, chapterIndex, onClose, onChapterEnd, vnT
         <button className="vn-topbar-btn" onClick={onClose}>
           <ArrowLeft size={20} />
         </button>
-        {stage && (
-          <button className="vn-clock" onClick={() => setClockOpen(v => !v)} title="世界时间">
-            <b>{String(new Date(worldNow).getHours()).padStart(2, "0")}:{String(new Date(worldNow).getMinutes()).padStart(2, "0")}</b>
-            <span>{new Date(worldNow).getMonth() + 1}月{new Date(worldNow).getDate()}日 周{"日一二三四五六"[new Date(worldNow).getDay()]}</span>
-          </button>
-        )}
+
         <div className="vn-topbar-right">
           {stage && (
             <button className="vn-topbar-btn" onClick={() => { const v = !bgmMuted; setBgmMuted(v); saveBgmMuted(v); }} title={bgmMuted ? "打开音乐" : "关掉音乐"}>
@@ -1090,13 +1087,21 @@ export function VnPlayer({ characterId, chapterIndex, onClose, onChapterEnd, vnT
               <NotebookPen size={18} />
             </button>
           )}
-          <button className="vn-topbar-btn" onClick={() => setHistoryOpen(true)} title="回顾">
-            <Clock size={18} />
-          </button>
-          {!isArchived && (
-            <button className="vn-topbar-btn" onClick={() => setShowArchiveConfirm(true)} title={stage ? "结束这一场" : "归档章节"}>
-              {stage ? <Square size={16} /> : <Archive size={18} />}
+          {stage ? (
+            <button className="vn-topbar-btn" onClick={() => setStageMenu(v => !v)} title="更多">
+              <MoreHorizontal size={18} />
             </button>
+          ) : (
+            <>
+              <button className="vn-topbar-btn" onClick={() => setHistoryOpen(true)} title="回顾">
+                <Clock size={18} />
+              </button>
+              {!isArchived && (
+                <button className="vn-topbar-btn" onClick={() => setShowArchiveConfirm(true)} title="归档章节">
+                  <Archive size={18} />
+                </button>
+              )}
+            </>
           )}
         </div>
         </div>
@@ -1602,6 +1607,23 @@ export function VnPlayer({ characterId, chapterIndex, onClose, onChapterEnd, vnT
               <button data-main="true" disabled={!retryHint.trim()} onClick={() => { const id = retryTarget; const h = retryHint; setRetryTarget(null); void handleMsgRetry(id, h); }}>按这个改</button>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* ── 场景 app：左上角时间（她选的 C：大时间 + 日期地点，不要框）；点了能拨时间 ── */}
+      {stage && !hideClock && !stageOpening && (
+        <button className="vn-hud" onClick={(e) => { e.stopPropagation(); setClockOpen(v => !v); }} title="世界时间">
+          <b>{String(new Date(worldNow).getHours()).padStart(2, "0")}:{String(new Date(worldNow).getMinutes()).padStart(2, "0")}</b>
+          <span>{new Date(worldNow).getMonth() + 1}月{new Date(worldNow).getDate()}日 星期{"日一二三四五六"[new Date(worldNow).getDay()]}{currentScene ? ` · ${placeByKey(currentScene)?.label ?? currentScene}` : ""}</span>
+        </button>
+      )}
+
+      {/* ── 场景 app：「···」 ── */}
+      {stage && stageMenu && (
+        <div className="vn-stage-menu" onClick={(e) => e.stopPropagation()}>
+          <button onClick={() => { setStageMenu(false); setHistoryOpen(true); }}>回顾</button>
+          <button onClick={() => { setStageMenu(false); const v = !hideClock; setHideClock(v); saveStageSettings({ ...loadStageSettings(), hideClock: v }); }}>{hideClock ? "显示时间" : "隐藏时间"}</button>
+          {!isArchived && <button data-danger="true" onClick={() => { setStageMenu(false); setShowArchiveConfirm(true); }}>结束这一场</button>}
         </div>
       )}
 

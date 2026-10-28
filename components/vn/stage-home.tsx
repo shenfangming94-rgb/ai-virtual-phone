@@ -104,18 +104,20 @@ export function StageHome({ onClose, onPlay }: Props) {
 
   const openScenes = openStageScenes();
   const d = new Date(now);
-  const clock = `周${WEEK[d.getDay()]} ${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+  const clock = `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+  const [hideClock, setHideClock] = useState(() => Boolean(loadStageSettings().hideClock));
 
   return (
     <div className="stg">
+      <div className="stg-hud">
+        {!hideClock ? <span className="stg-pill stg-pill-date">{d.getFullYear()}<b>年</b>{d.getMonth() + 1}<b>月</b>{d.getDate()}<b>日</b><i>星期{WEEK[d.getDay()]}</i></span> : null}
+        <span className="stg-pill">{map.label}{!hideClock ? <><em>·</em>{clock}</> : null}</span>
+      </div>
       <div className="stg-bar">
         <button type="button" className="stg-ic" onClick={() => (map.parent ? setMapId(map.parent) : onClose())} aria-label="返回">
           <ChevronLeft size={24} />
         </button>
-        <div className="stg-title">
-          <b>{map.label}</b>
-          <span>{clock}</span>
-        </div>
+        <div className="stg-spacer" />
         <button type="button" className="stg-ic" onClick={() => { const v = !muted; setMuted(v); saveBgmMuted(v); }} aria-label={muted ? "打开音乐" : "关掉音乐"}>
           {muted ? <VolumeX size={20} /> : <Music2 size={20} />}
         </button>
@@ -189,6 +191,7 @@ export function StageHome({ onClose, onPlay }: Props) {
             <button type="button" onClick={() => { setMenu(false); setWriting(""); }}>自己写一个地点</button>
             {loadCustomPlaces().length ? <button type="button" onClick={() => { setMenu(false); setMineOpen(true); }}>我的地点</button> : null}
             <button type="button" onClick={() => { setMenu(false); setPastOpen(true); }}>以前的场景</button>
+            <button type="button" onClick={() => { setMenu(false); const v = !hideClock; setHideClock(v); saveStageSettings({ ...loadStageSettings(), hideClock: v }); }}>{hideClock ? "显示时间" : "隐藏时间"}</button>
             <button type="button" className="stg-cancel" onClick={() => setMenu(false)}>取消</button>
           </div>
         </div>

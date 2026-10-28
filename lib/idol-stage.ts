@@ -251,7 +251,7 @@ export function resolveBgm(key: string): { key: string; songs: BgmSong[]; mode: 
 // ── 此刻设置 ──
 
 export type StageLang = "zh" | "ko-talk" | "ko-all";
-export type StageSettings = { words: number; style: string; lang: StageLang; volume: number };
+export type StageSettings = { words: number; style: string; lang: StageLang; volume: number; /** 截图时藏起左上角的日期时间（时间照走） */ hideClock?: boolean };
 const SETTINGS_KEY = "idol_stage_settings_v1";
 export const DEFAULT_STAGE_SETTINGS: StageSettings = { words: 800, style: "", lang: "ko-talk", volume: 55 };
 export function loadStageSettings(): StageSettings {

@@ -1034,3 +1034,16 @@
 .vn-clock-pop { position: absolute; z-index: 22; left: 16px; top: calc(var(--page-header-safe-top, 44px) + 54px); padding: 12px; border-radius: 14px; background: rgba(24,20,32,0.94); color: var(--vn-ui-text); display: flex; flex-direction: column; gap: 8px; font-size: calc(12px*var(--app-text-scale,1)); animation: vn-stage-fade 0.2s ease; }
 .vn-clock-pop div { display: flex; flex-wrap: wrap; gap: 6px; max-width: 230px; }
 .vn-clock-pop button { padding: 6px 12px; border-radius: 999px; border: 1px solid rgba(255,255,255,0.18); background: none; color: inherit; font-size: calc(13px*var(--app-text-scale,1)); cursor: pointer; }
+
+/* 此刻：左上角大时间（C：不要框，白字发光）、圆形按钮、「···」菜单 */
+.vn-hud { position: absolute; z-index: 21; left: 18px; top: calc(var(--page-header-safe-top, 44px) + 48px); padding: 0; border: 0; background: none; text-align: left; color: #fff; cursor: pointer;
+  font-family: "Source Han Serif CN VF", "Songti SC", serif; text-shadow: 0 0 10px rgba(255,255,255,0.35), 0 1px 3px rgba(0,0,0,0.7); }
+.vn-hud b { display: block; font-size: 40px; font-weight: 700; letter-spacing: 1px; line-height: 1; }
+.vn-hud span { display: block; margin-top: 6px; font-size: 14px; font-weight: 600; letter-spacing: 1px; }
+.vn-shell[data-stage] .vn-topbar-btn { width: 36px; height: 36px; border-radius: 50%; display: grid; place-items: center; background: rgba(0,0,0,0.25); color: #fff; }
+.vn-shell[data-stage] .vn-topbar-right { gap: 8px; }
+.vn-stage-menu { position: absolute; z-index: 23; right: 14px; top: calc(var(--page-header-safe-top, 44px) + 50px); min-width: 140px; padding: 6px; border-radius: 14px; background: rgba(24,20,32,0.94); display: flex; flex-direction: column; animation: vn-stage-fade 0.2s ease; }
+.vn-stage-menu button { padding: 11px 14px; border: 0; border-radius: 9px; background: none; color: var(--vn-ui-text); text-align: left; font-size: calc(14px*var(--app-text-scale,1)); cursor: pointer; }
+.vn-stage-menu button:active { background: rgba(255,255,255,0.08); }
+.vn-stage-menu button[data-danger] { color: #ff8a9a; }
+.vn-clock-pop { top: calc(var(--page-header-safe-top, 44px) + 116px) !important; }

@@ -118,5 +118,5 @@ for (const img of [MAP2, MAP2]) {
 }
 await p.screenshot({ path: OUT + "/t12_custom.png" });
 const vnReq = asked.find(a => a.includes("这一场的写法")) || "";
-console.log(JSON.stringify({ retryAsked, retryHasHint, errs, frames, stage, hasDirector: vnReq.includes("场外指令：让朴书雅"), hasWords: vnReq.includes("大约 800 字"), noOldBilingual: !vnReq.includes("对白双语规则") }, null, 1));
+console.log(JSON.stringify({ placeList: asked.some(a => a.includes("地点名单") && a.includes("江南·烤肉店")), retryAsked, retryHasHint, errs, frames, stage, hasDirector: vnReq.includes("场外指令：让朴书雅"), hasWords: vnReq.includes("大约 800 字"), noOldBilingual: !vnReq.includes("对白双语规则") }, null, 1));
 await b.close();

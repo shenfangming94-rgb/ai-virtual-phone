@@ -131,9 +131,13 @@ const PLACE_ALIASES: [RegExp, string][] = [
   [/办公室|面谈/, "公司·老师办公室"],
   [/公司大楼$|사옥$|大楼$/, "公司·大厅"],
   [/老家/, "家"],
+  [/观众席/, "场馆·观众席"],
+  [/竞技场.*后台|场馆.*后台/, "场馆·后台"],
+  [/竞技场|巨蛋|演唱会场馆/, "场馆·舞台"],
 ];
 
 export function placeKeyFromText(text: string): string {
+  if (placeByKey(text.trim())) return text.trim();
   const t = text.replace(/\s+/g, "");
   for (const [re, key] of PLACE_ALIASES) if (re.test(t)) return key;
   const scored = allScenePlaces()
@@ -323,7 +327,9 @@ export function startNodeStage(node: CareerNode): { chapterIndex: number; scene:
     const s = getStageScene(ch.id);
     if (s && s.nodeId === node.id && !s.ended) return { chapterIndex: ch.index, scene: s };
   }
-  return startStageScene({ placeKey: placeKeyFromText(node.place), placeName: node.place, nodeId: node.id, premise });
+  const key = placeKeyFromText(node.place);
+  // 写的就是地图上的地点（「江南·烤肉店」）：用地图的说法；不是的照它原来写的
+  return startStageScene({ placeKey: key, placeName: placeByKey(node.place.trim()) ? placeFullName(key) : node.place, nodeId: node.id, premise });
 }
 
 function frameText(raw: string, role: string): string {

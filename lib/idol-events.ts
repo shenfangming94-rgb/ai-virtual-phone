@@ -7,6 +7,7 @@
  * 跳过的日子里：不用她回的（群里、八卦、动态）按原来的时间补上；要她回的私聊在她落地时才发过来。
  */
 
+import { allScenePlaces, placeLocked } from "./idol-stage";
 import { nudgeLeave } from "./idol-leave";
 import { fameEvent, fameTotal, fameWordNow } from "./idol-fame";
 import { kvGet, kvSet } from "./kv-db";
@@ -169,6 +170,7 @@ const PLAN_RULES = `你在给一出韩国娱乐圈练习生的戏排接下来几
 - 消息要像真人发的 KakaoTalk：口语、短，一个人一次一到三条。where 写 group（练习生群）或 private（私聊她）。
 - 每句话都要合情合理、前因后果对得上：只有影响到群里大家的事才在群里通知，个人的事走私聊或者当八卦传。
 - 机会和约要她回复的写 invite（title、at 开始时间、place、replyBy 回复截止、from 谁通知或谁约的），kind 写 chance 或 date；同时写一条通知她的消息。
+- invite 的 place：先从「地点名单」里挑最合适的，照名单原样写（比如吃烤肉写「江南·烤肉店」、公司里的事写「公司·会议室」）；名单里实在没有合适的才自己写一个具体地点。
 - 有人「【近况要更新】」的，在 status 里给他写新的近况：status 世界视角一句他最近在忙什么，kakao 他自己会写在 KakaoTalk 状态消息里的短句。有事发生在谁身上，也更新他的近况。
 - posts：偶尔有一两个人发 KakaoTalk 动态（练习生手机管得严，一周一两条），写他自己口吻的一两句。
 - fame：这件事让外界更多人知道她了才写，按动静写 small（路透、小帖子）/ medium（公开视频上传、给前辈伴舞、上杂志）/ big（上热搜、出了大事，好事坏事都算）；跟外界无关、别人身上的事不写。
@@ -203,6 +205,7 @@ async function plan(from: number, to: number): Promise<void> {
     `【她是谁】\n${card ? describeTrainee(card) : "一个想当爱豆的女生"}\n关注度：${fameWord(s.fame)}${s.health && s.health.until > now ? `\n身体：${s.health.what}` : ""}`,
     careerPromptBlock(),
     `【名单】\n${rosterBlock() || "（还没有）"}`,
+    `【地点名单】${allScenePlaces().filter(x => !placeLocked(x)).map(x => x.key).join("、")}`,
     crowd ? `【练习生群里的路人】${crowd}` : "",
     `【她最近做过的事】\n${recentHers()}`,
     s.feed.length ? `【前几天已经发生的事】\n${s.feed.slice(-8).map(f => `- ${f.text}`).join("\n")}` : "",

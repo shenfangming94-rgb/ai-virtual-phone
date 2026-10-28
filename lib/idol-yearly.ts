@@ -92,7 +92,7 @@ function birthday(year: number, now: number) {
   const due = at(iso, 19);
   if (due > now + HOUR) {
     addNodes([{
-      id: uid("node"), kind: "date", title: `${host.name}约你过生日`, place: "宿舍附近的烤肉店", dueAt: due, status: "invite",
+      id: uid("node"), kind: "date", title: `${host.name}约你过生日`, place: "江南·烤肉店", dueAt: due, status: "invite",
       premise: `今天是她的生日，${host.name}张罗着给她过，叫了几个跟她要好的人。`, from: host.name, fromId: host.id, replyBy: due - 2 * HOUR,
     }]);
     queueMessage(host.id, `今天是她的生日。你想晚上七点在宿舍附近的烤肉店给她过生日（会叫上几个要好的人），先祝她生日快乐，再约她，问她来不来。`, 5 * MIN);
@@ -160,7 +160,7 @@ function concert(year: number, now: number) {
     void teacherSays(`年末家族演唱会（${md(show)}）的伴舞名单定了，练习生里选了几个人，名单私下通知；没被选上的当天一起去台下看。`, `年末演唱会伴舞名单定了，选上的我私下通知。没选上的 ${md(show)} 一起去台下看。`);
   } else {
     addNodes([
-      { id: uid("node"), kind: "event", title: `${c.name} 年末家族演唱会（台下看）`, place: hall, dueAt: show - HOUR, status: "pending", premise: `${c.name} 年末家族演唱会。她这次没被选上伴舞，跟同期一起坐在练习生席，看前辈和被选上的同期在台上。`, companyId: c.id, from: teacher?.name },
+      { id: uid("node"), kind: "event", title: `${c.name} 年末家族演唱会（台下看）`, place: `${hall} 观众席`, dueAt: show - HOUR, status: "pending", premise: `${c.name} 年末家族演唱会。她这次没被选上伴舞，跟同期一起坐在练习生席，看前辈和被选上的同期在台上。`, companyId: c.id, from: teacher?.name },
     ]);
     void teacherSays(`年末家族演唱会（${md(show)}）的伴舞名单定了，选上的已经私下通知。没被选上的当天跟老师一起去台下看，下午五点在公司门口集合。`, `年末演唱会伴舞名单定了。没选上的 ${md(show)} 下午五点公司门口集合，一起去看。`);
   }

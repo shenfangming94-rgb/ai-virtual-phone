@@ -7,7 +7,7 @@
  */
 
 import { loadGroups, findGroup, type Group } from "./idol-groups";
-import { fameTier } from "./idol-fame";
+import { fameBand } from "./idol-fame";
 
 export type Tier = "top" | "mid" | "small" | "rookie";
 export const TIER_NAMES: Record<Tier, string> = { top: "顶流", mid: "中坚", small: "小团", rookie: "新人" };
@@ -74,7 +74,7 @@ export function channelSubs(key: string, kind: "company" | "group" | "person", c
 }
 /** 她出镜的视频：公司频道越大越多，再乘她的关注度 */
 export function myVideoViews(key: string, channelSubsN: number): number {
-  const tier = fameTier().name;
+  const tier = fameBand();
   const mult = tier === "公众人物" ? 8 : tier === "小有人知" ? 2.5 : 1;
   return Math.max(800, Math.round(channelSubsN * (0.003 + seeded(key) * 0.005) * mult));
 }

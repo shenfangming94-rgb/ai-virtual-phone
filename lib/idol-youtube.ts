@@ -15,7 +15,7 @@ import { loadCharacters } from "./character-storage";
 import { loadProfiles } from "./idol-people";
 import { loadTraineeCard } from "./trainee-card";
 import { idolWorldPrompt } from "./idol-worldbook";
-import { fameEvent, fameTier } from "./idol-fame";
+import { fameEvent, fameBand } from "./idol-fame";
 import { COMPANIES, companyOf, loadCareer } from "./idol-career";
 import { findGroup, groupLine, loadGroups, rosterPrompt, upsertGroups, companyIdByName } from "./idol-groups";
 import { LOOKS } from "./idol-search";
@@ -312,7 +312,7 @@ export async function moreComments(videoId: string, parentId?: string): Promise<
     const ch = s.channels[v.ch];
     const now = Date.now();
     const parent = parentId ? v.cmts.find(c => c.id === parentId) : undefined;
-    const tier = fameTier().name;
+    const tier = fameBand();
     const profiles = loadProfiles();
     const chars = loadCharacters();
     const knowHer = Object.values(profiles).filter(p => p.met && p.layer === "main").map(p => ({ p, c: chars.find(c => c.id === p.charId) })).filter(x => x.c).slice(0, 10);

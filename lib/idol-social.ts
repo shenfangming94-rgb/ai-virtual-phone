@@ -9,7 +9,7 @@
 import { loadInstalledCustomApps, readCustomAppCollection, writeCustomAppCollection } from "./custom-app-storage";
 import { loadCharacters } from "./character-storage";
 import { loadProfiles } from "./idol-people";
-import { fameTier, fameTotal } from "./idol-fame";
+import { fameBand, fameTotal } from "./idol-fame";
 import { loadTraineeCard } from "./trainee-card";
 import { loadCareer, companyOf } from "./idol-career";
 
@@ -35,7 +35,7 @@ function whoMe(): string {
 let lastSig = "";
 export function socialTick(): void {
   if (!loadTraineeCard()) return;
-  const tier = fameTier(fameTotal()).name;
+  const tier = fameBand();
   const row = { id: "idol_mode", on: true, publicChars: idolPublicChars(), publicMe: tier === "公众人物", tierMe: tier, whoMe: whoMe(), altOnly: true, meAnon: true };
   const apps = loadInstalledCustomApps().filter(a => APPS.includes(a.manifest.id));
   const sig = JSON.stringify(row) + apps.map(a => a.id).join(",");
@@ -52,7 +52,7 @@ export function socialTick(): void {
 /** 小红书路人写评论时带上：她在这个世界算哪一档、谁是出道爱豆（没开局就空） */
 export function idolXhsLine(): string {
   if (!loadTraineeCard()) return "";
-  const tier = fameTier(fameTotal()).name;
+  const tier = fameBand();
   const pubs = idolPublicChars().map(id => loadCharacters().find(c => c.id === id)?.name).filter(Boolean);
   const me = tier === "公众人物" ? `用户是公众人物（${whoMe()}）：评论区以她的粉丝为主，夹着路人和少量黑粉，大家知道她是谁。`
     : tier === "小有人知" ? `用户小有人知（${whoMe()}）：评论区大多是陌生网友，偶尔有一两个人认出她。`

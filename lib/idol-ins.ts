@@ -15,7 +15,7 @@ import { loadCharacters } from "./character-storage";
 import { loadProfiles, composePersona, type IdolProfile } from "./idol-people";
 import { loadTraineeCard } from "./trainee-card";
 import { idolWorldPrompt } from "./idol-worldbook";
-import { fameEvent, fameTier, fameTotal } from "./idol-fame";
+import { fameEvent, fameBand, fameTotal } from "./idol-fame";
 import { addWorldFeed } from "./idol-events";
 import { isKakaoFriend } from "./idol-kakao";
 import { loadCareer } from "./idol-career";
@@ -281,7 +281,7 @@ export async function fillFeed(): Promise<number> {
       return { ...strangersFollow(x, (now - since) / HOUR), strangersAt: now };
     });
     const s = loadIns();
-    const tier = fameTier(fameTotal()).name;
+    const tier = fameBand();
     // 陌生人私信：公开号或有点名气才有
     const strangerMax = tier === "公众人物" ? 3 : tier === "小有人知" ? 1 : !s.me.private && Math.random() < 0.25 ? 1 : 0;
     // 熟人主动私信：ins 上有来往（她关注了 / 聊过）、没加 Kakao、开着「会主动来找你」
@@ -358,7 +358,7 @@ function strangerAcc(): InsAcc {
 
 /** 陌生人关注她：看号公不公开、她在哪一档（私密号的话变成关注申请） */
 function strangersFollow(s: State, hours: number): State {
-  const tier = fameTier(fameTotal()).name;
+  const tier = fameBand();
   const rate = tier === "公众人物" ? 6 : tier === "小有人知" ? 0.5 : 0.01;
   let n = Math.floor(rate * Math.min(hours, 72) * rnd(0.4, 1.3));
   if (tier === "普通人" && !s.me.private && Math.random() < 0.15 * Math.min(1, hours / 24)) n += 1;
@@ -392,7 +392,7 @@ export async function moreComments(id: string, mode: "reply" | "more"): Promise<
     const owner = accOf(post.by)!;
     const mine = post.by === ME;
     const p = owner.charId ? loadProfiles()[owner.charId] : undefined;
-    const tier = fameTier(fameTotal()).name;
+    const tier = fameBand();
     const who = mine
       ? (post.wasPublic ? `她的号是公开的，她现在是「${tier}」：普通人就只有零星陌生人；小有人知会有人认出她；公众人物满屏粉丝。` : "她的号锁着，只有关注她的人看得到。") + `关注她的人：${s.followers.map(fid => s.accs[fid]).filter(Boolean).slice(0, 20).map(a => `@${a.handle}（${ownerName(a)}）`).join("、") || "还没有"}`
       : `这是 @${owner.handle}（${owner.alt ? `${ownerName(owner)} 的私人小号，只有熟人看得到` : owner.name}${owner.verified ? "，认证公开号，评论多是粉丝" : ""}）的帖子。${p ? composePersona(p) : ""}`;
@@ -441,7 +441,7 @@ async function reactToMine(postId: string): Promise<void> {
   const s = loadIns();
   const post = s.posts.find(p => p.id === postId);
   if (!post) return;
-  const tier = fameTier(fameTotal());
+  const tier = { name: fameBand() };
   const profiles = loadProfiles();
   const fl = s.followers.map(id => s.accs[id]).filter(Boolean).map(a => `@${a.handle}（${a.name}${a.charId && profiles[a.charId] ? `，${profiles[a.charId].role}，跟她：${profiles[a.charId].relation ?? "认识"}` : ""}）`).join("、");
   const imgs = post.imgs.map((i, n) => `第${n + 1}张：${i.desc}${i.who?.length ? `（照片里有：${i.who.map(w => w === SELF_REFERENCE_ID ? "她自己" : loadCharacters().find(c => c.id === w)?.name).filter(Boolean).join("、")}）` : ""}`).join("\n");

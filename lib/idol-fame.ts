@@ -17,15 +17,24 @@ const DAY = 864e5;
 /** 热度半衰期：一周 */
 const HALF = 7 * DAY;
 
+/** 咖位八档。band 是以前的三档（ins、微博、YouTube 这些按它判断怎么写） */
 export const FAME_TIERS = [
-  { min: 0, name: "普通人", range: "0～19" },
-  { min: 20, name: "小有人知", range: "20～49" },
-  { min: 50, name: "公众人物", range: "50+" },
+  { min: 0, name: "无人知晓", range: "0～4", band: "普通人", word: "除了家人朋友没人知道她" },
+  { min: 5, name: "默默无闻", range: "5～11", band: "普通人", word: "公司里的人知道她，外面几乎没人在意" },
+  { min: 12, name: "小有名气", range: "12～19", band: "小有人知", word: "追练习生的一小圈人里有人提过她" },
+  { min: 20, name: "潜力新人", range: "20～29", band: "小有人知", word: "有人专门关注她，她的路透会被转" },
+  { min: 30, name: "普通艺人", range: "30～41", band: "公众人物", word: "正常艺人那一档，路人也听过她的名字，偶尔上热搜" },
+  { min: 42, name: "人气艺人", range: "42～55", band: "公众人物", word: "粉丝多，走到哪都有人认出来" },
+  { min: 56, name: "当红艺人", range: "56～71", band: "公众人物", word: "代言综艺排着来，大众都认识她" },
+  { min: 72, name: "顶流", range: "72+", band: "公众人物", word: "国民级，全韩国都知道她" },
 ] as const;
+export type FameTier = (typeof FAME_TIERS)[number];
+/** 练习生时期热度最多到这里（出道后放开） */
+const TRAINEE_HEAT_CAP = 30;
 
 export function familyStart(): number {
   const f = loadTraineeCard()?.family;
-  return f === "child" ? 55 : f === "star" ? 50 : f === "chaebol" || f === "rich" ? 30 : 5;
+  return f === "child" ? 50 : f === "star" ? 24 : f === "chaebol" || f === "rich" ? 15 : 5;
 }
 const familyText = () => {
   const f = loadTraineeCard()?.family;
@@ -83,13 +92,18 @@ export function fameState(): { pop: number; heat: number; total: number; log: Fa
 }
 export const fameTotal = () => fameState().total;
 
-/** 出道了一律算公众人物 */
-export function fameTier(total = fameTotal()): (typeof FAME_TIERS)[number] {
-  let stage = "";
-  try { stage = (JSON.parse(kvGet("idol_career_v1") || "null") as { stage?: string } | null)?.stage ?? ""; } catch { /* 没有就算没出道 */ }
-  if (stage === "idol") return FAME_TIERS[2];
-  return total >= 50 ? FAME_TIERS[2] : total >= 20 ? FAME_TIERS[1] : FAME_TIERS[0];
+function careerStage(): string {
+  try { return (JSON.parse(kvGet("idol_career_v1") || "null") as { stage?: string } | null)?.stage ?? ""; } catch { return ""; }
 }
+
+/** 咖位：出道了最低算普通艺人 */
+export function fameTier(total = fameTotal()): FameTier {
+  const t = [...FAME_TIERS].reverse().find(x => total >= x.min) ?? FAME_TIERS[0];
+  if (careerStage() === "idol" && t.min < 30) return FAME_TIERS[4];
+  return t;
+}
+/** 以前的三档（普通人 / 小有人知 / 公众人物） */
+export const fameBand = (total = fameTotal()): string => fameTier(total).band;
 
 /** 热度两周后大概剩多少 */
 export const heatIn = (days: number) => Math.round(fameState().heat * Math.pow(0.5, (days * DAY) / HALF));
@@ -100,7 +114,7 @@ export function fameEvent(size: FameSize, text: string, at = Date.now()): void {
   const s = settle(load(), Math.max(at, load().at));
   const dPop = size === "medium" ? 1 : size === "debut" ? 30 : 0;
   const dHeat = size === "small" ? 2 : size === "medium" ? 5 : size === "big" ? 10 + Math.floor(Math.random() * 11) : 0;
-  const next = { ...s, pop: Math.min(100, s.pop + dPop), heat: Math.min(100, s.heat + dHeat) };
+  const next = { ...s, pop: Math.min(100, s.pop + dPop), heat: Math.min(careerStage() === "idol" ? 100 : TRAINEE_HEAT_CAP, s.heat + dHeat) };
   next.log = [...s.log, { at, text: text.trim() || "有点动静", size, pop: dPop, heat: dHeat }];
   save(next);
 }
@@ -117,9 +131,6 @@ export function setFameTotal(target: number): void {
 
 /** 给世界看的一句话 */
 export function fameWordNow(): string {
-  const t = fameTotal();
-  const tier = fameTier(t);
-  return tier.name === "公众人物" ? "公众人物：很多人认识她，评论区多是粉丝，有人开帖讨论她"
-    : tier.name === "小有人知" ? "小有人知：有一小撮人在关注她，偶尔被路透粉、考古粉认出来"
-    : "普通人：几乎没人知道她，网上的人都当她是陌生人";
+  const tier = fameTier(fameTotal());
+  return `${tier.name}：${tier.word}`;
 }

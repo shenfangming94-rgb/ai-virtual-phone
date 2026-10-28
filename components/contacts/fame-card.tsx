@@ -61,10 +61,10 @@ export function FameCardBlock() {
         <div className="fm-id-in">
           <div className="fm-n"><b>{f.total}</b><span>{tier.name}</span></div>
           <div className="fm-scale">
-            {FAME_TIERS.map(t => <div key={t.name} className={t.name === tier.name ? "on" : ""} style={{ width: t.min === 0 ? "20%" : t.min === 20 ? "30%" : "50%" }}>{t.name}<br />{t.range}</div>)}
+            {FAME_TIERS.map((t, i) => <div key={t.name} className={t.name === tier.name ? "on" : ""} style={{ width: `${((FAME_TIERS[i + 1]?.min ?? 100) - t.min)}%` }}>{t.name === tier.name ? <>{t.name}<br />{t.range}</> : null}</div>)}
           </div>
           <Meter pop={f.pop} heat={f.heat} />
-          <div className="fm-legend"><span><i className="p" />人气 {f.pop}</span><span><i className="h" />热度 {f.heat}（会退）</span>{next && tier.name !== "公众人物" ? <span className="r">差 {next.min - f.total} 分到「{next.name}」</span> : null}</div>
+          <div className="fm-legend"><span><i className="p" />人气 {f.pop}</span><span><i className="h" />热度 {f.heat}（会退）</span>{next ? <span className="r">差 {next.min - f.total} 分到「{next.name}」</span> : null}</div>
           {stampAt ? <div className="fm-stamp"><b>確認</b>{String(new Date(stampAt).getMonth() + 1).padStart(2, "0")}.{String(new Date(stampAt).getDate()).padStart(2, "0")}</div> : null}
         </div>
       </button>
@@ -93,7 +93,7 @@ function FameDetail({ onClose }: { onClose: () => void }) {
           <div className="fm-sub"><span><i className="p" />人气 {f.pop}</span><span><i className="h" />热度 {f.heat}{f.heat ? ` · 两周后约剩 ${heatIn(14)}` : ""}</span></div>
         </div>
         <div className="fm-cd">
-          <div className="fm-k">三档</div>
+          <div className="fm-k">咖位</div>
           {FAME_TIERS.map(t => <div key={t.name} className={`fm-tr${t.name === tier.name ? " on" : ""}`}><b>{t.range}</b>{t.name}</div>)}
         </div>
         <div className="fm-cd">

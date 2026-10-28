@@ -160,7 +160,7 @@ async function generate(): Promise<State | null> {
       `place：via=stage 时从这些地点里选一个（照原样）：${places.join("、")}；其余写空`,
       "meet：要约她去哪儿见谁就写 {\"title\":\"提醒事项里的标题\",\"place\":\"地点\",\"days\":几天后,\"hour\":几点}，不用约就写 null",
       "size：big / mid / small",
-      `trigger：从这几种里选最合适的：{"type":"time"}（到时候就来）、{"type":"grade","subject":"${SUBJECTS.map(s => s.id).join("/")}","grade":"C/B/A"}（某门课升到某档）、{"type":"place","place":"上面的地点","times":2～4}（去过某地几次）、{"type":"fame","level":20～60}（有了一点名气）、{"type":"people","min":"认识/熟人/朋友/好朋友/暧昧/恋人","count":1～3,"mbti":"可选，MBTI 里要有的字母","role":"可选，对方身份里要有的词","gender":"可选，男/女"}（跟某一类人的关系到了某一步，不指定具体哪个人）、{"type":"dated","times":1～3}（谈过几次恋爱）、{"type":"rank","top":几} 或 {"type":"rank","bottom":几}（月末排名进前几 / 掉到最后几）、{"type":"season","month":1～12} 或 {"type":"season","birthday":true}（到了某个月 / 她生日前后）、{"type":"after","event":"debut_team/someone_left/selection_failed"}（进了出道组以后 / 有同期离开公司以后 / 出道组选拔没进以后）。time 占三分之一左右，跟人有关的条件多用一些；条件要跟这件事说得通，选 place 的，这件事必须跟那个地方本身有关系`,
+      `trigger：从这几种里选最合适的：{"type":"time"}（到时候就来）、{"type":"grade","subject":"${SUBJECTS.map(s => s.id).join("/")}","grade":"C/B/A"}（某门课升到某档）、{"type":"place","place":"上面的地点","times":2～4}（去过某地几次）、{"type":"fame","level":12～40}（有了一点名气：12 小有名气、20 潜力新人、30 普通艺人）、{"type":"people","min":"认识/熟人/朋友/好朋友/暧昧/恋人","count":1～3,"mbti":"可选，MBTI 里要有的字母","role":"可选，对方身份里要有的词","gender":"可选，男/女"}（跟某一类人的关系到了某一步，不指定具体哪个人）、{"type":"dated","times":1～3}（谈过几次恋爱）、{"type":"rank","top":几} 或 {"type":"rank","bottom":几}（月末排名进前几 / 掉到最后几）、{"type":"season","month":1～12} 或 {"type":"season","birthday":true}（到了某个月 / 她生日前后）、{"type":"after","event":"debut_team/someone_left/selection_failed"}（进了出道组以后 / 有同期离开公司以后 / 出道组选拔没进以后）。time 占三分之一左右，跟人有关的条件多用一些；条件要跟这件事说得通，选 place 的，这件事必须跟那个地方本身有关系`,
     ].join("\n") },
     { role: "user", content: [
       describeTrainee(card),
@@ -182,7 +182,7 @@ async function generate(): Promise<State | null> {
     let trigger: Trigger = { type: "time" };
     if (t.type === "grade" && SUBJECTS.some(s => s.id === t.subject) && ["C", "B", "A"].includes(String(t.grade))) trigger = { type: "grade", subject: t.subject as Subject, grade: t.grade as "C" | "B" | "A" };
     if (t.type === "place" && t.place && places.includes(t.place)) trigger = { type: "place", place: t.place, times: Math.max(2, Math.min(4, Number(t.times) || 2)) };
-    if (t.type === "fame") trigger = { type: "fame", level: Math.max(15, Math.min(60, Number(t.level) || 25)) };
+    if (t.type === "fame") trigger = { type: "fame", level: Math.max(12, Math.min(40, Number(t.level) || 20)) };
     if (t.type === "people") trigger = {
       type: "people", min: (RELATIONS as readonly string[]).includes(String(t.min)) && RELATIONS.indexOf(t.min as typeof RELATIONS[number]) >= RELATIONS.indexOf("认识") ? t.min as Relation : "朋友",
       count: Math.max(1, Math.min(3, Number(t.count) || 1)),

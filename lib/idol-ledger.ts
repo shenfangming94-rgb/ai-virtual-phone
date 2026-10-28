@@ -2,7 +2,7 @@
  * 爱豆小手机：公司心里的那本账，和每个月的月末排名。
  *
  * 账（她看不到数字）：考核表现（演了按戏里判、打勾按她写的那句）、缺席扣、请假不扣、完成机会加、老师对她的印象。
- * 月考完第二天上午十点，管理老师在练习生群里发结果和一张排名表（代码画的图）；同期在群里反应。
+ * 月考完第二天上午十点，室长在练习生群里发结果和一张排名表（代码画的图）；同期在群里反应。
  * 她的名次从账来，一个月最多升降八名；考前写了「想要的结果」就照那个排；排名页能「改我的名次」。
  */
 
@@ -201,7 +201,7 @@ async function words(r: MonthRank, teacherName: string, mates: string[], friends
   try {
     const recent = load().entries.filter(e => e.at >= (load().months.slice(-2)[0]?.at ?? 0)).slice(-6).map(e => e.why).join("；");
     const res = await simpleLLMCall(chatConfig(), [
-      { role: "system", content: `你在写韩国练习生公司月末评价出结果那天，KakaoTalk 练习生群里的几句话。只输出 JSON：{"announce":"管理老师${teacherName}在群里发结果时说的话，一两句","comment":"${teacherName}私下给${me}的一句评语，照她这个月的表现说","reactions":[{"who":"","text":""}],"dms":[{"who":"","text":""}]}。reactions 是群里两三个人看到结果的反应，只说自己的名次或泛泛的话，不在群里点评别人；dms 是跟${me}要好的人私聊她说的话（只用「她的朋友」里的名字，可以没有），提到她的名次要对得上。都要口语、短；第一次排名没有升降可说。` },
+      { role: "system", content: `你在写韩国练习生公司月末评价出结果那天，KakaoTalk 练习生群里的几句话。只输出 JSON：{"announce":"室长${teacherName}在群里发结果时说的话，一两句","comment":"${teacherName}私下给${me}的一句评语，照她这个月的表现说","reactions":[{"who":"","text":""}],"dms":[{"who":"","text":""}]}。reactions 是群里两三个人看到结果的反应，只说自己的名次或泛泛的话，不在群里点评别人；dms 是跟${me}要好的人私聊她说的话（只用「她的朋友」里的名字，可以没有），提到她的名次要对得上。都要口语、短；第一次排名没有升降可说。` },
       { role: "user", content: `${me}这次第 ${r.rank} 名（共 ${r.total} 人）${r.prevRank ? `，上次第 ${r.prevRank} 名` : "，第一次排名"}。她这个月：${recent || "照常训练"}。前三名：${r.rows.slice(0, 3).map(x => x.name).join("、")}。群里可以说话的人：${mates.join("、") || "群里的路人"}。她的朋友：${friends.join("、") || "没有"}` },
     ], { temperature: 0.85, label: "月末排名" });
     const j = JSON.parse(res.content?.match(/\{[\s\S]*\}/)?.[0] ?? "{}") as { announce?: string; comment?: string; reactions?: { who?: string; text?: string }[]; dms?: { who?: string; text?: string }[] };
@@ -246,7 +246,7 @@ async function publish(node: CareerNode, at: number, notify: (m: string) => void
   const mates = r.rows.filter(x => x.id !== ME).slice(0, 12).map(x => x.name);
   const contacts = new Set(loadChatContacts().map(c => c.characterId));
   const friendChars = loadCharacters().filter(c => contacts.has(c.id) && c.id !== teacher?.id && ["朋友", "好朋友", "暧昧", "恋人"].includes(relationOf(getProfile(c.id))));
-  const w = await words(r, teacher?.name ?? "管理老师", mates, friendChars.map(c => c.name));
+  const w = await words(r, teacher?.name ?? "室长", mates, friendChars.map(c => c.name));
   r.comment = w.comment;
   if (gid && teacher) {
     const iso = (ms: number) => new Date(ms).toISOString();

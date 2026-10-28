@@ -2,7 +2,7 @@
  * 爱豆小手机：提醒事项的规矩。
  *
  * 每个日程三种结局：去演（剧情 app）/ 打勾写一句（算真发生过）/ 过了开始时间两小时没动 = 缺席（有后果）。
- * 请假：KakaoTalk 给管理老师发消息，老师批了（回复里 [准假:日程名]）自动「已请假」；也能在提醒事项里直接左滑请假。
+ * 请假：KakaoTalk 给室长发消息，老师批了（回复里 [准假:日程名]）自动「已请假」；也能在提醒事项里直接左滑请假。
  * 待回复：机会先问她要不要，接了才变日程。跳时间遇到日程或新的待回复就停。
  */
 
@@ -20,10 +20,11 @@ import {
 import { afterNodeScene } from "./idol-kakao";
 import { setWorldTime } from "./world-clock";
 import { addFame, plannedStops } from "./idol-events";
-import { recordAbsent, recordNodeDone } from "./idol-ledger";
+import { recordAbsent, recordNodeDone, scoreResultText } from "./idol-ledger";
 import { getProfile, saveProfile } from "./idol-people";
 import { onSelection, revealName } from "./idol-debut";
 import { yearlyStops } from "./idol-yearly";
+import { classesForTeacher, leaveFromMarker, onNodeDone } from "./idol-starroad";
 
 const KEY = "idol_reminders_v1";
 const MIN = 60e3;
@@ -55,7 +56,7 @@ function patchNode(id: string, patch: Partial<CareerNode>): CareerNode | undefin
   return next;
 }
 
-/** 管理老师（拉群的那位） */
+/** 室长（拉群的那位） */
 export function teacherOf(): Character | undefined {
   try {
     const raw = JSON.parse(kvGet("idol_kakao_v1") || "null") as { teacherId?: string } | null;
@@ -78,10 +79,12 @@ export async function checkNode(id: string, result: string): Promise<void> {
   const node = patchNode(id, { status: "done", result: text || "照常完成", doneAt: Date.now() });
   if (!node) return;
   const teacher = teacherOf();
-  if (node.kind !== "custom" && node.kind !== "date") noteToPerson(teacher?.id, `她${node.title}：${text || "照常完成"}`, node.dueAt, node.place);
+  if (node.kind !== "custom" && node.kind !== "date" && node.kind !== "practice") noteToPerson(teacher?.id, `她${node.title}：${text || "照常完成"}`, node.dueAt, node.place);
   if (node.kind === "date") noteToPerson(node.fromId, `一起去了「${node.title}」${text ? `：${text}` : ""}`, node.dueAt, node.place);
   if (node.kind === "chance") addFame(5, node.title);
   recordNodeDone(node, text);
+  const sc = scoreResultText(text);
+  onNodeDone(node, sc >= 3 ? "good" : sc < 0 ? "bad" : "ok");
   await completeNode(id);
   await afterNodeScene(loadCareer().nodes.find(n => n.id === id), [], node.place).catch(() => undefined);
 }
@@ -226,6 +229,8 @@ async function sendAs(charId: string, instruction: string): Promise<string | nul
 
 /** 缺席的后果：公司的事老师来问，第二次起叫去办公室；约好的事那个人来问 */
 function onAbsent(node: CareerNode) {
+  // 作业没交：这周不涨，不罚
+  if (node.kind === "homework") return;
   recordAbsent(node);
   if (node.kind === "selection") void onSelection(node, "absent");
   if (node.kind === "debut" && node.step === "name") void revealName();
@@ -269,7 +274,7 @@ export function reminderTick(notify: (msg: string) => void): void {
   const absent: CareerNode[] = [];
   let changed = false;
   const nodes = career.nodes.map(n => {
-    if ((n.status === "pending" && now > n.dueAt + ABSENT_AFTER && n.kind !== "custom") || n.status === "passed") {
+    if ((n.status === "pending" && now > n.dueAt + ABSENT_AFTER && n.kind !== "custom" && n.kind !== "practice") || n.status === "passed") {
       changed = true;
       if (n.status === "pending") absent.push(n);
       return { ...n, status: "absent" as const };
@@ -308,11 +313,13 @@ export function buildIdolChatHint(characterId: string, isGroup: boolean): string
   const now = Date.now();
   const teacher = teacherOf();
   if (teacher && teacher.id === characterId) {
-    const upcoming = loadCareer().nodes.filter(n => n.status === "pending" && n.dueAt > now - ABSENT_AFTER && n.kind !== "custom" && n.kind !== "date").slice(0, 6);
-    if (upcoming.length) out.push(
+    const upcoming = loadCareer().nodes.filter(n => n.status === "pending" && n.dueAt > now - ABSENT_AFTER && n.kind !== "custom" && n.kind !== "date" && n.kind !== "practice").slice(0, 8);
+    const classes = classesForTeacher();
+    if (upcoming.length || classes) out.push(
       "### 请假",
-      `她接下来的日程：${upcoming.map(n => `「${n.title}」${new Date(n.dueAt).getMonth() + 1}月${new Date(n.dueAt).getDate()}日`).join("、")}`,
-      "【规则】她找你请假时，按你的性格、她的理由和她最近的表现决定批不批。批了就在回复末尾另起一行写 [准假:日程名]（日程名照上面写），没批就正常回她，不写记号。",
+      upcoming.length ? `她接下来的日程：${upcoming.map(n => `「${n.title}」${new Date(n.dueAt).getMonth() + 1}月${new Date(n.dueAt).getDate()}日`).join("、")}` : "",
+      classes ? `她接下来几天的课：\n${classes}` : "",
+      "【规则】她找你请假时，按你的性格、她的理由和她最近的表现决定批不批。批了就在回复末尾另起一行写记号：日程写 [准假:日程名]（照上面写）；请一整天的课写 [准假:几月几日]；只请一节课写 [准假:几月几日 课名]。那天有日程也要请就各写一行。没批就正常回她，不写记号。",
     );
   }
   const asked = loadCareer().nodes.filter(n => n.status === "invite" && n.fromId === characterId);
@@ -349,7 +356,9 @@ export function installIdolChatHooks(notify: (msg: string) => void): void {
     const teacher = teacherOf();
     for (const t of titles) {
       const node = loadCareer().nodes.find(n => n.status === "pending" && (n.title === t || t.includes(n.title) || n.title.includes(t)));
-      if (node) { leaveNode(node.id, "", teacher?.name); notify(`📝 ${node.title} 请好假了`); }
+      if (node) { leaveNode(node.id, "", teacher?.name); notify(`📝 ${node.title} 请好假了`); continue; }
+      const cls = leaveFromMarker(t);
+      if (cls) notify(`📝 ${cls}`);
     }
     return { ...payload, message: { ...msg, content } };
   });

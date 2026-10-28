@@ -1,0 +1,57 @@
+import puppeteer from "puppeteer-core";
+const OUT=process.argv[2]||".";
+const b=await puppeteer.launch({executablePath:"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",headless:"new"});
+const p=await b.newPage(); await p.setViewport({width:430,height:900,deviceScaleFactor:2});
+const errs=[]; p.on("pageerror",e=>errs.push(e.message));
+const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+const asks=[];
+const CORS={"Access-Control-Allow-Origin":"*","Access-Control-Allow-Headers":"*","Access-Control-Allow-Methods":"POST, OPTIONS"};
+await p.setRequestInterception(true);
+p.on("request",r=>{ if(r.url().includes("mock.test")&&r.method()==="OPTIONS"){r.respond({status:204,headers:CORS});return;} if(r.url().includes("mock.test")){ const s=r.postData()||""; asks.push(s.slice(-300)); const c=s.includes("排接下来几天")?JSON.stringify({events:[],newPeople:[],status:[],posts:[]}):"这周声乐作业：把副歌的高音练稳，周五三点唱给老师听哦。"; r.respond({status:200,headers:CORS,contentType:"application/json",body:JSON.stringify({choices:[{message:{role:"assistant",content:c},finish_reason:"stop"}]})}); } else r.continue(); });
+await p.goto("http://localhost:3031/",{waitUntil:"networkidle2",timeout:300000}); await sleep(2000);
+await p.evaluate(async()=>{
+  const now=new Date().toISOString();
+  const mk=(id,name)=>({id,name,avatar:null,persona:"",wechatID:"x"+id,tags:[],createdAt:now,updatedAt:now});
+  const base={layer:"main",group:"公司",role:"JYP 练习生室长",age:"34",isIdol:false,publicLabels:[],publicText:"",face:"mixed",privateLines:[],speech:"",taboo:"",withYou:"",met:true,events:[],note:""};
+  const db=await new Promise((res,rej)=>{const r=indexedDB.open("AiPhoneKvDB");r.onsuccess=()=>res(r.result);r.onerror=rej;});
+  const tx=db.transaction("entries","readwrite"); const st=tx.objectStore("entries");
+  for (const k of ["idol_starroad_v1","idol_stage_scenes_v1","idol_reminders_v1"]) st.delete(k);
+  st.put({key:"ai_phone_characters_v1",value:JSON.stringify([mk("c1","朴珍熙")])});
+  st.put({key:"idol_people_v1",value:JSON.stringify({c1:{...base,charId:"c1"}})});
+  st.put({key:"idol_kakao_v1",value:JSON.stringify({teacherId:"c1"})});
+  st.put({key:"ai_phone_api_configs_v1",value:JSON.stringify([{id:"m1",name:"mock",provider:"openai",apiKey:"x",baseUrl:"https://mock.test/v1",defaultModel:"m",enableImageRecognition:false,enableImageGeneration:false}])});
+  st.put({key:"ai_phone_user_identities_v1",value:JSON.stringify([{id:"identity-1",name:"金智允",bio:"",gender:"女",age:"16",occupation:"",customSettings:""}])});
+  st.put({key:"idol_trainee_card_v1",value:JSON.stringify({name:"金智允",photo:null,birthday:"2001-04-16",nationality:"中国",mbti:"",looks:"",start:"2015-03-01",trainLength:"一年半",family:"normal",familyCustom:"",familyNote:"",talents:["vocal","variety","visual"],talentNote:"",weakness:"",other:"",signature:null,company:"JYP",no:"x",createdAt:1})});
+  const t0=new Date("2015-03-01T09:00:00").getTime();
+  st.put({key:"idol_career_v1",value:JSON.stringify({stage:"trainee",companyId:"jyp",signedAt:t0,facts:[],offers:[],offersMadeAt:1,nodes:[
+    {id:"n1",kind:"first_day",title:"进公司第一天",place:"JYP 公司大楼",premise:"第一天",dueAt:t0+86400000,status:"done",companyId:"jyp",remindedEve:true,remindedDue:true},
+    {id:"d1",kind:"date",title:"和智元去弘大",place:"弘大",premise:"",dueAt:new Date("2015-03-05T10:30:00").getTime(),status:"done",remindedEve:true,remindedDue:true},
+    {id:"d2",kind:"date",title:"周四下午看电影",place:"江南·电影院",premise:"",dueAt:new Date("2015-03-12T14:30:00").getTime(),status:"invite",from:"韩智元",remindedEve:true}]})});
+  st.put({key:"idol_stage_scenes_v1",value:JSON.stringify({ch1:{chapterId:"ch1",place:"江南·商场",bg:"江南·商场",premise:"",startAt:new Date("2015-03-03T14:20:00").getTime(),newFaces:[],ids:[],ended:true}})});
+  await new Promise(r=>tx.oncomplete=r);
+});
+const setT=async s=>p.evaluate(s=>{const wc=window.__worldClock; const t=new Date(s).getTime(); wc.offset=t-wc.RealDate.now(); localStorage.setItem("idol_world_clock_v1",JSON.stringify({real:false,offset:wc.offset,world:t}));},s);
+await setT("2015-03-09T10:05:00");
+await p.reload({waitUntil:"networkidle2"}); await sleep(9000);
+await p.evaluate(()=>document.querySelector(".lock-swipe")?.click()); await sleep(1500);
+const kv=async k=>p.evaluate(k=>new Promise(res=>{const r=indexedDB.open("AiPhoneKvDB");r.onsuccess=()=>{const g=r.result.transaction("entries").objectStore("entries").get(k);g.onsuccess=()=>res(g.result?.value)}}),k);
+const sr=JSON.parse(await kv("idol_starroad_v1")||"null");
+console.log("grades", sr && Object.entries(sr.subjects).map(([k,v])=>k+":"+v.grade+"/"+v.pts.toFixed(1)).join(" "));
+console.log("marks", sr?.marks.map(m=>new Date(m.at).toISOString().slice(5,16)+" "+m.label+" "+m.status).join(" | "));
+console.log("skips", sr?.skips.length, "hw", sr?.homeworkWeek, sr?.homeworkLog);
+const car=JSON.parse(await kv("idol_career_v1"));
+console.log("nodes", car.nodes.map(n=>n.kind+":"+n.title+":"+n.status).join(" | "));
+await p.evaluate(()=>window.postMessage({type:"OS_CMD",action:"open_app",appId:"starroad"},"*")); await sleep(2500);
+await p.screenshot({path:OUT+"/sr_transcript.png"});
+await p.evaluate(()=>[...document.querySelectorAll(".sr-table td.g button")][1].click()); await sleep(600);
+await p.screenshot({path:OUT+"/sr_sheet.png"});
+await p.evaluate(()=>document.querySelector(".sr-sh-btn").click()); await sleep(800);
+await p.evaluate(()=>[...document.querySelectorAll(".sr-tabs button")][1].click()); await sleep(1200);
+await p.screenshot({path:OUT+"/sr_destiny.png"});
+await p.evaluate(()=>window.postMessage({type:"OS_CMD",action:"open_app",appId:"career"},"*")); await sleep(2000);
+await p.evaluate(()=>[...document.querySelectorAll(".rm-lrow")].find(x=>x.textContent.includes("课表")).click()); await sleep(800);
+await p.evaluate(()=>[...document.querySelectorAll(".rm-tt-week button")][0].click()); await sleep(500);
+await p.screenshot({path:OUT+"/sr_timetable.png",fullPage:false});
+console.log("practice", JSON.parse(await kv("idol_career_v1")).nodes.filter(n=>n.kind==="practice").map(n=>n.title+" "+new Date(n.dueAt).toString().slice(0,21)));
+console.log("asks", asks.length, asks.slice(0,2));
+console.log("errs", errs.slice(0,3)); await b.close();

@@ -16,6 +16,7 @@ import { loadTraineeCard, saveTraineeCard, describeTrainee } from "./trainee-car
 import { upsertCalendarScheduleItem } from "./calendar-storage";
 import { getWeekStartIso } from "./calendar-utils";
 import { debutPromptBlock, onSelection, revealName, type Debut } from "./idol-debut";
+import { starPromptBlock } from "./idol-starroad";
 
 export type Company = { id: string; name: string; scale: string; style: string; trainee: string; recruit: string; fame: string };
 
@@ -31,7 +32,7 @@ export const COMPANIES: Company[] = [
 export const companyOf = (id?: string) => COMPANIES.find(c => c.id === id);
 
 export type Offer = { id: string; companyId: string; kind: "scout" | "audition"; at: number; message: string; place: string; status: "new" | "accepted" | "declined"; notified?: boolean };
-export type NodeKind = "audition" | "first_day" | "weekly" | "monthly" | "talk" | "makeup" | "chance" | "date" | "custom" | "selection" | "debut" | "event";
+export type NodeKind = "audition" | "first_day" | "weekly" | "monthly" | "talk" | "makeup" | "chance" | "date" | "custom" | "selection" | "debut" | "event" | "homework" | "practice";
 /** invite = 待回复；pending = 定了还没到/没做；done = 演了或打勾；leave = 请假；absent = 缺席；declined = 不去/过期；passed = 旧数据（当缺席） */
 export type NodeStatus = "invite" | "pending" | "done" | "leave" | "absent" | "declined" | "passed";
 export type CareerNode = {
@@ -58,13 +59,15 @@ export type CareerNode = {
   doneAt?: number;
   /** 出道那几件事：name 队名公布 / record 录音 / mv / showcase */
   step?: string;
+  /** 作业、加练是哪门课（星路） */
+  subject?: string;
 };
 
 /** 节点归哪个列表 */
 export function listOf(n: CareerNode): "company" | "chance" | "date" | "mine" {
   if (n.kind === "chance") return "chance";
   if (n.kind === "date") return "date";
-  if (n.kind === "custom") return "mine";
+  if (n.kind === "custom" || n.kind === "practice") return "mine";
   return "company";
 }
 export type Career = {
@@ -238,7 +241,7 @@ export async function signCompany(companyId: string): Promise<void> {
   first.setHours(9, 0, 0, 0);
   const firstDay: CareerNode = {
     id: uid("node"), kind: "first_day", title: "进公司第一天", place: `${c.name} 公司大楼`,
-    premise: "进公司的第一天：见练习生管理老师，分宿舍，见同期的练习生们。", dueAt: first.getTime(), status: "pending", companyId: c.id,
+    premise: "进公司的第一天：见练习生室长，分宿舍，见同期的练习生们。", dueAt: first.getTime(), status: "pending", companyId: c.id,
   };
   career.nodes = [...career.nodes.filter(n => n.status !== "pending" || n.kind === "audition"), firstDay];
   saveCareer(career);
@@ -343,6 +346,7 @@ export function careerPromptBlock(): string {
     career.roommates?.length ? `【她的室友】${career.roommates.map(id => loadCharacters().find(c => c.id === id)?.name).filter(Boolean).join("、")}` : "",
     career.facts.length ? `【戏里已经定下来的公司细节】\n${career.facts.slice(-30).map(f => `- ${f}`).join("\n")}` : "",
     next.length ? `【接下来的日程】${next.join("；")}` : "",
+    starPromptBlock(),
     recentResults(career),
     lastRankLine(),
   ].filter(Boolean).join("\n\n");
@@ -370,7 +374,7 @@ function lastRankLine(): string {
 /** 最近过去的日程怎么样了（演了、打勾写的、请假、缺席），世界要知道 */
 function recentResults(career: Career): string {
   const label: Record<string, string> = { done: "完成", leave: "请假", absent: "缺席", passed: "缺席" };
-  const past = career.nodes.filter(n => label[n.status] && n.kind !== "custom").sort((a, b) => b.dueAt - a.dueAt).slice(0, 8);
+  const past = career.nodes.filter(n => label[n.status] && n.kind !== "custom" && n.kind !== "practice").sort((a, b) => b.dueAt - a.dueAt).slice(0, 8);
   if (!past.length) return "";
   return `【最近的日程结果】\n${past.map(n => `- ${new Date(n.dueAt).getMonth() + 1}月${new Date(n.dueAt).getDate()}日 ${n.title}：${label[n.status]}${n.result ? `（${n.result}）` : ""}`).join("\n")}`;
 }

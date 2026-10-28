@@ -5,7 +5,7 @@
 
 import { kvGet, kvSet } from "./kv-db";
 
-export type NoteApp = "kakao" | "naver" | "reminders" | "clock" | "mail" | "stage" | "system";
+export type NoteApp = "kakao" | "naver" | "reminders" | "clock" | "mail" | "stage" | "starroad" | "system";
 export type LockNote = { id: string; app: NoteApp; title: string; text: string; at: number; from?: string; seen?: boolean; /** 固定排在最上面（出道当天那一串） */ pin?: boolean; /** 场景 app：点了开这件事那一场 */ nodeId?: string };
 
 const KEY = "idol_lock_notes_v1";
@@ -18,6 +18,7 @@ export const APP_LOOK: Record<NoteApp, { name: string; icon: string; bg: string;
   clock: { name: "时钟", icon: "⏰", bg: "#1c1c1e", fg: "#ff9f0a" },
   mail: { name: "邮件", icon: "✉", bg: "#1e88ff", fg: "#fff" },
   stage: { name: "此刻", icon: "◐", bg: "#2b2140", fg: "#f5c4dc" },
+  starroad: { name: "星路", icon: "✦", bg: "#1c1c1e", fg: "#f7f7f6" },
   system: { name: "通知", icon: "•", bg: "#8e8e93", fg: "#fff" },
 };
 
@@ -64,6 +65,10 @@ export function parseNotice(msg: string): Omit<LockNote, "id" | "at"> {
   if (stage) {
     const [title, rest] = split(stage[2]);
     return { app: "stage", title, text: rest, nodeId: stage[1] };
+  }
+  if (text.startsWith("🌠")) {
+    const [, rest] = split(text.replace(/^🌠\s*/u, ""));
+    return { app: "starroad", title: "", text: rest || text.replace(/^🌠\s*/u, "") };
   }
   if (text.startsWith("💬")) {
     const body = strip(text).replace(/^KakaoTalk[：:]\s*/, "");

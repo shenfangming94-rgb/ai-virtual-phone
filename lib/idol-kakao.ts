@@ -29,7 +29,7 @@ type Incoming = { id: string; charId: string; message: string; place: string; at
 type KakaoState = {
   myId?: string;
   incoming: Incoming[];
-  /** 练习生群（KakaoTalk 群聊会话 id）和管理老师 */
+  /** 练习生群（KakaoTalk 群聊会话 id）和室长 */
   groupId?: string;
   teacherId?: string;
   /** 已经在群里通知过的节点 */
@@ -201,12 +201,12 @@ const isTrainee = (c: Character) => /练习生|同期/.test(`${getProfile(c.id).
 
 async function makeTeacher(companyName: string): Promise<Character> {
   try {
-    const d = await draftPerson(`${companyName} 带新人练习生的管理老师，日常在 KakaoTalk 群里通知日程`, rollFace());
+    const d = await draftPerson(`${companyName} 带新人练习生的室长（실장님，练习生都这么叫他），日常在 KakaoTalk 群里通知日程`, rollFace());
     return createPerson(d.name, {
-      ...emptyProfile(""), ...draftFields(d), layer: "main", role: d.role || `${companyName} 练习生管理老师`, group: d.group || "公司",
+      ...emptyProfile(""), ...draftFields(d), layer: "main", role: d.role || `${companyName} 练习生室长`, group: d.group || "公司",
     }, null, genKakaoId());
   } catch {
-    return createPerson("管理老师", { ...emptyProfile(""), layer: "main", role: `${companyName} 练习生管理老师`, group: "公司" }, null, genKakaoId());
+    return createPerson("室长", { ...emptyProfile(""), layer: "main", role: `${companyName} 练习生室长`, group: "公司" }, null, genKakaoId());
   }
 }
 
@@ -232,7 +232,7 @@ async function ensureRoommates(mates: Character[]): Promise<void> {
 
 let groupBusy = false;
 
-/** 进公司第一天之后：管理老师把她拉进练习生群（第一天那场戏里的老师和同期一起进群） */
+/** 进公司第一天之后：室长把她拉进练习生群（第一天那场戏里的老师和同期一起进群） */
 export async function ensureTraineeGroup(present: Character[], notify?: (msg: string) => void): Promise<void> {
   const s = load();
   if (groupBusy || (s.groupId && loadChatSessions().some(x => x.id === s.groupId))) return;

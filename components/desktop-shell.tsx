@@ -8,6 +8,8 @@ import { ClockApp } from "./clock-app";
 import { ContactsApp } from "./contacts/contacts-app";
 import { CareerApp } from "./career/career-app";
 import { IdolSearchApp } from "./idolsearch/idol-search-app";
+import { StarRoadApp } from "./starroad/star-road-app";
+import { starroadTick } from "@/lib/idol-starroad";
 import { InsApp } from "./ins/ins-app";
 import { insTick } from "@/lib/idol-ins";
 import { YoutubeApp } from "./youtube/youtube-app";
@@ -1133,6 +1135,7 @@ export function DesktopShell({ initialThemeProfile, initialThemeAssets }: Deskto
       try { reminderTick(idolNotify); } catch { /* 同上 */ }
       try { eventsTick(idolNotify); } catch { /* 同上 */ }
       try { rankTick(idolNotify); } catch { /* 同上 */ }
+      try { starroadTick(idolNotify); } catch { /* 同上 */ }
       try { debutTick(idolNotify); } catch { /* 同上 */ }
       try { yearlyTick(idolNotify); } catch { /* 同上 */ }
       try { searchTick(idolNotify); } catch { /* 同上 */ }
@@ -4329,6 +4332,9 @@ html,body{margin:0;padding:0;width:100%;height:100%;background:#121110;color:rgb
     if (activeApp === "ins") {
       return <InsApp onClose={() => setActiveApp(null)} onNotice={setNotice} />;
     }
+    if (activeApp === "starroad") {
+      return <StarRoadApp onClose={() => setActiveApp(null)} onNotice={setNotice} />;
+    }
     if (activeApp === "idolsearch") {
       return <IdolSearchApp onClose={() => setActiveApp(null)} onNotice={setNotice} onOpenMail={() => { const ic = mailAppIcon(); if (ic) openApp(ic as DesktopIconId); else setNotice("先装上邮箱 app"); }} />;
     }
@@ -4460,6 +4466,7 @@ html,body{margin:0;padding:0;width:100%;height:100%;background:#121110;color:rgb
                     if (app === "kakao") setActiveApp("chat" as IconId);
                     else if (app === "reminders") setActiveApp("career" as IconId);
                     else if (app === "clock") setActiveApp("clock" as IconId);
+                    else if (app === "starroad") setActiveApp("starroad" as IconId);
                     else if (app === "mail") { const ic = mailAppIcon(); if (ic) openApp(ic as DesktopIconId); }
                     else if (app === "stage" && banner.nodeId) requestStageForNode(banner.nodeId);
                   }}

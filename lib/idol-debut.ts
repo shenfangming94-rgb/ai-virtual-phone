@@ -3,7 +3,7 @@
  *
  * - 按练习生证「多久出道」定目标；目标前两个半月排「出道组选拔」（提醒事项里的一项，演/打勾/缺席）
  * - 选拔对账：月末排名 + 最近的账；够了进出道组，不够推迟三个月再选，门槛一次比一次低，第三次一定进
- * - 进了：第二天管理老师私聊发「데뷔조 명단.jpg」（d1）→ 五天后经纪人拉「PROJECT X（暂定）」群发定位卡（d2）
+ * - 进了：第二天室长私聊发「데뷔조 명단.jpg」（d1）→ 五天后经纪人拉「PROJECT X（暂定）」群发定位卡（d2）
  *   → 三周后「队名公布」那场（演完/打勾/没去都会公布）群里发队名海报（d3），群名换成队名
  *   → 录出道曲、拍 MV、出道 Showcase 进提醒事项；锁屏出现 D-N 小组件（d4）
  *   → 出道当天早上手机锁上，锁屏一串通知（d5）
@@ -232,7 +232,7 @@ async function plan(members: { id: string; name: string; age: string; about: str
 {"members":[{"name":"跟给的名字一样","ko":"名字的韩文读音","nation":"国籍，两三个字","positions":[{"zh":"中文定位","ko":"韩文"}]}],
 "team":{"en":"队名，英文，原创，不能跟真实存在的团重名","ko":"队名韩文写法","meaning":"中文一两句：队名什么意思、寓意","meaningKo":"同样意思的韩文一句"},
 "song":"出道曲名（英文或韩文，后面括号写中文意思）",
-"teacherMsg":"管理老师${teacher}私聊${me}告诉她进了出道组时说的话，一两句，跟着会发名单图",
+"teacherMsg":"室长${teacher}私聊${me}告诉她进了出道组时说的话，一两句，跟着会发名单图",
 "managerMsg":"经纪人${manager}拉了出道组新群后第一句自我介绍，说定位发在下面",
 "d2React":[{"who":"成员名字","text":"看到定位后的一句反应"}],
 "d3Msg":"经纪人在群里公布队名时说的话",
@@ -281,7 +281,7 @@ async function formTeam(): Promise<void> {
     { id: ME, name: card?.name || "我", age: String(Math.max(15, new Date().getFullYear() - parseInt(card?.birthday ?? "2000", 10))), about: `（她本人）擅长：${(card?.talents ?? []).join("、")}；${card?.looks ?? ""}；国籍 ${card?.nationality ?? ""}` },
     ...mates.map(m => ({ id: m.id, name: m.name, age: profiles[m.id]?.age ?? "", about: `${profiles[m.id]?.role ?? ""}；${(profiles[m.id]?.privateLines ?? []).slice(0, 2).join("；")}` })),
   ];
-  const p = await plan(raw, company, d.codename, manager.name, teacher?.name ?? "管理老师");
+  const p = await plan(raw, company, d.codename, manager.name, teacher?.name ?? "室长");
   const members: DebutMember[] = raw.map(m => {
     const got = p.list.find(x => x.name === m.name);
     const prof = profiles[m.id];

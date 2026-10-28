@@ -1,0 +1,75 @@
+@font-face { font-family: "SR Mrs Saint Delafield"; font-style: normal; font-weight: 400; font-display: swap; src: url("/fonts/starroad/MrsSaintDelafield-400.woff2") format("woff2"); }
+@font-face { font-family: "SR Old Standard TT"; font-style: italic; font-weight: 400; font-display: swap; src: url("/fonts/starroad/OldStandardTT-400i.woff2") format("woff2"); }
+@font-face { font-family: "SR Old Standard TT"; font-style: normal; font-weight: 400; font-display: swap; src: url("/fonts/starroad/OldStandardTT-400.woff2") format("woff2"); }
+@font-face { font-family: "SR Old Standard TT"; font-style: normal; font-weight: 700; font-display: swap; src: url("/fonts/starroad/OldStandardTT-700.woff2") format("woff2"); }
+@font-face { font-family: "SR Playfair Display SC"; font-style: normal; font-weight: 700; font-display: swap; src: url("/fonts/starroad/PlayfairDisplaySC-700.woff2") format("woff2"); }
+@font-face { font-family: "SR Rubik Mono One"; font-style: normal; font-weight: 400; font-display: swap; src: url("/fonts/starroad/RubikMonoOne-400.woff2") format("woff2"); }
+
+/* 星路：手帐（预览 docs/idol/mockups/destiny/starroad-v2） */
+.sr-app { --sr-paper: #f7f7f6; --sr-ink: #222; position: absolute; inset: 0; overflow: hidden; background: repeating-linear-gradient(90deg, #f4f4f4 0 22px, #dcdcde 22px 44px); color: var(--sr-ink); font-family: "SR Old Standard TT", "Source Han Serif CN VF", "Noto Serif SC", "Songti SC", serif; -webkit-font-smoothing: antialiased; }
+.sr-app button { font-family: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: pointer; }
+.sr-back { position: absolute; z-index: 9; left: 12px; top: calc(var(--page-header-safe-top, 44px) + 2px); width: 32px; height: 32px; border-radius: 50%; background: rgba(255,255,255,.85) !important; display: flex; align-items: center; justify-content: center; box-shadow: 0 1px 4px rgba(0,0,0,.12); }
+.sr-book { position: absolute; left: 0; right: 0; top: calc(var(--page-header-safe-top, 44px) + 42px); bottom: calc(env(safe-area-inset-bottom, 0px) + 22px); }
+.sr-cover { position: absolute; left: 20px; right: 14px; top: 8px; bottom: -6px; background: #1c1c1e; border-radius: 6px 18px 18px 6px; }
+.sr-page { position: absolute; left: 24px; right: 34px; top: 0; bottom: 0; background: var(--sr-paper); border-radius: 4px 10px 10px 4px; box-shadow: 0 2px 8px rgba(0,0,0,.12); z-index: 2; }
+.sr-rings { position: absolute; z-index: 5; left: 6px; top: 16px; bottom: 16px; width: 40px; display: flex; flex-direction: column; justify-content: space-between; pointer-events: none; }
+.sr-rings i { display: block; height: 9px; width: 30px; border: 2.6px solid #1d1d1f; border-left: none; border-radius: 0 6px 6px 0; box-shadow: inset -2px 0 0 #555; }
+.sr-tabs { position: absolute; z-index: 1; right: 14px; top: 34px; width: 26px; display: flex; flex-direction: column; gap: 4px; }
+.sr-tabs > * { height: 104px; background: #ececeb !important; border-radius: 0 9px 9px 0 !important; writing-mode: vertical-rl; font: 600 11px/26px "SR Old Standard TT", serif !important; letter-spacing: .12em; text-align: center; color: #888 !important; box-shadow: 1px 1px 3px rgba(0,0,0,.08); }
+.sr-tabs > .on { background: var(--sr-paper) !important; color: #222 !important; font-weight: 700 !important; }
+.sr-tabs > .ghost { background: #e2e2e1 !important; color: #bbb !important; }
+.sr-in { position: absolute; left: 34px; right: 12px; top: 16px; bottom: 14px; overflow: hidden; }
+
+/* 成绩单 */
+.sr-frame { position: absolute; inset: 0; border: 1.3px solid var(--sr-ink); border-radius: 9px; pointer-events: none; }
+.sr-vine { position: absolute; width: 26px; color: var(--sr-ink); opacity: .85; }
+.sr-wm { position: absolute; right: 12px; bottom: 48px; width: 120px; height: 170px; background: url(/idol/starroad/card-front-light.png) 30% 47% / 360% auto; filter: invert(1); opacity: .07; pointer-events: none; }
+.sr-transcript h1 { margin: 22px 0 0; text-align: center; font: 700 25px/1 "SR Playfair Display SC", serif; transform: scaleX(.86); }
+.sr-transcript h1 b { font-size: 12px; vertical-align: middle; margin: 0 4px; }
+.sr-sub { text-align: center; font-size: 11px; letter-spacing: .16em; margin-top: 6px; }
+.sr-info { display: flex; gap: 10px; margin: 16px 12px 0 14px; }
+.sr-fields { flex: 1; min-width: 0; font-size: 9.5px; letter-spacing: .06em; }
+.sr-fields div { display: flex; align-items: flex-end; margin-bottom: 8px; white-space: nowrap; }
+.sr-fields u { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; text-decoration: none; border-bottom: .8px solid var(--sr-ink); margin-left: 5px; font: 500 10px "Source Han Serif CN VF", "Noto Serif SC", serif; padding: 0 2px 1px; text-align: center; }
+.sr-photo { width: 66px; height: 88px; flex-shrink: 0; border: .8px solid #bbb; background: linear-gradient(160deg, #e8cbc5, #c6d4e0); overflow: hidden; }
+.sr-photo img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.sr-table { border-collapse: collapse; margin: 12px 10px 0; width: calc(100% - 20px); }
+.sr-table th { font: 700 9.5px "SR Old Standard TT", serif; letter-spacing: .1em; height: 26px; border: .8px solid var(--sr-ink); }
+.sr-table td { border: .8px solid var(--sr-ink); height: 37px; text-align: center; padding: 0; }
+.sr-table td.s { font: italic 11px "SR Old Standard TT", serif; width: 40%; }
+.sr-table td.s small { display: block; font: 400 8px "Source Han Serif CN VF", "Noto Serif SC", serif; font-style: normal; color: #999; margin-top: 1px; }
+.sr-table td.g { width: 20%; }
+.sr-table td.g button { width: 100%; height: 36px; font: 700 20px "SR Playfair Display SC", serif !important; }
+.sr-table td.r { font: 400 9px "Source Han Serif CN VF", "Noto Serif SC", serif; color: #777; }
+.sr-table td.r .up { color: #b5525c; }
+.sr-table td.r .dn { color: #5b7a99; }
+.sr-note { text-align: center; margin-top: 10px; font: 400 10px "Source Han Serif CN VF", "Noto Serif SC", serif; color: #999; }
+.sr-motto { position: absolute; left: 0; right: 0; bottom: 16px; text-align: center; font-size: 8.4px; letter-spacing: .12em; }
+
+/* 点等级弹出来的小卡 */
+.sr-mask { position: absolute; inset: 0; z-index: 20; background: rgba(0,0,0,.28); display: flex; align-items: flex-end; justify-content: center; padding: 0 16px calc(env(safe-area-inset-bottom, 0px) + 28px); }
+.sr-sheet { width: 100%; max-width: 340px; background: var(--sr-paper); border: 1.3px solid var(--sr-ink); border-radius: 12px; padding: 18px 18px 16px; box-shadow: 0 10px 30px rgba(0,0,0,.2); }
+.sr-sh-head { display: flex; align-items: baseline; gap: 8px; border-bottom: .8px solid var(--sr-ink); padding-bottom: 10px; }
+.sr-sh-en { font: italic 18px "SR Old Standard TT", serif; }
+.sr-sh-zh { font: 400 12px "Source Han Serif CN VF", "Noto Serif SC", serif; color: #888; }
+.sr-sh-g { margin-left: auto; font: 700 30px/1 "SR Playfair Display SC", serif; }
+.sr-sh-line { margin-top: 14px; font: 700 15px "Source Han Serif CN VF", "Noto Serif SC", serif; letter-spacing: .04em; }
+.sr-sh-last { margin-top: 6px; font: 400 11px "Source Han Serif CN VF", "Noto Serif SC", serif; color: #888; }
+.sr-sh-tip { margin-top: 10px; font: 400 11px "Source Han Serif CN VF", "Noto Serif SC", serif; color: #999; line-height: 1.6; }
+.sr-sh-btn { margin-top: 16px; width: 100%; height: 42px; border-radius: 21px !important; background: #1c1c1e !important; color: #f7f7f6 !important; font: 600 14px "Source Han Serif CN VF", "Noto Serif SC", serif !important; letter-spacing: .2em; }
+.sr-sh-btn:disabled { background: #d6d6d4 !important; color: #888 !important; }
+
+/* 命运图鉴 */
+.sr-destiny { left: 40px; right: 14px; top: 24px; }
+.sr-stars { position: absolute; right: 8px; top: 0; color: #fff; font-size: 18px; text-shadow: 0 0 1px #aaa; letter-spacing: 6px; }
+.sr-dhead { margin: 30px 4px 0; background: #ececeb; height: 30px; display: flex; align-items: center; padding: 0 12px; justify-content: space-between; }
+.sr-dhead span:first-child { font: 22px "SR Rubik Mono One", sans-serif; color: #9a9a9a; letter-spacing: -.02em; }
+.sr-dhead span:last-child { font: 500 10.5px "Source Han Serif CN VF", "Noto Serif SC", serif; color: #888; }
+.sr-album { display: grid; justify-content: center; gap: 10px 18px; margin: 14px 6px 0; }
+.sr-card { aspect-ratio: 1179 / 1752; border-radius: 7px; position: relative; overflow: hidden; box-shadow: 0 2px 6px rgba(0,0,0,.14); }
+.sr-card.lock { background: url(/idol/starroad/card-locked.jpg) center / cover; }
+.sr-card .l { position: absolute; inset: 0; background: url(/idol/starroad/card-front-light.png) 0 0 / 100% 100%; }
+.sr-card .d { position: absolute; inset: 0; background: url(/idol/starroad/card-front-dark.png) 0 0 / 100% 100%; opacity: .8; }
+.sr-card .no { position: absolute; left: 8px; top: 7px; font: 600 6px "Source Han Serif CN VF", "Noto Serif SC", serif; letter-spacing: .2em; color: rgba(40,38,32,.55); }
+.sr-card .t { position: absolute; left: 4px; right: 4px; bottom: 20px; text-align: center; font: 700 10px "Source Han Serif CN VF", "Noto Serif SC", serif; letter-spacing: .14em; color: #2b2a25; }
+.sr-card .en { position: absolute; left: 0; right: 0; bottom: 5px; text-align: center; font: 12px "SR Mrs Saint Delafield", cursive; color: rgba(43,42,37,.75); transform: rotate(-4deg); }

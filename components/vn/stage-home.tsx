@@ -5,6 +5,7 @@
  * 地图图片、钉子位置、每个地点的背景和 BGM 都是她自己配。
  */
 
+import { classAt } from "@/lib/idol-starroad";
 import "@/styles/stage-replay.css";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ChevronLeft, MoreHorizontal, X, Lock, Music2, VolumeX, Image as ImageIcon, Check, Search, Play } from "lucide-react";
@@ -370,6 +371,7 @@ function PlaceSheet({ place, onClose, onGo }: { place: StagePlace; onClose: () =
                 </div>
               ) : <p className="stg-empty">还谁都不认识，进去看看会碰上谁</p>}
             </div>
+            {!(place.key === "公司" || place.key.startsWith("公司·")) && classAt(Date.now()) ? <p className="stg-clash">现在是{classAt(Date.now())}，去这里算旷课</p> : null}
             <button type="button" className="stg-go" onClick={() => {
               const meet = Object.keys(marks).filter(id => marks[id] === "meet");
               const avoid = people.filter(({ c }) => marks[c.id] === "avoid").map(({ c }) => c.name);

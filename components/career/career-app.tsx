@@ -19,6 +19,7 @@ import {
   acceptInvite, addMine, checkNode, declineInvite, deleteNode, isNightNow, leaveNode, setNote, setWish, teacherOf, uncheckNode,
 } from "@/lib/idol-reminders";
 import { loadMonths, overrideMyRank, RANK_EVENT } from "@/lib/idol-ledger";
+import { STARROAD_EVENT, classAt, weekTimetable } from "@/lib/idol-starroad";
 
 const WEEK = ["日", "一", "二", "三", "四", "五", "六"];
 const DAY = 864e5;
@@ -136,8 +137,8 @@ function Row({ item, swiped, onSwipe, onCheck, onInfo, onLeave, onDelete, onNoti
   const now = Date.now();
   const red = item.status === "pending" && dayStart(item.dueAt) <= dayStart(now);
   const st = statusText(item);
-  const canLeave = item.status === "pending" && item.kind !== "custom";
-  const canDelete = item.kind === "custom";
+  const canLeave = item.status === "pending" && item.kind !== "custom" && item.kind !== "practice";
+  const canDelete = item.kind === "custom" || item.kind === "practice";
   const acts = (canLeave ? 1 : 0) + (canDelete ? 1 : 0) + 1;
   return (
     <div className="rm-swipe">
@@ -181,7 +182,7 @@ function Row({ item, swiped, onSwipe, onCheck, onInfo, onLeave, onDelete, onNoti
 export function CareerApp({ onClose, onNotice }: { onClose: () => void; onNotice?: (message: string) => void }) {
   const career = useCareer();
   const items = allItems(career);
-  const [page, setPage] = useState<{ p: "home" } | { p: "list"; key: ListKey } | { p: "company" } | { p: "rank" }>({ p: "home" });
+  const [page, setPage] = useState<{ p: "home" } | { p: "list"; key: ListKey } | { p: "company" } | { p: "rank" } | { p: "timetable" }>({ p: "home" });
   const [detailId, setDetailId] = useState<string | null>(null);
   const [checkId, setCheckId] = useState<string | null>(null);
   const [leaveId, setLeaveId] = useState<string | null>(null);
@@ -229,6 +230,8 @@ export function CareerApp({ onClose, onNotice }: { onClose: () => void; onNotice
     );
   } else if (page.p === "company") {
     body = <CompanyPage onBack={() => setPage({ p: "home" })} onNotice={onNotice} />;
+  } else if (page.p === "timetable") {
+    body = <TimetablePage onBack={() => setPage({ p: "home" })} />;
   } else if (page.p === "rank") {
     body = <RankPage onBack={() => setPage({ p: "home" })} onNotice={onNotice} />;
   } else {
@@ -269,6 +272,11 @@ export function CareerApp({ onClose, onNotice }: { onClose: () => void; onNotice
             <span className="rm-lt">{company ? `${company.name} 内部档案` : "这个世界里的公司"}<small>{company ? "楼里、宿舍、一周、规矩" : "还没进公司"}</small></span>
             <span className="rm-lc"><ChevronRight size={18} /></span>
           </button>
+          {company ? <button type="button" className="rm-lrow" onClick={() => setPage({ p: "timetable" })}>
+            <span className="rm-dot" style={{ background: "#5e5ce6" }}><CalendarDays size={18} /></span>
+            <span className="rm-lt">课表<small>每周的课，默认都去；请假找室长</small></span>
+            <span className="rm-lc"><ChevronRight size={18} /></span>
+          </button> : null}
           <button type="button" className="rm-lrow" onClick={() => setPage({ p: "rank" })}>
             <span className="rm-dot" style={{ background: "#ff375f" }}><BarChart3 size={19} /></span>
             <span className="rm-lt">月末排名<small>{rankSummary()}</small></span>
@@ -402,6 +410,7 @@ function Detail({ item, onBack, onGo, onCheck, onLeave, onDelete, onAccept, onDe
         <div className="rm-kv"><span>时间</span><b>{whenText(item.dueAt)}</b></div>
         {item.place ? <div className="rm-kv"><span>地点</span><b>{item.place}</b></div> : null}
         {item.from ? <div className="rm-kv"><span>{item.kind === "date" ? "谁约的" : "谁通知的"}</span><b>{item.from}</b></div> : null}
+        {(item.kind === "date" || item.kind === "custom") && (open || item.status === "invite") && classAt(item.dueAt) ? <div className="rm-kv rm-clash"><span>撞课</span><b>这个时间是{classAt(item.dueAt)}，去了算旷课</b></div> : null}
         {st ? <div className="rm-kv"><span>结果</span><b>{st}</b></div> : null}
       </div>
       {playable && item.kind !== "date" ? (
@@ -422,8 +431,47 @@ function Detail({ item, onBack, onGo, onCheck, onLeave, onDelete, onAccept, onDe
         {playable ? <button type="button" className="p" onClick={() => { setWish(item.id, wish); onGo(); }}>去演</button> : null}
         {open ? <button type="button" onClick={onCheck}>打勾</button> : null}
         {playable ? <button type="button" onClick={onLeave}>{item.kind === "date" ? "去不了" : "请假"}</button> : null}
-        {item.kind === "custom" ? <button type="button" className="del" onClick={onDelete}>删除</button> : null}
+        {item.kind === "custom" || item.kind === "practice" ? <button type="button" className="del" onClick={onDelete}>删除</button> : null}
       </div>
+    </div>
+  );
+}
+
+const MARK: Record<string, string> = { attend: "上了", official: "公假", leave: "请假", skip: "旷课" };
+
+function TimetablePage({ onBack }: { onBack: () => void }) {
+  const [, set] = useState(0);
+  useEffect(() => { const f = () => set(x => x + 1); window.addEventListener(STARROAD_EVENT, f); return () => window.removeEventListener(STARROAD_EVENT, f); }, []);
+  const [offset, setOffset] = useState(0);
+  const mon = (() => { const d = new Date(); d.setHours(0, 0, 0, 0); d.setDate(d.getDate() - ((d.getDay() + 6) % 7) + offset * 7); return d.getTime(); })();
+  const week = weekTimetable(mon);
+  const today = new Date().toDateString();
+  return (
+    <div className="rm-page">
+      <div className="rm-top"><button type="button" className="rm-circle" onClick={onBack} aria-label="返回"><ChevronLeft size={22} /></button><span /></div>
+      <h1 style={{ color: "#5e5ce6" }}>课表</h1>
+      <div className="rm-tt-week">
+        <button type="button" onClick={() => setOffset(o => o - 1)} disabled={offset <= -1}><ChevronLeft size={18} /></button>
+        <span>{offset === 0 ? "这周" : offset < 0 ? "上周" : "下周"}</span>
+        <button type="button" onClick={() => setOffset(o => o + 1)} disabled={offset >= 1}><ChevronRight size={18} /></button>
+      </div>
+      {week.filter(d => d.classes.length).map(d => (
+        <div key={d.day}>
+          <div className={`rm-sec ${new Date(d.day).toDateString() === today ? "rm-tt-today" : ""}`}>{d.label}</div>
+          <div className="rm-group">
+            {d.classes.map(c => (
+              <div key={c.start + c.label} className="rm-kv rm-tt-row">
+                <span>{c.start}～{c.end}</span>
+                <b>{c.label}</b>
+                <em className={c.status ? `st-${c.status}` : c.leave ? "st-leave" : ""}>{c.status ? MARK[c.status] : c.leave ? "已请假" : ""}</em>
+              </div>
+            ))}
+          </div>
+        </div>
+      ))}
+      {!week.some(d => d.classes.length) ? <p className="rm-empty">进了公司才有课表</p> : null}
+      <p className="rm-tt-tip">课默认都去了，不用打勾。上课时间人在公司外（此刻里去了别处、答应了别人的约）算旷课。请假在 KakaoTalk 找室长。</p>
+      <div style={{ height: 60 }} />
     </div>
   );
 }

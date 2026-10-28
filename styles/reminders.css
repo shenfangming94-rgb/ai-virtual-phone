@@ -106,3 +106,17 @@
 
 .rm-invitation-text { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 15px; line-height: 1.65; }
 .rm-invitation-text + .rm-invitation-text { margin-top: 14px; }
+
+/* 星路：课表、撞课 */
+.rm-clash b { color: #ff453a; font-weight: 500; }
+.rm-tt-week { display: flex; align-items: center; justify-content: center; gap: 18px; margin: -4px 0 6px; font-size: 14px; font-weight: 600; }
+.rm-tt-week button { width: 30px; height: 30px; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: rgba(120,120,128,.14); color: inherit; border: 0; }
+.rm-tt-week button:disabled { opacity: .3; }
+.rm-tt-today { color: #5e5ce6; }
+.rm-tt-row span { min-width: 92px; font-variant-numeric: tabular-nums; }
+.rm-tt-row b { flex: 1; text-align: left; font-weight: 500; }
+.rm-tt-row em { font-style: normal; font-size: 13px; color: #8e8e93; min-width: 34px; text-align: right; }
+.rm-tt-row em.st-skip { color: #ff453a; }
+.rm-tt-row em.st-leave { color: #ff9f0a; }
+.rm-tt-row em.st-official { color: #0a84ff; }
+.rm-tt-tip { margin: 18px 20px 0; font-size: 12px; line-height: 1.6; color: #8e8e93; }

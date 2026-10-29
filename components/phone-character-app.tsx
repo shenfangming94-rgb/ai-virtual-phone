@@ -1,7 +1,7 @@
 "use client";
 
 import { setPersonRelation } from "@/lib/idol-relations";
-import { IdolArchiveHome } from "@/components/idol-archive-home";
+import { ArchiveFolderIcon, IdolArchiveHome } from "@/components/idol-archive-home";
 import { IdolPersonRelations } from "@/components/idol-person-relations";
 import "@/styles/idol-archive.css";
 import { loadProfiles } from "@/lib/idol-people";
@@ -91,7 +91,6 @@ const POLAROID_RATIOS = [
   { label: "9:16", className: "ratio-9-16" },
 ] as const;
 
-const POLAROID_SIZE_WIDTHS = { small: 110, medium: 130, large: 150 } as const;
 
 function clampCharacterImageValue(value: number, min: number, max: number, fallback: number): number {
   return Number.isFinite(value) ? Math.min(max, Math.max(min, value)) : fallback;
@@ -1041,28 +1040,14 @@ function CharListView({
 
             {worldCharacters.map((char, idx) => {
               if (char.canvasX === undefined) return null;
-              const hash = char.id.charCodeAt(0) + idx * 17;
-              const styleIdx = char.polaroidStyle ?? (hash % 5);
-
-              const sizeMode = char.polaroidSize ?? "random";
-              const w = sizeMode === "random"
-                ? 110 + (hash % 5) * 10
-                : POLAROID_SIZE_WIDTHS[sizeMode];
-              const ratioClass = POLAROID_RATIOS[styleIdx % POLAROID_RATIOS.length].className;
-
-              const tapeStyles = ["char-polaroid-tape-white", "char-polaroid-tape-red", "char-polaroid-tape-black"];
-              const tapeMod = char.polaroidStyle !== undefined ? styleIdx % tapeStyles.length : hash % 3;
-              const tapeWidth = tapeMod === 2 ? 30 : 44;
-              const tapeRot = (hash % 10) - 5;
-
               return (
                 <DraggableNode
                   key={char.id} id={char.id}
                   x={char.canvasX} y={char.canvasY || 0} rot={0} zIndex={char.canvasZIndex || 100}
                   onDragEnd={handleDragEndChar}
                   onClick={isEditing ? undefined : (e) => onSelect(char, e)}
-                  className={`char-polaroid char-polaroid-board-item idol-folder-${idx % 5} ${ratioClass} ${linkFromId === char.id ? "wt-link-source" : ""}`}
-                  w={w}
+                  className={`ida-folder-node char-polaroid-board-item ${linkFromId === char.id ? "wt-link-source" : ""}`}
+                  w={100}
                   isEditing={isEditing}
                   onDeleteIntent={(id) => setDeleteConfirm({ id, type: 'char' })}
                   onEditTap={handleCharEditTap}
@@ -1075,32 +1060,9 @@ function CharListView({
                   zoom={pan.zoom}
                   pinchRef={pinchRef}
                 >
-                  <div className={`char-polaroid-tape-base ${tapeStyles[tapeMod]}`} style={{ top: -10, width: tapeWidth, transform: `translateX(-50%) rotate(${tapeRot}deg)` }} />
-                  {hash % 3 === 0 && (
-                    <div className="char-clue-label" style={{ top: -10, left: -6, transform: `rotate(${-(char.canvasRot || 0) - 5}deg)` }}>
-                      0{idx + 1} ASSET
-                    </div>
-                  )}
-                  <div className="char-polaroid-img-wrapper" style={{ boxShadow: "inset 0 0 10px rgba(0,0,0,0.1)" }}>
-                    {char.avatar ? <img
-                      src={char.avatar}
-                      alt={char.name}
-                      className="char-polaroid-img"
-                      draggable={false}
-                      style={{
-                        objectPosition: `${100 - (char.polaroidImageX ?? 50)}% ${100 - (char.polaroidImageY ?? 50)}%`,
-                        transform: `scale(${char.polaroidImageZoom ?? 1})`,
-                      }}
-                    /> : <CharAvatarFallback name={char.name} size="100%" />}
-                    <button
-                      className="char-polaroid-menu-btn absolute top-1 right-1 w-6 h-6 bg-black/20 text-white rounded-full flex items-center justify-center cursor-pointer hover:bg-black/40 transition-colors z-10"
-                      onClick={(e) => { e.stopPropagation(); setActiveMoveChar(char); }}
-                      aria-label="转移世界"
-                    >
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="1"></circle><circle cx="19" cy="12" r="1"></circle><circle cx="5" cy="12" r="1"></circle></svg>
-                    </button>
-                  </div>
-                  <div className="char-polaroid-text" style={{ fontSize: 12.5 }}>{char.name || "UNNAMED"}</div>
+                  <ArchiveFolderIcon tone={idx}/>
+                  <button type="button" className="char-polaroid-menu-btn ida-folder-transfer" onClick={e=>{e.stopPropagation();setActiveMoveChar(char)}} aria-label="转移世界">⋯</button>
+                  <div className="ida-folder-name">{char.name || "未命名"}</div>
                 </DraggableNode>
               );
             })}
@@ -1111,8 +1073,8 @@ function CharListView({
                 const a = worldCharacters.find(c => c.id === line.aId);
                 const b = worldCharacters.find(c => c.id === line.bId);
                 if (!a || !b || a.canvasX === undefined || a.canvasY === undefined || b.canvasX === undefined || b.canvasY === undefined) return null;
-                const x1 = a.canvasX + 60, y1 = a.canvasY + 60;
-                const x2 = b.canvasX + 60, y2 = b.canvasY + 60;
+                const x1 = a.canvasX + 50, y1 = a.canvasY + 34;
+                const x2 = b.canvasX + 50, y2 = b.canvasY + 34;
                 return (
                   <g key={line.key}>
                     {/* 连线阴影 (更淡的阴影) */}
@@ -1462,7 +1424,7 @@ function DraggableNode({
       return;
     }
     if (!isEditing) return;
-    if ((e.target as HTMLElement).tagName.toLowerCase() === 'button') return;
+    if ((e.target as HTMLElement).closest('button')) return;
     e.stopPropagation();
     e.currentTarget.setPointerCapture(e.pointerId);
     dragStart.current = { cx: e.clientX, cy: e.clientY, startX: pos.x, startY: pos.y, moved: false };
@@ -1541,12 +1503,10 @@ function DraggableNode({
   }
 
   function handleClick(e: React.MouseEvent<HTMLDivElement>) {
+    if ((e.target as HTMLElement).closest('.char-polaroid-menu-btn')) return;
     if (dragStart.current.moved) {
       e.stopPropagation();
       e.preventDefault();
-      return;
-    }
-    if ((e.target as HTMLElement).closest('.char-polaroid-menu-btn')) {
       return;
     }
     if (isEditing) {

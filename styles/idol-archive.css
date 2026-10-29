@@ -55,17 +55,6 @@
 /* The layout editor retains drag, transfer, resizing and props controls. */
 .idol-archive-shell .char-infinite-canvas{background:#fff;background-image:none}
 .idol-archive-shell .char-polaroid-board-item{background:none;border:0;box-shadow:none;padding:0;--folder-top:#e0cef1;--folder-bottom:#cbb0e2}
-.idol-archive-shell .idol-folder-1{--folder-top:#f0d3df;--folder-bottom:#dfb3c5}
-.idol-archive-shell .idol-folder-2{--folder-top:#cde8f5;--folder-bottom:#a9cee8}
-.idol-archive-shell .idol-folder-3{--folder-top:#f4e8bc;--folder-bottom:#e6d39f}
-.idol-archive-shell .idol-folder-4{--folder-top:#d3ebdf;--folder-bottom:#add4c0}
-.idol-archive-shell .char-polaroid-board-item .char-polaroid-tape-base,.idol-archive-shell .char-polaroid-board-item .char-clue-label{display:none}
-.idol-archive-shell .char-polaroid-board-item .char-polaroid-img-wrapper{height:85px;aspect-ratio:auto!important;background:none;border:0;box-shadow:none!important;overflow:visible}
-.idol-archive-shell .char-polaroid-board-item .char-polaroid-img-wrapper>img,.idol-archive-shell .char-polaroid-board-item .char-polaroid-img-wrapper>div{visibility:hidden}
-.idol-archive-shell .char-polaroid-board-item .char-polaroid-img-wrapper:before{content:'';position:absolute;inset:0;background:var(--folder-top);clip-path:polygon(0 9%,3% 3%,7% 0,27% 0,31% 2%,37% 8%,41% 9%,93% 9%,98% 13%,100% 20%,100% 93%,96% 100%,4% 100%,0 94%);border-radius:6px}
-.idol-archive-shell .char-polaroid-board-item .char-polaroid-img-wrapper:after{content:'';position:absolute;inset:17px 0 0;border-radius:6px;background:linear-gradient(white 0 4px,var(--folder-top) 4px,var(--folder-bottom));box-shadow:0 1px 3px #0000000a;pointer-events:none}
-.idol-archive-shell .char-polaroid-menu-btn{background:#ffffff80;color:#8b7898;z-index:3}
-.idol-archive-shell .char-polaroid-text{background:none;border:0;color:#8c709f;font-family:inherit;font-weight:400;letter-spacing:0;padding:12px 0 0}
 .idol-archive-shell .char-infinite-container>svg circle{display:none}
 .idol-archive-shell .char-infinite-container>svg line{stroke-dasharray:none}
 .idol-archive-shell .char-infinite-container>svg foreignObject span{font-family:inherit!important;transform:none!important;background:white!important;color:#625c6c!important;border:0!important;box-shadow:none!important;font-weight:400}
@@ -87,7 +76,6 @@
 :is(.idol-archive-detail,.idol-archive-workspace) .ui-btn-danger{background:#fff0f2;color:#e35d6a}
 
 .ida-editing .char-archive-label{text-transform:none}.ida-editing .char-archive-photo>div.absolute{background:#8c709f;color:white}
-.idol-archive-shell .char-polaroid-text{position:static;bottom:auto;left:auto;margin-top:0;min-height:28px}
 .ida-decoration-toggle{font:inherit;font-size:11px;color:#8c709f;background:#eee5f5;border:0;border-radius:10px;padding:7px 8px}
 .idol-archive-workspace .ida-decoration{width:140px;height:105px;box-shadow:0 2px 8px #80619808;border:1px solid #eee8f4;background:#f4eef9;border-radius:12px;padding:15px;clip-path:none;font-family:inherit;color:#927ba2;background-image:none;box-sizing:border-box}
 .idol-archive-workspace .ida-decoration strong{font-size:13px;font-weight:500;display:block;margin-bottom:13px}
@@ -123,3 +111,8 @@
 .idol-archive-workspace .char-export-avatar{border:0;border-radius:50%;overflow:hidden;box-shadow:none}
 .ida-decoration-toggle{white-space:nowrap;flex-shrink:0}
 .idol-archive-shell .page-header-right button[aria-label="编辑排版"]{background:#eae0f3;color:#806198;box-shadow:none}
+/* Reuse the list folder geometry in the draggable editor as well. */
+.ida-folder-node{width:100px;display:block;aspect-ratio:auto;transition:none;text-align:center}
+.ida-folder-node>.iah-folder{width:85px;height:68px;flex:none}
+.ida-folder-transfer{position:absolute;top:13px;right:7px;width:22px;height:22px;border:0;border-radius:50%;background:#ffffff80;color:#8c709f;cursor:pointer;font:inherit;line-height:1;z-index:3}
+.ida-folder-name{font:inherit;font-size:13px;line-height:1.5;font-weight:400;color:#8c709f;margin-top:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}

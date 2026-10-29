@@ -190,3 +190,5 @@ ul.ct-v { list-style: disc; }
 .ct-seg-dark { background: rgba(0, 0, 0, 0.14); margin-top: 6px; }
 .ct-seg-dark button { color: rgba(255, 255, 255, 0.85) !important; }
 .ct-seg-dark button.on { background: rgba(255, 255, 255, 0.92); color: #000 !important; }
+
+.ct-prose { white-space: pre-line; }

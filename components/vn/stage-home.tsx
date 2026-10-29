@@ -453,7 +453,7 @@ function MusicEditor({ bgKey, fallbackLabel }: { bgKey: string; fallbackLabel?: 
 // ── 此刻设置 ──
 
 const LANGS: [StageSettings["lang"], string, string][] = [
-  ["ko-talk", "先韩后中", "旁白中文，外国人说母语，后面带中文翻译"],
+  ["ko-talk", "先韩后中", "旁白中文，台词按人物和情境选择语言，附中文翻译"],
   ["ko-all", "全部韩语", "旁白也写韩语，都带中文翻译"],
   ["zh", "全中文", "所有人都说中文"],
 ];

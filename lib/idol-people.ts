@@ -6,6 +6,7 @@
  * 改档案时自动拼成角色的 persona，AI 读的就是拼好的那份。
  */
 
+import { IDOL_LANGUAGE_RULE } from "./idol-language";
 import { rosterPrompt } from "./idol-groups";
 import { kvGet, kvSet } from "./kv-db";
 import { loadCharacters, saveCharacters, createCharacter } from "./character-storage";
@@ -49,11 +50,15 @@ export type IdolProfile = {
   /** 一句话身份，比如「VANTA 主唱 · 同公司前辈」 */
   role: string;
   age: string;
+  nationality?: string;
+  heightCm?: number;
+  appearance?: string;
+  romanceStyle?: string;
   isIdol: boolean;
   publicLabels: string[];
   publicText: string;
   face: FaceRelation;
-  /** 私下（爱豆）/ 平时（非爱豆）：几句具体会做的事 */
+  /** 私下（爱豆）/ 性格与相处（非爱豆）：稳定倾向及随情境变化的相处方式 */
   privateLines: string[];
   speech: string;
   taboo: string;
@@ -121,6 +126,7 @@ export function emptyProfile(charId: string): IdolProfile {
     group: "",
     role: "",
     age: "",
+    nationality: "",
     isIdol: false,
     publicLabels: [],
     publicText: "",
@@ -147,15 +153,19 @@ export function rollFace(): FaceRelation {
 /** 档案拼成给 AI 读的人设 */
 export function composePersona(p: IdolProfile): string {
   const out: string[] = [];
-  const head = [p.role, p.gender, p.age ? `${p.age}岁` : "", p.birthday ? `生日 ${p.birthday.replace("-", "月")}日` : "", p.mbti ? `MBTI ${p.mbti}（只是参考，不刻板）` : ""].filter(Boolean).join("，");
+  const head = [p.role, p.nationality ? `国籍：${p.nationality}` : "", p.gender, p.age ? `${p.age}岁` : "", p.birthday ? `生日 ${p.birthday.replace("-", "月")}日` : "", p.mbti ? `MBTI ${p.mbti}（只是参考，不刻板）` : ""].filter(Boolean).join("，");
   if (head) out.push(`【身份】${head}`);
+  if (p.appearance || p.heightCm) out.push(`【外貌】${p.heightCm ? `${p.heightCm}cm。` : ""}${p.appearance || ""}`);
   if (p.isIdol && (p.publicLabels.length || p.publicText)) {
     out.push(`【公开人设】${p.publicLabels.length ? `标签：${p.publicLabels.join("、")}。` : ""}${p.publicText}`);
   }
   if (p.privateLines.length) {
-    const title = p.isIdol ? `【私下】（跟公开人设：${FACE_LABEL[p.face]}）` : "【平时】";
+    const title = p.isIdol ? `【私下】（跟公开人设：${FACE_LABEL[p.face]}）` : "【性格与相处】";
     out.push(`${title}\n${p.privateLines.map(l => `- ${l}`).join("\n")}`);
   }
+  out.push("【人物一致性】性格是稳定倾向，结合关系、处境和经历自然反应，不必每句话都展示；变化要有原因。MBTI只是辅助参考，人物设定和实际经历优先。");
+  if (p.canCrush && p.romanceStyle) out.push(`【感情里的你】${p.romanceStyle}\n以当前关系和心动程度为准，未确定关系不提前表现成恋人，确定关系后的亲密表达与期待要有自然变化。`);
+  out.push(`【说话语言】${IDOL_LANGUAGE_RULE}`);
   if (p.speech) out.push(`【说话】${p.speech}`);
   if (p.taboo) out.push(`【雷区】${p.taboo}`);
   if (p.status?.text) out.push(`【最近】${p.status.text}`);
@@ -388,12 +398,19 @@ export type CardDraft = {
   role: string;
   group: string;
   age: string;
+  nationality?: string;
+  heightCm?: number;
+  appearance?: string;
+  romanceStyle?: string;
   isIdol: boolean;
   publicLabels: string[];
   publicText: string;
   privateLines: string[];
   speech: string;
   taboo: string;
+  canCrush?: boolean;
+  heart?: Heart;
+  rolled?: boolean;
 };
 
 const CARD_RULES = `写人物卡的规矩：
@@ -401,16 +418,18 @@ const CARD_RULES = `写人物卡的规矩：
 - 大多数人是普通人：性格正常，会开玩笑，也会笨拙、说错话。不面瘫、不病弱、不高冷，不硬塞创伤和秘密，不写「怕什么、想要什么」。
 - 只写具体会做的事和具体的说话方式，不写抽象形容词堆砌。
 - 只有已经出道的爱豆才有公开人设（标签 + 两三句粉丝眼里的他）；不是爱豆的人公开人设留空。
-- 私下（爱豆）或平时（非爱豆）写四五句具体行为。私下和公开人设的关系按给定的骰子结果写。
+- 私下（爱豆）或性格与相处（非爱豆）写成简短连贯的描述，放入 privateLines 的一两段里：说明稳定的处事倾向、熟悉前后的相处差别，以及压力或冲突下的反应。爱豆私下和公开人设的关系按给定的骰子结果写。
+- 性格是稳定倾向，结合关系、处境和经历自然反应，变化要有原因。MBTI只作辅助参考，人物设定和实际经历优先。
 - 雷区可以没有。
 - 不写他对她的第一印象，他们还没见过。
 - 名字用韩国人名的中文写法（外国人按国籍）。
 - 跟名单里已有的人不要撞型、不要重名。
-- 每个人都写性别、生日（月-日）、MBTI。MBTI 只是个标志，性格参考它但不刻板，也不要跟它差太远。
+- 每个人都写国籍，结合已知背景和她的要求填写，不凭中文译名判断；保留已知国籍。
+- 每个人都写性别、生日（月-日）、MBTI。MBTI 只作辅助参考。
 - 年龄：跟她一起玩的同期练习生 16～19 岁，跟她差不多大；公司里的练习生 12～21 岁；20 岁以上的练习生少见，会被人议论年纪大。老师、经纪人、工作人员这些大人不限。
 - 秘密按给定的骰子写：没有就留空；小秘密写一件他瞒着别人的小事或心事；重的写作风不正（同时吊着好几个人、劈腿这类，成年人才可以写约炮）或者关系户。秘密只写一句事实，不写成创伤故事。
 只输出一个 JSON 对象，不要别的字：
-{"name":"","gender":"男或女","birthday":"MM-DD","mbti":"","role":"一句话身份","group":"身份分组","age":"","isIdol":false,"publicLabels":[],"publicText":"","privateLines":[],"speech":"","taboo":"","secret":""}`;
+{"name":"","nationality":"","gender":"男或女","birthday":"MM-DD","mbti":"","role":"一句话身份","group":"身份分组","age":"","isIdol":false,"publicLabels":[],"publicText":"","privateLines":[],"speech":"","taboo":"","secret":""}`;
 
 const SECRET_DICE: Record<SecretKind, string> = { none: "没有秘密", light: "有一个小秘密", heavy: "有一个重的秘密" };
 
@@ -431,7 +450,7 @@ function rosterLine(exceptId?: string): string {
   const chars = loadCharacters();
   const lines = chars
     .filter(c => c.id !== exceptId && all[c.id])
-    .map(c => `${c.name}（${all[c.id].role || all[c.id].group || "未写身份"}）`);
+    .map(c => `${c.name}（${all[c.id].role || all[c.id].group || "未写身份"}）：${all[c.id].privateLines.join("；").slice(0, 220) || "性格未写"}`);
   const circle = rosterPrompt(40);
   const people = lines.length ? `已有的人：${lines.join("、")}` : "现在还没有别的人。";
   return circle ? `${people}\n${circle}\n她要的人如果是上面某个团的成员：团名、公司、出道年份、同团成员照抄，年龄要跟出道年份对得上（出道时一般十六到二十二岁）；上面没有的人别编成这些团的成员。` : people;
@@ -446,6 +465,10 @@ function parseDraft(text: string): CardDraft {
   const g = String(j.gender ?? "");
   return {
     name: String(j.name),
+    nationality: String(j.nationality ?? "").trim(),
+    heightCm: Number.isFinite(Number(j.heightCm)) && Number(j.heightCm) > 0 ? Math.round(Number(j.heightCm)) : undefined,
+    appearance: String(j.appearance ?? "").trim(),
+    romanceStyle: String(j.romanceStyle ?? "").trim(),
     gender: g.includes("女") ? "女" : g.includes("男") ? "男" : "",
     birthday: String(j.birthday ?? "").replace(/[^0-9-]/g, "").slice(-5),
     mbti: String(j.mbti ?? "").toUpperCase().replace(/[^A-Z]/g, "").slice(0, 4),
@@ -462,6 +485,31 @@ function parseDraft(text: string): CardDraft {
   };
 }
 
+const DETAIL_RULES = `人物补充：
+- 外貌：包含身高、整体好看程度、长相风格，以及简短的外貌描述。外貌不决定性格。身高以厘米数字写在heightCm，其他外貌内容写在appearance。
+- 有心动线的男性，身高在180～190cm之间，含两端。
+- 只有有心动线的人写romanceStyle：用简短连贯的描述写喜欢但尚未确定关系时如何靠近与表露、确定关系后的亲密表达与期待，以及分歧时的沟通、边界和修复。结合人物性格，不预设他现在已经喜欢她；实际表现由当前关系和心动程度决定。
+- 没有心动线的人romanceStyle留空。`;
+
+/** 先由原有规则判定心动线，再据此生成外貌和感情方式；确认人物时沿用这次判定。 */
+async function addPersonalDetails(draft: CardDraft, source?: IdolProfile): Promise<CardDraft> {
+  const p = applyStartRolls({ ...emptyProfile("draft"), ...source, ...draftFields(draft), ...(source?.rolled ? { rolled: true, canCrush: source.canCrush, heart: source.heart } : {}) });
+  const res = await simpleLLMCall(chatConfig(), [
+    { role: "system", content: `${DETAIL_RULES}\n只输出包含heightCm（厘米数值）、appearance、romanceStyle三个字段的JSON对象` },
+    { role: "user", content: `根据这张已经确定基础信息和心动线的人物卡补充外貌与感情方式，不修改基础信息：\n${JSON.stringify({ ...draft, canCrush: Boolean(p.canCrush) })}` },
+  ], { temperature: 0.9, label: "人物外貌与感情方式" });
+  if (!res.content) throw new Error(res.error || "人物补充没生成成功");
+  const raw = res.content.match(/\{[\s\S]*\}/);
+  if (!raw) throw new Error("人物补充没有按格式返回");
+  const extra = JSON.parse(raw[0]);
+  const details = parseDraft(JSON.stringify({ ...draft, heightCm: extra.heightCm, appearance: extra.appearance, romanceStyle: extra.romanceStyle }));
+  if (!details.appearance || !details.heightCm || (p.canCrush && !details.romanceStyle)) throw new Error("人物外貌或感情方式没有写完整，请重试");
+  const heightCm = p.canCrush && p.gender === "男"
+    ? details.heightCm && details.heightCm >= 180 && details.heightCm <= 190 ? details.heightCm : 180 + Math.floor(Math.random() * 11)
+    : details.heightCm;
+  return { ...draft, heightCm, appearance: details.appearance, romanceStyle: p.canCrush ? details.romanceStyle : "", canCrush: p.canCrush, heart: p.heart, rolled: p.rolled };
+}
+
 /** 照描述捏一个新人。face 是代码掷的骰子 */
 export async function draftPerson(wish: string, face: FaceRelation, secret: SecretKind = rollSecretKind()): Promise<CardDraft & { secretKind: SecretKind }> {
   const res = await simpleLLMCall(chatConfig(), [
@@ -469,28 +517,37 @@ export async function draftPerson(wish: string, face: FaceRelation, secret: Secr
     { role: "user", content: `${rosterLine()}\n${herLine()}\n骰子：如果他是爱豆，私下跟公开人设「${FACE_LABEL[face]}」；秘密：${SECRET_DICE[secret]}。\n她想要的人：${wish.trim() || "随你，照这个世界里合理会出现的人来"}` },
   ], { temperature: 0.95, label: "通讯录捏人" });
   if (!res.content) throw new Error(res.error || "AI 没回");
-  return { ...parseDraft(res.content), secretKind: secret };
+  return { ...(await addPersonalDetails(parseDraft(res.content))), secretKind: secret };
 }
 
 /** 照她写的方向改一张已有的卡 */
 export async function reviseCard(p: IdolProfile, name: string, direction: string): Promise<CardDraft> {
   const current: CardDraft = {
-    name, gender: p.gender ?? "", birthday: p.birthday ?? "", mbti: p.mbti ?? "", secret: p.secret?.text ?? "",
+    name, nationality: p.nationality ?? "", heightCm: p.heightCm, appearance: p.appearance, romanceStyle: p.canCrush ? p.romanceStyle : "", gender: p.gender ?? "", birthday: p.birthday ?? "", mbti: p.mbti ?? "", secret: p.secret?.text ?? "",
     role: p.role, group: p.group, age: p.age, isIdol: p.isIdol,
     publicLabels: p.publicLabels, publicText: p.publicText, privateLines: p.privateLines, speech: p.speech, taboo: p.taboo,
   };
   const res = await simpleLLMCall(chatConfig(), [
-    { role: "system", content: `${CARD_RULES}\n这次是改一张已有的卡：只改她要求的地方，其余照抄，名字不改。` },
-    { role: "user", content: `${rosterLine(p.charId)}\n${herLine()}\n私下跟公开人设：${FACE_LABEL[p.face]}；秘密：${SECRET_DICE[p.secret?.kind ?? "none"]}\n现在的卡：${JSON.stringify(current)}\n她要的方向：${direction}` },
+    { role: "system", content: `${CARD_RULES}\n${DETAIL_RULES}\n输出JSON在原字段之外包含heightCm、appearance、romanceStyle。\n这次是改一张已有的卡：只改她要求的地方，其余照抄，名字不改。` },
+    { role: "user", content: `${rosterLine(p.charId)}\n${herLine()}\n私下跟公开人设：${FACE_LABEL[p.face]}；秘密：${SECRET_DICE[p.secret?.kind ?? "none"]}\n有心动线：${Boolean(p.canCrush)}\n现在的卡：${JSON.stringify(current)}\n她要的方向：${direction}` },
   ], { temperature: 0.8, label: "通讯录改卡" });
   if (!res.content) throw new Error(res.error || "AI 没回");
-  return { ...parseDraft(res.content), name };
+  const draft = parseDraft(res.content);
+  const heightCm = p.canCrush && p.gender === "男" && draft.heightCm && (draft.heightCm < 180 || draft.heightCm > 190)
+    ? p.heightCm ?? 180 : draft.heightCm ?? p.heightCm;
+  return {
+    ...draft, name, nationality: draft.nationality || p.nationality || "", heightCm,
+    appearance: draft.appearance || p.appearance,
+    romanceStyle: p.canCrush ? draft.romanceStyle || p.romanceStyle : "",
+    canCrush: p.canCrush, heart: p.heart, rolled: p.rolled,
+  };
 }
 
 /** 她搜 ID 搜到一个只有名字的人：照模板把卡补全（名字、身份、你们见过的事不改） */
 export async function completeCard(p: IdolProfile, name: string, secretKind: SecretKind = p.secret?.kind ?? rollSecretKind()): Promise<CardDraft & { secretKind: SecretKind }> {
   const known = [
     p.role ? `身份：${p.role}` : "",
+    p.nationality ? `国籍：${p.nationality}（保留，不改）` : "",
     p.metAt ? `${fmtDay(p.metAt.at)}在「${p.metAt.place}」见过她` : "",
     p.events.length ? `和她之间的事：${p.events.map(e => e.text).join("；")}` : "",
     p.withYou ? `对她的第一印象：${p.withYou}` : "",
@@ -500,14 +557,17 @@ export async function completeCard(p: IdolProfile, name: string, secretKind: Sec
     { role: "user", content: `${rosterLine(p.charId)}\n${herLine()}\n骰子：如果他是爱豆，私下跟公开人设「${FACE_LABEL[p.face]}」；秘密：${SECRET_DICE[secretKind]}。\n名字：${name}\n${known || "只知道名字"}` },
   ], { temperature: 0.9, label: "通讯录补全卡" });
   if (!res.content) throw new Error(res.error || "AI 没回");
-  return { ...parseDraft(res.content), name, secretKind };
+  const draft = parseDraft(res.content);
+  return { ...(await addPersonalDetails({ ...draft, nationality: p.nationality || draft.nationality, name }, p)), secretKind };
 }
 
 /** AI 捏好的卡 → 档案字段（秘密按骰子） */
 export function draftFields(d: CardDraft & { secretKind?: SecretKind }, prev?: Secret): Partial<IdolProfile> {
   const kind = d.secretKind ?? prev?.kind ?? "none";
   return {
-    role: d.role, group: d.group, age: d.age, isIdol: d.isIdol, gender: d.gender, birthday: d.birthday, mbti: d.mbti,
+    heightCm: d.heightCm, appearance: d.appearance, romanceStyle: d.romanceStyle,
+    ...(d.canCrush !== undefined ? { canCrush: d.canCrush, heart: d.heart, rolled: d.rolled } : {}),
+    role: d.role, group: d.group, age: d.age, nationality: d.nationality?.trim() ?? "", isIdol: d.isIdol, gender: d.gender, birthday: d.birthday, mbti: d.mbti,
     publicLabels: d.publicLabels, publicText: d.publicText, privateLines: d.privateLines, speech: d.speech, taboo: d.taboo,
     secret: { kind, text: kind === "none" ? "" : (d.secret || prev?.text || ""), ...(prev?.revealed ? { revealed: prev.revealed } : {}) },
   };

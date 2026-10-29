@@ -593,3 +593,79 @@ Flora 要一个专门玩「爱豆模拟器」的小手机：她是想当爱豆�
 - 开局人气：普通 5、富二代财阀 15、星二代 24、童星 50（旧存档数不动，名片上能自己改）
 - 练习生时期热度封顶 30，出道后放开
 - 别的 app 原来按三档判断的改成 `fameBand()`（每档带 band：普通人 / 小有人知 / 公众人物），逻辑不变；给 AI 的那句 `fameWordNow` 用咖位名 + 一句描述
+
+
+### 2026-10-29 星路成绩单/命运标记/课表美化落实（Codex）
+- Flora 确认三张预览后授权实施。sr-fields 标签固定44px列+等宽值列，标签和值分别居中；5条横线实测均134px，头像与信息区整体垂直居中。
+- 地图 stg-mpin 命运!改为整个地址图标组右上角（right:-5px/top:-13px），保留原粉色样式与点击行为；卡片视图本来就在右上，未改逻辑。
+- 提醒事项课表用浅紫周日期条+每日时间轴卡片，前后周仍仅上/本/下周；日期可选，空课日说明，显示真实课程和attend/leave/official/skip原状态。未结算课程按时间显示待上课/上课时段/待记录，不假报出勤。预览中的教室地址是示例，正式版不伪造，显示实际公司名。课程生成/请假/记账均未改。
+- 命运间隔只核对未改：gapDays通常30天，短练习期最低15天，已符合最新要求。
+- tsc与diff检查通过；verify-starroad-refinements-v1.mjs 独立假存档验证5线等长、!偏移、七天日期选择、前后周边界、周日空课、无水平溢出及pageerror。实际截图 starroad-info-actual-v1.png、destiny-badge-actual-v1.png、timetable-actual-v1.png 位于预览目录。未上线。
+
+
+### 2.38 2026-10-29 本次收尾，明天从这里接（Codex）
+
+**Flora 本次最后要求仅保存交接文档，今天停止工作，明天再继续。没有授权下一项新功能。**
+
+#### 接续顺序与合作状态
+- CC 目前无法继续使用，后续由 Codex 接续。Flora 暂时不想折腾账号，不主动安排申诉/账号排查。
+- 新窗口先读项目交接 2.36、2.37、2.38，再读 `docs/idol/destiny.md`；完整 Codex 记录在 `/Users/flora/work/CODEX-HANDOFF.md`。先接她的新需求，不自行重做已定稿界面或实施旧待办。
+- 全程中文、自然亲切，设计先预览再实施；历史预览另存版本，勿覆盖。交接新增内容标明 Codex，CC 的成果不要算成自己做的。不要展示猫。
+
+#### 已完成的最新一轮（Codex；已获预览确认）
+1. 星路成绩单：个人信息 NAME/BIRTH/AGENCY/SINCE/DAY 的横线统一长度，标签和值分别居中，照片和信息区垂直居中。改动 `components/starroad/star-road-app.tsx`、`styles/starroad.css`。
+2. 此刻命运感叹号：放整个地点图标/标签组右上角，保留原颜色和行为。改动 `styles/stage.css`。
+3. 提醒事项课表：浅紫周日期栏、逐日选择、当天课程时间轴/白卡；上周/本周/下周边界保留，显示真实课表及上课/请假/公假/旷课状态。未记录的过去课程显示待记录，不伪报已上；无课日有说明。改动 `components/career/career-app.tsx`、`styles/reminders.css`。课程生成、升降级、请假和旷课规则未改，预览里的示意教室名称未放入正式版。
+4. 已跑 `tsc --noEmit --incremental false`、`git diff --check`，以及独立假存档实际浏览器验证：5条线均134px，感叹号偏移正确、七天切换/前后周边界/周日空课/无水平溢出，无页面错误。未使用用户真实 API。Flora 尚未给这轮实机试用的新反馈。
+
+#### 命运节奏最新结论（覆盖2.36中的旧“五天”描述）
+- Flora 再次明确五天方案已驳回，采用至少一个月；练习生时期短到排不下8个才缩短，最短半个月。
+- Codex 已核对 `lib/idol-destiny.ts`：gapDays为 `max(15,min(30,floor(traineeSpan/DAY/9)))*DAY`，当前符合该方向，没有改命运代码。不要按2.36的旧五天文字再改回去。
+- `destiny.md` 顶部“还没开工”为旧标题，实际CC已完成的看2.36和当前代码，不能据此从头做一遍。
+
+#### Git与存档状态（刚检查）
+- 目录 `/Users/flora/projects/momo-idol`，分支 `idol`。
+- 本轮早期代码存档点 `03bb90a`，标签 `checkpoint/idol-maps-music-replay-weather-20261028`；后面CC又提交了星路/命运等，不能误称03bb90a已包含它们。
+- 当前HEAD `4c4c68a`：关注度证：去掉挤成竖排的分档条，计量条按八档打刻线；前一条 `b705f91` 为咖位八档。
+- 当前最新三处界面调整**尚未提交Git**，保留在工作区：上述5个源码/样式文件，另有本HANDOFF文档修改。不要丢弃、覆盖、reset或自动回滚。今天用户只要求文档交接，因此未新增代码提交。
+- 全部仍本地，未push、未上线。本交接不等于浏览器游戏数据备份，也未对真实游戏存档做导入/清理/回滚。
+
+#### 预览、验证与本地环境
+- 都在熟悉目录 `/Users/flora/work/idol-settings-preview/`。
+- 确认的预览：`starroad-info-preview-v1.png`、`destiny-badge-preview-v1.png`、`timetable-preview-v1.png`。
+- 实际实施截图：`starroad-info-actual-v1.png`、`destiny-badge-actual-v1.png`、`timetable-actual-v1.png`。
+- 脚本：`preview-starroad-refinements-v1.mjs`、`verify-starroad-refinements-v1.mjs`（均项目外）。用独立浏览器虚构数据，不碰用户真实浏览器存档。
+- 可用puppeteer-core：`/private/tmp/claude-501/-Users-flora/40c456dc-060f-46eb-8974-ff6aee18e32f/scratchpad/pp/node_modules/`；旧bd4740临时依赖已失效，不要继续引用。
+- 爱豆本地服务沿用3031，本次未停止/重启现有服务。下一次按需确认，不乱关进程。
+
+#### 其他现状，避免误接
+- 地图、剧情中音乐分组、只读重播、邀请全文、天气共享与初雪生活反应已在前一轮完成，详情见上方Codex段落。
+- 天气真实联网后来已通过浏览器实测，先前curl SSL失败不是目前阻塞；不要再说“真实数据没取成功”。天气桌面快捷图标缺失也已补过。
+- CC尚未完成的功能按2.36待办保留，不自动实施：出道组课表、发动机临时调课/外聘老师、命运friend来法所选人物离开后的处理等。继续前由Flora决定做哪一项。
+
+
+### 2.39 2026-10-29 人物国籍与说话语言（Codex）
+- 用户授权：通讯录名片加国籍，与身份/年龄/MBTI放在一起；统一韩国背景下的说话规则。三个语言选项只留在此刻，其他App沿用float原来的双语机制，不新增语言设置。
+- 已实施：IdolProfile/CardDraft支持可选nationality；新人生成模板、解析、存档、编辑、预览与名片显示已接入；补全卡保留已知国籍、改卡响应漏字段时保留原值。旧人物缺国籍不强行赋韩国籍、不自动批量调用AI补全。
+- 统一语言规则在lib/idol-language.ts：韩国日常默认韩语，外国人物根据对象和情境可用母语或韩语，不跟着用户中文输入自动切中文。规则进人物persona、世界场景提示及KKT单聊/群聊提示；仅对有idol档案的人物追加，不改float原有双语格式或开关。此刻去掉“按国籍固定母语/没写国籍当韩国人”的旧文案，保留三个选项及全中文优先规则。
+- 用户明确要求用假AI测试，不使用真实API。独立临时Chrome、虚构存档、拦截所有外部请求；verify-nationality-kkt-v1.mjs通过：生成/编辑保存国籍、改卡/补全漏国籍保留美国籍、旧人缺字段兼容、韩国私聊/美国人物韩语与英语/双人群聊完整请求链、实际请求含国籍和语言规则及原float双语格式、韩语气泡与展开中文正常，pageerror为空，真实API调用0。假回复验证链路和显示，不证明真实模型一定遵守。
+- 脚本、nationality-contact-v1.png、nationality-kkt-korean-v1.png、nationality-kkt-group-v1.png、nationality-kkt-results-v1.json、nationality-kkt-prompts-v1.json在/Users/flora/work/idol-settings-preview/。tsc --noEmit --incremental false与git diff --check通过。此次代码未提交、未push、未部署。
+- 前一轮用户指定的成绩单/命运标记/课表美化已经本地提交为d169a0f；2.38里的“5个源码文件未提交”为当时状态，现已过时。原有HANDOFF改动一直保留未提交。
+
+### 2.40 2026-10-29 外貌、性格与相处、感情方式（Codex）
+- Flora确认实施：外貌包含身高、整体好看程度、长相风格和简短描述；提示词仅写正向要求与“外貌不决定性格”，不列痞帅/奶狗或旧衣服/疤等反例。她尚未开玩、没有已有人物，不做批量迁移。
+- 国籍前一轮实现保留。新增heightCm、appearance、romanceStyle；普通人的“平时”改为“性格与相处”，已出道爱豆仍显示“私下”及公开人设。性格描述用一两段连贯内容写处事倾向、熟悉前后差别、压力冲突反应；生成名单带已有人的性格摘要，MBTI仅辅助。
+- 有心动线的人才生成/展示感情方式，讲未确定关系时靠近、确定关系后的亲密表达与期待、分歧沟通及修复；persona中与当前关系/心动程度共同约束，不提前演恋人。原有心动线年龄/身份/性别概率判定未改。
+- 新生/补全采用两步生成：基础人物卡后由原applyStartRolls确定心动线，再请求外貌与感情方式。心动判定随draft带入保存，点“就这个人”不再重掷。相比此前每次新生/补全多一次模型请求；本次全部用假AI，不调用真实API。改卡仍一次请求。
+- 有心动线男性身高限制180～190cm（含端点），详情生成提示+代码校验，越界回复会在区间内重新取值。女生及无心动线男性无此限制。
+- 新字段在生成预览、名片、编辑页、角色persona全接通。性格内容由项目原privateLines兼容承载，显示为连贯段落，外观布局沿用原通讯录。
+- verify-profile-details-v1.mjs独立虚构存档/拦截外部请求测试通过：练习生男性、已出道男性、无心动线工作人员；预览到保存心动判定保留；身高183正常、175越界兜底有效；无心动线强制去除假AI误给的romanceStyle；编辑保存不丢字段；persona与栏目匹配，无pageerror。假AI是预写样例，用于验证链路/显示，不代表真实模型写作质量。
+- 实际界面截图profile-details-{male-top,male-body,male-romance,staff-body,idol-body}-v2.png与浏览对比页“人物档案-当前界面-v1.html”位于/Users/flora/work/idol-settings-preview/，v1截图保留。未提交、未push、未部署。
+
+### 2026-10-29 人物档案界面定稿确认（Codex）
+- Flora看过2.40的实际界面截图后确认“好的那照着这个改吧”。当前正式源码已按该版实现，保留原通讯录样式，外貌、性格与相处/私下、按心动线显示的感情方式均定稿。
+- 本次只确认现有实现并补充记录，未扩大设计范围。此前假AI流程与浏览器显示验证、类型检查通过，本次git diff --check通过。代码仍未提交、未push、未部署。
+
+### 2026-10-29 人物档案本地提交（Codex）
+- Flora明确要求提交，本次将国籍与统一语言规则、外貌与身高、性格与相处、感情方式及相关交接记录一起提交到idol分支。上文“未提交”描述为当时状态。
+- 提交前git diff --check通过；此前类型检查与独立假AI浏览器验证通过。本次不push、不部署。

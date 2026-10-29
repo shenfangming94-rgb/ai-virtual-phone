@@ -1,3 +1,4 @@
+import { IDOL_LANGUAGE_RULE } from "./idol-language";
 import { worldWeatherHint } from "./idol-weather";
 /**
  * 爱豆小手机：剧情 app 的「世界」模式。
@@ -155,6 +156,7 @@ export function worldPromptFor(meta: SceneMeta | null, fallbackPlace: string, pa
     `【时间和地点】\n现在：${fmtWorld(Date.now())}\n地点：${meta?.place || fallbackPlace || "某个地方"}${meta?.premise ? `\n开头：${meta.premise}` : ""}`,
     `【在场的人】${people.length ? people.map(c => c.name).join("、") : "暂时只有她"}${peopleBlock ? `\n\n${peopleBlock}` : ""}`,
     meta?.open ? mightMeetBlock(participantIds, meta.place, meta.avoid) : "",
+    `【说话语言】${IDOL_LANGUAGE_RULE}`,
     `【规矩】
 - 不替她说话、不替她做决定、不写她的心理。
 - 只写在场的人；不在场的人可以被提到，要出场就写他进来了。
@@ -193,8 +195,8 @@ function mightMeetBlock(presentIds: string[], place: string, avoid: string[] = [
     })
     .sort((x, y) => y.score - x.score);
   const detail = scored.slice(0, 25).map(({ c, p, last }) =>
-    `- ${c.name}（${p.role || p.group || "身份没写"}，跟她：${relationOf(p)}）${p.privateLines.length ? `：${p.privateLines.slice(0, 2).join("；")}` : ""}${last ? `。最近：${last.text}` : ""}`);
-  const rest = scored.slice(25).map(({ c, p }) => `${c.name}（${p.role || p.group || "身份没写"}）`);
+    `- ${c.name}（${p.role || p.group || "身份没写"}${p.nationality ? `，国籍：${p.nationality}` : ""}，跟她：${relationOf(p)}）${p.privateLines.length ? `：${p.privateLines.slice(0, 2).join("；")}` : ""}${last ? `。最近：${last.text}` : ""}`);
+  const rest = scored.slice(25).map(({ c, p }) => `${c.name}（${p.role || p.group || "身份没写"}${p.nationality ? `，国籍：${p.nationality}` : ""}）`);
   return [
     "【可能碰上的人】这里有谁交给你定：按现在几点、这是什么地方、她的日程，以及每个人的身份和习惯，判断这会儿谁合理会在这里。可以是下面的人，也可以是没名字的路人或新面孔，也可以没人。不要为了凑人硬塞。",
     detail.length ? detail.join("\n") : "（她还谁都不认识）",

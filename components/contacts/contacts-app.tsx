@@ -465,7 +465,7 @@ function CardView({ data, id, onBack, onEdit, onNotice }: { data: Data; id: stri
         <div className="ct-hero">
           <Avatar name={char.name} src={char.avatar} size={168} className="ct-hero-avatar" />
           <h1>{char.name}</h1>
-          <p>{[p.role, p.age ? `${p.age} 岁` : "", p.mbti].filter(Boolean).join(" · ") || "还没写身份"}</p>
+          <p>{[p.role, p.nationality, p.age ? `${p.age} 岁` : "", p.mbti].filter(Boolean).join(" · ") || "还没写身份"}</p>
         </div>
         <div className="ct-actions">
           <button type="button" className="ct-glass-dark" onClick={() => openChat()}><MessageCircle size={22} /><span>Kakao</span></button>
@@ -485,6 +485,8 @@ function CardView({ data, id, onBack, onEdit, onNotice }: { data: Data; id: stri
           <div className="ct-v">{relationOf(p)}</div>
           {p.birthday ? <><hr /><div className="ct-k">生日</div><div className="ct-v">{p.birthday.split("-").map(x => String(parseInt(x, 10) || x)).join("月")}日</div></> : null}
         </div>
+
+        {p.appearance || p.heightCm ? <div className="ct-block"><div className="ct-k">外貌{p.heightCm ? ` · ${p.heightCm}cm` : ""}</div>{p.appearance ? <div className="ct-v ct-prose">{p.appearance}</div> : null}</div> : null}
 
         {p.leave?.phase === "left" && p.leave.left ? (
           <div className="ct-block">
@@ -520,7 +522,7 @@ function CardView({ data, id, onBack, onEdit, onNotice }: { data: Data; id: stri
 
         {!p.privateLines.length ? (
           <div className="ct-block">
-            <div className="ct-k">平时</div>
+            <div className="ct-k">性格与相处</div>
             <div className="ct-v is-dim">戏里见过，还只知道名字</div>
             <button type="button" className="ct-wide-dark" disabled={busy} onClick={() => void flesh()}>
               <Sparkles size={16} /> {busy ? "在想…" : "照模板补全"}
@@ -530,10 +532,12 @@ function CardView({ data, id, onBack, onEdit, onNotice }: { data: Data; id: stri
 
         {p.privateLines.length ? (
           <div className="ct-block">
-            <div className="ct-k"><span>{p.isIdol ? "私下" : "平时"}</span>{p.isIdol ? <span className="ct-chips"><span>{FACE_LABEL[p.face]}</span></span> : null}</div>
-            <ul className="ct-v">{p.privateLines.map((l, i) => <li key={i}>{l}</li>)}</ul>
+            <div className="ct-k"><span>{p.isIdol ? "私下" : "性格与相处"}</span>{p.isIdol ? <span className="ct-chips"><span>{FACE_LABEL[p.face]}</span></span> : null}</div>
+            <div className="ct-v ct-prose">{p.privateLines.join("\n\n")}</div>
           </div>
         ) : null}
+
+        {p.canCrush && p.romanceStyle ? <div className="ct-block"><div className="ct-k">感情里的{p.gender === "女" ? "她" : "他"}</div><div className="ct-v ct-prose">{p.romanceStyle}</div></div> : null}
 
         {p.speech || p.taboo ? (
           <div className="ct-block">
@@ -636,9 +640,12 @@ function EditView({ data, id, onDone, onDeleted, onNotice }: { data: Data; id: s
             <button type="button" className={p.gender === "女" ? "on" : ""} onClick={() => set("gender", "女")}>女</button>
           </div>
         </Field>
+        <Field label="国籍"><input value={p.nationality ?? ""} onChange={e => set("nationality", e.target.value)} placeholder="例如：韩国、美国" /></Field>
         <Field label="年龄"><input value={p.age} onChange={e => set("age", e.target.value)} /></Field>
         <Field label="生日"><input value={p.birthday ?? ""} onChange={e => set("birthday", e.target.value)} placeholder="月-日，比如 04-12" /></Field>
         <Field label="MBTI"><input value={p.mbti ?? ""} onChange={e => set("mbti", e.target.value.toUpperCase())} placeholder="只是参考" /></Field>
+        <Field label="身高（cm）"><input type="number" value={p.heightCm ?? ""} onChange={e => set("heightCm", e.target.value ? Number(e.target.value) : undefined)} /></Field>
+        <Field label="外貌"><textarea rows={4} value={p.appearance ?? ""} onChange={e => set("appearance", e.target.value)} /></Field>
         <Field label="分组">
           <input value={p.group} list="ct-groups" onChange={e => set("group", e.target.value)} placeholder="公司 / 同期练习生 / 家和老朋友…" />
           <datalist id="ct-groups">{groups.map(g => <option key={g} value={g} />)}</datalist>
@@ -668,7 +675,8 @@ function EditView({ data, id, onDone, onDeleted, onNotice }: { data: Data; id: s
             </Field>
           </>
         ) : null}
-        <Field label={p.isIdol ? "私下（一行一句）" : "平时（一行一句）"}><textarea rows={5} value={p.privateLines.join("\n")} onChange={e => set("privateLines", lines(e.target.value))} /></Field>
+        <Field label={p.isIdol ? "私下" : "性格与相处"}><textarea rows={5} value={p.privateLines.join("\n")} onChange={e => set("privateLines", lines(e.target.value))} /></Field>
+        {p.canCrush ? <Field label={`感情里的${p.gender === "女" ? "她" : "他"}`}><textarea rows={5} value={p.romanceStyle ?? ""} onChange={e => set("romanceStyle", e.target.value)} /></Field> : null}
         <Field label="说话"><textarea rows={2} value={p.speech} onChange={e => set("speech", e.target.value)} /></Field>
         <Field label="雷区"><textarea rows={2} value={p.taboo} onChange={e => set("taboo", e.target.value)} placeholder="可以不写" /></Field>
         <Field label="见过了吗">
@@ -879,18 +887,20 @@ function AddSheet({ onClose, onCreated, onNotice }: { onClose: () => void; onCre
             <div className="ct-sheet-hero">
               <Avatar name={draft.name} size={64} />
               <b>{draft.name}</b>
-              <small>{[draft.role, draft.age ? `${draft.age} 岁` : ""].filter(Boolean).join(" · ")}</small>
+              <small>{[draft.role, draft.nationality, draft.age ? `${draft.age} 岁` : ""].filter(Boolean).join(" · ")}</small>
             </div>
             <div className="ct-sheet-scroll">
+              {draft.appearance || draft.heightCm ? <div className="ct-white"><div className="ct-k">外貌{draft.heightCm ? ` · ${draft.heightCm}cm` : ""}</div><div className="ct-v ct-prose">{draft.appearance}</div></div> : null}
               {draft.isIdol && (draft.publicLabels.length || draft.publicText) ? (
                 <div className="ct-white"><div className="ct-k">公开人设</div>{draft.publicLabels.length ? <div className="ct-chips is-light">{draft.publicLabels.map(l => <span key={l}>{l}</span>)}</div> : null}<div className="ct-v">{draft.publicText}</div></div>
               ) : null}
               {draft.privateLines.length ? (
                 <div className="ct-white">
-                  <div className="ct-k"><span>{draft.isIdol ? "私下" : "平时"}</span>{draft.isIdol ? <span className="ct-chips is-light"><span>{FACE_LABEL[face]}</span></span> : null}</div>
-                  <ul className="ct-v">{draft.privateLines.map((l, i) => <li key={i}>{l}</li>)}</ul>
+                  <div className="ct-k"><span>{draft.isIdol ? "私下" : "性格与相处"}</span>{draft.isIdol ? <span className="ct-chips is-light"><span>{FACE_LABEL[face]}</span></span> : null}</div>
+                  <div className="ct-v ct-prose">{draft.privateLines.join("\n\n")}</div>
                 </div>
               ) : null}
+              {draft.canCrush && draft.romanceStyle ? <div className="ct-white"><div className="ct-k">感情里的{draft.gender === "女" ? "她" : "他"}</div><div className="ct-v ct-prose">{draft.romanceStyle}</div></div> : null}
               {draft.speech ? <div className="ct-white"><div className="ct-k">说话</div><div className="ct-v">{draft.speech}</div></div> : null}
               {draft.taboo ? <div className="ct-white"><div className="ct-k">雷区</div><div className="ct-v">{draft.taboo}</div></div> : null}
             </div>

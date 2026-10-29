@@ -206,8 +206,6 @@ export function PhoneCharacterApp({ onClose, onNotice }: PhoneCharacterAppProps)
   const [characters, setCharacters] = useState<Character[]>(() => loadCharacters());
   const [bgItems, setBgItems] = useState<CanvasBgItem[]>(() => loadBackgroundItems());
   const [transition, setTransition] = useState<TransitionState | null>(null);
-  const [pendingPlacementChar, setPendingPlacementChar] = useState<Character | null>(null);
-  const [pendingPolaroidStyle, setPendingPolaroidStyle] = useState<number>(0);
 
   // ── 世界卷宗：分组数据 + 当前打开的卷宗（持久记忆） ──
   const [worldGroups, setWorldGroups] = useState<CharacterWorldGroup[]>(() => loadCharacterWorldGroups());
@@ -232,6 +230,17 @@ export function PhoneCharacterApp({ onClose, onNotice }: PhoneCharacterAppProps)
     saveCharacters(next);
     // 角色增删会影响世界成员归属（normalize），同步刷新分组
     setWorldGroups(loadCharacterWorldGroups());
+  }
+
+  function assignCharacterToWorld(char: Character) {
+    if (safeWorldId !== DEFAULT_CHARACTER_WORLD_ID) moveCharacterToWorld(char.id, safeWorldId);
+    setWorldGroups(loadCharacterWorldGroups());
+  }
+
+  function archiveCharacter(char: Character) {
+    const latest = loadCharacters();
+    updateChars([...latest.filter(c => c.id !== char.id), char]);
+    assignCharacterToWorld(char);
   }
 
   function updateBgItems(next: CanvasBgItem[]) {
@@ -283,19 +292,9 @@ export function PhoneCharacterApp({ onClose, onNotice }: PhoneCharacterAppProps)
             onUpdateBgItems={updateBgItems}
             onClose={onClose}
             onSelect={handleSelectChar}
-            onCreate={(style: number) => { setPendingPolaroidStyle(style); setView({ type: "detail", id: null, isEditing: true }); }}
-            pendingPlacementChar={pendingPlacementChar}
-            onStartCharPlacement={(char: Character) => setPendingPlacementChar(char)}
-            onPlacementDone={(placed: Character) => {
-              setPendingPlacementChar(null);
-              // 新建/导入的角色放进当前打开的卷宗（normalize 默认丢进默认世界）
-              if (safeWorldId !== DEFAULT_CHARACTER_WORLD_ID) {
-                moveCharacterToWorld(placed.id, safeWorldId);
-              } else {
-                setWorldGroups(loadCharacterWorldGroups());
-              }
-            }}
-            onClearPendingPlacement={() => setPendingPlacementChar(null)}
+            onCreate={() => setView({ type: "detail", id: null, isEditing: true })}
+            onArchiveCharacter={archiveCharacter}
+            onAssignToWorld={assignCharacterToWorld}
             onNotice={onNotice}
           />
         )}
@@ -332,10 +331,9 @@ export function PhoneCharacterApp({ onClose, onNotice }: PhoneCharacterAppProps)
                   : `已覆盖旧版本，当前为 V${nextVersion}`);
               } else {
                 const newChar = createCharacter(data);
-                newChar.polaroidStyle = pendingPolaroidStyle;
-                setPendingPlacementChar(newChar);
+                archiveCharacter(newChar);
                 setView({ type: "list", id: null, isEditing: false });
-                onNotice("点击画布放置角色");
+                onNotice("已加入档案库");
               }
             }}
             onRestoreVersion={(version) => {
@@ -489,10 +487,8 @@ function CharListView({
   onClose,
   onSelect,
   onCreate,
-  pendingPlacementChar,
-  onStartCharPlacement,
-  onPlacementDone,
-  onClearPendingPlacement,
+  onArchiveCharacter,
+  onAssignToWorld,
   onNotice,
 }: {
   characters: Character[];
@@ -504,11 +500,9 @@ function CharListView({
   onUpdateBgItems: (next: CanvasBgItem[]) => void;
   onClose: () => void;
   onSelect: (char: Character, e: React.MouseEvent<HTMLDivElement>) => void;
-  onCreate: (polaroidStyle: number) => void;
-  pendingPlacementChar: Character | null;
-  onStartCharPlacement: (char: Character) => void;
-  onPlacementDone: (char: Character) => void;
-  onClearPendingPlacement: () => void;
+  onCreate: () => void;
+  onArchiveCharacter: (char: Character) => void;
+  onAssignToWorld: (char: Character) => void;
   onNotice: (text: string) => void;
 }) {
   const fileRef = useRef<HTMLInputElement>(null);
@@ -734,13 +728,10 @@ function CharListView({
   const isEditingRef = useRef(isEditing);
   isEditingRef.current = isEditing;
   panRef.current = pan;
-  const [showStylePicker, setShowStylePicker] = useState(false);
-  const pendingStyleRef = useRef<number>(0);
-  const pendingActionRef = useRef<'import' | 'create'>('import');
   const [pendingBgType, setPendingBgType] = useState<CanvasBgItem['type'] | null>(null);
   const [ghostPos, setGhostPos] = useState<{ x: number; y: number }>({ x: -9999, y: -9999 });
   const [importError, setImportError] = useState<string | null>(null);
-  const placementActive = !!(pendingPlacementChar || pendingBgType);
+  const placementActive = !!pendingBgType;
 
   useEffect(() => {
     if (!deleteConfirm) {
@@ -759,12 +750,11 @@ function CharListView({
     function handleKeyDown(e: KeyboardEvent) {
       if (e.key === 'Escape') {
         setPendingBgType(null);
-        onClearPendingPlacement();
       }
     }
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [placementActive, onClearPendingPlacement]);
+  }, [placementActive]);
 
   function handleCanvasPointerDown(e: React.PointerEvent) {
     if (pinchRef.current) return;
@@ -773,18 +763,7 @@ function CharListView({
       if (!rect) return;
       const canvasX = (e.clientX - rect.left - pan.x) / pan.zoom;
       const canvasY = (e.clientY - rect.top - pan.y) / pan.zoom;
-      if (pendingPlacementChar) {
-        const charWithCoords: Character = {
-          ...pendingPlacementChar,
-          canvasX,
-          canvasY,
-          canvasRot: (Math.random() * 20) - 10,
-          canvasZIndex: 100 + characters.length,
-        };
-        onUpdateChars([...characters, charWithCoords]);
-        onPlacementDone(charWithCoords);
-        onNotice("已放置角色");
-      } else if (pendingBgType) {
+      if (pendingBgType) {
         const newId = `bg_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
         const newItem: CanvasBgItem = {
           id: newId,
@@ -970,7 +949,7 @@ function CharListView({
     }
     if (added.length) {
       onUpdateChars([...characters, ...added]);
-      for (const c of added) onPlacementDone(c);
+      for (const c of added) onAssignToWorld(c);
     }
     const parts = [`导入了 ${added.length} 个角色`];
     if (memories) parts.push(`${memories} 条记忆`);
@@ -996,7 +975,6 @@ function CharListView({
   }
 
   async function handleImportFile(file: File) {
-    const styleIdx = pendingStyleRef.current;
     try {
       if (file.type === "application/json" || file.name.endsWith(".json")) {
         const text = await file.text();
@@ -1005,9 +983,8 @@ function CharListView({
         const data = parseCharacterFromJson(text);
         if (!data) return onNotice("解析失败，请检查文件格式");
         const c = createCharacter(data);
-        c.polaroidStyle = styleIdx;
-        onStartCharPlacement(c);
-        onNotice("点击画布放置角色");
+        onArchiveCharacter(c);
+        onNotice("已加入档案库");
       } else if (file.type === "image/png" || file.name.endsWith(".png")) {
         const buffer = await file.arrayBuffer();
         const data = parseCharacterFromPng(buffer);
@@ -1022,9 +999,8 @@ function CharListView({
           avatar = data.avatar;
         }
         const c = createCharacter({ ...data, avatar });
-        c.polaroidStyle = styleIdx;
-        onStartCharPlacement(c);
-        onNotice("点击画布放置角色");
+        onArchiveCharacter(c);
+        onNotice("已加入档案库");
       } else {
         onNotice("请选择 .json 或 .png 文件");
       }
@@ -1085,11 +1061,11 @@ function CharListView({
         footer={
           <div className="char-bottom-bar flex justify-center pb-8">
             <div className="wt-bottom-pill">
-              <button className="wt-bottom-pill-btn" onClick={() => { pendingActionRef.current = 'import'; setShowStylePicker(true); }}>
+              <button className="wt-bottom-pill-btn" onClick={() => fileRef.current?.click()}>
                 <IconImport />
                 <span>导入</span>
               </button>
-              <button className="wt-bottom-pill-btn" onClick={() => { pendingActionRef.current = 'create'; setShowStylePicker(true); }}>
+              <button className="wt-bottom-pill-btn" onClick={onCreate}>
                 <IconPlus />
                 <span>新建</span>
               </button>
@@ -1143,7 +1119,6 @@ function CharListView({
           if (placementActive) {
             e.preventDefault();
             setPendingBgType(null);
-            onClearPendingPlacement();
           }
         }}
         style={{ display: !isEditing && !placementActive ? 'none' : undefined, touchAction: 'none', WebkitUserSelect: 'none', cursor: placementActive ? 'crosshair' : undefined }}
@@ -1312,18 +1287,7 @@ function CharListView({
               zIndex: 999999,
             }}
           >
-            {pendingPlacementChar ? (
-              <div className="char-polaroid w-[100px]" style={{ boxShadow: '0 2px 8px rgba(0,0,0,0.2)' }}>
-                <div className="char-polaroid-img-wrapper">
-                  {pendingPlacementChar.avatar ? (
-                    <img src={pendingPlacementChar.avatar} className="char-polaroid-img" alt="" draggable={false} />
-                  ) : (
-                    <CharAvatarFallback name={pendingPlacementChar.name} size="100%" />
-                  )}
-                </div>
-                <div className="char-polaroid-text ts-10">{pendingPlacementChar.name || "UNNAMED"}</div>
-              </div>
-            ) : pendingBgType ? (
+            {pendingBgType ? (
               <div className="scale-[0.6] origin-center">
                 {renderBgContent({ id: `ghost-${pendingBgType}`, type: pendingBgType, x: 0, y: 0, rot: 0, zIndex: 0 })}
               </div>
@@ -1561,76 +1525,6 @@ function CharListView({
       })()}
 
       {/* Style picker popup */}
-      {showStylePicker && (
-        <div
-          className="absolute inset-0 bg-black/50 flex flex-col items-center justify-end pb-[120px] px-4"
-          style={{ zIndex: 9999999 }}
-          onClick={() => setShowStylePicker(false)}
-        >
-          <div className="relative w-full max-w-[280px]" onClick={e => e.stopPropagation()}>
-            {/* Back paper layer */}
-            <div className="absolute rounded-[2px]" style={{
-              top: 6, left: 4, right: -6, bottom: -4,
-              background: '#ede7d9', border: '1px solid #cfc3a6',
-              transform: 'rotate(2.5deg)',
-              boxShadow: '3px 4px 10px rgba(0,0,0,0.18)'
-            }} />
-            {/* Main paper */}
-            <div
-              className="relative w-full rounded-[2px]"
-              style={{
-                background: '#f5f0e6',
-                padding: '18px 12px 14px',
-                boxShadow: '2px 3px 12px rgba(0,0,0,0.25), inset 0 0 30px rgba(139,119,80,0.08)',
-                border: '1px solid #d4c9a8',
-                fontFamily: '"Courier New", monospace',
-                transform: 'rotate(-1.5deg)'
-              }}
-            >
-              {/* tape decoration on top */}
-              <div className="absolute rounded-[1px]" style={{ top: -6, left: '50%', marginLeft: -18, width: 36, height: 12, background: 'rgba(255,255,255,0.55)', transform: 'rotate(1deg)' }} />
-              <div className="text-center ts-12 font-bold text-[#4a3f2f] mb-3 tracking-[1px] uppercase">Select Format</div>
-              <div className="flex gap-1.5 justify-center">
-                {[
-                  { label: '正方', cls: 'ratio-square' },
-                  { label: '竖版', cls: 'ratio-portrait' },
-                  { label: '横版', cls: 'ratio-landscape' },
-                  { label: '16:9', cls: 'ratio-16-9' },
-                  { label: '9:16', cls: 'ratio-9-16' },
-                ].map((style, idx) => (
-                  <button
-                    key={idx}
-                    onClick={() => {
-                      pendingStyleRef.current = idx;
-                      setShowStylePicker(false);
-                      if (pendingActionRef.current === 'import') {
-                        fileRef.current?.click();
-                      } else {
-                        onCreate(idx);
-                      }
-                    }}
-                    className="bg-none border-[1.5px] border-transparent rounded-[3px] cursor-pointer p-1 flex flex-col items-center gap-[3px]"
-                    style={{
-                      transition: 'border-color 0.15s, background 0.15s'
-                    }}
-                    onMouseEnter={e => { e.currentTarget.style.borderColor = '#8c7a5a'; e.currentTarget.style.background = 'rgba(140,122,90,0.08)'; }}
-                    onMouseLeave={e => { e.currentTarget.style.borderColor = 'transparent'; e.currentTarget.style.background = 'none'; }}
-                  >
-                    <div
-                      className={`char-polaroid ${style.cls} w-9 pointer-events-none relative`}
-                      style={{ padding: '2px 2px 8px', boxShadow: '0 1px 2px rgba(0,0,0,0.12)' }}
-                    >
-                      <div className="char-polaroid-img-wrapper bg-[#ddd]" />
-                    </div>
-                    <div className="ts-9 text-[#6b5d47] font-semibold" style={{ fontFamily: 'inherit' }}>{style.label}</div>
-                  </button>
-                ))}
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* Props picker popup */}
       {isPropsMenuOpen && (
         <div
@@ -2302,6 +2196,11 @@ function CharArchiveView({
           <div className="char-archive-left">
             <div
               className="char-archive-photo relative"
+              role={isEditing ? "button" : undefined}
+              aria-label={isEditing ? "更换头像" : undefined}
+              aria-disabled={avatarBusy}
+              tabIndex={isEditing ? 0 : undefined}
+              onKeyDown={e => { if (isEditing && !avatarBusy && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); fileRef.current?.click(); } }}
               style={{ cursor: avatarBusy ? "wait" : isEditing ? "pointer" : "default" }}
               onClick={() => {
                 if (isEditing && !avatarBusy) {
@@ -2315,9 +2214,9 @@ function CharArchiveView({
                 <CharAvatarFallback name={name || char.name} size="100%" />
               )}
               {isEditing && (
-                <div className="absolute inset-0 bg-black/30 flex flex-col items-center justify-center pointer-events-none text-white">
-                  <IconCamera size={24} />
-                  <span className="ts-10 mt-1">{avatarBusy ? "处理中…" : "更换头像"}</span>
+                <div className="ida-avatar-change">
+                  <IconCamera size={14} />
+                  <span className="sr-only">{avatarBusy ? "处理中…" : "更换头像"}</span>
                 </div>
               )}
             </div>

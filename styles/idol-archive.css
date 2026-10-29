@@ -98,3 +98,7 @@
 .idol-archive-workspace .ida-decoration-grid{background:#ecf6ef;color:#7e9f8b}
 /* Plain section headings replace the legacy inverted archive labels. */
 .ida-editing .char-log-entry-header{background:transparent;padding:0}
+/* Keep the chosen portrait visible; changing it is a small corner action. */
+.ida-editing .char-archive-photo{overflow:visible}
+.ida-editing .char-archive-photo>img{width:100%;height:100%;object-fit:cover;border-radius:50%}
+.ida-avatar-change{position:absolute;right:-3px;bottom:-3px;width:26px;height:26px;border:2px solid white;border-radius:50%;display:grid;place-items:center;background:#8c709f;color:white;pointer-events:none}

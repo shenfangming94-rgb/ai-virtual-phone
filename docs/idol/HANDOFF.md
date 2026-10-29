@@ -331,6 +331,18 @@ Flora 要一个专门玩「爱豆模拟器」的小手机：她是想当爱豆�
 - 截图后自己先 Read 看一遍再给她；看字形要放大截图（deviceScaleFactor 3）
 - 开发服务器偶尔在重新编译时截到没样式的页面，重跑一次就好
 
+### 4.1 全量审计（10-30 凌晨跑完，54 项全绿）
+
+Codex 在 `/Users/flora/work/idol-full-audit-20261029/` 搭了整套审计（run-cases.cjs 2 并行、guarded-puppeteer.mjs 拦截外网/记录 guard.json、结果写 results/latest.json）。它限额中断后 Nox 接手跑完：26 个挂的全是**测试代码没跟上 10-29 界面改版**，没有产品 bug。本次修改：
+
+- 测试脚本更新到新界面（`docs/idol/tests/` 下 13 个文件）：地图卡片→钉子（stg-card→stg-mpin）、课表周导航（rm-tt-week→tt-days）、快拍输入框（ig-st-text→ig-sv-text）、发帖入口（ig-np-add→ig-np-empty/ig-np-row）、结束这一场进「更多」菜单、世界时间按钮（vn-clock→vn-hud）、提醒事项试镜走「待回复卡片→行内去试镜→回首页→计划→去演」、opening 加家庭背景步骤、career 试镜戏现在跑在 vn 播放器（点开场卡→vn-input-field，不是 story-composer）
+- runner 传 map.jpg 给上传类脚本（argv[3]）；超时 150s→300s
+- guarded-puppeteer 的 close 后加 `setTimeout(process.exit,800).unref()`（两个测试并行跑时 Chrome 关不掉会挂进程，这是审计壳的兜底，不影响产品）
+- 假 AI 补字段：nationality 测试的人物外貌/感情方式；birthday 测试加暖机 run + 允许认识判断调用；family-opening 放行天气请求（open-meteo）只查真实模型端点；stage-replay 过滤 net::ERR_BLOCKED_BY_CLIENT
+- stage-music 的 wav 之前根本不存在（脚本没生成文件），补了合成；headless 放音频要 `--autoplay-policy=no-user-gesture-required`
+
+重跑方法：`cd /Users/flora/work/idol-full-audit-20261029 && node prepare-cases.cjs && echo '[]' > results/latest.json && node run-cases.cjs <名字...>`（名字来自 docs/idol/tests/ + recent-verify-*）。
+
 ## 5. 关键数据键一览
 
 | key | 存什么 |

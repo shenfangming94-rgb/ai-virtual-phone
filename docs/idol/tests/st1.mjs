@@ -56,7 +56,7 @@ await p.screenshot({ path: OUT + "/s0_desk.png" });
 await p.evaluate(() => window.postMessage({ type: "OS_CMD", action: "open_app", appId: "vnmode" }, "*")); await sleep(2000);
 await p.screenshot({ path: OUT + "/s1_home.png" });
 // 点汉江公园
-await p.evaluate(() => [...document.querySelectorAll(".stg-card")].find(x => x.textContent.includes("汉江公园")).click()); await sleep(500);
+await p.evaluate(() => [...document.querySelectorAll(".stg-mpin")].find(x => x.textContent.includes("汉江公园")).click()); await sleep(500);
 // 想碰见韩智元、不想碰见金智妍（点两下）
 await p.evaluate(() => { const c = [...document.querySelectorAll(".stg-chip")]; c.find(x => x.textContent.includes("韩智元")).click(); });
 await p.evaluate(() => { const c = [...document.querySelectorAll(".stg-chip")]; c.find(x => x.textContent.includes("金智妍")).click(); });
@@ -79,7 +79,8 @@ await p.evaluate(() => document.querySelector('.vn-topbar-btn[title="每段总�
 await p.screenshot({ path: OUT + "/s6b_notes.png" });
 await p.evaluate(() => [...document.querySelectorAll(".vn-notes-head button")][0].click()); await sleep(300);
 // 结束这一场
-await p.evaluate(() => document.querySelector('.vn-topbar-btn[title="结束这一场"]').click()); await sleep(300);
+await p.evaluate(() => document.querySelector('.vn-topbar-btn[title="更多"]').click()); await sleep(300);
+await p.evaluate(() => [...document.querySelectorAll(".vn-stage-menu button")].find(x => x.textContent.includes("结束这一场"))?.click()); await sleep(400);
 await p.evaluate(() => [...document.querySelectorAll(".vn-end-btn")].find(x => x.textContent.includes("确认")).click()); await sleep(2500);
 await p.screenshot({ path: OUT + "/s7_end.png" });
 await p.evaluate(() => document.querySelector(".vn-stage-merge").click()); await sleep(1500);
@@ -116,17 +117,18 @@ if (MAP) {
 }
 // 主线：时间到周评 → 横幅 → 点进去
 await p.evaluate(() => document.querySelector('.stg-ic[aria-label="返回"]').click()); await sleep(500);
-await setClock(T0 + 31 * 60e3); await sleep(7000);
+await setClock(T0 + 31 * 60e3);
+for (let bi = 0; bi < 10 && !(await p.evaluate(() => !!document.querySelector(".idol-banner"))); bi++) await sleep(500);
 await p.screenshot({ path: OUT + "/s10_banner.png" });
 await p.evaluate(() => document.querySelector(".idol-banner")?.click()); await sleep(2000);
 await p.screenshot({ path: OUT + "/s11_node.png" });
 // 小地图 + 加歌
 await p.evaluate(() => document.querySelector('.vn-topbar-btn')?.click()); await sleep(800);
 await p.evaluate(() => document.querySelector('.stg-ic[aria-label="地图设置"]').click()); await sleep(300);
-await p.evaluate(() => [...document.querySelectorAll(".stg-menu button")].find(x => x.textContent.includes("去掉")).click()); await sleep(500);
+await p.evaluate(() => [...document.querySelectorAll(".stg-menu button")].find(x => x.textContent.includes("不用图片"))?.click()); await sleep(500);
 await p.evaluate(() => [...document.querySelectorAll(".stg-card")].find(x => x.textContent.includes("公司")).click()); await sleep(500);
 await p.screenshot({ path: OUT + "/s12_company.png" });
-await p.evaluate(() => [...document.querySelectorAll(".stg-card")].find(x => x.textContent.includes("练习室")).click()); await sleep(500);
+await p.evaluate(() => [...document.querySelectorAll(".stg-mpin")].find(x => x.textContent.includes("练习室")).click()); await sleep(500);
 await p.evaluate(() => [...document.querySelectorAll(".stg-row button")].find(x => x.textContent.includes("加歌")).click()); await sleep(800);
 await p.screenshot({ path: OUT + "/s13_songs.png" });
 await p.evaluate(() => [...document.querySelectorAll(".stg-seg button")][1].click()); await sleep(500);

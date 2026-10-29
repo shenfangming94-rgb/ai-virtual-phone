@@ -50,7 +50,7 @@ await p.evaluate(()=>[...document.querySelectorAll(".sr-tabs button")][1].click(
 await p.screenshot({path:OUT+"/sr_destiny.png"});
 await p.evaluate(()=>window.postMessage({type:"OS_CMD",action:"open_app",appId:"career"},"*")); await sleep(2000);
 await p.evaluate(()=>[...document.querySelectorAll(".rm-lrow")].find(x=>x.textContent.includes("课表")).click()); await sleep(800);
-await p.evaluate(()=>[...document.querySelectorAll(".rm-tt-week button")][0].click()); await sleep(500);
+await p.evaluate(()=>[...document.querySelectorAll(".tt-days button")][0].click()); await sleep(500);
 await p.screenshot({path:OUT+"/sr_timetable.png",fullPage:false});
 console.log("practice", JSON.parse(await kv("idol_career_v1")).nodes.filter(n=>n.kind==="practice").map(n=>n.title+" "+new Date(n.dueAt).toString().slice(0,21)));
 console.log("asks", asks.length, asks.slice(0,2));

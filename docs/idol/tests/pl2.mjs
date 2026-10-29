@@ -40,7 +40,7 @@ await p.reload({waitUntil:"networkidle2"}); await sleep(2500);
 await p.evaluate(()=>{const wc=window.__worldClock; wc.offset=new Date("2015-03-03T21:40:00").getTime()-wc.RealDate.now();});
 await p.evaluate(()=>document.querySelector(".lock-swipe")?.click()); await sleep(800);
 await p.evaluate(()=>window.postMessage({type:"OS_CMD",action:"open_app",appId:"story"},"*")); await sleep(2500);
-await p.click('button[aria-label="开一场戏"]'); await sleep(600);
+await p.evaluate(()=>document.querySelector('button[aria-label="开一场戏"]').click()); await sleep(600);
 await p.evaluate(()=>[...document.querySelectorAll(".story-place-grid button")].find(x=>x.textContent==="天台").click());
 await p.evaluate(()=>[...document.querySelectorAll(".story-dialog footer button")].find(x=>x.textContent==="出发").click()); await sleep(5000);
 await p.screenshot({path:OUT+"/p5.png"});

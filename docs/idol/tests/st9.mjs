@@ -72,7 +72,7 @@ for (let i = 0; i < 4; i++) {
   await p.evaluate(() => document.querySelector(".vn-shell").click()); await sleep(150);
   await p.evaluate(() => document.querySelector(".vn-shell").click()); await sleep(1200);
 }
-await p.evaluate(() => document.querySelector(".vn-clock").click()); await sleep(400);
+await p.evaluate(() => document.querySelector(".vn-hud").click()); await sleep(400);
 await p.screenshot({ path: OUT + "/z_clock.png" });
 await p.evaluate(() => [...document.querySelectorAll(".vn-clock-pop button")][2].click()); await sleep(800);
 await p.screenshot({ path: OUT + "/z_clock2.png" });

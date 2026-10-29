@@ -5,13 +5,14 @@ const errs=[]; p.on("pageerror",e=>errs.push(e.message)); p.on("console",m=>{ if
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
 const replies0=["【楼里】B2 是练习室……\n【宿舍】公司后面的公寓，四人一间，门禁十一点\n【一周】每周五傍晚周评\n【规矩】前辈进来要起立",
  "推开练习室的门，冷气一下子扑过来。镜子前已经坐着两个人。\n\n韩智元盘腿坐在地上拉筋，看到你进来，抬手挥了挥：「来啦？今天老师说八点开始，你还早着呢。」\n\n角落里一个扎低马尾的女生站起来，手里还抱着一摞新练习服，有点局促地朝你点头：「你好，我叫申多恩，今天刚来的。」\n[新人:申多恩|今天刚来的同期练习生]\n[时间:+5分钟]",
- "申多恩愣了一下，接过你递的水，釜山口音一下子冒出来：「哎呀谢谢，我早上太紧张，水都忘带了。」\n\n韩智元在旁边笑出声：「她刚才在门口转了三圈才敢进来。」\n\n八点到了，走廊传来管理老师的脚步声。\n[时间:+20分钟]\n[收尾]",
+ "申多恩愣了一下，接过你递的水，釜山口音一下子冒出来：「哎呀谢谢，我早上太紧张，水都忘带了。」\n\n韩智元在旁边笑出声：「她刚才在门口转了三圈才敢进来。」\n\n八点到了，走廊传来管理老师的脚步声。\n[时间:+20分钟]",
  JSON.stringify({summary:"第一天早上在练习室见到了新来的申多恩，你给她递了水，韩智元在旁边拆台。",people:[{name:"韩智元",event:"早上在练习室跟你和新来的申多恩一起等老师，拿申多恩开了玩笑",impression:""},{name:"申多恩",event:"刚来的第一天，你给她递了一瓶水",impression:"觉得你挺照顾人的"}]}),
 ];
 const replies=[replies0[1],replies0[2],replies0[3],replies0[0]]; let n=0; const prompts=[];
+const replyByContent=(s)=>{const b=s||"";if(b.includes("把这场戏记下来"))return JSON.stringify({summary:"第一天在练习室认识了申多恩。",people:[{name:"韩智元",event:"在练习室一起等老师",impression:""}]});if(b.includes("人物补充")||b.includes("补成完整的卡"))return JSON.stringify({name:"申多恩",role:"同期练习生",group:"同期练习生",age:"17",isIdol:false,publicLabels:[],publicText:"",privateLines:[],speech:"",taboo:""});if(b.includes("楼里")||b.includes("宿舍")||b.includes("规矩")||b.includes("一周"))return "【楼里】B2 是练习室。【宿舍】公司后面的公寓。";return "申多恩点了点头，继续练声。\n韩智元在旁边小声说：「她耳力很好，别小看。」\n[时间:+5分钟]";};
 const CORS={"Access-Control-Allow-Origin":"*","Access-Control-Allow-Headers":"*","Access-Control-Allow-Methods":"POST, OPTIONS"};
 await p.setRequestInterception(true);
-p.on("request",r=>{ if(r.url().includes("mock.test")&&r.method()==="OPTIONS"){r.respond({status:204,headers:CORS});return;} if(r.url().includes("mock.test")){ prompts.push(r.postData()); const content=replies[Math.min(n++,replies.length-1)]; r.respond({status:200,headers:CORS,contentType:"application/json",body:JSON.stringify({choices:[{message:{role:"assistant",content},finish_reason:"stop"}]})}); } else r.continue(); });
+p.on("request",r=>{ if(r.url().includes("mock.test")&&r.method()==="OPTIONS"){r.respond({status:204,headers:CORS});return;} if(r.url().includes("mock.test")){ prompts.push(r.postData()); const content=replyByContent(r.postData()||""); r.respond({status:200,headers:CORS,contentType:"application/json",body:JSON.stringify({choices:[{message:{role:"assistant",content},finish_reason:"stop"}]})}); } else r.continue(); });
 await p.goto("http://localhost:3031/",{waitUntil:"networkidle2",timeout:180000}); await sleep(2000);
 await p.evaluate(async()=>{
   const now=new Date().toISOString();
@@ -35,20 +36,29 @@ const shift=async(h)=>{await p.evaluate(h=>{const wc=window.__worldClock; wc.off
 await shift(2); await shift(2);
 await p.evaluate(()=>window.postMessage({type:"OS_CMD",action:"open_app",appId:"career"},"*")); await sleep(1500);
 await p.screenshot({path:"cr_1.png"});
-await p.evaluate(()=>[...document.querySelectorAll(".cr-btns button")].find(x=>x.textContent==="去试镜").click()); await sleep(800);
+await p.evaluate(()=>[...document.querySelectorAll(".rm-card")].find(x=>x.textContent.includes("待回复"))?.click()); await sleep(600);
+await p.evaluate(()=>[...document.querySelectorAll(".rm-row button")].find(x=>x.textContent==="去试镜")?.click()); await sleep(800);
 await p.screenshot({path:"cr_2.png"});
 await shift(50);
-await p.evaluate(()=>[...document.querySelectorAll(".cr-row button")][0].click()); await sleep(4500);
+await p.evaluate(()=>document.querySelector(".rm-circle")?.click()); await sleep(500); // 回首页
+await p.evaluate(()=>[...document.querySelectorAll(".rm-card")].find(x=>x.textContent.includes("计划"))?.click()); await sleep(600);
+await p.evaluate(()=>[...document.querySelectorAll(".rm-row .rm-body")].find(x=>x.textContent.includes("试镜"))?.click()); await sleep(600);
+await p.evaluate(()=>[...document.querySelectorAll(".rm-dbtns button")].find(x=>x.textContent==="去演")?.click()); await sleep(4500);
 await p.screenshot({path:"cr_3.png"});
-await p.type(".story-composer textarea","我深吸一口气，开始唱准备好的那首歌。");
-await p.click('button[aria-label="发送剧情输入"]'); await sleep(3500);
-await p.evaluate(()=>[...document.querySelectorAll(".story-idol-bar button")].find(x=>x.textContent==="结束这场").click()); await sleep(500);
-await p.evaluate(()=>[...document.querySelectorAll(".story-dialog footer button")].find(x=>x.textContent==="结束这场").click()); await sleep(5000);
+await p.waitForSelector(".vn-stage-open", { timeout: 15000 });
+await p.evaluate(() => document.querySelector(".vn-stage-open").click()); await sleep(1000);
+await p.waitForSelector(".vn-input-field", { timeout: 60000 });
+await p.evaluate(() => { const i = document.querySelector(".vn-input-field"); const set = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value").set; set.call(i, "我深吸一口气，开始唱准备好的那首歌。"); i.dispatchEvent(new Event("input", { bubbles: true })); });
+await p.evaluate(() => [...document.querySelectorAll(".vn-send-btn")][1].click()); await sleep(3500);
 await p.screenshot({path:"cr_4.png"});
-await p.evaluate(()=>[...document.querySelectorAll(".story-idol-jumps button")].find(x=>x.textContent==="留在这").click()); await sleep(500);
+await p.evaluate(() => document.querySelector('.vn-topbar-btn[title="更多"]').click()); await sleep(300);
+await p.evaluate(() => [...document.querySelectorAll(".vn-stage-menu button")].find(x => x.textContent.includes("结束这一场"))?.click()); await sleep(400);
+await p.evaluate(() => [...document.querySelectorAll(".vn-end-btn")].find(x => x.textContent.includes("确认"))?.click()); await sleep(3000);
+await p.evaluate(() => [...document.querySelectorAll(".vn-end-btn")].find(x => x.textContent.includes("就这样"))?.click()); await sleep(1500);
 await p.evaluate(()=>window.postMessage({type:"OS_CMD",action:"open_app",appId:"career"},"*")); await sleep(1500);
 await p.screenshot({path:"cr_5.png"});
-await p.evaluate(()=>[...document.querySelectorAll(".cr-seg button")][1].click()); await sleep(600);
+await p.evaluate(()=>[...document.querySelectorAll(".rm-lrow")].find(x=>x.textContent.includes("课表"))?.click()); await sleep(800);
+await p.evaluate(()=>[...document.querySelectorAll(".tt-days button")][0].click()); await sleep(600);
 await p.screenshot({path:"cr_6.png"});
 console.log("calls",n, "now", await p.evaluate(()=>new Date().toString()));
 console.log(errs.slice(0,5));

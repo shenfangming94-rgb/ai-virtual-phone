@@ -60,17 +60,17 @@ await open(); await sleep(4000);
 await p.screenshot({ path: OUT + "/ig5_feed.png" });
 // 发帖：写画面
 await p.evaluate(() => document.querySelectorAll(".ig-tabbar button")[2].click()); await sleep(600);
-await clickText(".ig-np-add button", "写画面"); await sleep(400);
+await p.click(".ig-np-empty"); await sleep(300); await clickText(".ig-np-row", "写画面"); await sleep(400);
 await p.type(".ig-ta", "两只手隔着桌子各拿一杯冰美式，一只手戴着男士手表");
-await clickText(".ig-link", "添加"); await sleep(400);
+await clickText(".ig-link", "完成"); await sleep(400);
 await p.type(".ig-cap", "今天的咖啡比平时甜");
 await p.screenshot({ path: OUT + "/ig6_compose.png" });
 await clickText(".ig-share", "分享"); await sleep(3500);
 await p.screenshot({ path: OUT + "/ig7_posted.png" });
 // 快拍
 await p.evaluate(() => document.querySelector(".ig-st.me").click()); await sleep(500);
-await p.type(".ig-st-text", "凌晨三点\n练习室只剩我一个");
-await clickText(".ig-link", "发布"); await sleep(800);
+await p.type(".ig-sv-text", "凌晨三点\n练习室只剩我一个");
+await clickText(".ig-stn-post", "发布"); await sleep(800);
 await p.evaluate(() => { const wc = window.__worldClock; wc.offset += 14 * 3600e3; }); await sleep(1500);
 await p.evaluate(() => document.querySelector(".ig-st.me").click()); await sleep(600);
 await p.evaluate(() => document.querySelector(".ig-sv-seen")?.click()); await sleep(600);

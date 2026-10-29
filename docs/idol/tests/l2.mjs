@@ -2,7 +2,14 @@ import puppeteer from "puppeteer-core";
 const b=await puppeteer.launch({executablePath:"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",headless:"new"});
 const p=await b.newPage(); await p.setViewport({width:430,height:900,deviceScaleFactor:2});
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
-await p.goto("http://localhost:3031/",{waitUntil:"networkidle2",timeout:180000}); await sleep(3000);
+await p.goto("http://localhost:3031/",{waitUntil:"networkidle2",timeout:180000}); await sleep(2000);
+await p.evaluate(async()=>{
+  const db=await new Promise((res,rej)=>{const r=indexedDB.open("AiPhoneKvDB");r.onsuccess=()=>res(r.result);r.onerror=rej;});
+  const tx=db.transaction("entries","readwrite"); const st=tx.objectStore("entries");
+  st.put({key:"idol_trainee_card_v1",value:JSON.stringify({name:"Flora",photo:null,birthday:"1998-04-11",nationality:"中国",mbti:"",looks:"",start:"2015-03-01",trainLength:"一年半",family:"normal",familyCustom:"",familyNote:"",talents:["vocal"],talentNote:"",weakness:"",other:"",signature:null,company:"JYP",no:"x",createdAt:1})});
+  await new Promise(r=>tx.oncomplete=r);
+});
+await p.reload({waitUntil:"networkidle2"}); await sleep(3000);
 await p.screenshot({path:"m_big.png"});
 await p.evaluate(()=>document.querySelector(".lock-swipe").click()); await sleep(900);
 await p.evaluate(()=>window.postMessage({type:"OS_CMD",action:"open_app",appId:"settings"},"*")); await sleep(1800);

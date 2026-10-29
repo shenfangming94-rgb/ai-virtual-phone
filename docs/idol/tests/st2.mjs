@@ -59,7 +59,7 @@ await p.screenshot({ path: OUT + "/s0_desk.png" });
 await p.evaluate(() => window.postMessage({ type: "OS_CMD", action: "open_app", appId: "vnmode" }, "*")); await sleep(2000);
 await p.screenshot({ path: OUT + "/s1_home.png" });
 
-await p.evaluate(() => [...document.querySelectorAll(".stg-card")].find(x => x.textContent.includes("汉江公园")).click()); await sleep(500);
+await p.evaluate(() => [...document.querySelectorAll(".stg-mpin")].find(x => x.textContent.includes("汉江公园")).click()); await sleep(500);
 await p.evaluate(() => document.querySelector(".stg-go").click()); await sleep(1200);
 await p.evaluate(() => document.querySelector(".vn-stage-open").click()); await sleep(400);
 await p.evaluate(() => { const i = document.querySelector(".vn-input-field"); const set = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value").set; set.call(i, "……智元？"); i.dispatchEvent(new Event("input", { bubbles: true })); });

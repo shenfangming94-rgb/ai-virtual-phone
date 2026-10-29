@@ -18,6 +18,22 @@ function reply(s) {
 韩智元|"안 추워? 바람 많이 부는데.|不冷吗？风挺大的。"
 朴书雅从后面跑过来，拍了一下韩智元的肩膀。
 朴书雅|"我先回去了啊，明天见。"
+韩智元|"泡面给你，我吃过了。"
+你接过纸碗，热气糊了眼镜。
+韩智元|"公司食堂今天提前收摊，出来买泡面顺便吹吹风。"
+江风把纸碗吹得哗啦响，桥上的车灯一盏一盏划过。
+韩智元|"上次周评你唱的那首，副歌比之前稳多了。"
+远处有人喊了一声智元，他回头张望，又转回来。
+韩智元|"是我室友。不用管他。"
+你低头喝了口汤，辣味从喉咙暖到胃里。
+韩智元|"以后晚上练习饿了，可以来这儿，我常来。"
+风小了一点，汉江的水面像一块揉皱的锡纸。
+韩智元|"走吧，送你回宿舍，十一点有门禁。"
+他把耳机线绕好塞进口袋，先站了起来。
+路灯把你的影子拉得很长，他走在你左半边。
+韩智元|"明天早上第一节课别迟到。"
+快到宿舍楼下时他停下，摆摆手转身往男宿走。
+你站在门口，看他的背影消失在拐角。
 </scene>
 </content>
 [离场:朴书雅]
@@ -89,7 +105,8 @@ for (let i = 0; i < 8; i++) {
 await p.evaluate(() => document.querySelector('.vn-topbar-btn[title="切换场景"]')?.click()); await sleep(500);
 await p.screenshot({ path: OUT + "/t8_places.png" });
 await p.evaluate(() => document.querySelector(".vn-history-close")?.click()); await sleep(300);
-await p.evaluate(() => document.querySelector('.vn-topbar-btn[title="回顾"]').click()); await sleep(500);
+await p.evaluate(() => document.querySelector('.vn-topbar-btn[title="更多"]').click()); await sleep(300);
+await p.evaluate(() => [...document.querySelectorAll(".vn-stage-menu button")].find(x => x.textContent.includes("回顾"))?.click()); await sleep(500);
 await p.screenshot({ path: OUT + "/t9_history.png" });
 const stage = await p.evaluate(async () => {
   const db = await new Promise(res => { const r = indexedDB.open("AiPhoneKvDB"); r.onsuccess = () => res(r.result); });

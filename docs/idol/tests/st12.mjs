@@ -59,7 +59,7 @@ await p.evaluate(() => [...document.querySelectorAll(".stg-mpin")].find(x => x.t
 await p.evaluate(async () => { await document.fonts.ready; await new Promise(r => setTimeout(r, 1500)); });
 await p.screenshot({ path: OUT + "/y_company.png" });
 // 给练习室配一张图再看
-await p.evaluate(() => [...document.querySelectorAll(".stg-card")].find(x => x.textContent.includes("练习室")).click()); await sleep(600);
+await p.evaluate(() => [...document.querySelectorAll(".stg-mpin")].find(x => x.textContent.includes("练习室")).click()); await sleep(600);
 {
   const [fc] = await Promise.all([p.waitForFileChooser(), p.evaluate(() => [...document.querySelectorAll(".stg-row button")].find(x => x.textContent.includes("加一张")).click())]);
   await fc.accept([MAP2]); await sleep(1800);

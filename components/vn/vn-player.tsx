@@ -1011,7 +1011,7 @@ export function VnPlayer({ characterId, chapterIndex, onClose, onChapterEnd, vnT
   };
 
   return (
-    <div className="vn-shell" ref={vnShellRef} data-vn-theme={vnTheme || "default"} data-stage={stage ? "true" : undefined} onClick={() => {
+    <div className="vn-shell" ref={vnShellRef} data-vn-theme={vnTheme || "default"} data-stage={stage ? "true" : undefined} data-active-time-node={stage && (stageEnd === null || stageEnd === "working" || (typeof stageEnd === "object" && "error" in stageEnd)) && !isReplaying && !stageScene?.ended ? stageScene?.nodeId : undefined} onClick={() => {
       if (clockOpen || stageMenu) { setClockOpen(false); setStageMenu(false); return; }
       if (historyOpen || showArchiveConfirm || showReplayConfirm || showScenePicker || showBeatsPanel || stageEnd || notesOpen || retryTarget) return;
       if (stageOpening) { setStageOpening(false); return; }
@@ -1641,7 +1641,7 @@ export function VnPlayer({ characterId, chapterIndex, onClose, onChapterEnd, vnT
           <span>剧情里过了多久？</span>
           <div>
             {[[5, "+5 分"], [15, "+15 分"], [30, "+30 分"], [60, "+1 小时"], [180, "+3 小时"]].map(([m, label]) => (
-              <button key={m} onClick={() => { const msg = jumpWorld(Date.now() + Number(m) * 60e3); setWorldNow(Date.now()); setClockOpen(false); if (msg) showStageToast(msg); }}>{label}</button>
+              <button key={m} onClick={() => { const msg = jumpWorld(Date.now() + Number(m) * 60e3, { activeNodeId: stageScene?.nodeId }); setWorldNow(Date.now()); setClockOpen(false); if (msg) showStageToast(msg); }}>{label}</button>
             ))}
           </div>
         </div>
@@ -1690,8 +1690,8 @@ export function VnPlayer({ characterId, chapterIndex, onClose, onChapterEnd, vnT
               {onStageReplay ? <button className="vn-end-btn vn-stage-merge" onClick={onStageReplay}>重播这一场</button> : null}
               <div className="vn-stage-jumps">
                 <button className="vn-end-btn" onClick={() => { onChapterEnd(); }}>就这样</button>
-                <button className="vn-end-btn" onClick={() => { jumpWorld(Date.now() + 3600e3); onChapterEnd(); }}>过 1 小时</button>
-                <button className="vn-end-btn" onClick={() => { const d = new Date(); jumpWorld(new Date(d.getFullYear(), d.getMonth(), d.getDate() + 1, 8, 0, 0).getTime()); onChapterEnd(); }}>第二天早上</button>
+                <button className="vn-end-btn" onClick={() => { const msg = jumpWorld(Date.now() + 3600e3, { activeNodeId: stageScene?.nodeId }); if (msg) showStageToast(msg); onChapterEnd(); }}>过 1 小时</button>
+                <button className="vn-end-btn" onClick={() => { const d = new Date(); const msg = jumpWorld(new Date(d.getFullYear(), d.getMonth(), d.getDate() + 1, 8, 0, 0).getTime(), { activeNodeId: stageScene?.nodeId }); if (msg) showStageToast(msg); onChapterEnd(); }}>第二天早上</button>
               </div>
             </>
           )}

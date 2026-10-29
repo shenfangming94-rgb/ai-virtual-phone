@@ -2028,6 +2028,7 @@ export function StoryApp({ onClose }: StoryAppProps) {
     <div
       className={`story-app-shell story-session-${currentSession.id}`}
       data-story-theme={uiPrefs.theme || "paper"}
+      data-active-time-node={activeGroup && !getSceneMeta(activeGroup.id)?.ended ? getSceneMeta(activeGroup.id)?.nodeId : undefined}
       style={storyShellStyle}
       onTouchStart={(event) => handleTouchStart(event.touches[0]?.clientX || 0)}
       onTouchMove={(event) => handleTouchMove(event.touches[0]?.clientX || 0)}

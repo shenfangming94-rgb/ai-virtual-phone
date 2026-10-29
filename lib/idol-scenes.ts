@@ -16,7 +16,7 @@ import { simpleLLMCall } from "./api-helpers";
 import { loadApiConfigs, loadBindingConfig, resolveBinding, resolveUserIdentity } from "./settings-storage";
 import { composePersona, createPerson, emptyProfile, fmtDay, getProfile, saveProfile, type ScenePersonFacts, KINSHIP_LABEL } from "./idol-people";
 import { describeTrainee, loadTraineeCard } from "./trainee-card";
-import { jumpWorld } from "./idol-reminders";
+import { jumpWorld, sceneTimeBoundaryHint } from "./idol-reminders";
 import { saveMemoryEntry } from "./memory-storage";
 
 const KEY = "idol_scenes_v1";
@@ -212,6 +212,7 @@ export async function continueScene(scene: Scene): Promise<StoryReply> {
   const system = [
     "你在写一出以韩国娱乐圈为背景的戏，主角是「她」（用户）。",
     `【她是谁】\n${whoIsShe()}`,
+    sceneTimeBoundaryHint(),
     `【这一场】\n开始时间：${fmtWorld(scene.startAt)}\n现在：${fmtWorld(Date.now())}\n地点：${scene.place}${scene.premise ? `\n开头：${scene.premise}` : ""}`,
     `【在场的人】${names.length ? names.join("、") : "暂时只有她"}\n\n${peopleBlock(scene.peopleIds)}`,
     WRITING_RULES,

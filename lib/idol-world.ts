@@ -19,7 +19,7 @@ import type { Character } from "./character-types";
 import { resolveUserIdentity } from "./settings-storage";
 import { composePersona, createPerson, emptyProfile, fmtDay, getProfile, loadProfiles, relationOf, saveProfile, stepRelation } from "./idol-people";
 import { describeTrainee, loadTraineeCard } from "./trainee-card";
-import { shiftWorldTime } from "./world-clock";
+import { jumpWorld, sceneTimeBoundaryHint } from "./idol-reminders";
 import { fmtWorld, parseReply, type SceneNewFace } from "./idol-scenes";
 import { createOrGetStorySession, createStoryGroup, loadStoryGroups, loadStoryMessages, updateStoryGroup, updateStorySession, type StorySession } from "./story-storage";
 import { simpleLLMCall } from "./api-helpers";
@@ -154,6 +154,7 @@ export function worldPromptFor(meta: SceneMeta | null, fallbackPlace: string, pa
     careerPromptBlock(),
     eventsPromptBlock(),
     worldWeatherHint(),
+    sceneTimeBoundaryHint(meta?.nodeId),
     `【时间和地点】\n现在：${fmtWorld(Date.now())}\n地点：${meta?.place || fallbackPlace || "某个地方"}${meta?.premise ? `\n开头：${meta.premise}` : ""}`,
     `【在场的人】${people.length ? people.map(c => c.name).join("、") : "暂时只有她"}${peopleBlock ? `\n\n${peopleBlock}` : ""}`,
     meta?.open ? mightMeetBlock(participantIds, meta.place, meta.avoid) : "",
@@ -217,20 +218,20 @@ export function extractSceneTags(text: string): { text: string; tags: SceneTags 
 /** 处理记号：新面孔建成背景人物并拉进这场，时间往前拨，交换 KakaoTalk。返回新加的人名和要给她看的提示 */
 export function applySceneTags(groupId: string, sessionId: string, tags: SceneTags, introduction = ""): { added: string[]; notes: string[] } {
   if (!loadStoryGroups().some(g => g.id === groupId)) {
-    if (tags.minutes > 0) shiftWorldTime(tags.minutes * 60e3);
+    const stopped = tags.minutes > 0 ? jumpWorld(Date.now() + tags.minutes * 60e3) : "";
     if (tags.facts.length) addCompanyFacts(tags.facts);
-    return { added: [], notes: [] };
+    return { added: [], notes: stopped ? [stopped] : [] };
   }
   return applySceneTagsTo(storyHost(groupId, sessionId), tags, introduction);
 }
 
 export function applySceneTagsTo(host: SceneHost, tags: SceneTags, introduction = ""): { added: string[]; notes: string[] } {
-  if (tags.minutes > 0) shiftWorldTime(tags.minutes * 60e3);
+  const stopped = tags.minutes > 0 ? jumpWorld(Date.now() + tags.minutes * 60e3, { activeNodeId: host.meta()?.nodeId }) : "";
   if (tags.facts.length) addCompanyFacts(tags.facts);
   const added = addFaces(host, tags.newFaces, introduction);
   // 新面孔先建好，再处理给号 / 加你（名字对得上）
   const place = host.meta()?.place || host.fallbackPlace;
-  const notes = applyKakaoTags(tags.kakao, place);
+  const notes = [...(stopped ? [stopped] : []), ...applyKakaoTags(tags.kakao, place)];
   // 给号 / 加你里提到、名单外的人也拉进这场
   const names = [...tags.kakao.gives.map(g => g.name), ...tags.kakao.adds.map(a => a.name)];
   const encountered = loadCharacters().filter(c => names.includes(c.name) && c.id !== WORLD_CHAR_ID);

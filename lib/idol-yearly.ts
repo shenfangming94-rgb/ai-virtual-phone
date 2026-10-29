@@ -203,12 +203,15 @@ export function yearlyStops(): { at: number; title: string }[] {
   const done = loadDone();
   const out: { at: number; title: string }[] = [];
   for (const year of [y, y + 1]) {
-    if (card.birthday && !done.includes(`bday-${year}`)) out.push({ at: at(`${year}-${card.birthday.slice(5)}`, 8), title: "你的生日" });
+    if (card.birthday && !done.includes(`bday-${year}`)) {
+      const date = `${year}-${card.birthday.slice(5)}`;
+      if (now <= at(date, 23, 59)) out.push({ at: Math.max(now, at(date, 8)), title: "你的生日" });
+    }
     for (const which of ["spring", "chuseok"] as const) {
       const iso = which === "spring" ? findLunar(year, "正月", "初一", [0, 15], [1, 25]) : findLunar(year, "八月", "十五", [8, 1], [9, 15]);
-      if (iso && !done.includes(`${which}-${year}`)) out.push({ at: at(iso, 0) - 8 * DAY + 10 * HOUR, title: which === "spring" ? "春节放假通知" : "中秋放假通知" });
+      if (iso && now <= at(iso, 0) - DAY && !done.includes(`${which}-${year}`)) out.push({ at: Math.max(now, at(iso, 0) - 8 * DAY + 10 * HOUR), title: which === "spring" ? "春节放假通知" : "中秋放假通知" });
     }
-    if (career.stage === "trainee" && !done.includes(`concert-${year}`)) out.push({ at: at(nthWeekday(year, 11, 6, 3), 10) - 28 * DAY, title: "年末演唱会伴舞名单" });
+    if (career.stage === "trainee" && now <= at(nthWeekday(year, 11, 6, 3), 18) && !done.includes(`concert-${year}`)) out.push({ at: Math.max(now, at(nthWeekday(year, 11, 6, 3), 10) - 28 * DAY), title: "年末演唱会伴舞名单" });
   }
-  return out.filter(s => s.at > now);
+  return out.filter(s => s.at >= now);
 }

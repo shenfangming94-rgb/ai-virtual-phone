@@ -20,7 +20,7 @@ import {
   saveScene,
   type Scene,
 } from "@/lib/idol-scenes";
-import { setWorldTime, shiftWorldTime } from "@/lib/world-clock";
+import { jumpWorld } from "@/lib/idol-reminders";
 
 type Notice = ((message: string) => void) | undefined;
 
@@ -112,7 +112,7 @@ function SceneView({ id, onBack, onNotice }: { id: string; onBack: () => void; o
       const r = await continueScene(s);
       const fresh = getScene(s.id) ?? s;
       const added = addNewFaces(fresh, r.newFaces, r.text);
-      if (r.minutes > 0) shiftWorldTime(r.minutes * 60e3);
+      if (r.minutes > 0) { const stopped = jumpWorld(Date.now() + r.minutes * 60e3); if (stopped) onNotice?.(stopped); }
       fresh.lines = [...fresh.lines, line("story", r.text)];
       saveScene(fresh);
       if (added.length) onNotice?.(`新面孔：${added.join("、")}`);
@@ -181,10 +181,10 @@ function SceneView({ id, onBack, onNotice }: { id: string; onBack: () => void; o
       setEnding(null);
     }
   };
-  const jump = (fn: () => void, label: string) => { fn(); onNotice?.(label); onBack(); };
+  const jump = (fn: () => string, label: string) => { onNotice?.(fn() || label); onBack(); };
   const nextMorning = () => {
     const d = new Date();
-    setWorldTime(new Date(d.getFullYear(), d.getMonth(), d.getDate() + 1, 8, 0, 0).getTime());
+    return jumpWorld(new Date(d.getFullYear(), d.getMonth(), d.getDate() + 1, 8, 0, 0).getTime());
   };
 
   return (
@@ -248,9 +248,9 @@ function SceneView({ id, onBack, onNotice }: { id: string; onBack: () => void; o
                 {ending.summary ? <p className="sc-sheet-text">{ending.summary}</p> : null}
                 <div className="sc-sheet-meta">接下来跳到什么时候？</div>
                 <div className="sc-jumps">
-                  <button type="button" onClick={() => jump(() => shiftWorldTime(3600e3), "过了 1 小时")}>过 1 小时</button>
+                  <button type="button" onClick={() => jump(() => jumpWorld(Date.now() + 3600e3), "过了 1 小时")}>过 1 小时</button>
                   <button type="button" onClick={() => jump(nextMorning, "到第二天早上 8 点了")}>第二天早上</button>
-                  <button type="button" onClick={() => jump(() => shiftWorldTime(7 * 864e5), "过了 1 周")}>过 1 周</button>
+                  <button type="button" onClick={() => jump(() => jumpWorld(Date.now() + 7 * 864e5), "过了 1 周")}>过 1 周</button>
                   <button type="button" onClick={() => { onBack(); }}>留在这</button>
                 </div>
               </>

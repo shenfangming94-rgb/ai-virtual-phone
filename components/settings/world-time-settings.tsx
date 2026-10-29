@@ -3,7 +3,8 @@
 import { useEffect, useState } from "react";
 
 import { Toggle } from "@/components/ui/form";
-import { loadWorldClock, setWorldClockReal, setWorldTime, shiftWorldTime, subscribeWorldClock } from "@/lib/world-clock";
+import { jumpWorld, switchWorldClockMode } from "@/lib/idol-reminders";
+import { loadWorldClock, subscribeWorldClock } from "@/lib/world-clock";
 
 const pad = (n: number) => String(n).padStart(2, "0");
 const WEEK = ["日", "一", "二", "三", "四", "五", "六"];
@@ -32,16 +33,16 @@ export function WorldTimeSettings({ onNotice }: { onNotice?: (message: string) =
     const apply = () => {
         const target = new Date(`${date}T${time || "00:00"}:00`);
         if (!date || Number.isNaN(target.getTime())) { onNotice?.("日期没填对"); return; }
-        setWorldTime(target.getTime());
-        onNotice?.(`现在是 ${target.getFullYear()} 年 ${target.getMonth() + 1} 月 ${target.getDate()} 日 ${pad(target.getHours())}:${pad(target.getMinutes())}`);
+        const stopped = jumpWorld(target.getTime());
+        onNotice?.(stopped || `现在是 ${target.getFullYear()} 年 ${target.getMonth() + 1} 月 ${target.getDate()} 日 ${pad(target.getHours())}:${pad(target.getMinutes())}`);
     };
-    const shift = (ms: number, label: string) => { shiftWorldTime(ms); onNotice?.(label); };
+    const shift = (ms: number, label: string) => { onNotice?.(jumpWorld(Date.now() + ms) || label); };
     const nextMorning = () => {
         const d = new Date();
         d.setDate(d.getDate() + 1);
         d.setHours(8, 0, 0, 0);
-        setWorldTime(d.getTime());
-        onNotice?.("到第二天早上 8 点了");
+        const stopped = jumpWorld(d.getTime());
+        onNotice?.(stopped || "到第二天早上 8 点了");
     };
 
     return (
@@ -61,7 +62,7 @@ export function WorldTimeSettings({ onNotice }: { onNotice?: (message: string) =
                     <div className="card-featured-label">跟现实时间一致</div>
                     <div className="card-featured-desc">关着的时候小手机用世界时间；打开就回到现实时间，再关掉会回到原来的世界时间</div>
                 </div>
-                <Toggle checked={clock.real} onChange={next => { setWorldClockReal(next); onNotice?.(next ? "已经跟现实时间一致" : "回到世界时间"); }} className="settings-toggle-control" />
+                <Toggle checked={clock.real} onChange={next => { const stopped = switchWorldClockMode(next); setClock(loadWorldClock()); onNotice?.(stopped || (next ? "已经跟现实时间一致" : "回到世界时间")); }} className="settings-toggle-control" />
             </div>
 
             {!clock.real ? (

@@ -3,7 +3,8 @@
 import { useEffect, useRef, useState } from "react";
 import { AlarmClock, ChevronLeft, Globe, Plus, Timer, Watch } from "lucide-react";
 
-import { loadWorldClock, realNow, setWorldClockReal, setWorldTime, shiftWorldTime, subscribeWorldClock } from "@/lib/world-clock";
+import { loadWorldClock, realNow, subscribeWorldClock } from "@/lib/world-clock";
+import { jumpWorld, switchWorldClockMode } from "@/lib/idol-reminders";
 import { loadWorldAlarms, saveWorldAlarms, type WorldAlarm } from "@/lib/world-alarms";
 
 const pad = (n: number) => String(n).padStart(2, "0");
@@ -113,16 +114,16 @@ function AdjustSheet({ onClose, onNotice }: { onClose: () => void; onNotice: Not
   const apply = () => {
     const target = new Date(`${date}T${time || "00:00"}:00`);
     if (!date || Number.isNaN(target.getTime())) { onNotice?.("日期没填对"); return; }
-    setWorldTime(target.getTime());
-    done(`现在是 ${target.getFullYear()} 年 ${target.getMonth() + 1} 月 ${target.getDate()} 日 ${pad(target.getHours())}:${pad(target.getMinutes())}`);
+    const stopped = jumpWorld(target.getTime());
+    done(stopped || `现在是 ${target.getFullYear()} 年 ${target.getMonth() + 1} 月 ${target.getDate()} 日 ${pad(target.getHours())}:${pad(target.getMinutes())}`);
   };
-  const shift = (ms: number, label: string) => { shiftWorldTime(ms); done(label); };
+  const shift = (ms: number, label: string) => { done(jumpWorld(Date.now() + ms) || label); };
   const nextMorning = () => {
     const d = new Date();
     d.setDate(d.getDate() + 1);
     d.setHours(8, 0, 0, 0);
-    setWorldTime(d.getTime());
-    done("到第二天早上 8 点了");
+    const stopped = jumpWorld(d.getTime());
+    done(stopped || "到第二天早上 8 点了");
   };
 
   return (
@@ -140,7 +141,7 @@ function AdjustSheet({ onClose, onNotice }: { onClose: () => void; onNotice: Not
               type="checkbox"
               className="clock-switch"
               checked={clock.real}
-              onChange={e => { setWorldClockReal(e.target.checked); setClock(loadWorldClock()); onNotice?.(e.target.checked ? "已经跟现实时间一致" : "回到世界时间"); }}
+              onChange={e => { const stopped = switchWorldClockMode(e.target.checked); setClock(loadWorldClock()); onNotice?.(stopped || (e.target.checked ? "已经跟现实时间一致" : "回到世界时间")); }}
             />
           </label>
         </div>

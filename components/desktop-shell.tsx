@@ -32,6 +32,7 @@ import { APP_LOOK, markNoteSeen, noteFromNotice, type LockNote } from "@/lib/ido
 import { requestStageForNode } from "@/lib/idol-stage";
 import { isChatStorageHydrated } from "@/lib/chat-storage";
 import { LockScreen } from "./lock-screen";
+import { TIME_JUMP_EVENT } from "@/lib/idol-time-jump";
 import { TraineeOpening } from "./opening/trainee-opening";
 import { TRAINEE_CARD_EVENT, loadTraineeCard } from "@/lib/trainee-card";
 import { useWorldAlarms } from "@/lib/world-alarms";
@@ -1153,13 +1154,19 @@ export function DesktopShell({ initialThemeProfile, initialThemeAssets }: Deskto
     // 开发时给测试脚本用（线上没有）
     if (process.env.NODE_ENV !== "production") {
       void Promise.all([import("@/lib/idol-weather"), import("@/lib/custom-app-storage"), import("@/lib/idol-weather-life")]).then(([w, apps, life]) => { (window as unknown as { __idolWeatherTest?: unknown }).__idolWeatherTest = { w, apps, life }; });
-      void import("@/lib/idol-reminders").then(m => { (window as unknown as { __idol?: unknown }).__idol = { checkNode: m.checkNode, leaveNode: m.leaveNode, run }; });
+      void import("@/lib/idol-reminders").then(m => { (window as unknown as { __idol?: unknown }).__idol = { checkNode: m.checkNode, leaveNode: m.leaveNode, jump: m.jumpWorld, cap: m.capJump, switchClock: m.switchWorldClockMode, run }; });
       void Promise.all([import("@/lib/idol-leave"), import("@/lib/chat-storage"), import("@/lib/idol-casual")]).then(([l, cs, ca]) => { (window as unknown as { __idolLeave?: unknown }).__idolLeave = { casual: ca.casualTick, nudge: l.nudgeLeave, afterRank: l.afterMonthlyRank, tick: l.leaveTick, dm: (id: string) => { const s = cs.createOrGetSession(id); cs.pushChatMessage({ sessionId: s.id, role: "assistant", content: "嗨", status: "sent" }); }, group: (name: string, ids: string[]) => cs.createGroupSession(name, ids).id }; });
       void Promise.all([import("@/lib/settings-storage"), import("@/lib/idol-people"), import("@/lib/idol-world"), import("@/lib/story-storage"), import("@/lib/chat-storage"), import("@/lib/follow-up-service"), import("@/lib/idol-career"), import("@/lib/idol-family"), import("@/lib/idol-family-data"), import("@/lib/idol-saves"), import("@/lib/trainee-card")]).then(([settings, people, world, story, chat, follow, career, family, familyData, saves, trainee]) => { (window as unknown as { __idolTest?: unknown }).__idolTest = { settings, people, world, story, chat, follow, career, family, familyData, saves, trainee }; });
       void Promise.all([import("@/lib/idol-groups"), import("@/lib/idol-calendar"), import("@/lib/idol-search")]).then(([g, c, se]) => { (window as unknown as { __idolGroups?: unknown }).__idolGroups = { load: g.loadGroups, month: c.generateWorldMonth, site: se.buildSite }; });
     }
     const timer = window.setInterval(run, 5000);
-    return () => window.clearInterval(timer);
+    const onTimeJump = (event: Event) => {
+      const message = (event as CustomEvent<{ message?: string }>).detail?.message;
+      run();
+      if (message) setNotice(message);
+    };
+    window.addEventListener(TIME_JUMP_EVENT, onTimeJump);
+    return () => { window.clearInterval(timer); window.removeEventListener(TIME_JUMP_EVENT, onTimeJump); };
   }, []);
   // 爱豆小手机：还没有练习生证就先走开局
   const [needOpening, setNeedOpening] = useState(() => !loadTraineeCard());

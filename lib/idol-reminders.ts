@@ -18,7 +18,8 @@ import {
   type CareerNode,
 } from "./idol-career";
 import { afterNodeScene } from "./idol-kakao";
-import { setWorldTime } from "./world-clock";
+import { loadWorldClock, realNow, setWorldClockReal, setWorldTime } from "./world-clock";
+import { findTimeJumpStop, TIME_JUMP_EVENT, type TimeJumpOptions } from "./idol-time-jump";
 import { addFame, plannedStops } from "./idol-events";
 import { recordAbsent, recordNodeDone, scoreResultText } from "./idol-ledger";
 import { getProfile, saveProfile } from "./idol-people";
@@ -170,21 +171,16 @@ export function uncheckNode(id: string): void { patchNode(id, { status: "pending
 
 // ── 跳时间遇到日程就停 ──
 
+function activeTimeNodeId(): string | undefined {
+  return typeof document === "undefined" ? undefined : document.querySelector("[data-active-time-node]")?.getAttribute("data-active-time-node") || undefined;
+}
+
 /** 想跳到 target：中间有日程（提前半小时停）或新的待回复到达，就停在那里 */
-export function capJump(target: number): { target: number; stoppedBy?: string } {
+export function capJump(target: number, options: TimeJumpOptions = {}): { target: number; stoppedBy?: string } {
   const now = Date.now();
   const career = loadCareer();
-  const stops: { at: number; title: string }[] = [];
-  for (const n of career.nodes) {
-    if (n.status === "pending" && n.dueAt > now + 30 * MIN) stops.push({ at: n.dueAt - 30 * MIN, title: n.title });
-    if (n.status === "invite" && n.dueAt > now) stops.push({ at: Math.max(now + MIN, n.dueAt - 7 * DAY), title: `待回复：${n.title}` });
-  }
-  for (const o of career.offers) if (o.status === "new" && !o.notified && o.at > now) stops.push({ at: o.at, title: `${companyOf(o.companyId)?.name} 来找你了` });
-  for (const p of plannedStops()) if (p.at > now) stops.push(p);
-  for (const p of yearlyStops()) if (p.at > now) stops.push(p);
-  for (const p of destinyStops()) if (p.at > now) stops.push(p);
-  const first = stops.filter(s => s.at < target).sort((a, b) => a.at - b.at)[0];
-  return first ? { target: first.at, stoppedBy: first.title } : { target };
+  const stops = [...plannedStops(), ...yearlyStops(), ...destinyStops()];
+  return findTimeJumpStop(now, target, career.nodes, career.offers, stops, { activeNodeId: options.activeNodeId ?? activeTimeNodeId() });
 }
 
 // ── 缺席和消息 ──
@@ -275,7 +271,9 @@ export function reminderTick(notify: (msg: string) => void): void {
   const career = loadCareer();
   const absent: CareerNode[] = [];
   let changed = false;
+  const activeId = activeTimeNodeId();
   const nodes = career.nodes.map(n => {
+    if (n.id === activeId) return n; // 正在演该日程，不把自然耗时误判为缺席。
     if ((n.status === "pending" && now > n.dueAt + ABSENT_AFTER && n.kind !== "custom" && n.kind !== "practice") || n.status === "passed") {
       changed = true;
       if (n.status === "pending") absent.push(n);
@@ -373,8 +371,33 @@ export function isNightNow(): boolean {
 }
 
 /** 跳时间（遇到日程或新的待回复就停）。返回停下来的原因，没停返回空 */
-export function jumpWorld(target: number): string {
-  const r = capJump(target);
+export function jumpWorld(target: number, options: TimeJumpOptions = {}): string {
+  if (!Number.isFinite(target)) return "时间无效，请重新选择";
+  return applyTimeJump(capJump(target, options));
+}
+
+function applyTimeJump(r: { target: number; stoppedBy?: string }): string {
   setWorldTime(r.target);
-  return r.stoppedBy ? `停在了：${r.stoppedBy}` : "";
+  const message = r.stoppedBy ? `停在了：${r.stoppedBy}。现在是${new Date(r.target).toLocaleString("zh-CN", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit", hour12: false })}，可到提醒事项或 KakaoTalk 查看` : "";
+  if (typeof window !== "undefined") window.dispatchEvent(new CustomEvent(TIME_JUMP_EVENT, { detail: { message } }));
+  return message;
+}
+
+/** 时钟与设置共用；切到现实时间也不能绕过尚未处理的重要事件。 */
+export function switchWorldClockMode(real: boolean): string {
+  const clock = loadWorldClock();
+  const target = real ? realNow() : clock.world;
+  if (typeof target === "number" && target > Date.now()) {
+    const r = capJump(target);
+    if (r.stoppedBy) return applyTimeJump(r);
+  }
+  setWorldClockReal(real);
+  return "";
+}
+
+/** 给现有剧情生成一个本地时间上限，正文和[时间]都不要越过它。 */
+export function sceneTimeBoundaryHint(activeNodeId?: string): string {
+  const now = Date.now();
+  const r = capJump(now + 24 * HOUR, { activeNodeId });
+  return r.stoppedBy ? `【时间边界】${r.stoppedBy}；最多自然经过${Math.max(0, Math.floor((r.target - now) / MIN))}分钟。正文和[时间]标记都不能写到这个边界之后，不替她处理该事件，临近时留给她决定。` : "";
 }

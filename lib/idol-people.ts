@@ -67,6 +67,8 @@ export type IdolProfile = {
   age: string;
   nationality?: string;
   kinship?: Kinship;
+  /** 仅由用户在名片编辑页手动开启，不由AI生成或修改。 */
+  allowFamilyRomance?: boolean;
   heightCm?: number;
   appearance?: string;
   romanceStyle?: string;
@@ -177,7 +179,7 @@ export function composePersona(p: IdolProfile): string {
   const head = [p.role, p.nationality ? `国籍：${p.nationality}` : "", p.gender, p.age ? `${p.age}岁` : "", p.birthday ? `生日 ${p.birthday.replace("-", "月")}日` : "", p.mbti ? `MBTI ${p.mbti}（只是参考，不刻板）` : ""].filter(Boolean).join("，");
   if (head) out.push(`【身份】${head}`);
   const kinship = kinshipOf(p);
-  if (kinship !== "none") out.push(`【与你的亲属关系】${KINSHIP_LABEL[kinship]}，没有心动线。`);
+  if (kinship !== "none") out.push(`【与你的亲属关系】${KINSHIP_LABEL[kinship]}。${p.allowFamilyRomance ? "感情发展由当前关系和心动程度决定。" : "没有心动线。"}`);
   if (p.introducedIn && !p.privateLines.length) out.push(`【首次出场已知背景】只沿用其中关于你的已定事实：\n${p.introducedIn}`);
   if (p.appearance || p.heightCm) out.push(`【外貌】${p.heightCm ? `${p.heightCm}cm。` : ""}${p.appearance || ""}`);
   if (p.isIdol && (p.publicLabels.length || p.publicText)) {
@@ -256,7 +258,7 @@ export function rollSecretKind(): SecretKind {
 /** 性别、年龄知道了以后掷一次：有没有心动线、心动起点、关系起点 */
 export function applyStartRolls(p: IdolProfile): IdolProfile {
   const kinship = kinshipOf(p);
-  if (kinship !== "none") return { ...p, kinship, canCrush: false, heart: undefined, romanceStyle: "", rolled: true };
+  if (kinship !== "none" && !p.allowFamilyRomance) return { ...p, kinship, canCrush: false, heart: undefined, romanceStyle: "", relation: p.relation === "暧昧" || p.relation === "恋人" ? (p.met ? "认识" : "陌生") : p.relation, rolled: true };
   // 已在场景中确定的身高不回改；不符合偏好的人不自动开放心动线。
   if (p.gender === "男" && p.heightCm !== undefined && (p.heightCm < 180 || p.heightCm > 190)) return { ...p, canCrush: false, heart: undefined, romanceStyle: "", rolled: true };
   if (p.rolled) return p;

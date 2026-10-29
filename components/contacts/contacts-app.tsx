@@ -486,7 +486,7 @@ function CardView({ data, id, onBack, onEdit, onNotice }: { data: Data; id: stri
           <hr />
           <div className="ct-k">关系</div>
           <div className="ct-v">{relationOf(p)}</div>
-          {kinshipOf(p) !== "none" ? <><hr /><div className="ct-k">与你的亲属关系</div><div className="ct-v">{KINSHIP_LABEL[kinshipOf(p)]}</div></> : null}
+          {kinshipOf(p) !== "none" ? <><hr /><div className="ct-k">与你的亲属关系</div><div className="ct-v">{KINSHIP_LABEL[kinshipOf(p)]}{p.allowFamilyRomance ? " · 感情线已开放" : ""}</div></> : null}
           {p.birthday ? <><hr /><div className="ct-k">生日</div><div className="ct-v">{p.birthday.split("-").map(x => String(parseInt(x, 10) || x)).join("月")}日</div></> : null}
         </div>
 
@@ -651,6 +651,13 @@ function EditView({ data, id, onDone, onDeleted, onNotice }: { data: Data; id: s
         <Field label="身高（cm）"><input type="number" value={p.heightCm ?? ""} onChange={e => set("heightCm", e.target.value ? Number(e.target.value) : undefined)} /></Field>
         <Field label="外貌"><textarea rows={4} value={p.appearance ?? ""} onChange={e => set("appearance", e.target.value)} /></Field>
         <Field label="与你的亲属关系"><select className="ct-select" value={kinshipOf(p)} onChange={e => set("kinship", e.target.value as Kinship)}>{Object.entries(KINSHIP_LABEL).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></Field>
+        {kinshipOf(p) !== "none" ? <Field label="开放感情线">
+          <button type="button" className="ct-wide-dark" role="switch" aria-label="开放感情线" aria-checked={Boolean(p.allowFamilyRomance)} onClick={() => setP(prev => {
+            const open = !prev.allowFamilyRomance;
+            return open ? { ...prev, allowFamilyRomance: true, canCrush: true, heart: prev.heart ?? "没感觉", rolled: true } : { ...prev, allowFamilyRomance: false, canCrush: false, heart: undefined, romanceStyle: "", relation: prev.relation === "暧昧" || prev.relation === "恋人" ? (prev.met ? "认识" : "陌生") : prev.relation };
+          })}>{p.allowFamilyRomance ? "已开放 · 点击关闭" : "未开放 · 点击开放"}</button>
+          <div className="ct-v is-dim" style={{ fontSize: 12, marginTop: 8 }}>开放后默认没感觉，可调整心动程度和感情方式。关闭会清除心动与暧昧、恋人状态，相处记录保留。</div>
+        </Field> : null}
         <Field label="分组">
           <input value={p.group} list="ct-groups" onChange={e => set("group", e.target.value)} placeholder="公司 / 同期练习生 / 家和老朋友…" />
           <datalist id="ct-groups">{groups.map(g => <option key={g} value={g} />)}</datalist>
@@ -708,11 +715,11 @@ function EditView({ data, id, onDone, onDeleted, onNotice }: { data: Data; id: s
         ) : null}
         <Field label="关系">
           <select className="ct-select" value={relationOf(p)} onChange={e => set("relation", e.target.value as Relation)}>
-            {[...RELATIONS, "前任"].map(r => <option key={r} value={r}>{r}</option>)}
+            {[...RELATIONS, "前任"].map(r => <option key={r} value={r} disabled={kinshipOf(p) !== "none" && !p.allowFamilyRomance && (r === "暧昧" || r === "恋人")}>{r}</option>)}
           </select>
         </Field>
         <Field label="心动">
-          <select className="ct-select" disabled={kinshipOf(p) !== "none"} value={p.canCrush && p.heart ? p.heart : ""} onChange={e => { const v = e.target.value as Heart | ""; setP(prev => ({ ...prev, canCrush: Boolean(v), heart: v || undefined, rolled: true })); }}>
+          <select className="ct-select" aria-label="心动程度" disabled={kinshipOf(p) !== "none" && !p.allowFamilyRomance} value={p.canCrush && p.heart ? p.heart : ""} onChange={e => { const v = e.target.value as Heart | ""; setP(prev => ({ ...prev, canCrush: Boolean(v), heart: v || undefined, rolled: true })); }}>
             <option value="">没有心动线</option>
             {HEARTS.map(h => <option key={h} value={h}>{h}</option>)}
           </select>

@@ -132,13 +132,7 @@ function loadWorldPan(worldId: string): { x: number; y: number; zoom: number } {
   return { x: 0, y: 0, zoom: 1 };
 }
 
-type TransitionState = {
-  char: Character;
-  sourceRect: DOMRect;
-  phase: "start" | "fly" | "flip";
-  onComplete?: () => void;
-  reverse?: boolean;
-};
+
 
 type PinchState = { dist: number; zoom: number; midX: number; midY: number };
 
@@ -205,7 +199,6 @@ export function PhoneCharacterApp({ onClose, onNotice }: PhoneCharacterAppProps)
   const [view, setView] = useState<{ type: ViewType; id: string | null; isEditing?: boolean }>({ type: "list", id: null, isEditing: false });
   const [characters, setCharacters] = useState<Character[]>(() => loadCharacters());
   const [bgItems, setBgItems] = useState<CanvasBgItem[]>(() => loadBackgroundItems());
-  const [transition, setTransition] = useState<TransitionState | null>(null);
 
   // ── 世界卷宗：分组数据 + 当前打开的卷宗（持久记忆） ──
   const [worldGroups, setWorldGroups] = useState<CharacterWorldGroup[]>(() => loadCharacterWorldGroups());
@@ -248,30 +241,8 @@ export function PhoneCharacterApp({ onClose, onNotice }: PhoneCharacterAppProps)
     saveBackgroundItems(next);
   }
 
-  // Handle clicking a polaroid
-  function handleSelectChar(char: Character, e: React.MouseEvent<HTMLDivElement>) {
-    const rect = e.currentTarget.getBoundingClientRect();
-
-    setTransition({
-      char,
-      sourceRect: rect,
-      phase: "start",
-    });
-
-    // Animate
-    requestAnimationFrame(() => {
-      requestAnimationFrame(() => {
-        setTransition((p) => p ? { ...p, phase: "fly" } : null);
-        setTimeout(() => {
-          setTransition((p) => p ? { ...p, phase: "flip" } : null);
-          setTimeout(() => {
-            setView({ type: "detail", id: char.id });
-            setTransition(null);
-          }, 400); // Wait for flip 0.4s
-        }, 400); // Wait for fly 0.4s
-      });
-    });
-  }
+  // Open the current folder detail directly.
+  function handleSelectChar(char: Character) { setView({ type: "detail", id: char.id }); }
 
   // Handle back from detail
   function handleBackFromDetail() {
@@ -376,102 +347,14 @@ export function PhoneCharacterApp({ onClose, onNotice }: PhoneCharacterAppProps)
         )}
       </div>
 
-      {/* Fly & Flip Transition Overlay */}
-      {transition && (
-        <FlipTransitionOverlay transit={transition} />
-      )}
+
     </>
   );
 }
 
 // ── 过渡动效层 ───────────────────────────────────────
 
-function FlipTransitionOverlay({ transit }: { transit: TransitionState }) {
-  const { char, sourceRect, phase } = transit;
 
-  // Calculate relative bounds based on parent .phone-shell
-  const [shellRect, setShellRect] = useState<DOMRect | null>(null);
-
-  useEffect(() => {
-    const shell = document.querySelector(".char-app");
-    if (shell) setShellRect(shell.getBoundingClientRect());
-  }, []);
-
-  if (!shellRect) return null;
-
-  // The final target rect inside the phone shell
-  // We'll occupy the full width and height of the phone shell
-  const targetWidth = shellRect.width;
-  const targetHeight = shellRect.height;
-  const targetTop = shellRect.top;
-  const targetLeft = shellRect.left;
-
-  // Render variables
-  const isStart = phase === "start";
-
-  const currentTop = isStart ? sourceRect.top : targetTop;
-  const currentLeft = isStart ? sourceRect.left : targetLeft;
-  const currentWidth = isStart ? sourceRect.width : targetWidth;
-  const currentHeight = isStart ? sourceRect.height : targetHeight;
-
-  // 3D Rotation
-  const isFlipped = phase === "flip";
-
-  const duration = isStart ? "0s" : "0.4s";
-
-  return (
-    <div
-      className="char-flipper-container fixed"
-      style={{
-        top: currentTop,
-        left: currentLeft,
-        width: currentWidth,
-        height: currentHeight,
-        transition: `all ${duration} cubic-bezier(0.25, 1, 0.5, 1)`,
-      }}
-    >
-      <div
-        className="char-flipper-inner"
-        style={{
-          transition: `transform ${duration} ease-in-out`,
-          transform: isFlipped ? "rotateY(180deg)" : "rotateY(0deg)",
-        }}
-      >
-        <div className="char-flipper-front" style={{ padding: isStart ? 0 : "12px" }}>
-          {/* Polaroid Front */}
-          <div className="char-polaroid w-full h-full border-none shadow-none" style={{
-            transition: `padding ${duration} ease`
-          }}>
-            {isStart && <div className="char-polaroid-tape" />}
-            <div className="char-polaroid-img-wrapper" style={{
-              height: isStart ? "auto" : "100%",
-              aspectRatio: isStart ? "1/1" : "auto",
-              transition: `all ${duration} ease`
-            }}>
-              {char.avatar ? (
-                <img src={char.avatar} className="char-polaroid-img" alt="" />
-              ) : (
-                <div className="w-full h-full bg-[#9b8aaa]" />
-              )}
-            </div>
-            {isStart && <div className="char-polaroid-text">{char.name || "UNNAMED"}</div>}
-          </div>
-        </div>
-
-        <div className="char-flipper-back">
-          {/* Scaled down or full archive rendering so it doesn't look weird */}
-          <div className="absolute top-0 left-0" style={{
-            width: targetWidth, height: targetHeight,
-            opacity: isFlipped ? 1 : 0.5,
-            transition: `opacity ${duration} ease`
-          }}>
-            <CharArchiveView dummy char={char} onBack={() => { }} onEdit={() => { }} onDelete={() => { }} onExportJson={() => { }} onExportPng={async () => { }} />
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
 
 
 // ── 列表视图（照片墙） ─────────────────────────────────────────
@@ -1260,7 +1143,7 @@ function CharListView({
                         <span
                           className={`bg-[#111111] px-2 py-0.5 text-[11px] text-white border border-[#333333] rounded-[4px] font-bold ${isEditing ? 'cursor-pointer pointer-events-auto hover:bg-[#222222] transition-colors' : 'pointer-events-none'}`}
                           style={{
-                            fontFamily: '"Courier New", monospace',
+                            fontFamily: 'inherit',
                             boxShadow: '1px 2px 4px rgba(0,0,0,0.06)',
                             transform: 'rotate(-2deg)',
                           }}
@@ -1329,7 +1212,7 @@ function CharListView({
           }}
         >
           <div className="char-punched-hole-note" onClick={(e) => e.stopPropagation()}>
-            <h3>销毁确认</h3>
+            <h3>删除确认</h3>
             <p>{deleteConfirm.type === "char"
               ? "角色档案、联系人及与该角色的单聊记录将一并删除；角色会从群聊成员中移除，但群聊和群聊历史会保留。此操作无法恢复。"
               : "您确定要丢弃该物件吗？此操作将永远无法恢复。"}</p>
@@ -1340,7 +1223,7 @@ function CharListView({
                 onClick={() => {
                   if (deleteConfirmReady && !deleteBusy) setDeleteConfirm(null);
                 }}
-              >驳回申请</button>
+              >取消</button>
               <button className="char-punched-hole-btn danger" disabled={!deleteConfirmReady || deleteBusy} onClick={async () => {
                 if (!deleteConfirmReady || deleteBusy) return;
                 const target = deleteConfirm;
@@ -1350,10 +1233,10 @@ function CharListView({
                     await removeCharacterChatReferences(target.id);
                     clearCharacterVersions(target.id);
                     onUpdateChars(characters.filter(c => c.id !== target.id));
-                    onNotice?.("已销毁调查档案");
+                    onNotice?.("已删除人物档案");
                   } else {
                     onUpdateBgItems((bgItems || []).filter(b => b.id !== target.id));
-                    onNotice?.("已销毁散落物件");
+                    onNotice?.("已删除装饰");
                   }
                   setDeleteConfirm(null);
                 } catch (error) {
@@ -1361,7 +1244,7 @@ function CharListView({
                   setDeleteBusy(false);
                   onNotice?.("删除失败，请重试");
                 }
-              }}>{deleteBusy ? "销毁中…" : "批准销毁"}</button>
+              }}>{deleteBusy ? "删除中…" : "确认删除"}</button>
             </div>
           </div>
         </div>
@@ -1454,32 +1337,7 @@ function CharListView({
           if (picked.has(id)) picked.delete(id); else picked.add(id);
           return { ...prev, picked };
         });
-        return (
-          <div
-            className="absolute inset-0 bg-black/50 flex flex-col items-center justify-end pb-[120px] px-4"
-            style={{ zIndex: 9999999 }}
-            onClick={() => exportSheet.busy ? undefined : setExportSheet(null)}
-          >
-            <div className="relative w-full max-w-[320px]" onClick={e => e.stopPropagation()}>
-              <div className="absolute rounded-[2px]" style={{
-                top: 6, left: 4, right: -6, bottom: -4,
-                background: '#ede7d9', border: '1px solid #cfc3a6',
-                transform: 'rotate(1.5deg)',
-                boxShadow: '3px 4px 10px rgba(0,0,0,0.18)'
-              }} />
-              <div
-                className="relative w-full rounded-[2px] char-export-paper"
-                style={{
-                  background: '#f5f0e6',
-                  padding: '18px 14px 14px',
-                  boxShadow: '2px 3px 12px rgba(0,0,0,0.25), inset 0 0 30px rgba(139,119,80,0.08)',
-                  border: '1px solid #d4c9a8',
-                  fontFamily: '"Courier New", monospace',
-                  transform: 'rotate(-0.8deg)'
-                }}
-              >
-                <div className="absolute rounded-[1px]" style={{ top: -6, left: '50%', marginLeft: -18, width: 36, height: 12, background: 'rgba(255,255,255,0.55)', transform: 'rotate(1deg)' }} />
-                <div className="text-center ts-12 font-bold text-[#4a3f2f] mb-3 tracking-[1px] uppercase">Export Files</div>
+        return (<div className="wt-modal ida-paper-modal" role="dialog" aria-label="导出档案" onClick={() => exportSheet.busy ? undefined : setExportSheet(null)}><div className="wt-paper char-export-paper" onClick={e=>e.stopPropagation()}><div className="ida-modal-heading"><h2 className="wt-paper-kicker">导出档案</h2><button type="button" className="wt-btn" disabled={exportSheet.busy} onClick={()=>setExportSheet(null)}>关闭</button></div>
                 <div className="char-export-tabs">
                   {([["world", "这个卷宗"], ["all", "全部"]] as const).map(([key, label]) => (
                     <button
@@ -1518,87 +1376,12 @@ function CharListView({
                 <button className="char-export-go" disabled={exportSheet.busy || exportSheet.picked.size === 0} onClick={runBundleExport}>
                   {exportSheet.busy ? "导出中..." : `导出 ${exportSheet.picked.size} 个角色`}
                 </button>
-              </div>
-            </div>
-          </div>
-        );
+        </div></div>);
       })()}
 
-      {/* Style picker popup */}
-      {/* Props picker popup */}
-      {isPropsMenuOpen && (
-        <div
-          className="absolute inset-0 bg-black/50 flex flex-col items-center justify-end pb-[120px] px-4"
-          style={{ zIndex: 9999999 }}
-          onClick={() => setIsPropsMenuOpen(false)}
-        >
-          <div className="relative w-full max-w-[320px]" onClick={e => e.stopPropagation()}>
-            {/* Back paper layer */}
-            <div className="absolute rounded-[2px]" style={{
-              top: 5, left: 3, right: -5, bottom: -3,
-              background: '#ede7d9', border: '1px solid #cfc3a6',
-              transform: 'rotate(2deg)',
-              boxShadow: '3px 4px 10px rgba(0,0,0,0.18)'
-            }} />
-            {/* Main paper */}
-            <div
-              className="relative w-full rounded-[2px]"
-              style={{
-                background: '#f5f0e6',
-                padding: '18px 10px 14px',
-                boxShadow: '2px 3px 12px rgba(0,0,0,0.25), inset 0 0 30px rgba(139,119,80,0.08)',
-                border: '1px solid #d4c9a8',
-                fontFamily: '"Courier New", monospace',
-                transform: 'rotate(-1deg)'
-              }}
-            >
-              <div className="absolute rounded-[1px]" style={{ top: -6, left: '50%', marginLeft: -18, width: 36, height: 12, background: 'rgba(255,255,255,0.55)', transform: 'rotate(0.5deg)' }} />
-              <div className="text-center ts-12 font-bold text-[#4a3f2f] mb-3 tracking-[1px] uppercase">添加装饰</div>
-              <div className="flex gap-1.5 justify-center flex-wrap">
-                {([
-                  { type: 'a4' as const, label: '档案', w: 200, h: 280, scale: 0.16 },
-                  { type: 'yellow-note' as const, label: '便签', w: 110, h: 80, scale: 0.28 },
-                  { type: 'blue-note' as const, label: '蓝色便签', w: 120, h: 90, scale: 0.26 },
-                  { type: 'torn' as const, label: '碎片', w: 130, h: 70, scale: 0.24 },
-                  { type: 'grid' as const, label: '网格', w: 150, h: 100, scale: 0.21 },
-                  { type: 'scrap' as const, label: '小卡片', w: 140, h: 50, scale: 0.24 },
-                ]).map((item) => (
-                  <button
-                    key={item.type}
-                    onClick={() => handleAddBgItem(item.type)}
-                    className="bg-none border-[1.5px] border-transparent rounded-[3px] cursor-pointer p-1 flex flex-col items-center gap-[3px]"
-                    style={{
-                      transition: 'border-color 0.15s, background 0.15s'
-                    }}
-                    onMouseEnter={e => { e.currentTarget.style.borderColor = '#8c7a5a'; e.currentTarget.style.background = 'rgba(140,122,90,0.08)'; }}
-                    onMouseLeave={e => { e.currentTarget.style.borderColor = 'transparent'; e.currentTarget.style.background = 'none'; }}
-                  >
-                    {/* Scaled real prop preview */}
-                    <div className="overflow-hidden relative rounded-[1px]" style={{
-                      width: item.w * item.scale, height: item.h * item.scale,
-                    }}>
-                      <div className="pointer-events-none" style={{
-                        transform: `scale(${item.scale})`, transformOrigin: 'top left',
-                        width: item.w, height: item.h,
-                      }}>
-                        <div className={`char-bg-item ida-decoration ida-decoration-${item.type} relative ${item.type === 'a4' ? 'char-paper-a4' :
-                          (item.type === 'yellow-note' || item.type === 'blue-note') ? 'char-sticky-note' :
-                              item.type === 'torn' ? 'char-paper-torn' :
-                                item.type === 'grid' ? 'char-paper-grid' :
-                                  'char-paper-scrap'
-                          }`} {...(item.type === 'yellow-note' ? { "data-color": "yellow" } : item.type === 'blue-note' ? { "data-color": "blue" } : {})} style={{ width: item.w, height: item.h }}>
-                          {renderBgContent({ id: `preview-${item.type}`, type: item.type, x: 0, y: 0, rot: 0, zIndex: 1 }).props.children}
-                        </div>
-                      </div>
-                    </div>
-                    <div className="ts-9 text-[#6b5d47] font-semibold">{item.label}</div>
-                  </button>
-                ))}
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+      {isPropsMenuOpen && <div className="wt-modal ida-paper-modal" role="dialog" aria-label="添加装饰" onClick={()=>setIsPropsMenuOpen(false)}><div className="wt-paper" onClick={e=>e.stopPropagation()}><h2 className="wt-paper-kicker">添加装饰</h2><div className="ida-decoration-picker">{([
+        ['a4','人物笔记'],['yellow-note','黄色便签'],['blue-note','蓝色便签'],['torn','小记'],['grid','备忘'],['scrap','灵感']
+      ] as const).map(([type,label])=><button type="button" key={type} onClick={()=>handleAddBgItem(type)}><div className="ida-decoration-preview">{renderBgContent({id:'preview-'+type,type,x:0,y:0,rot:0,zIndex:0})}</div><span>{label}</span></button>)}</div><div className="wt-paper-actions"><button className="wt-btn" onClick={()=>setIsPropsMenuOpen(false)}>关闭</button></div></div></div>}
 
       {/* 转移世界 Modal */}
       {activeMoveChar && (
@@ -1816,7 +1599,6 @@ function CharArchiveView({
   onExportJson,
   onExportPng,
   onNotice = () => { },
-  dummy,
 }: {
   char: Character;
   isEditing?: boolean;
@@ -1830,7 +1612,6 @@ function CharArchiveView({
   onExportJson: () => void;
   onExportPng: () => Promise<void>;
   onNotice?: (text: string) => void;
-  dummy?: boolean;
 }) {
   const [archiveTab, setArchiveTab] = useState("资料");
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -2178,11 +1959,10 @@ function CharArchiveView({
     previewGesture.current = null;
   }
 
-  const archiveFrame = !isEditing && !dummy ? (
+  const archiveFrame = !isEditing ? (
     <div className="idol-detail-preview"><div className="ida-cover"><div className="ida-avatar">{char.avatar ? <img src={char.avatar} alt=""/> : char.name.slice(0,1)}</div><h1>{char.name}</h1><p>{char.tags?.join(" · ") || "人物档案"}</p></div><div className="ida-tabs">{["资料","人物关系","历史版本"].map(tab=><button className={archiveTab===tab?"active":""} key={tab} onClick={()=>{if(tab==="历史版本")openVersionHistory();else setArchiveTab(tab)}}>{tab}</button>)}</div>{archiveTab==="人物关系"?<IdolPersonRelations characterId={char.id}/>:<><div className="ida-card">{[["KakaoTalk ID",char.wechatID||"未设置"],["时区",char.timeZone||"未设置"],["更新日期",char.updatedAt?.slice(0,10)||"—"]].map(([k,v])=><div className="ida-info" key={k}><span>{k}</span>{v}</div>)}</div>{[["完整人设",personaText],["性格",personality],["简量人设",briefPersona]].filter(([,v])=>v).map(([title,text])=><section className="ida-card" key={title}><h2>{title}</h2><p>{text}</p></section>)}</>}<div className="ida-actions"><button onClick={onExportJson}>导出 JSON</button><button onClick={onExportPng}>导出图片</button><button onClick={onEdit}>编辑档案</button><button onClick={()=>setConfirmDelete(true)}>删除人物</button></div>{confirmDelete&&<div className="ida-card"><p>删除人物及其私聊记录？此操作无法恢复。</p><div className="ida-actions"><button onClick={()=>setConfirmDelete(false)}>取消</button><button disabled={deleteBusy} onClick={async()=>{setDeleteBusy(true);try{await onDelete()}catch{onNotice("删除失败，请重试");setDeleteBusy(false)}}}>确认删除</button></div></div>}</div>
   ) : (
       <div className="char-archive-frame">
-        <div className="char-archive-stamp">CLASSIFIED</div>
 
         <div className="char-archive-header">
           <div>
@@ -2519,7 +2299,7 @@ function CharArchiveView({
         </div>
 
         <div className="char-archive-actions">
-          {!dummy && confirmDelete ? (
+          {confirmDelete ? (
             <div className="char-confirm-row">
               <span className="char-confirm-text">DELETE CHARACTER + PRIVATE CHAT?</span>
               <button className="char-confirm-yes" disabled={deleteBusy} onClick={async () => {
@@ -2536,12 +2316,12 @@ function CharArchiveView({
               <button className="char-confirm-no" disabled={deleteBusy} onClick={() => setConfirmDelete(false)}>NO</button>
             </div>
           ) : (
-            !dummy && isEditing ? (
+            isEditing ? (
               <>
                 <button className="char-archive-btn char-archive-btn-danger" onClick={() => { if (isDirty()) { setShowUnsavedConfirm("cancel"); } else { onCancelEdit?.(); } }}>取消</button>
                 <button className="char-archive-btn bg-[var(--c-text)] text-[var(--c-page-body-bg)] border-[var(--c-input-border)]" onClick={handleSave}>保存</button>
               </>
-            ) : !dummy && !isEditing ? (
+            ) : !isEditing ? (
               <>
                 <button className="char-archive-btn" onClick={onExportPng}>EXPORT IMG</button>
                 <button className="char-archive-btn" onClick={onExportJson}>EXPORT JSON</button>
@@ -2553,13 +2333,7 @@ function CharArchiveView({
       </div>
   );
 
-  if (dummy) {
-    return (
-      <div className="char-archive-view" style={{ pointerEvents: "none" }}>
-        {archiveFrame}
-      </div>
-    );
-  }
+
 
   return (
     <PageShell

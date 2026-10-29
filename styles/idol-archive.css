@@ -102,3 +102,24 @@
 .ida-editing .char-archive-photo{overflow:visible}
 .ida-editing .char-archive-photo>img{width:100%;height:100%;object-fit:cover;border-radius:50%}
 .ida-avatar-change{position:absolute;right:-3px;bottom:-3px;width:26px;height:26px;border:2px solid white;border-radius:50%;display:grid;place-items:center;background:#8c709f;color:white;pointer-events:none}
+.idol-archive-workspace .char-export-paper{font-family:inherit;transform:none}
+.idol-archive-workspace .char-export-tabs button{font-family:inherit;border:0;border-radius:9px;background:white;color:#918899}
+.idol-archive-workspace .char-export-tabs button.is-on{background:#eae0f3;color:#806198}
+.idol-archive-workspace .char-export-row{border:0;background:white;border-radius:12px;margin:8px 0;font-family:inherit;color:#625c6c}
+.idol-archive-workspace .char-export-check{border-color:#e5e0eb;border-radius:6px;background:#f5f3f8;color:#8c709f}
+.idol-archive-workspace .char-export-check.is-on{background:#eae0f3;border-color:#d7c4e7;color:#806198}
+.idol-archive-workspace .char-export-go{background:#007aff;border:0;border-radius:12px;box-shadow:none;color:white;font-family:inherit;letter-spacing:0}
+.ida-decoration-picker{display:grid;grid-template-columns:repeat(3,1fr);gap:16px 10px;margin:20px 0}
+.ida-decoration-picker>button{border:0;background:none;color:#918899;font:inherit;font-size:11px;text-align:center;padding:0}
+.ida-decoration-preview{width:70px;height:58px;overflow:hidden;margin:auto auto 7px;border-radius:9px;pointer-events:none}
+.ida-decoration-preview .ida-decoration{transform:scale(.5);transform-origin:top left}
+
+.ida-modal-heading{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:14px}.ida-modal-heading h2{margin:0}
+.idol-archive-workspace .char-punched-hole-note{background:#f5f5f9;background-image:none;border:0;border-radius:22px;padding:24px;width:min(330px,90%);transform:none;animation:none;color:#25232b;box-shadow:0 16px 55px #33223c24}
+.idol-archive-workspace .char-punched-hole-note:before{display:none}.idol-archive-workspace .char-punched-hole-note p{color:#918899;line-height:1.8}
+.idol-archive-workspace .char-punched-hole-btn{border:0;border-radius:10px;background:white;color:#007aff;font-weight:400}.idol-archive-workspace .char-punched-hole-btn.danger{background:#fff0f2;color:#e35d6a}
+.idol-archive-workspace .char-export-tabs{border-bottom:1px solid #e9e5ef}
+.idol-archive-workspace .char-export-mem{border-top:1px solid #e9e5ef}
+.idol-archive-workspace .char-export-avatar{border:0;border-radius:50%;overflow:hidden;box-shadow:none}
+.ida-decoration-toggle{white-space:nowrap;flex-shrink:0}
+.idol-archive-shell .page-header-right button[aria-label="编辑排版"]{background:#eae0f3;color:#806198;box-shadow:none}

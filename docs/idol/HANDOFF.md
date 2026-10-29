@@ -780,3 +780,9 @@ Flora 要一个专门玩「爱豆模拟器」的小手机：她是想当爱豆�
 - 删除人物待放置状态/画布落点/跟随鼠标人物预览及过时版式选择：新建直接进入填写，保存即正式落库并加入当前卷宗；单张JSON/PNG导入也直接归档，包导入保留原批量逻辑。人物原取景比例和导入已有比例保留，不额外覆盖；装饰物自身的摆放/取消仍保留，关系图仍可手动拖动。
 - 隔离浏览器`verify-archive-avatar-direct-save-v1.cjs`通过实际上传测试图片、头像即时可见/保存/刷新保持、新建与JSON导入无待放置提示、非默认卷宗归属、导入比例保持。errors=[]，真实API0，外部请求全拦截，不使用真实浏览器存档，不重启3031。报告`archive-avatar-direct-save-results-v1.json`及截图`archive-avatar-visible-v1.png`、`archive-direct-save-v1.png`在熟悉的预览目录。
 - TypeScript与diff检查通过，本次修复一并本地提交；不push、不部署。
+
+### 2.51 2026-10-29 清理档案库旧转场并核对完整入口（Codex）
+- Flora发现点文件夹仍闪出旧档案，并要求不再零散遗漏。本次删除整段`FlipTransitionOverlay`、TransitionState、延时飞入/翻转和dummy旧档案预览；移除对应翻转CSS，列表/关系图均直接打开当前详情，不保留延时跳页任务。
+- 一并核对其他入口，移除导出/装饰弹窗旧牛皮纸与胶带包装，换为同一浅底圆角弹窗；导出增加明确关闭按钮。卷宗/关系弹窗标题统一中文；排版删除确认去掉打孔纸、旋转和侦探措辞，保持删除提醒/确认保护与数据逻辑。
+- 隔离浏览器`verify-archive-flow-audit-v1.cjs`逐步验证列表和关系图点击（MutationObserver＋多个时间点检查无旧转场/旧档案节点）、关系/历史、编辑/时区/未保存继续编辑及放弃、卷宗编辑/新建、导出关闭、装饰弹窗。全部通过，errors=[]、真实API0；报告`archive-flow-audit-results-v1.json`、截图`archive-clean-{export,decorations}-v1.png`在预览目录。测试初始化明确等待联系人存储hydration，避免虚构联系人被初始化覆盖。
+- 关系回归、TypeScript和diff检查通过。本次一并本地提交；不push、不部署，不重启3031或移动其缓存，不触碰真实存档。

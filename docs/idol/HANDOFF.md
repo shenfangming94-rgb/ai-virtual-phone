@@ -773,3 +773,4 @@ Flora 要一个专门玩「爱豆模拟器」的小手机：她是想当爱豆�
 - `verify-archive-unified-v1.cjs`（`/Users/flora/work/idol-settings-preview/`）隔离Chrome验证：编辑姓名/性格→备份旧卡并保存V2→历史版本切回V1；排版编辑切换、装饰显示隐藏且底层数据数量不变，均通过。errors=[]、真实API 0、全部外部请求拦截。正式截图`archive-unified-{editor,history,layout}-v1.png`，报告`archive-unified-results-v1.json`同目录。
 - 人物关系、人物链路、恋情回归与TypeScript、diff检查通过。测试仅使用3058和相对路径独立缓存`.next-archive-unify-check`；已停自建3058，恢复Next自动改写的配置、移出独立缓存。未重启/停止3031，没有再移动其`.next`，不碰用户真实浏览器存档。
 - 人物关系功能、档案库美化、微博统一认识关系的0.9.31本地包及全部交接，本次一并本地提交；未push、未部署。2.48中“尚未提交”是此前状态。
+- 编辑页标题黑条补正（Codex）：Flora发现完整人设/性格/简量人设标题仍有黑条。原因是旧`.char-log-entry-header`反色背景残留，本次仅清除编辑页标题背景及旧内边距。独立浏览器`verify-archive-headings-v1.cjs`验证三个标题计算背景均透明、errors=[]、真实API0；截图`archive-editor-headings-fixed-v1.png`，不动3031服务和真实存档。

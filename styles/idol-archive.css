@@ -96,3 +96,5 @@
 .idol-archive-workspace .ida-decoration-yellow-note{background:#fcf5dc;color:#a28b4d}
 .idol-archive-workspace .ida-decoration-blue-note{background:#eaf4fb;color:#7d9ab2}
 .idol-archive-workspace .ida-decoration-grid{background:#ecf6ef;color:#7e9f8b}
+/* Plain section headings replace the legacy inverted archive labels. */
+.ida-editing .char-log-entry-header{background:transparent;padding:0}

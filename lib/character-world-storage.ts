@@ -10,11 +10,23 @@ export const DEFAULT_CHARACTER_WORLD_ID = "world_default";
 
 registerKvMigration(CHARACTER_WORLDS_KEY);
 
+/** 爱豆主要人物之间的互动只读原生关系；玩家及其他角色保留原规则。 */
+export function idolCharactersKnowEachOther(a: string, b: string): boolean {
+    if (a === b) return true;
+    let profiles: Record<string, {layer?: string}> = {};
+    try { profiles = JSON.parse(kvGet("idol_people_v1") || "{}"); } catch { return false; }
+    const contacts = new Set(loadChatContacts().map(c => c.characterId));
+    if (![a,b].every(id => profiles[id]?.layer === "main" && contacts.has(id))) return true;
+    return loadCharacterWorldGroups().some(g => g.relations.some(r =>
+        (r.fromCharacterId === a && r.toCharacterId === b) || (r.fromCharacterId === b && r.toCharacterId === a)));
+}
+
 export type CharacterWorldRelation = {
     id: string;
     fromCharacterId: string;
     toCharacterId: string;
     label: string;
+    background?: string;
 };
 
 export type CharacterWorldGroup = {
@@ -23,6 +35,8 @@ export type CharacterWorldGroup = {
     description: string;
     memberIds: string[];
     relations: CharacterWorldRelation[];
+    idolRelationChecks?: string[];
+    idolManualPairs?: string[];
     createdAt: string;
     updatedAt: string;
 };
@@ -103,6 +117,7 @@ function normalizeGroups(groups: CharacterWorldGroup[], characters: Character[])
             if (relations.length !== (Array.isArray(group.relations) ? group.relations.length : 0)) changed = true;
 
             return {
+                ...group,
                 id: group.id,
                 name: group.name.trim() || "未命名世界",
                 description: typeof group.description === "string" ? group.description.trim() : "",
@@ -224,6 +239,7 @@ export function addCharacterWorldRelation(groupId: string, fromCharacterId: stri
     const now = new Date().toISOString();
     saveCharacterWorldGroups(loadCharacterWorldGroups().map(group => {
         if (group.id !== groupId) return group;
+        if (group.idolManualPairs?.includes(JSON.stringify([fromCharacterId,toCharacterId].sort()))) return group;
         const memberSet = new Set(group.memberIds);
         if (!memberSet.has(fromCharacterId) || !memberSet.has(toCharacterId)) return group;
         return {
@@ -243,10 +259,12 @@ export function addCharacterWorldRelation(groupId: string, fromCharacterId: stri
 }
 
 export function deleteCharacterWorldRelation(groupId: string, relationId: string): void {
+    const original = loadCharacterWorldGroups().find(g=>g.id===groupId)?.relations.find(r=>r.id===relationId);
+    const pair = original ? JSON.stringify([original.fromCharacterId,original.toCharacterId].sort()) : null;
     const now = new Date().toISOString();
     saveCharacterWorldGroups(loadCharacterWorldGroups().map(group =>
         group.id === groupId
-            ? { ...group, relations: group.relations.filter(relation => relation.id !== relationId), updatedAt: now }
+            ? { ...group, idolManualPairs: pair ? [...new Set([...(group.idolManualPairs || []), pair])] : group.idolManualPairs, relations: group.relations.filter(relation => pair ? JSON.stringify([relation.fromCharacterId,relation.toCharacterId].sort()) !== pair : relation.id !== relationId), updatedAt: now }
             : group
     ));
 }
@@ -274,15 +292,15 @@ export function canCharacterSeeMomentPost(post: MomentPost, viewerCharacterId: s
 }
 
 export function isMomentRealCharacterAllowedForViewer(viewerCharacterId: string, targetCharacterId: string): boolean {
-    return areCharactersInSameWorld(viewerCharacterId, targetCharacterId);
+    return areCharactersInSameWorld(viewerCharacterId, targetCharacterId) && idolCharactersKnowEachOther(viewerCharacterId, targetCharacterId);
 }
 
 export function isMomentRealCharacterAllowedForPost(post: MomentPost, targetCharacterId: string, anchorCharacterId?: string): boolean {
     if (post.authorType === "character") {
-        return areCharactersInSameWorld(post.authorId, targetCharacterId);
+        return areCharactersInSameWorld(post.authorId, targetCharacterId) && idolCharactersKnowEachOther(post.authorId, targetCharacterId);
     }
     if (anchorCharacterId) {
-        return areCharactersInSameWorld(anchorCharacterId, targetCharacterId);
+        return areCharactersInSameWorld(anchorCharacterId, targetCharacterId) && idolCharactersKnowEachOther(anchorCharacterId, targetCharacterId);
     }
     return post.visibility.includes(targetCharacterId);
 }
@@ -327,7 +345,10 @@ export function formatCharacterRelationsForPrompt(characterId: string): string {
     if (!group) return "";
     const worldDescription = group.description.trim();
     const hasWorldSetup = groups.length > 1 || group.id !== DEFAULT_CHARACTER_WORLD_ID || group.relations.length > 0 || Boolean(worldDescription);
-    if (!hasWorldSetup) return "";
+    let idolProfiles: Record<string,{layer?:string}> = {};
+    try { idolProfiles=JSON.parse(kvGet("idol_people_v1")||"{}"); } catch { /* 兼容旧档 */ }
+    const idolMain=idolProfiles[characterId]?.layer==="main";
+    if (!hasWorldSetup && !idolMain) return "";
 
     const characters = loadCharacters();
     const nameById = new Map(characters.map(character => [character.id, character.name]));
@@ -342,6 +363,7 @@ export function formatCharacterRelationsForPrompt(characterId: string): string {
         .filter((name): name is string => Boolean(name));
 
     const lines: string[] = [];
+    if (idolMain) lines.push("主要人物彼此是否认识以本关系记录为准：无关系记录视为不认识，不因同世界或都认识用户而推断相识。关系不代表知道对方的秘密或恋情。手动关系以最新记录为准。");
     lines.push(`当前世界观：${group.name}。`);
     if (worldDescription) {
         lines.push(`世界观描述：${worldDescription}`);
@@ -354,7 +376,7 @@ export function formatCharacterRelationsForPrompt(characterId: string): string {
         const fromName = nameById.get(relation.fromCharacterId);
         const toName = nameById.get(relation.toCharacterId);
         if (!fromName || !toName) continue;
-        lines.push(`${fromName}是${toName}的${relation.label}。`);
+        lines.push(`${fromName}是${toName}的${relation.label}。${relation.background ? `关系背景：${relation.background}` : ""}`);
     }
 
     // 一跳视角简介：与 viewer 拉过线的角色，附上各自的简量人设，

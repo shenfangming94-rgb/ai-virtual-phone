@@ -1,5 +1,9 @@
 "use client";
 
+import { setPersonRelation } from "@/lib/idol-relations";
+import { IdolArchiveHome } from "@/components/idol-archive-home";
+import { IdolPersonRelations } from "@/components/idol-person-relations";
+import "@/styles/idol-archive.css";
 import { loadProfiles } from "@/lib/idol-people";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { Character } from "@/lib/character-types";
@@ -675,6 +679,7 @@ function CharListView({
   const pinchRef = useRef<PinchState | null>(null);
   const canvasElRef = useRef<HTMLDivElement>(null);
   const [isPropsMenuOpen, setIsPropsMenuOpen] = useState(false);
+  const [showDecorations,setShowDecorations] = useState(false);
   // 批量导出：选人 + 带不带记忆
   const [exportSheet, setExportSheet] = useState<{ scope: "world" | "all"; picked: Set<string>; withMemories: boolean; busy: boolean } | null>(null);
   const [isEditing, setIsEditing] = useState(false);
@@ -1033,104 +1038,14 @@ function CharListView({
   }
 
   function renderBgContent(item: CanvasBgItem) {
-    const hash = item.id.charCodeAt(3) + item.id.charCodeAt(item.id.length - 1) * 17;
-    const isBurnt = hash % 15 === 0;
-    const hasCrease = hash % 7 === 0;
-
-    let content;
-    let baseClass = "";
-    let extraAttrs: Record<string, string> = {};
-
-    if (item.type === 'a4') {
-      baseClass = "char-paper-a4";
-      content = (
-        <>
-          {hasCrease && <div className="char-paper-crease" />}
-          <div className="char-paper-header">
-            <span>Dept of Truth</span>
-            <span>REF:{hash.toString(16).toUpperCase()}</span>
-          </div>
-          <div className="char-barcode" />
-          <div className="char-paper-paragraph">
-            <strong>SUBJECT:</strong> Anomalous entity detected.
-          </div>
-          <div className="char-paper-paragraph relative">
-            All field agents must maintain high alert.
-            {hash % 4 === 0 && <div className="char-marker-circle" />}
-          </div>
-          {hash % 2 === 0 && <div className="char-stamp-red" style={{ top: 120, right: 10 }}>RESTRICTED</div>}
-          {hash % 3 === 0 && <div className="char-handwriting red-ink" style={{ bottom: 20, right: 10 }}>* Verify ASAP *</div>}
-        </>
-      );
-    } else if (item.type === 'yellow-note') {
-      baseClass = "char-sticky-note";
-      extraAttrs = { "data-color": "yellow" };
-      content = (
-        <>
-          <div className="font-bold mb-1">REMINDER:</div>
-          <ul className="char-checkbox-list">
-            <li><span className="char-checkbox-box checked" /> Check logs</li>
-            <li><span className="char-checkbox-box" /> Verify target</li>
-          </ul>
-          {hash % 5 === 0 && <div className="char-handwriting" style={{ bottom: -5, left: 10 }}>Who is this??</div>}
-        </>
-      );
-    } else if (item.type === 'blue-note') {
-      baseClass = "char-sticky-note";
-      extraAttrs = { "data-color": "blue" };
-      content = (
-        <>
-          <div className="font-bold border-b border-[#999] pb-0.5 mb-1">ROUTING SLIP</div>
-          <div><strong>TO:</strong> Agent {hash % 99}</div>
-          <div className="mt-2">Needs clearance.</div>
-          {hash % 2 !== 0 && <div className="char-stamp-red" style={{ top: 20, right: -15, fontSize: "calc(12px*var(--app-text-scale,1))", transform: 'rotate(10deg)' }}>URGENT</div>}
-        </>
-      );
-    } else if (item.type === 'torn') {
-      baseClass = "char-paper-torn";
-      content = (
-        <>
-          <div className="font-bold mb-1">Log Day {hash % 30}</div>
-          <div className="char-paper-paragraph">
-            Subject exhibited <span className="char-redacted">unusual</span> behavior.
-          </div>
-          {hash % 4 === 0 && <div className="char-handwriting red-ink" style={{ bottom: 5, right: -10 }}>Liar.</div>}
-        </>
-      );
-    } else if (item.type === 'grid') {
-      baseClass = "char-paper-grid";
-      content = (
-        <>
-          {hasCrease && <div className="char-paper-crease" />}
-          <div className="border-b border-[var(--c-panel-border)] mb-1"><strong>COORDINATES:</strong></div>
-          <div className="ts-14 font-mono relative">
-            [{hash % 90} N, {hash % 180} W]
-            {hash % 3 === 0 && <div className="char-marker-circle" style={{ borderColor: '#000080' }} />}
-          </div>
-          <div className="char-barcode mt-2 h-4" />
-        </>
-      );
-    } else {
-      baseClass = "char-paper-scrap";
-      content = (
-        <>
-          <strong>EVIDENCE 0X4A-{hash % 10}</strong>
-          <div className="char-redacted mt-1">[EXPUNGED]</div>
-        </>
-      );
-    }
-
-    return (
-      <div className={`char-bg-item ${baseClass} ${isBurnt ? 'char-burnt-edges' : ''}`} {...extraAttrs}>
-        {content}
-      </div>
-    );
+    const titles: Record<string,string> = {a4:"人物笔记","yellow-note":"随手记","blue-note":"关系笔记",torn:"小记",grid:"备忘",scrap:"灵感"};
+    return <div className={`char-bg-item ida-decoration ida-decoration-${item.type}`}><strong>{titles[item.type] || "笔记"}</strong><span/><span/><span/></div>;
   }
 
   return (
-    <>
+    <div className="idol-archive-workspace">
       <PageShell
-        title={<strong style={{ fontWeight: 900, fontFamily: 'Impact, "Arial Black", sans-serif', fontSize: '1.15em', letterSpacing: '0.04em' }}>TARGET ARCHIVES</strong>}
+        title="档案库"
         leftAction={
           <button
             className="flex items-center justify-center w-[34px] h-[34px] rounded-full bg-black/5 text-[#666] hover:bg-black/10 transition-colors"
@@ -1140,9 +1055,10 @@ function CharListView({
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg>
           </button>
         }
-        className="[&_.page-body]:pb-0"
+        className="idol-archive-shell [&_.page-body]:pb-0"
         rightAction={
           <div className="flex items-center gap-2">
+            {isEditing && <button type="button" className="ida-decoration-toggle" onClick={()=>setShowDecorations(v=>!v)}>{showDecorations ? "隐藏装饰" : "显示装饰"}</button>}
             {isEditing && (
               <button
                 className="flex items-center justify-center w-[34px] h-[34px] rounded-full bg-black/5 text-[#666] hover:bg-black/10 transition-colors"
@@ -1171,27 +1087,27 @@ function CharListView({
             <div className="wt-bottom-pill">
               <button className="wt-bottom-pill-btn" onClick={() => { pendingActionRef.current = 'import'; setShowStylePicker(true); }}>
                 <IconImport />
-                <span>IMPORT</span>
+                <span>导入</span>
               </button>
               <button className="wt-bottom-pill-btn" onClick={() => { pendingActionRef.current = 'create'; setShowStylePicker(true); }}>
                 <IconPlus />
-                <span>CREATE</span>
+                <span>新建</span>
               </button>
               <button
                 className="wt-bottom-pill-btn"
                 onClick={() => setExportSheet({ scope: "world", picked: new Set(worldCharacters.map(c => c.id)), withMemories: true, busy: false })}
               >
                 <IconExport />
-                <span>EXPORT</span>
+                <span>导出</span>
               </button>
               {isEditing && (
-                <button className="wt-bottom-pill-btn" onClick={() => setIsPropsMenuOpen(true)}>
-                  <IconPlus /> <span>PROPS</span>
+                <button className="wt-bottom-pill-btn" onClick={() => {setShowDecorations(true);setIsPropsMenuOpen(true)}}>
+                  <IconPlus /> <span>装饰</span>
                 </button>
               )}
               <button className="wt-bottom-pill-btn wt-bottom-pill-active" onClick={() => setShowNpcGen(true)}>
                 <IconPlus />
-                <span>NPC</span>
+                <span>生成人物</span>
               </button>
               <input
                 ref={fileRef} type="file" accept=".json,.png,image/png,application/json" className="hidden"
@@ -1215,6 +1131,7 @@ function CharListView({
         onOpenEditor={() => setShowWorldEditor(true)}
         onOpenCreate={() => setShowNewWorld(true)}
       />
+      {!isEditing && !placementActive && <IdolArchiveHome people={worldCharacters} group={currentGroup} onSelect={onSelect} onMove={(id,x,y)=>onUpdateChars(characters.map(c=>c.id===id?{...c,canvasX:x,canvasY:y}:c))} />}
       <div
         ref={canvasElRef}
         className="char-infinite-canvas w-full flex-1 min-h-0 overflow-hidden relative select-none"
@@ -1229,7 +1146,7 @@ function CharListView({
             onClearPendingPlacement();
           }
         }}
-        style={{ touchAction: 'none', WebkitUserSelect: 'none', cursor: placementActive ? 'crosshair' : undefined }}
+        style={{ display: !isEditing && !placementActive ? 'none' : undefined, touchAction: 'none', WebkitUserSelect: 'none', cursor: placementActive ? 'crosshair' : undefined }}
       >
         {/* 拉线进行中的提示纸条 */}
         {linkFromId && (
@@ -1249,7 +1166,7 @@ function CharListView({
           <div className="char-infinite-container absolute w-0 h-0 origin-top-left" style={{ transform: `translate(${pan.x}px, ${pan.y}px) scale(${pan.zoom})` }}>
             {/* 连线原本在这里渲染，现在移到了下方，确保它覆盖在拍立得照片的上方 */}
 
-            {worldBgItems.map(item => (
+            {(showDecorations ? worldBgItems : []).map(item => (
               <DraggableNode
                 key={item.id} id={item.id} x={item.x} y={item.y} rot={item.rot} zIndex={item.zIndex}
                 onDragEnd={handleDragEndBg} isEditing={isEditing}
@@ -1283,10 +1200,10 @@ function CharListView({
               return (
                 <DraggableNode
                   key={char.id} id={char.id}
-                  x={char.canvasX} y={char.canvasY || 0} rot={char.canvasRot || 0} zIndex={char.canvasZIndex || 100}
+                  x={char.canvasX} y={char.canvasY || 0} rot={0} zIndex={char.canvasZIndex || 100}
                   onDragEnd={handleDragEndChar}
                   onClick={isEditing ? undefined : (e) => onSelect(char, e)}
-                  className={`char-polaroid char-polaroid-board-item ${ratioClass} ${linkFromId === char.id ? "wt-link-source" : ""}`}
+                  className={`char-polaroid char-polaroid-board-item idol-folder-${idx % 5} ${ratioClass} ${linkFromId === char.id ? "wt-link-source" : ""}`}
                   w={w}
                   isEditing={isEditing}
                   onDeleteIntent={(id) => setDeleteConfirm({ id, type: 'char' })}
@@ -1542,8 +1459,8 @@ function CharListView({
         <RelationLinkDialog
           fromName={nameById.get(linkTo.fromId) ?? "?"}
           toName={nameById.get(linkTo.toId) ?? "?"}
-          onConfirm={label => {
-            addCharacterWorldRelation(currentGroup.id, linkTo.fromId, linkTo.toId, label);
+          onConfirm={(label, reverse) => {
+            setPersonRelation(linkTo.fromId, linkTo.toId, label, reverse);
             setLinkTo(null);
           }}
           onCancel={() => setLinkTo(null)}
@@ -1742,15 +1659,15 @@ function CharListView({
               }}
             >
               <div className="absolute rounded-[1px]" style={{ top: -6, left: '50%', marginLeft: -18, width: 36, height: 12, background: 'rgba(255,255,255,0.55)', transform: 'rotate(0.5deg)' }} />
-              <div className="text-center ts-12 font-bold text-[#4a3f2f] mb-3 tracking-[1px] uppercase">Add Props</div>
+              <div className="text-center ts-12 font-bold text-[#4a3f2f] mb-3 tracking-[1px] uppercase">添加装饰</div>
               <div className="flex gap-1.5 justify-center flex-wrap">
                 {([
                   { type: 'a4' as const, label: '档案', w: 200, h: 280, scale: 0.16 },
                   { type: 'yellow-note' as const, label: '便签', w: 110, h: 80, scale: 0.28 },
-                  { type: 'blue-note' as const, label: '传票', w: 120, h: 90, scale: 0.26 },
+                  { type: 'blue-note' as const, label: '蓝色便签', w: 120, h: 90, scale: 0.26 },
                   { type: 'torn' as const, label: '碎片', w: 130, h: 70, scale: 0.24 },
                   { type: 'grid' as const, label: '网格', w: 150, h: 100, scale: 0.21 },
-                  { type: 'scrap' as const, label: '烧纸', w: 140, h: 50, scale: 0.24 },
+                  { type: 'scrap' as const, label: '小卡片', w: 140, h: 50, scale: 0.24 },
                 ]).map((item) => (
                   <button
                     key={item.type}
@@ -1770,7 +1687,7 @@ function CharListView({
                         transform: `scale(${item.scale})`, transformOrigin: 'top left',
                         width: item.w, height: item.h,
                       }}>
-                        <div className={`char-bg-item relative ${item.type === 'a4' ? 'char-paper-a4' :
+                        <div className={`char-bg-item ida-decoration ida-decoration-${item.type} relative ${item.type === 'a4' ? 'char-paper-a4' :
                           (item.type === 'yellow-note' || item.type === 'blue-note') ? 'char-sticky-note' :
                               item.type === 'torn' ? 'char-paper-torn' :
                                 item.type === 'grid' ? 'char-paper-grid' :
@@ -1821,7 +1738,7 @@ function CharListView({
           </div>
         </div>
       )}
-    </>
+    </div>
   );
 }
 
@@ -2021,6 +1938,7 @@ function CharArchiveView({
   onNotice?: (text: string) => void;
   dummy?: boolean;
 }) {
+  const [archiveTab, setArchiveTab] = useState("资料");
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleteBusy, setDeleteBusy] = useState(false);
   const [showUnsavedConfirm, setShowUnsavedConfirm] = useState<"back" | "cancel" | null>(null);
@@ -2366,14 +2284,16 @@ function CharArchiveView({
     previewGesture.current = null;
   }
 
-  const archiveFrame = (
+  const archiveFrame = !isEditing && !dummy ? (
+    <div className="idol-detail-preview"><div className="ida-cover"><div className="ida-avatar">{char.avatar ? <img src={char.avatar} alt=""/> : char.name.slice(0,1)}</div><h1>{char.name}</h1><p>{char.tags?.join(" · ") || "人物档案"}</p></div><div className="ida-tabs">{["资料","人物关系","历史版本"].map(tab=><button className={archiveTab===tab?"active":""} key={tab} onClick={()=>{if(tab==="历史版本")openVersionHistory();else setArchiveTab(tab)}}>{tab}</button>)}</div>{archiveTab==="人物关系"?<IdolPersonRelations characterId={char.id}/>:<><div className="ida-card">{[["KakaoTalk ID",char.wechatID||"未设置"],["时区",char.timeZone||"未设置"],["更新日期",char.updatedAt?.slice(0,10)||"—"]].map(([k,v])=><div className="ida-info" key={k}><span>{k}</span>{v}</div>)}</div>{[["完整人设",personaText],["性格",personality],["简量人设",briefPersona]].filter(([,v])=>v).map(([title,text])=><section className="ida-card" key={title}><h2>{title}</h2><p>{text}</p></section>)}</>}<div className="ida-actions"><button onClick={onExportJson}>导出 JSON</button><button onClick={onExportPng}>导出图片</button><button onClick={onEdit}>编辑档案</button><button onClick={()=>setConfirmDelete(true)}>删除人物</button></div>{confirmDelete&&<div className="ida-card"><p>删除人物及其私聊记录？此操作无法恢复。</p><div className="ida-actions"><button onClick={()=>setConfirmDelete(false)}>取消</button><button disabled={deleteBusy} onClick={async()=>{setDeleteBusy(true);try{await onDelete()}catch{onNotice("删除失败，请重试");setDeleteBusy(false)}}}>确认删除</button></div></div>}</div>
+  ) : (
       <div className="char-archive-frame">
         <div className="char-archive-stamp">CLASSIFIED</div>
 
         <div className="char-archive-header">
           <div>
-            <div className="char-archive-title">{isEditing ? "EDITING ARCHIVE" : "ARCHIVAL\nINFORMATION"}</div>
-            <div className="char-archive-subtitle">THE INTELLIGENCE DATABASE</div>
+            <div className="char-archive-title">{isEditing ? "编辑档案" : "人物档案"}</div>
+            <div className="char-archive-subtitle">人物资料</div>
           </div>
           <div className="char-archive-id">ID: {char.id.slice(0, 8).toUpperCase()}</div>
         </div>
@@ -2397,7 +2317,7 @@ function CharArchiveView({
               {isEditing && (
                 <div className="absolute inset-0 bg-black/30 flex flex-col items-center justify-center pointer-events-none text-white">
                   <IconCamera size={24} />
-                  <span className="ts-10 mt-1">{avatarBusy ? "Optimizing..." : "Change Photo"}</span>
+                  <span className="ts-10 mt-1">{avatarBusy ? "处理中…" : "更换头像"}</span>
                 </div>
               )}
             </div>
@@ -2420,13 +2340,13 @@ function CharArchiveView({
                   className="ts-10 px-3 py-1 bg-[#111111] text-white border-none rounded-full cursor-pointer hover:bg-[#222222] transition-colors"
                   onClick={() => setShowUrlInput((v) => !v)}
                 >
-                  Use IMG URL
+                  使用图片链接
                 </button>
                 {showUrlInput && (
                   <div className="flex gap-1 mt-1">
                     <input
                       className="flex-1 ts-10 p-1 border border-[var(--c-input-border)] rounded w-full min-w-0"
-                      placeholder="Image URL..."
+                      placeholder="粘贴图片链接…"
                       value={urlInput}
                       onChange={(e) => setUrlInput(e.target.value)}
                       onKeyDown={(e) => {
@@ -2446,11 +2366,11 @@ function CharArchiveView({
 
             {/* Name Box moved to the top of Right Column */}
             <div className="char-archive-name-box flex-1 flex flex-col justify-center text-left border-b border-[var(--c-panel-border)]" style={{ padding: "4px 6px 8px 6px" }}>
-              <span className="ts-8 text-[var(--c-text)] font-mono block mb-0.5">TARGET NAME / CODENAME</span>
+              <span className="ts-8 text-[var(--c-text)] font-mono block mb-0.5">人物姓名</span>
               {isEditing ? (
                 <input
                   className="char-archive-input ts-20 font-black w-full text-left bg-[var(--c-input)]/50 border border-dashed border-[#666] font-inherit tracking-[1px]"
-                  placeholder="Name or Codename"
+                  placeholder="填写人物姓名"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   style={{
@@ -2466,17 +2386,17 @@ function CharArchiveView({
 
             <div className="char-archive-row">
               <div className="char-archive-cell" style={{ flex: 0.8 }}>
-                <span className="char-archive-label">Status</span>
-                <span className="char-archive-val">{isEditing ? "EDITING" : "ACTIVE"}</span>
+                <span className="char-archive-label">状态</span>
+                <span className="char-archive-val">{isEditing ? "编辑中" : "已保存"}</span>
               </div>
               <div className="char-archive-cell" style={{ flex: 1.5 }}>
-                <span className="char-archive-label">WeChat</span>
+                <span className="char-archive-label">KakaoTalk ID</span>
                 <span className="char-archive-val select-text cursor-text tracking-[-0.5px]">
                   {char.wechatID || "N/A"}
                 </span>
               </div>
               <div className="char-archive-cell" style={{ flex: 1.1 }}>
-                <span className="char-archive-label">Update</span>
+                <span className="char-archive-label">更新日期</span>
                 <span className="char-archive-val">{char.updatedAt ? char.updatedAt.slice(0, 10).replace(/-/g, "/") : "N/A"}</span>
               </div>
             </div>
@@ -2486,7 +2406,7 @@ function CharArchiveView({
 
         <div className="char-archive-row">
           <div className="char-archive-cell" style={{ flex: 1.8 }}>
-            <span className="char-archive-label">Tags</span>
+            <span className="char-archive-label">人物标签</span>
             <div className="flex flex-wrap gap-2">
               {tags.map((t, i) => (
                 <div key={i} className="char-archive-tag">
@@ -2509,15 +2429,15 @@ function CharArchiveView({
                     value={tagInput}
                     onChange={e => setTagInput(e.target.value)}
                     onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleAddTag(); } }}
-                    placeholder="Add tag..."
+                    placeholder="添加标签…"
                   />
-                  <button onClick={handleAddTag} className="bg-[#4a3f2f] text-white border-none rounded-[2px] px-2 ts-10 cursor-pointer">ADD</button>
+                  <button onClick={handleAddTag} className="bg-[#4a3f2f] text-white border-none rounded-[2px] px-2 ts-10 cursor-pointer">添加</button>
                 </div>
               )}
             </div>
           </div>
           <div className="char-archive-cell" style={{ flex: 1.2 }}>
-            <span className="char-archive-label">Timezone</span>
+            <span className="char-archive-label">时区</span>
             {isEditing ? (
               <div className="char-timezone-picker">
                 <button
@@ -2525,11 +2445,11 @@ function CharArchiveView({
                   className="char-timezone-trigger"
                   onClick={openTimeZonePicker}
                 >
-                  {timeZone || "SYSTEM"}
+                  {timeZone || "跟随系统"}
                 </button>
               </div>
             ) : (
-              <span className="char-archive-val">{timeZone || "SYSTEM"}</span>
+              <span className="char-archive-val">{timeZone || "跟随系统"}</span>
             )}
           </div>
         </div>
@@ -2538,7 +2458,7 @@ function CharArchiveView({
           <div className="char-wall-settings">
             <div className="char-wall-settings-options">
               <div>
-                <div className="char-wall-settings-label">PHOTO WALL RATIO</div>
+                <div className="char-wall-settings-label">头像取景比例</div>
                 <div className="char-wall-settings-row">
                   {POLAROID_RATIOS.map((ratio, index) => (
                     <button
@@ -2553,7 +2473,7 @@ function CharArchiveView({
                 </div>
               </div>
               <div>
-                <div className="char-wall-settings-label">CARD SIZE</div>
+                <div className="char-wall-settings-label">排版大小</div>
                 <div className="char-wall-settings-row">
                   {([
                     ["random", "随机"],
@@ -2611,17 +2531,18 @@ function CharArchiveView({
           </div>
         )}
 
+        {!isEditing && <IdolPersonRelations characterId={char.id} />}
         {/* Persona Section (Full Width) */}
         <div className="char-archive-text-section border-b-0">
           <div className="char-log-entry mb-4">
             <div className="char-log-entry-header">
-              <span>PERSONA / TRAITS</span>
+              <span>完整人设</span>
             </div>
             {isEditing ? (
               <AutoResizingTextarea
                 value={persona}
                 onChange={setPersona}
-                placeholder="Describe background, personality..."
+                placeholder="填写背景与完整人设…"
                 minHeight={120}
                 style={{
                   width: "100%", background: "color-mix(in srgb, var(--c-input) 50%, transparent)",
@@ -2638,13 +2559,13 @@ function CharArchiveView({
           {(isEditing || personality.trim()) && (
             <div className="char-log-entry mb-4 border-t border-dashed border-[#999] pt-3">
               <div className="char-log-entry-header">
-                <span>PERSONALITY</span>
+                <span>性格</span>
               </div>
               {isEditing ? (
                 <AutoResizingTextarea
                   value={personality}
                   onChange={setPersonality}
-                  placeholder="Character personality traits..."
+                  placeholder="填写人物性格…"
                   minHeight={60}
                   style={{
                     width: "100%", background: "color-mix(in srgb, var(--c-input) 50%, transparent)",
@@ -2662,7 +2583,7 @@ function CharArchiveView({
           {(isEditing || briefPersona.trim()) && (
             <div className="char-log-entry mb-4 border-t border-dashed border-[#999] pt-3">
               <div className="flex items-center justify-between gap-2 mb-2 flex-wrap">
-                <span className="char-log-entry-header !mb-0">BRIEF PERSONA / 简量人设</span>
+                <span className="char-log-entry-header !mb-0">简量人设</span>
                 {isEditing && (
                   <button
                     className="ts-10 px-3 py-1 bg-[#111111] text-white border-none rounded-full cursor-pointer disabled:opacity-50 hover:bg-[#222222] transition-colors"
@@ -2718,8 +2639,8 @@ function CharArchiveView({
           ) : (
             !dummy && isEditing ? (
               <>
-                <button className="char-archive-btn char-archive-btn-danger" onClick={() => { if (isDirty()) { setShowUnsavedConfirm("cancel"); } else { onCancelEdit?.(); } }}>CANCEL</button>
-                <button className="char-archive-btn bg-[var(--c-text)] text-[var(--c-page-body-bg)] border-[var(--c-input-border)]" onClick={handleSave}>SAVE</button>
+                <button className="char-archive-btn char-archive-btn-danger" onClick={() => { if (isDirty()) { setShowUnsavedConfirm("cancel"); } else { onCancelEdit?.(); } }}>取消</button>
+                <button className="char-archive-btn bg-[var(--c-text)] text-[var(--c-page-body-bg)] border-[var(--c-input-border)]" onClick={handleSave}>保存</button>
               </>
             ) : !dummy && !isEditing ? (
               <>
@@ -2745,7 +2666,7 @@ function CharArchiveView({
     <PageShell
       title=""
       onBack={handleBack}
-      className="bg-[var(--c-page-body-bg)]"
+      className={`idol-archive-detail ${isEditing ? "ida-editing" : ""}`}
       rightAction={!isEditing ? (
         <div className="flex items-center gap-2">
           {isExisting && (
@@ -2767,7 +2688,7 @@ function CharArchiveView({
       {archiveFrame}
 
       {showSaveVersionConfirm && (
-        <div className="fixed inset-0 z-[10020] flex items-center justify-center bg-black/45 px-5" role="dialog" aria-modal="true" aria-label="保存角色卡">
+        <div className="ida-modal fixed inset-0 z-[10020] flex items-center justify-center bg-black/45 px-5" role="dialog" aria-modal="true" aria-label="保存角色卡">
           <div className="w-full max-w-sm rounded-2xl border border-[var(--c-panel-border)] bg-[var(--c-page-body-bg)] p-5 text-[var(--c-text)] shadow-2xl">
             <div className="text-base font-bold">保存角色卡</div>
             <p className="mt-2 ts-12 leading-relaxed opacity-75">
@@ -2808,7 +2729,7 @@ function CharArchiveView({
 
       {showVersions && (
         <div
-          className="fixed inset-0 z-[10020] flex items-end justify-center bg-black/45 sm:items-center sm:px-5"
+          className="ida-modal ida-history-modal fixed inset-0 z-[10020] flex items-end justify-center bg-black/45 sm:items-center sm:px-5"
           role="dialog"
           aria-modal="true"
           aria-label="角色卡历史版本"
@@ -2830,7 +2751,7 @@ function CharArchiveView({
               ) : (
                 <div className="flex flex-col gap-3">
                   {versions.map((version) => (
-                    <div key={version.id} className="rounded-xl border border-[var(--c-panel-border)] p-4">
+                    <div key={version.id} className="ida-version rounded-xl border border-[var(--c-panel-border)] p-4">
                       <div className="flex items-start justify-between gap-3">
                         <div className="min-w-0">
                           <div className="font-bold">V{version.version}</div>
@@ -2915,8 +2836,8 @@ function CharArchiveView({
         >
           <div className="char-timezone-sheet" role="dialog" aria-modal="true" aria-label="Timezone">
             <div className="char-timezone-sheet-header">
-              <span>TIMEZONE</span>
-              <button type="button" onClick={closeTimeZonePicker}>CLOSE</button>
+              <span>时区</span>
+              <button type="button" onClick={closeTimeZonePicker}>关闭</button>
             </div>
             <input
               className="char-timezone-search"
@@ -2936,8 +2857,8 @@ function CharArchiveView({
               autoFocus
             />
             <div className="char-timezone-sheet-actions">
-              <button type="button" onClick={clearTimeZone}>SYSTEM</button>
-              <button type="button" onClick={applyTimeZoneSearch}>DONE</button>
+              <button type="button" onClick={clearTimeZone}>跟随系统</button>
+              <button type="button" onClick={applyTimeZoneSearch}>完成</button>
             </div>
             <div className="char-timezone-options" role="listbox">
               {filteredTimeZoneOptions.length > 0 ? (
@@ -2955,11 +2876,11 @@ function CharArchiveView({
                     </button>
                   ))}
                   {hasMoreTimeZoneOptions && (
-                    <div className="char-timezone-more">MORE RESULTS</div>
+                    <div className="char-timezone-more">更多结果</div>
                   )}
                 </>
               ) : (
-                <div className="char-timezone-empty">NO MATCHES</div>
+                <div className="char-timezone-empty">没有匹配的时区</div>
               )}
             </div>
           </div>
@@ -3273,7 +3194,7 @@ function NpcGeneratorSheet({ characters, onClose, onConfirm }: {
 
   return (
     <div
-      className="wt-modal"
+      className="wt-modal ida-paper-modal"
       onClick={busy ? undefined : onClose}
     >
       <div

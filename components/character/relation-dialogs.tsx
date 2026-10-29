@@ -15,13 +15,14 @@ export function RelationLinkDialog({
 }: {
   fromName: string;
   toName: string;
-  onConfirm: (label: string) => void;
+  onConfirm: (label: string, reverse: string) => void;
   onCancel: () => void;
 }) {
   const [label, setLabel] = useState("");
+  const [reverse,setReverse] = useState("");
   const submit = () => {
-    if (!label.trim()) return;
-    onConfirm(label.trim());
+    if (!label.trim() || !reverse.trim()) return;
+    onConfirm(label.trim(),reverse.trim());
   };
   return (
     <div className="wt-modal" onClick={onCancel}>
@@ -41,10 +42,11 @@ export function RelationLinkDialog({
           onKeyDown={e => { if (e.key === "Enter") submit(); }}
           placeholder="如：哥哥 / 宿敌 / 上司"
         />
+        <p>{toName}是{fromName}的…</p><input className="wt-paper-input" value={reverse} onChange={e=>setReverse(e.target.value)} placeholder="填写对应的反向称谓，如：妹妹 / 下属"/>
         <div className="wt-paper-actions">
           <button type="button" className="wt-btn" onClick={onCancel}>取消</button>
           <span className="wt-paper-spacer" />
-          <button type="button" className="wt-btn wt-btn-primary" disabled={!label.trim()} onClick={submit}>牵线</button>
+          <button type="button" className="wt-btn wt-btn-primary" disabled={!label.trim() || !reverse.trim()} onClick={submit}>牵线</button>
         </div>
       </div>
     </div>

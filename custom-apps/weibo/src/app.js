@@ -265,6 +265,7 @@
     const identity = await api.user.getProfile({}).catch(() => null);
     S.identity = identity || { id: "default", name: "我" };
     const chars = await api.characters.list().catch(() => []);
+    S.unifiedRelations = await api.characters.readRelations({}).then(r => r && r.idolRelations).catch(() => null);
     // 只留绑定当前身份的角色（和微信的身份分区一致）
     const owners = await Promise.all(chars.map(c => api.user.getProfile({ characterId: c.id }).catch(() => null)));
     S.chars = chars.filter((c, i) => !owners[i] || !identity || owners[i].id === identity.id);
@@ -3870,7 +3871,10 @@
   /** 认识的 char：任意一方的判断里写了对方就算（互关是双向的） */
   function knownChars(id) {
     const mine = ((S.accounts[id] || {}).rel || {}).knows || [];
-    return activeChars().filter(c => c.id !== id && (mine.includes(c.id) || (((S.accounts[c.id] || {}).rel || {}).knows || []).includes(id)));
+    const unified = S.unifiedRelations;
+    return activeChars().filter(c => c.id !== id && (unified && unified.mainCharacterIds.includes(id) && unified.mainCharacterIds.includes(c.id)
+      ? unified.relations.some(r => (r.fromCharacterId === id && r.toCharacterId === c.id) || (r.toCharacterId === id && r.fromCharacterId === c.id))
+      : (mine.includes(c.id) || (((S.accounts[c.id] || {}).rel || {}).knows || []).includes(id))));
   }
   async function ensureCharRel(id) {
     // 第一次打开：判断认识谁 + 按人设写一批他关注的账号和粉丝（同一次调用）；老数据只有关系没有账号的，再补一次账号
@@ -3878,10 +3882,11 @@
     S[`_rel_${id}`] = true; refreshAll();
     const needRel = !(acc && acc.rel);
     const others = activeChars().filter(c => c.id !== id);
+    const unifiedMain = S.unifiedRelations && S.unifiedRelations.mainCharacterIds.includes(id);
     const askMe = needRel && isPublic(id) && isLove(id) === "secret";
     const instruction = [
       `当前时间：${nowText()}`,
-      needRel ? `按你（${ch.name}）的人设、世界书和记忆，判断下面这些人里你在现实中认识谁（同学、校友、同事、队友、朋友、家人……认识就算，不用很熟）：${others.map(c => c.name).join("、") || "无"}。` : "",
+      needRel && unifiedMain ? `档案库已确定你认识的人：${knownChars(id).map(c=>c.name).join("、") || "无"}。认识谁以这份记录为准，不另外推断。` : needRel ? `按你（${ch.name}）的人设、世界书和记忆，判断下面这些人里你在现实中认识谁（同学、校友、同事、队友、朋友、家人……认识就算，不用很熟）：${others.map(c => c.name).join("、") || "无"}。` : "",
       askMe ? `你是公众人物，和${herName()}在谈地下恋。如果你们在工作或生活上本来就有直接联系（比如她也是圈内人/同行/前后辈、你的经纪人或助理、同学同事、亲戚……），大号互关很正常；如果她是和你工作生活都没有直接交集的素人，大号关注她容易被扒。判断你的大号会不会关注她。` : "",
       `再写出你（${ch.name}）微博大号的关注列表和粉丝列表里的账号，要一眼看出是你的号：`,
       `- 关注 ${rand(8, 12)} 个：按你的人设、爱好、职业、学校和生活来（喜欢的歌手演员、游戏动漫官号、学校/公司/社团官号、兴趣博主、搞笑号……），要有你自己的特色，不要大众脸。`,
@@ -3897,7 +3902,7 @@
     const patch = {};
     if (needRel) {
       const b = parseBlocks(text, "关系")[0] || {};
-      const knows = none(b["认识"]) ? [] : String(b["认识"]).split(/[、,，\s]+/).map(n => charByName(n.trim())).filter(c => c && c.id !== id).map(c => c.id);
+      const knows = unifiedMain ? knownChars(id).map(c=>c.id) : none(b["认识"]) ? [] : String(b["认识"]).split(/[、,，\s]+/).map(n => charByName(n.trim())).filter(c => c && c.id !== id).map(c => c.id);
       patch.rel = { knows, followsMe: askMe ? !/否/.test(String(b["关注用户"] || "")) : true, at: nowIso() };
     }
     const fol = [], fans = [];

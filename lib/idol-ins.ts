@@ -1,3 +1,4 @@
+import { idolCharactersKnowEachOther, formatCharacterRelationsForPrompt } from "./character-world-storage";
 import { recordInsRomance } from "./idol-romance";
 /**
  * 爱豆小手机：ins。
@@ -300,9 +301,9 @@ export async function fillFeed(): Promise<number> {
     const res = await simpleLLMCall(config(), [
       { role: "system", content: `你在给一出韩国娱乐圈的戏补「她」ins 上这段时间的新内容。只输出 JSON：
 {"posts":[{"handle":"","at":"YYYY-MM-DD HH:mm","imgs":[{"desc":"画面一句话","who":["照片里有谁的 handle，自己就写自己的"]}],"cap":"配文","capZh":"","comments":[{"handle":"","text":"","zh":""}]}],"stories":[{"handle":"","at":"","text":"快拍上的字（可空）","img":"画面一句话（可空）"}],"dms":[{"handle":"","name":"","stranger":true,"at":"","lines":[{"text":"","zh":""}]}]}
-一、posts 和 stories：只写「她关注的号」。帖子必须有图，一条 1～5 张；配文多数十五个字以内，可以空、可以只有 emoji；想说一段话的人发快拍。${LANG}配文不是中文的给 capZh。帖子和快拍照这个人的性格、身份和最近在忙的事，有的人几天不发。练习生发得少、多是练习室、吃的、天空；出道爱豆的大号是营业的样子，小号才是私下。评论来自他的熟人或粉丝，一共写三到八条帖子、两到六条快拍；没有关注的号就都空着。
+一、posts 和 stories：只写「她关注的号」。帖子必须有图，一条 1～5 张；配文多数十五个字以内，可以空、可以只有 emoji；想说一段话的人发快拍。${LANG}配文不是中文的给 capZh。帖子和快拍照这个人的性格、身份和最近在忙的事，有的人几天不发。练习生发得少、多是练习室、吃的、天空；出道爱豆的大号是营业的样子，小号才是私下。评论者严格按下方每个号的关系候选选择；公开号可有路人粉丝，锁号仅已认识人物。评论来自他的熟人或粉丝，一共写三到八条帖子、两到六条快拍；没有关注的号就都空着。
 二、dms：有人主动给她发 ins 私信。陌生人（stranger:true，自己起 handle 和 name）最多 ${strangerMax} 个：她现在是「${tier}」${s.me.private ? "，号锁着" : "，号公开"}，陌生人是刷到她的帖子来搭话、问歌问地点、粉丝打招呼、偶尔奇怪的人；熟人只能是下面「可能主动来找她的人」里的，要有合情合理的事才来，大多数时候一个都不来。一个人一到三句。` },
-      { role: "user", content: `时间段：${fmt(from)} 到 ${fmt(now)}\n\n她关注的号：\n${seen.map(desc).join("\n") || "（还没有）"}\n\n可能主动来找她的人：\n${knownDm.map(a => desc(a) + lastDm(a)).join("\n") || "（没有）"}\n\n${idolWorldPrompt()}` },
+      { role: "user", content: `时间段：${fmt(from)} 到 ${fmt(now)}\n\n她关注的号：\n${seen.map(a=>desc(a)+relationCommentHint(s,a)).join("\n") || "（还没有）"}\n\n可能主动来找她的人：\n${knownDm.map(a => desc(a) + lastDm(a)).join("\n") || "（没有）"}\n\n${idolWorldPrompt()}` },
     ], { temperature: 0.9, label: "ins 刷新首页" });
     const j = pickJson<{ posts?: { handle?: string; at?: string; imgs?: { desc?: string; who?: string[] }[]; cap?: string; capZh?: string; likes?: number; comments?: { handle?: string; text?: string; zh?: string }[] }[]; stories?: { handle?: string; at?: string; text?: string; img?: string }[]; dms?: { handle?: string; name?: string; stranger?: boolean; at?: string; lines?: { text?: string; zh?: string }[] }[] }>(res.content);
     if (!j.posts && !j.stories && !j.dms) throw new Error(res.error || "AI 没写出来");
@@ -337,7 +338,7 @@ export async function fillFeed(): Promise<number> {
         const at = Math.min(now, Math.max(from, parseAt(p.at) ?? rnd(from, now)));
         const imgs = (p.imgs ?? []).filter(i => i?.desc).slice(0, 5).map(i => ({ desc: String(i.desc), who: whoIds(i.who, acc) }));
         if (!imgs.length) continue;
-        posts.push({ id: uid("post"), by: acc.id, at, imgs, cap: String(p.cap ?? ""), capZh: p.capZh ? String(p.capZh) : undefined, likes: insLikes(`${acc.handle}${at}`, acc.followers, !acc.private), comments: (p.comments ?? []).filter(c => c?.text).slice(0, 8).map(c => ({ by: String(c.handle || "user").replace(/^@/, ""), text: String(c.text), zh: c.zh ? String(c.zh) : undefined, at: at + rnd(5, 300) * MIN })) });
+        posts.push({ id: uid("post"), by: acc.id, at, imgs, cap: String(p.cap ?? ""), capZh: p.capZh ? String(p.capZh) : undefined, likes: insLikes(`${acc.handle}${at}`, acc.followers, !acc.private), comments: (p.comments ?? []).filter(c => c?.text && relationCommentAllowed(x, acc, c.handle, c.text)).slice(0, 8).map(c => ({ by: String(c.handle || "user").replace(/^@/, ""), text: String(c.text), zh: c.zh ? String(c.zh) : undefined, at: at + rnd(5, 300) * MIN })) });
         n++;
       }
       for (const st of j.stories ?? []) {
@@ -385,6 +386,27 @@ export function myComment(id: string, text: string) {
 
 const cmBusy = new Set<string>();
 /** 评论区：「让他回」= 楼主回她；「看更多评论」= 多出一批别人的评论 */
+
+/** 未授权主要人物不能借陌生人 handle 绕过；公开号的真正路人保留。 */
+function relationCommentAllowed(s: State, owner: InsAcc, handle: unknown, text?: string): boolean {
+  const h=String(handle || '').replace(/^@/,'').trim().toLowerCase();
+  const matched=Object.values(s.accs).filter(a=>a.handle.toLowerCase()===h || a.id===h || a.name.toLowerCase()===h);
+  const named=loadCharacters().filter(c=>c.name.toLowerCase()===h || c.id===h);
+  const ids=[...new Set([...matched.map(a=>a.charId),...named.map(c=>c.id)].filter((x):x is string=>Boolean(x)))];
+  if(!owner.charId)return true;
+  if(ids.length) {
+    if(!ids.every(id=>idolCharactersKnowEachOther(owner.charId!,id)))return false;
+    const mentions=[...(text || '').matchAll(/@([a-zA-Z0-9._]+)/g)].flatMap(m=>Object.values(s.accs).filter(a=>a.handle.toLowerCase()===m[1].toLowerCase()).map(a=>a.charId).filter((id):id is string=>Boolean(id)));
+    return ids.every(id=>mentions.every(target=>idolCharactersKnowEachOther(id,target)));
+  }
+  return !owner.private;
+}
+function relationCommentHint(s: State, owner: InsAcc): string {
+  if(!owner.charId)return '';
+  const allowed=Object.values(s.accs).filter(a=>a.charId && idolCharactersKnowEachOther(owner.charId!,a.charId));
+  return '\n可出场的已建档评论者（没有列出的主要人物不能评论，不能改名冒充路人）：'+allowed.map(a=>'@'+a.handle+' '+a.name).join('、')+'\n'+formatCharacterRelationsForPrompt(owner.charId)+'\n根据关系程度、性格和帖子内容决定是否互动，不必每条都评论。'+(owner.private?'锁号不生成路人评论。':'公开号允许真正的粉丝路人评论。');
+}
+
 export async function moreComments(id: string, mode: "reply" | "more"): Promise<void> {
   if (cmBusy.has(id)) return;
   cmBusy.add(id);
@@ -398,7 +420,7 @@ export async function moreComments(id: string, mode: "reply" | "more"): Promise<
     const tier = fameBand();
     const who = mine
       ? (post.wasPublic ? `她的号是公开的，她现在是「${tier}」：普通人就只有零星陌生人；小有人知会有人认出她；公众人物满屏粉丝。` : "她的号锁着，只有关注她的人看得到。") + `关注她的人：${s.followers.map(fid => s.accs[fid]).filter(Boolean).slice(0, 20).map(a => `@${a.handle}（${ownerName(a)}）`).join("、") || "还没有"}`
-      : `这是 @${owner.handle}（${owner.alt ? `${ownerName(owner)} 的私人小号，只有熟人看得到` : owner.name}${owner.verified ? "，认证公开号，评论多是粉丝" : ""}）的帖子。${p ? composePersona(p) : ""}`;
+      : `这是 @${owner.handle}（${owner.alt ? `${ownerName(owner)} 的私人小号，只有熟人看得到` : owner.name}${owner.verified ? "，认证公开号，评论多是粉丝" : ""}）的帖子。${p ? composePersona(p) : ""}${relationCommentHint(s, owner)}`;
     const res = await simpleLLMCall(config(), [
       { role: "system", content: mode === "reply"
         ? mine
@@ -408,7 +430,7 @@ export async function moreComments(id: string, mode: "reply" | "more"): Promise<
       { role: "user", content: `帖子：${post.imgs.map(i => i.desc).join("；")}\n配文：${post.cap || "（没写）"}\n已有评论：\n${post.comments.slice(-15).map(c => `@${c.by}：${c.text}`).join("\n") || "（还没有）"}\n\n${idolWorldPrompt()}` },
     ], { temperature: 0.9, label: mode === "reply" ? "ins 评论回复" : "ins 更多评论" });
     const j = pickJson<{ comments?: { handle?: string; text?: string; zh?: string }[] }>(res.content);
-    const add = (j.comments ?? []).filter(c => c?.text && String(c.handle).replace(/^@/, "") !== s.me.handle).slice(0, 8).map((c, i) => ({ by: String(c.handle || owner.handle).replace(/^@/, ""), text: String(c.text), zh: c.zh ? String(c.zh) : undefined, at: Date.now() + i * 1000 }));
+    const add = (j.comments ?? []).filter(c => c?.text && relationCommentAllowed(loadIns(), owner, c.handle, c.text) && String(c.handle).replace(/^@/, "") !== s.me.handle).slice(0, 8).map((c, i) => ({ by: String(c.handle || owner.handle).replace(/^@/, ""), text: String(c.text), zh: c.zh ? String(c.zh) : undefined, at: Date.now() + i * 1000 }));
     if (!add.length) throw new Error(res.error || "没人评论");
     patch(x => ({ ...x, posts: x.posts.map(q => q.id === id ? { ...q, comments: [...q.comments, ...add] } : q) }));
   } finally { cmBusy.delete(id); }

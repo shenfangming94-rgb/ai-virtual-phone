@@ -1,5 +1,8 @@
 "use client";
 
+import { loadCharacterWorldGroups } from "./character-world-storage";
+import { loadProfiles } from "./idol-people";
+
 import type { CustomAppPermission, CustomAppPromptProfile, InstalledCustomApp } from "./custom-app-types";
 import {
   appendCustomAppTimelineEntry,
@@ -1444,6 +1447,9 @@ export function writeCustomAppCharacterState(app: InstalledCustomApp, record: Re
 export function readCustomAppCharacterRelations(record: Record<string, unknown>): Record<string, unknown> {
   const characterId = cleanText(record.characterId ?? record.id, 160);
   const characters = loadCharacters();
+  const profiles = loadProfiles(), contactIds = new Set(loadChatContacts().map(c=>c.characterId));
+  const mainCharacterIds = characters.filter(c=>profiles[c.id]?.layer === "main" && contactIds.has(c.id)).map(c=>c.id);
+  const idolRelations = { mainCharacterIds, relations: loadCharacterWorldGroups().flatMap(g=>g.relations).filter(r=>mainCharacterIds.includes(r.fromCharacterId)&&mainCharacterIds.includes(r.toCharacterId)) };
   const selected = characterId ? characters.find(item => item.id === characterId) ?? null : null;
   const identities = loadUserIdentities();
   const userIdentity = resolveUserIdentity(characterId) ?? identities[0] ?? null;
@@ -1458,10 +1464,12 @@ export function readCustomAppCharacterRelations(record: Record<string, unknown>)
       },
       user: userIdentity ? serializeUserProfile(userIdentity) : null,
       stateValues: getLatestCharacterStateValues(selected.id),
+      idolRelations,
       relationText: [selected.persona, selected.personality].filter(Boolean).join("\n"),
     };
   }
   return {
+    idolRelations,
     characters: characters.map(character => ({
       id: character.id,
       name: character.name,

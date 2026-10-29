@@ -418,6 +418,8 @@ async function buildNPCReactionMessages(
     // Assemble via shared pipeline (full world book + character context)
     const llmMessages = assemblePromptPayload(input);
 
+    const allowed = loadCharacters().filter(c => isMomentRealCharacterAllowedForPost(post,c.id,character.id));
+    llmMessages.push({role:"system",content:"主要人物互动只从以下候选选择："+allowed.map(c=>c.name).join("、")+"。未列出的人物不认识楼主，不得换名冒充路人。结合关系程度、性格和帖子内容决定是否互动，认识不要求每条互动。"});
     llmMessages.push(await buildMomentSnapshotMessage(post, character.id, apiConfig, "npc_reaction_post"));
 
     return {
@@ -708,7 +710,7 @@ function triggerAIReactionsForPost(post: MomentPost, excludeAuthorId: string): v
     const contacts = loadChatContacts();
 
     const visibleChars = contacts
-        .filter(c => post.visibility.includes(c.characterId) && c.characterId !== excludeAuthorId)
+        .filter(c => post.visibility.includes(c.characterId) && c.characterId !== excludeAuthorId && isMomentRealCharacterAllowedForPost(post,c.characterId))
         .map(c => ({
             contact: c,
             char: chars.find(ch => ch.id === c.characterId),
@@ -740,6 +742,7 @@ function triggerAIReactionsForPost(post: MomentPost, excludeAuthorId: string): v
 }
 
 async function generateAIComment(post: MomentPost, character: Character): Promise<boolean> {
+    if (!isMomentRealCharacterAllowedForPost(post,character.id)) return false;
     const resolved = await resolveAssemblerInput(character.id, "comment");
     if (!resolved) return false;
 
@@ -774,7 +777,7 @@ async function generateAIComment(post: MomentPost, character: Character): Promis
         .replace(/^["\s]+|["\s]+$/g, "")
         .trim();
 
-    if (!cleaned) return false;
+    if (!cleaned || !isMomentRealCharacterAllowedForPost(post,character.id)) return false;
 
     const userName = getUserName(character.id);
     const chars = loadCharacters();
@@ -927,6 +930,7 @@ async function triggerCharacterReply(
     characterId: string,
     newComments: MomentComment[],
 ): Promise<boolean> {
+    if (!isMomentRealCharacterAllowedForPost(post,characterId)) return false;
     const visibleNewComments = getVisibleMomentCommentsForCharacter(post, characterId, newComments);
     if (visibleNewComments.length === 0) return false;
 
@@ -1032,6 +1036,7 @@ async function triggerCharacterReply(
             continue;
         }
 
+        if (!isMomentRealCharacterAllowedForPost(post,characterId)) continue;
         addMomentComment({
             postId: post.id,
             authorType: "character",

@@ -1,5 +1,6 @@
 "use client";
 
+import { relationTick } from "@/lib/idol-relations";
 import { romanceTick } from "@/lib/idol-romance-reactions";
 
 import { GlobalCallHost } from "./chat/global-call-host";
@@ -1145,6 +1146,7 @@ export function DesktopShell({ initialThemeProfile, initialThemeAssets }: Deskto
       try { yearlyTick(idolNotify); } catch { /* 同上 */ }
       try { searchTick(idolNotify); } catch { /* 同上 */ }
       try { mailAppTick(idolNotify); } catch { /* 同上 */ }
+      void relationTick();
       try { romanceTick(); } catch { /* 恋情处理失败不影响其他App */ }
       try { insTick(idolNotify); } catch { /* 同上 */ }
       try { ytTick(idolNotify); } catch { /* 同上 */ }
@@ -1159,7 +1161,7 @@ export function DesktopShell({ initialThemeProfile, initialThemeAssets }: Deskto
       void Promise.all([import("@/lib/idol-weather"), import("@/lib/custom-app-storage"), import("@/lib/idol-weather-life")]).then(([w, apps, life]) => { (window as unknown as { __idolWeatherTest?: unknown }).__idolWeatherTest = { w, apps, life }; });
       void import("@/lib/idol-reminders").then(m => { (window as unknown as { __idol?: unknown }).__idol = { checkNode: m.checkNode, leaveNode: m.leaveNode, jump: m.jumpWorld, cap: m.capJump, switchClock: m.switchWorldClockMode, run }; });
       void Promise.all([import("@/lib/idol-leave"), import("@/lib/chat-storage"), import("@/lib/idol-casual")]).then(([l, cs, ca]) => { (window as unknown as { __idolLeave?: unknown }).__idolLeave = { casual: ca.casualTick, nudge: l.nudgeLeave, afterRank: l.afterMonthlyRank, tick: l.leaveTick, dm: (id: string) => { const s = cs.createOrGetSession(id); cs.pushChatMessage({ sessionId: s.id, role: "assistant", content: "嗨", status: "sent" }); }, group: (name: string, ids: string[]) => cs.createGroupSession(name, ids).id }; });
-      void Promise.all([import("@/lib/settings-storage"), import("@/lib/idol-people"), import("@/lib/idol-world"), import("@/lib/story-storage"), import("@/lib/chat-storage"), import("@/lib/follow-up-service"), import("@/lib/idol-career"), import("@/lib/idol-family"), import("@/lib/idol-family-data"), import("@/lib/idol-saves"), import("@/lib/trainee-card")]).then(([settings, people, world, story, chat, follow, career, family, familyData, saves, trainee]) => { (window as unknown as { __idolTest?: unknown }).__idolTest = { settings, people, world, story, chat, follow, career, family, familyData, saves, trainee }; });
+      void Promise.all([import("@/lib/settings-storage"), import("@/lib/idol-people"), import("@/lib/idol-world"), import("@/lib/story-storage"), import("@/lib/chat-storage"), import("@/lib/follow-up-service"), import("@/lib/idol-career"), import("@/lib/idol-family"), import("@/lib/idol-family-data"), import("@/lib/idol-saves"), import("@/lib/trainee-card"), import("@/lib/idol-relations"), import("@/lib/character-world-storage"), import("@/lib/character-storage"), import("@/lib/idol-ins")]).then(([settings, people, world, story, chat, follow, career, family, familyData, saves, trainee, relations, characterWorlds, characters, ins]) => { (window as unknown as { __idolTest?: unknown }).__idolTest = { settings, people, world, story, chat, follow, career, family, familyData, saves, trainee, relations, characterWorlds, characters, ins }; });
       void Promise.all([import("@/lib/idol-groups"), import("@/lib/idol-calendar"), import("@/lib/idol-search")]).then(([g, c, se]) => { (window as unknown as { __idolGroups?: unknown }).__idolGroups = { load: g.loadGroups, month: c.generateWorldMonth, site: se.buildSite }; });
     }
     const timer = window.setInterval(run, 5000);

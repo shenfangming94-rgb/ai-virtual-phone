@@ -140,6 +140,7 @@ const PRIMARY_DATA_MODULES: DataModuleDefinition[] = [
           "idol_yearly_v1",
           "idol_birthday_v1",
           "idol_romance_v1",
+          "ai_phone_character_worlds_v1",
           "idol_mail_v1",
         ],
       },

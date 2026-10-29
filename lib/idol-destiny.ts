@@ -14,7 +14,7 @@ import { simpleLLMCall } from "./api-helpers";
 import { loadApiConfigs, loadBindingConfig, resolveBinding } from "./settings-storage";
 import { addToCalendar, companyOf, loadCareer, saveCareer, type CareerNode } from "./idol-career";
 import { describeTrainee, loadTraineeCard } from "./trainee-card";
-import { RELATIONS, createPerson, draftPerson, draftFields, emptyProfile, getProfile, loadProfiles, relationOf, rollFace, saveProfile, type Relation } from "./idol-people";
+import { RELATIONS, createPerson, draftPerson, draftFields, emptyProfile, getProfile, loadProfiles, relationOf, rollFace, kinshipOf, saveProfile, type Relation } from "./idol-people";
 import { fameTotal } from "./idol-fame";
 import { genKakaoId, queueFriendRequest } from "./idol-kakao";
 import { loadGrades, SUBJECTS, type Subject } from "./idol-starroad";
@@ -271,13 +271,17 @@ async function personFor(c: Destiny): Promise<Character | null> {
     try { const id = (JSON.parse(kvGet("idol_kakao_v1") || "null") as { teacherId?: string } | null)?.teacherId; const t = loadCharacters().find(x => x.id === id); if (t) return t; } catch { /* 没有室长就当新人 */ }
   }
   if (c.via === "family") {
-    const fam = loadCharacters().find(x => /妈妈|爸爸|母亲|父亲|家人|姐姐|哥哥|外婆|奶奶/.test(`${x.name}${getProfile(x.id).role}`) && getProfile(x.id).group !== "公司");
+    const family = loadCharacters().filter(x => kinshipOf(getProfile(x.id)) !== "none");
+    const name = c.who?.name || "";
+    const fam = family.find(x => x.name === name)
+      ?? family.find(x => name && getProfile(x.id).role.includes(name))
+      ?? (family.length === 1 ? family[0] : undefined);
     if (fam) return fam;
   }
   const have = findPerson(c.who?.name ?? "");
   if (have) return have;
   const name = c.who?.name || "";
-  const d = await draftPerson(`${c.who?.role || "跟她命运里一件事有关的人"}。他找她是因为：${c.seed}${name ? `。名字叫${name}` : ""}`, rollFace());
+  const d = await draftPerson(`${c.who?.role || "跟她命运里一件事有关的人"}。他找她是因为：${c.seed}${name ? `。名字叫${name}` : ""}`, rollFace(), undefined, c.via === "family" ? { family: true } : undefined);
   const ch = createPerson(name || d.name || "陌生人", {
     ...emptyProfile(""), ...draftFields(d), layer: "main", role: d.role || c.who?.role || "", group: c.via === "family" ? "家人" : d.group || "",
     ...(c.via === "family" ? { met: true } : {}),

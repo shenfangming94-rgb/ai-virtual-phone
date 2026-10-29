@@ -240,7 +240,7 @@ async function plan(members: { id: string; name: string; age: string; about: str
 "ddayGroup":{"who":"成员名字","text":"出道当天早上在群里说的第一句"},
 "momMsg":"出道当天早上${me}的妈妈发来的 KakaoTalk",
 "news":{"title":"出道当天 NAVER 新闻标题","text":"新闻摘要一句"}}
-规矩：每人一到两个定位；要有队长、主唱、主舞、门面、忙内（忙内是年龄最小的）；照每个人的特长和性格定，${me}的定位照她擅长的；d2React、d3React 各两三个人，用自己的说话方式，口语、短；队名还没公布前的话里不提队名。`,
+规矩：已给定的成员国籍必须保留，不按名字猜国籍；每人一到两个定位；要有队长、主唱、主舞、门面、忙内（忙内是年龄最小的）；照每个人的特长和性格定，${me}的定位照她擅长的；d2React、d3React 各两三个人，用自己的说话方式，口语、短；队名还没公布前的话里不提队名。`,
     },
     { role: "user", content: `公司：${company}\n暂定名：${codename}\n\n成员：\n${members.map(m => `- ${m.name}（${m.age || "?"}岁）${m.about}`).join("\n")}` },
   ], { temperature: 0.9, label: "出道组" });
@@ -279,7 +279,7 @@ async function formTeam(): Promise<void> {
   const profiles = loadProfiles();
   const raw = [
     { id: ME, name: card?.name || "我", age: String(Math.max(15, new Date().getFullYear() - parseInt(card?.birthday ?? "2000", 10))), about: `（她本人）擅长：${(card?.talents ?? []).join("、")}；${card?.looks ?? ""}；国籍 ${card?.nationality ?? ""}` },
-    ...mates.map(m => ({ id: m.id, name: m.name, age: profiles[m.id]?.age ?? "", about: `${profiles[m.id]?.role ?? ""}；${(profiles[m.id]?.privateLines ?? []).slice(0, 2).join("；")}` })),
+    ...mates.map(m => ({ id: m.id, name: m.name, age: profiles[m.id]?.age ?? "", about: `${profiles[m.id]?.role ?? ""}；国籍 ${profiles[m.id]?.nationality || "未写"}；${(profiles[m.id]?.privateLines ?? []).slice(0, 2).join("；")}` })),
   ];
   const p = await plan(raw, company, d.codename, manager.name, teacher?.name ?? "室长");
   const members: DebutMember[] = raw.map(m => {
@@ -287,7 +287,7 @@ async function formTeam(): Promise<void> {
     const prof = profiles[m.id];
     return {
       id: m.id, name: m.name, ko: got?.ko ?? "",
-      nation: m.id === ME ? (card?.nationality || got?.nation || "") : (got?.nation || "韩国"),
+      nation: m.id === ME ? (card?.nationality || got?.nation || "") : (prof?.nationality || got?.nation || ""),
       birthday: m.id === ME ? (card?.birthday ?? "").replace(/-/g, ".") : birthYear(prof?.age ?? "", prof?.birthday),
       positions: got?.positions?.length ? got.positions : [{ zh: "副唱", ko: "서브보컬" }],
     };

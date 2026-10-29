@@ -144,7 +144,7 @@ export async function generateVnCompletion(
     rawOutput = ex.text;
     const chId = chapterIdOf(sceneChapter);
     const host = chId ? stageHost(chId) : null;
-    idol = { ...(host ? applySceneTagsTo(host, ex.tags) : { added: [], notes: [] }), closing: ex.tags.closing };
+    idol = { ...(host ? applySceneTagsTo(host, ex.tags, ex.text) : { added: [], notes: [] }), closing: ex.tags.closing };
     rawOutput = normalizeStageRaw(rawOutput);
     // 认识的人开口说话了但 AI 忘了写 [出场]：也算进这一场
     if (host) {

@@ -254,7 +254,7 @@ export async function generateStoryCompletion(
     parsed.renderedText = rendered.text;
     const groupId = sceneGroupIdOf(history);
     const sessionId = history[history.length - 1]?.sessionId;
-    const applied = groupId && sessionId ? applySceneTags(groupId, sessionId, raw.tags) : { added: [], notes: [] };
+    const applied = groupId && sessionId ? applySceneTags(groupId, sessionId, raw.tags, raw.text) : { added: [], notes: [] };
     idol = { ...applied, closing: raw.tags.closing };
   }
   return {

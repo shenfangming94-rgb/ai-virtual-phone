@@ -14,7 +14,7 @@ import { addChatContact, createGroupSession, createOrGetSession, loadChatContact
 import { addFriendRequest, dispatchFriendRequestUpdated, loadFriendRequests, clearRequestsForCharacter } from "./friend-request-storage";
 import { PENDING_REPLY_PREFIX } from "./friend-request-engine";
 import { resolveUserIdentity, loadApiConfigs, loadBindingConfig, resolveBinding } from "./settings-storage";
-import { createPerson, emptyProfile, fmtDay, getProfile, saveProfile, draftPerson, completeCard, rollFace, rollSecretKind, draftFields, decayRelations, herAge } from "./idol-people";
+import { createPerson, emptyProfile, fmtDay, getProfile, saveProfile, draftPerson, completeCard, rollFace, rollSecretKind, draftFields, decayRelations, herAge, loadProfiles } from "./idol-people";
 import { companyOf, loadCareer, saveCareer, type CareerNode } from "./idol-career";
 import { simpleLLMCall } from "./api-helpers";
 import { loadTraineeCard } from "./trainee-card";
@@ -137,18 +137,35 @@ export function kakaoPromptLine(): string {
 // ── 她搜 ID 加人 ──
 
 /** 搜到的人卡太薄（只有名字身份）：照模板补全，返回补好的档案 */
+const fleshing = new Map<string, Promise<void>>();
+
 export async function fleshOut(charId: string, reroll = false): Promise<void> {
+  const pending = fleshing.get(charId);
+  if (pending) return pending;
   const c = loadCharacters().find(x => x.id === charId);
   if (!c) return;
   const p = getProfile(charId);
   if (!reroll && p.privateLines.length) return;
-  const d = await completeCard(p, c.name, reroll ? rollSecretKind() : undefined);
-  const f = draftFields(d, reroll ? undefined : p.secret);
-  saveProfile({ ...p, ...f, role: d.role || p.role, group: d.group || p.group, age: d.age || p.age, face: reroll ? rollFace() : p.face, ...(reroll ? { rolled: false } : {}) });
+  const face = reroll ? rollFace() : p.face;
+  const task = (async () => {
+    const d = await completeCard({ ...p, face }, c.name, reroll ? rollSecretKind() : undefined);
+    // 补全期间可能已经加好友或新增相处记录，保存时使用最新状态。
+    if (!loadCharacters().some(x => x.id === charId)) return;
+    const current = getProfile(charId);
+    const f = draftFields(d, reroll ? undefined : current.secret);
+    const next = { ...current, ...f, role: d.role || current.role, group: d.group || current.group, age: d.age || current.age, face: current.face !== p.face ? current.face : face };
+    for (const key of Object.keys(f) as (keyof typeof f)[]) {
+      if (JSON.stringify(current[key]) !== JSON.stringify(p[key])) Object.assign(next, { [key]: current[key] });
+    }
+    saveProfile(next);
+  })();
+  fleshing.set(charId, task);
+  try { await task; } finally { if (fleshing.get(charId) === task) fleshing.delete(charId); }
 }
 
 export function needsFleshOut(charId: string): boolean {
-  return getProfile(charId).privateLines.length === 0;
+  const p = loadProfiles()[charId];
+  return Boolean(p && p.privateLines.length === 0);
 }
 
 function promote(charId: string) {
@@ -183,6 +200,7 @@ export function addByKakaoId(char: Character, greeting: string) {
 
 /** 接受申请时：升成主要人物，返回「在哪认识」那一句 */
 export function onKakaoAccepted(charId: string): string {
+  if (!loadProfiles()[charId]) return "";
   promote(charId);
   return metLine(charId);
 }

@@ -2,6 +2,7 @@
 // 群里认识、还没加好友的人：用户点「添加到通讯录」直接加；角色在群里聊投缘了
 // 也会偶尔主动发好友申请（走「新的朋友」，被拒最多再来 3 次）。
 
+import { onKakaoAccepted } from "./idol-kakao";
 import { loadCharacters } from "./character-storage";
 import {
     addChatContact,
@@ -44,6 +45,7 @@ export function addFriendFromGroup(characterId: string, groupName: string): Chat
     const char = loadCharacters().find(c => c.id === characterId);
     if (!char) return null;
     addChatContact(characterId);
+    onKakaoAccepted(characterId);
     clearRequestsForCharacter(characterId);
     dispatchFriendRequestUpdated();
     const session = createOrGetSession(characterId);

@@ -37,6 +37,9 @@ import {
   HEARTS,
   RELATIONS,
   draftFields,
+  KINSHIP_LABEL,
+  kinshipOf,
+  type Kinship,
   loadCharm,
   relationOf,
   saveCharm,
@@ -483,6 +486,7 @@ function CardView({ data, id, onBack, onEdit, onNotice }: { data: Data; id: stri
           <hr />
           <div className="ct-k">关系</div>
           <div className="ct-v">{relationOf(p)}</div>
+          {kinshipOf(p) !== "none" ? <><hr /><div className="ct-k">与你的亲属关系</div><div className="ct-v">{KINSHIP_LABEL[kinshipOf(p)]}</div></> : null}
           {p.birthday ? <><hr /><div className="ct-k">生日</div><div className="ct-v">{p.birthday.split("-").map(x => String(parseInt(x, 10) || x)).join("月")}日</div></> : null}
         </div>
 
@@ -646,6 +650,7 @@ function EditView({ data, id, onDone, onDeleted, onNotice }: { data: Data; id: s
         <Field label="MBTI"><input value={p.mbti ?? ""} onChange={e => set("mbti", e.target.value.toUpperCase())} placeholder="只是参考" /></Field>
         <Field label="身高（cm）"><input type="number" value={p.heightCm ?? ""} onChange={e => set("heightCm", e.target.value ? Number(e.target.value) : undefined)} /></Field>
         <Field label="外貌"><textarea rows={4} value={p.appearance ?? ""} onChange={e => set("appearance", e.target.value)} /></Field>
+        <Field label="与你的亲属关系"><select className="ct-select" value={kinshipOf(p)} onChange={e => set("kinship", e.target.value as Kinship)}>{Object.entries(KINSHIP_LABEL).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></Field>
         <Field label="分组">
           <input value={p.group} list="ct-groups" onChange={e => set("group", e.target.value)} placeholder="公司 / 同期练习生 / 家和老朋友…" />
           <datalist id="ct-groups">{groups.map(g => <option key={g} value={g} />)}</datalist>
@@ -707,7 +712,7 @@ function EditView({ data, id, onDone, onDeleted, onNotice }: { data: Data; id: s
           </select>
         </Field>
         <Field label="心动">
-          <select className="ct-select" value={p.canCrush && p.heart ? p.heart : ""} onChange={e => { const v = e.target.value as Heart | ""; setP(prev => ({ ...prev, canCrush: Boolean(v), heart: v || undefined, rolled: true })); }}>
+          <select className="ct-select" disabled={kinshipOf(p) !== "none"} value={p.canCrush && p.heart ? p.heart : ""} onChange={e => { const v = e.target.value as Heart | ""; setP(prev => ({ ...prev, canCrush: Boolean(v), heart: v || undefined, rolled: true })); }}>
             <option value="">没有心动线</option>
             {HEARTS.map(h => <option key={h} value={h}>{h}</option>)}
           </select>

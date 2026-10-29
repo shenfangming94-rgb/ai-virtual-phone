@@ -111,7 +111,7 @@ function SceneView({ id, onBack, onNotice }: { id: string; onBack: () => void; o
     try {
       const r = await continueScene(s);
       const fresh = getScene(s.id) ?? s;
-      const added = addNewFaces(fresh, r.newFaces);
+      const added = addNewFaces(fresh, r.newFaces, r.text);
       if (r.minutes > 0) shiftWorldTime(r.minutes * 60e3);
       fresh.lines = [...fresh.lines, line("story", r.text)];
       saveScene(fresh);

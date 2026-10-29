@@ -41,6 +41,21 @@ export type Secret = { kind: SecretKind; text: string; revealed?: { at: number; 
 export type Charm = "normal" | "likable" | "everyone";
 export const CHARM_LABEL: Record<Charm, string> = { normal: "普通", likable: "招人喜欢", everyone: "万人迷" };
 
+export const KINSHIP_LABEL = { none: "无亲属关系", blood: "血缘亲属", adoptive: "收养亲属", step: "继亲", nominal: "名义亲属" } as const;
+export type Kinship = keyof typeof KINSHIP_LABEL;
+
+/** 以明确记录为准，兼容旧卡中明确的亲属身份；称呼哥哥姐姐本身不作判定。 */
+export function kinshipOf(p: Pick<IdolProfile, "kinship" | "role" | "group">): Kinship {
+  if (p.kinship && p.kinship !== "none" && Object.prototype.hasOwnProperty.call(KINSHIP_LABEL, p.kinship)) return p.kinship;
+  const role = (p.role || "").replace(/(?:像|如同|好像)?亲(?:哥哥|姐姐|弟弟|妹妹)(?:一样|一般|似的|般)/g, "");
+  if (/养父|养母|养子|养女|收养|领养/.test(role)) return "adoptive";
+  if (/继父|继母|继兄|继姐|继弟|继妹|重组家庭/.test(role)) return "step";
+  if (/干爸|干妈|干爹|干娘|干哥|干姐|义父|义母|义兄|义姐|结拜|名义.{0,4}亲/.test(role)) return "nominal";
+  if (/亲生|她的爸爸|她的妈妈|亲哥|亲姐|亲弟|亲妹|同父异母|同母异父|同父同母|堂[兄弟姐妹哥]|表[兄弟姐妹哥]|远房亲|远亲|父亲|母亲|爷爷|奶奶|外公|外婆|祖父|祖母|伯父|伯母|叔父|姑父|姑妈|舅舅|舅妈|侄子|侄女|外甥/.test(role)) return "blood";
+  if (/^(家人|亲人|亲属|家庭)$/.test(p.group || "")) return /爸|妈|兄|弟|姐|妹|祖|孙|叔|姨|姑|舅|侄|甥/.test(role) ? "blood" : "nominal";
+  return "none";
+}
+
 export type IdolProfile = {
   charId: string;
   /** main = 主要人物（进通讯录、能私聊），background = 背景人物 */
@@ -51,6 +66,7 @@ export type IdolProfile = {
   role: string;
   age: string;
   nationality?: string;
+  kinship?: Kinship;
   heightCm?: number;
   appearance?: string;
   romanceStyle?: string;
@@ -62,6 +78,9 @@ export type IdolProfile = {
   privateLines: string[];
   speech: string;
   taboo: string;
+  /** 首次出场原文，用于补全时继承当场已经确定的资料 */
+  introducedIn?: string;
+  sceneFacts?: ScenePersonFacts;
   /** 跟你：见面后才有 */
   withYou: string;
   met: boolean;
@@ -87,6 +106,8 @@ export type IdolProfile = {
   /** 想不想离开公司（只有同公司练习生有，规矩在 idol-leave.ts） */
   leave?: LeaveInfo;
 };
+
+export type ScenePersonFacts = Partial<Pick<IdolProfile, "gender" | "age" | "nationality" | "birthday" | "mbti" | "heightCm" | "appearance" | "isIdol" | "kinship">>;
 
 export type LeaveInfo = {
   /** 0～10，越高越想走，她看不到 */
@@ -155,6 +176,9 @@ export function composePersona(p: IdolProfile): string {
   const out: string[] = [];
   const head = [p.role, p.nationality ? `国籍：${p.nationality}` : "", p.gender, p.age ? `${p.age}岁` : "", p.birthday ? `生日 ${p.birthday.replace("-", "月")}日` : "", p.mbti ? `MBTI ${p.mbti}（只是参考，不刻板）` : ""].filter(Boolean).join("，");
   if (head) out.push(`【身份】${head}`);
+  const kinship = kinshipOf(p);
+  if (kinship !== "none") out.push(`【与你的亲属关系】${KINSHIP_LABEL[kinship]}，没有心动线。`);
+  if (p.introducedIn && !p.privateLines.length) out.push(`【首次出场已知背景】只沿用其中关于你的已定事实：\n${p.introducedIn}`);
   if (p.appearance || p.heightCm) out.push(`【外貌】${p.heightCm ? `${p.heightCm}cm。` : ""}${p.appearance || ""}`);
   if (p.isIdol && (p.publicLabels.length || p.publicText)) {
     out.push(`【公开人设】${p.publicLabels.length ? `标签：${p.publicLabels.join("、")}。` : ""}${p.publicText}`);
@@ -231,6 +255,10 @@ export function rollSecretKind(): SecretKind {
 
 /** 性别、年龄知道了以后掷一次：有没有心动线、心动起点、关系起点 */
 export function applyStartRolls(p: IdolProfile): IdolProfile {
+  const kinship = kinshipOf(p);
+  if (kinship !== "none") return { ...p, kinship, canCrush: false, heart: undefined, romanceStyle: "", rolled: true };
+  // 已在场景中确定的身高不回改；不符合偏好的人不自动开放心动线。
+  if (p.gender === "男" && p.heightCm !== undefined && (p.heightCm < 180 || p.heightCm > 190)) return { ...p, canCrush: false, heart: undefined, romanceStyle: "", rolled: true };
   if (p.rolled) return p;
   const age = parseInt(p.age, 10);
   if (!p.gender || !Number.isFinite(age)) return p;
@@ -399,6 +427,7 @@ export type CardDraft = {
   group: string;
   age: string;
   nationality?: string;
+  kinship?: Kinship;
   heightCm?: number;
   appearance?: string;
   romanceStyle?: string;
@@ -424,12 +453,13 @@ const CARD_RULES = `写人物卡的规矩：
 - 不写他对她的第一印象，他们还没见过。
 - 名字用韩国人名的中文写法（外国人按国籍）。
 - 跟名单里已有的人不要撞型、不要重名。
+- kinship写他与她的亲属关系：none无亲属关系，blood血缘亲属（含同父异母、同母异父、堂表亲和远亲），adoptive收养亲属，step继亲，nominal名义认亲；普通朋友或前辈的哥哥姐姐称呼写none，不据此编造亲属关系。
 - 每个人都写国籍，结合已知背景和她的要求填写，不凭中文译名判断；保留已知国籍。
 - 每个人都写性别、生日（月-日）、MBTI。MBTI 只作辅助参考。
 - 年龄：跟她一起玩的同期练习生 16～19 岁，跟她差不多大；公司里的练习生 12～21 岁；20 岁以上的练习生少见，会被人议论年纪大。老师、经纪人、工作人员这些大人不限。
 - 秘密按给定的骰子写：没有就留空；小秘密写一件他瞒着别人的小事或心事；重的写作风不正（同时吊着好几个人、劈腿这类，成年人才可以写约炮）或者关系户。秘密只写一句事实，不写成创伤故事。
 只输出一个 JSON 对象，不要别的字：
-{"name":"","nationality":"","gender":"男或女","birthday":"MM-DD","mbti":"","role":"一句话身份","group":"身份分组","age":"","isIdol":false,"publicLabels":[],"publicText":"","privateLines":[],"speech":"","taboo":"","secret":""}`;
+{"name":"","kinship":"none","nationality":"","gender":"男或女","birthday":"MM-DD","mbti":"","role":"一句话身份","group":"身份分组","age":"","isIdol":false,"publicLabels":[],"publicText":"","privateLines":[],"speech":"","taboo":"","secret":""}`;
 
 const SECRET_DICE: Record<SecretKind, string> = { none: "没有秘密", light: "有一个小秘密", heavy: "有一个重的秘密" };
 
@@ -466,6 +496,7 @@ function parseDraft(text: string): CardDraft {
   return {
     name: String(j.name),
     nationality: String(j.nationality ?? "").trim(),
+    kinship: j.kinship && Object.prototype.hasOwnProperty.call(KINSHIP_LABEL, j.kinship) ? j.kinship : undefined,
     heightCm: Number.isFinite(Number(j.heightCm)) && Number(j.heightCm) > 0 ? Math.round(Number(j.heightCm)) : undefined,
     appearance: String(j.appearance ?? "").trim(),
     romanceStyle: String(j.romanceStyle ?? "").trim(),
@@ -503,27 +534,30 @@ async function addPersonalDetails(draft: CardDraft, source?: IdolProfile): Promi
   if (!raw) throw new Error("人物补充没有按格式返回");
   const extra = JSON.parse(raw[0]);
   const details = parseDraft(JSON.stringify({ ...draft, heightCm: extra.heightCm, appearance: extra.appearance, romanceStyle: extra.romanceStyle }));
-  if (!details.appearance || !details.heightCm || (p.canCrush && !details.romanceStyle)) throw new Error("人物外貌或感情方式没有写完整，请重试");
+  if (!(source?.appearance || details.appearance) || !(source?.heightCm ?? details.heightCm) || (p.canCrush && !(source?.romanceStyle || details.romanceStyle))) throw new Error("人物外貌或感情方式没有写完整，请重试");
+  const generatedHeight = source?.heightCm ?? details.heightCm;
   const heightCm = p.canCrush && p.gender === "男"
-    ? details.heightCm && details.heightCm >= 180 && details.heightCm <= 190 ? details.heightCm : 180 + Math.floor(Math.random() * 11)
-    : details.heightCm;
-  return { ...draft, heightCm, appearance: details.appearance, romanceStyle: p.canCrush ? details.romanceStyle : "", canCrush: p.canCrush, heart: p.heart, rolled: p.rolled };
+    ? generatedHeight && generatedHeight >= 180 && generatedHeight <= 190 ? generatedHeight : 180 + Math.floor(Math.random() * 11)
+    : generatedHeight;
+  return { ...draft, kinship: p.kinship ?? draft.kinship, heightCm, appearance: source?.appearance || details.appearance, romanceStyle: p.canCrush ? source?.romanceStyle || details.romanceStyle : "", canCrush: p.canCrush, heart: p.heart, rolled: p.rolled };
 }
 
 /** 照描述捏一个新人。face 是代码掷的骰子 */
-export async function draftPerson(wish: string, face: FaceRelation, secret: SecretKind = rollSecretKind()): Promise<CardDraft & { secretKind: SecretKind }> {
+export async function draftPerson(wish: string, face: FaceRelation, secret: SecretKind = rollSecretKind(), context?: { family: boolean }): Promise<CardDraft & { secretKind: SecretKind }> {
   const res = await simpleLLMCall(chatConfig(), [
     { role: "system", content: CARD_RULES },
     { role: "user", content: `${rosterLine()}\n${herLine()}\n骰子：如果他是爱豆，私下跟公开人设「${FACE_LABEL[face]}」；秘密：${SECRET_DICE[secret]}。\n她想要的人：${wish.trim() || "随你，照这个世界里合理会出现的人来"}` },
   ], { temperature: 0.95, label: "通讯录捏人" });
   if (!res.content) throw new Error(res.error || "AI 没回");
-  return { ...(await addPersonalDetails(parseDraft(res.content))), secretKind: secret };
+  const draft = parseDraft(res.content);
+  const kinship = context?.family ? kinshipOf({ ...draft, group: "家人" }) : draft.kinship;
+  return { ...(await addPersonalDetails({ ...draft, kinship })), secretKind: secret };
 }
 
 /** 照她写的方向改一张已有的卡 */
 export async function reviseCard(p: IdolProfile, name: string, direction: string): Promise<CardDraft> {
   const current: CardDraft = {
-    name, nationality: p.nationality ?? "", heightCm: p.heightCm, appearance: p.appearance, romanceStyle: p.canCrush ? p.romanceStyle : "", gender: p.gender ?? "", birthday: p.birthday ?? "", mbti: p.mbti ?? "", secret: p.secret?.text ?? "",
+    name, kinship: p.kinship, nationality: p.nationality ?? "", heightCm: p.heightCm, appearance: p.appearance, romanceStyle: p.canCrush ? p.romanceStyle : "", gender: p.gender ?? "", birthday: p.birthday ?? "", mbti: p.mbti ?? "", secret: p.secret?.text ?? "",
     role: p.role, group: p.group, age: p.age, isIdol: p.isIdol,
     publicLabels: p.publicLabels, publicText: p.publicText, privateLines: p.privateLines, speech: p.speech, taboo: p.taboo,
   };
@@ -536,7 +570,7 @@ export async function reviseCard(p: IdolProfile, name: string, direction: string
   const heightCm = p.canCrush && p.gender === "男" && draft.heightCm && (draft.heightCm < 180 || draft.heightCm > 190)
     ? p.heightCm ?? 180 : draft.heightCm ?? p.heightCm;
   return {
-    ...draft, name, nationality: draft.nationality || p.nationality || "", heightCm,
+    ...draft, name, kinship: p.kinship ?? draft.kinship, nationality: draft.nationality || p.nationality || "", heightCm,
     appearance: draft.appearance || p.appearance,
     romanceStyle: p.canCrush ? draft.romanceStyle || p.romanceStyle : "",
     canCrush: p.canCrush, heart: p.heart, rolled: p.rolled,
@@ -546,6 +580,8 @@ export async function reviseCard(p: IdolProfile, name: string, direction: string
 /** 她搜 ID 搜到一个只有名字的人：照模板把卡补全（名字、身份、你们见过的事不改） */
 export async function completeCard(p: IdolProfile, name: string, secretKind: SecretKind = p.secret?.kind ?? rollSecretKind()): Promise<CardDraft & { secretKind: SecretKind }> {
   const known = [
+    `已有资料（已填字段保留）：${JSON.stringify({ role: p.role, group: p.group, kinship: p.kinship, gender: p.gender, age: p.age, birthday: p.birthday, mbti: p.mbti, nationality: p.nationality, heightCm: p.heightCm, appearance: p.appearance, sceneFacts: p.sceneFacts })}`,
+    p.introducedIn ? `首次出场原文（只提取${name}已经明确的背景，不与之矛盾）：\n${p.introducedIn}` : "",
     p.role ? `身份：${p.role}` : "",
     p.nationality ? `国籍：${p.nationality}（保留，不改）` : "",
     p.metAt ? `${fmtDay(p.metAt.at)}在「${p.metAt.place}」见过她` : "",
@@ -558,13 +594,24 @@ export async function completeCard(p: IdolProfile, name: string, secretKind: Sec
   ], { temperature: 0.9, label: "通讯录补全卡" });
   if (!res.content) throw new Error(res.error || "AI 没回");
   const draft = parseDraft(res.content);
-  return { ...(await addPersonalDetails({ ...draft, nationality: p.nationality || draft.nationality, name }, p)), secretKind };
+  // 补全只填缺失资料，不能由一次模型回复改写已经确定的身份。
+  const lockedDraft: CardDraft = {
+    ...draft, ...p.sceneFacts, name,
+    role: p.role || draft.role, group: p.group || draft.group,
+    gender: p.gender || draft.gender, age: p.age || draft.age,
+    birthday: p.birthday || draft.birthday, mbti: p.mbti || draft.mbti,
+    nationality: p.nationality || draft.nationality, kinship: p.kinship || draft.kinship,
+    heightCm: p.heightCm ?? draft.heightCm, appearance: p.appearance || draft.appearance,
+    isIdol: p.sceneFacts?.isIdol ?? (p.isIdol || (p.privateLines.length ? p.isIdol : draft.isIdol)),
+  };
+  return { ...(await addPersonalDetails(lockedDraft, p)), secretKind };
 }
 
 /** AI 捏好的卡 → 档案字段（秘密按骰子） */
 export function draftFields(d: CardDraft & { secretKind?: SecretKind }, prev?: Secret): Partial<IdolProfile> {
   const kind = d.secretKind ?? prev?.kind ?? "none";
   return {
+    ...(d.kinship ? { kinship: d.kinship } : {}),
     heightCm: d.heightCm, appearance: d.appearance, romanceStyle: d.romanceStyle,
     ...(d.canCrush !== undefined ? { canCrush: d.canCrush, heart: d.heart, rolled: d.rolled } : {}),
     role: d.role, group: d.group, age: d.age, nationality: d.nationality?.trim() ?? "", isIdol: d.isIdol, gender: d.gender, birthday: d.birthday, mbti: d.mbti,

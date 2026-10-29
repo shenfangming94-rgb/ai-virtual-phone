@@ -16,7 +16,7 @@ import {
     type FriendRequest,
 } from "@/lib/friend-request-storage";
 import { handleAcceptFriendRequest, triggerRejectReaction } from "@/lib/friend-request-engine";
-import { addByKakaoId, findByKakaoId, fleshOut, needsFleshOut } from "@/lib/idol-kakao";
+import { addByKakaoId, findByKakaoId, fleshOut, needsFleshOut, onKakaoAccepted } from "@/lib/idol-kakao";
 import { getProfile } from "@/lib/idol-people";
 import { PageShell } from "@/components/ui/page-shell";
 import { pinyin } from "pinyin-pro";
@@ -565,7 +565,9 @@ export function ChatContactsList({ onCloseApp, onSelectSession, onSelectMascot, 
                                             setIsAddFriendOpen(false);
                                             return;
                                         }
+                                        if (needsFleshOut(addResult.id)) await fleshOut(addResult.id).catch(() => undefined);
                                         addChatContact(addResult.id);
+                                        onKakaoAccepted(addResult.id);
                                         clearRequestsForCharacter(addResult.id);
                                         dispatchFriendRequestUpdated();
                                         const newSession = createOrGetSession(addResult.id);

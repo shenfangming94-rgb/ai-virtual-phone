@@ -101,10 +101,11 @@ export async function handleAcceptFriendRequest(
     const userName = resolveUserIdentity(characterId, "chat")?.name ?? "用户";
 
     // 爱豆版：戏里只露过名字的人来加她，通过时先照模板把卡补全（满不满意去通讯录看）
-    if (sourcePlace && needsFleshOut(characterId)) await fleshOut(characterId).catch(() => undefined);
+    if (needsFleshOut(characterId)) await fleshOut(characterId).catch(() => undefined);
 
     // Re-add to contacts
     addChatContact(characterId);
+    const met = onKakaoAccepted(characterId);
 
     // Get or create session
     const session = createOrGetSession(characterId);
@@ -116,7 +117,7 @@ export async function handleAcceptFriendRequest(
         content: sourceGroupName
             ? `${userName}通过了${char?.name ?? "角色"}的好友申请（你们是在群聊「${sourceGroupName}」里认识的，验证消息：${requestMessage}）`
             : sourcePlace
-                ? `${userName}通过了${char?.name ?? "角色"}的好友申请（${onKakaoAccepted(characterId) || `你们是在「${sourcePlace}」认识的`}${requestMessage ? `，验证消息：${requestMessage}` : ""}）`
+                ? `${userName}通过了${char?.name ?? "角色"}的好友申请（${met || `你们是在「${sourcePlace}」认识的`}${requestMessage ? `，验证消息：${requestMessage}` : ""}）`
                 : `${userName}通过了${char?.name ?? "角色"}的好友申请`,
     });
 

@@ -14,7 +14,7 @@ import { kvGet, kvSet } from "./kv-db";
 import { loadCharacters } from "./character-storage";
 import { simpleLLMCall } from "./api-helpers";
 import { loadApiConfigs, loadBindingConfig, resolveBinding, resolveUserIdentity } from "./settings-storage";
-import { composePersona, createPerson, emptyProfile, fmtDay, getProfile, saveProfile } from "./idol-people";
+import { composePersona, createPerson, emptyProfile, fmtDay, getProfile, saveProfile, type ScenePersonFacts, KINSHIP_LABEL } from "./idol-people";
 import { describeTrainee, loadTraineeCard } from "./trainee-card";
 import { jumpWorld } from "./idol-reminders";
 import { saveMemoryEntry } from "./memory-storage";
@@ -158,7 +158,7 @@ const WRITING_RULES = `写法：
 - 写到下一个需要她反应的地方就停。`;
 
 const TAG_RULES = `回复最后另起一行写标记（她看不到，没有就不写）：
-- 名单里没有、但这次出场并且有名字的人：[新人:名字|一句话身份]
+- 名单里没有、但这次出场并且有名字的人：[新人:名字|一句话身份|已知资料JSON]。已知资料JSON只写本段已明确的gender、age、nationality、birthday、mbti、heightCm、appearance、isIdol、kinship，未明确的字段不填；没有资料可用原来的两字段格式。
 - 戏里过去了一段时间：[时间:+N分钟]
 - 这一场已经自然收尾：[收尾]`;
 
@@ -172,16 +172,32 @@ function peopleBlock(ids: string[]): string {
   }).filter(Boolean).join("\n\n");
 }
 
-export type StoryReply = { text: string; newFaces: { name: string; role: string }[]; minutes: number; closing: boolean; facts: string[] };
+export type SceneNewFace = { name: string; role: string; facts?: ScenePersonFacts };
+
+export type StoryReply = { text: string; newFaces: SceneNewFace[]; minutes: number; closing: boolean; facts: string[] };
 
 export function parseReply(raw: string): StoryReply {
-  const newFaces: { name: string; role: string }[] = [];
+  const newFaces: SceneNewFace[] = [];
   let minutes = 0;
   let closing = false;
   const facts: string[] = [];
   const text = raw
     .replace(/\[公司[:：]\s*([^\]]+)\]/g, (_, f: string) => { facts.push(f.trim()); return ""; })
-    .replace(/\[新人[:：]\s*([^|｜\]]+)[|｜]?([^\]]*)\]/g, (_, n: string, r: string) => { newFaces.push({ name: n.trim(), role: (r || "").trim() }); return ""; })
+    .replace(/\[新人[:：]\s*([^|｜\]]+)[|｜]?([^\]]*)\]/g, (_, n: string, r: string) => { const at = r.search(/[|｜]\s*\{/);
+      const role = at < 0 ? r.trim() : r.slice(0, at).trim();
+      const facts: ScenePersonFacts = {};
+      if (at >= 0) {
+        try {
+          const raw = JSON.parse(r.slice(at + 1).trim());
+          for (const key of ["age", "nationality", "birthday", "mbti", "appearance"] as const) if (typeof raw[key] === "string" && raw[key].trim()) facts[key] = raw[key].trim();
+          if (Object.prototype.hasOwnProperty.call(KINSHIP_LABEL, raw.kinship)) facts.kinship = raw.kinship;
+          if (typeof raw.age === "number" && Number.isFinite(raw.age) && raw.age > 0) facts.age = String(raw.age);
+          if (raw.gender === "男" || raw.gender === "女") facts.gender = raw.gender;
+          if (typeof raw.heightCm === "number" && Number.isFinite(raw.heightCm) && raw.heightCm > 0) facts.heightCm = Math.round(raw.heightCm);
+          if (typeof raw.isIdol === "boolean") facts.isIdol = raw.isIdol;
+        } catch { /* 旧版两字段标记仍可建立背景人物，原文另存供补全参考。 */ }
+      }
+      newFaces.push({ name: n.trim(), role, facts }); return ""; })
     .replace(/\[出场[:：]\s*([^\]|｜]+)[^\]]*\]/g, (_, n: string) => { newFaces.push({ name: n.trim(), role: "" }); return ""; })
     .replace(/\[时间[:：]\s*\+?\s*(\d+)\s*(分钟|小时)?\]/g, (_, n: string, u: string) => { minutes += Number(n) * (u === "小时" ? 60 : 1); return ""; })
     .replace(/\[收尾\]/g, () => { closing = true; return ""; })
@@ -217,7 +233,7 @@ export async function continueScene(scene: Scene): Promise<StoryReply> {
 }
 
 /** 新面孔：名单外有名字的人，先存成背景人物（见过了、在这里认识） */
-export function addNewFaces(scene: Scene, faces: { name: string; role: string }[]): string[] {
+export function addNewFaces(scene: Scene, faces: SceneNewFace[], introduction = ""): string[] {
   const chars = loadCharacters();
   const added: string[] = [];
   for (const f of faces) {
@@ -230,7 +246,7 @@ export function addNewFaces(scene: Scene, faces: { name: string; role: string }[
     const char = createPerson(f.name, {
       ...emptyProfile(""),
       layer: "background",
-      role: f.role,
+      role: f.role, ...f.facts, sceneFacts: f.facts, introducedIn: introduction.slice(0, 12000),
       met: true,
       metAt: { at: Date.now(), place: scene.place },
     });

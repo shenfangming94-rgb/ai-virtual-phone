@@ -19,7 +19,7 @@ import { resolveUserIdentity } from "./settings-storage";
 import { composePersona, createPerson, emptyProfile, fmtDay, getProfile, loadProfiles, relationOf, saveProfile, stepRelation } from "./idol-people";
 import { describeTrainee, loadTraineeCard } from "./trainee-card";
 import { shiftWorldTime } from "./world-clock";
-import { fmtWorld, parseReply } from "./idol-scenes";
+import { fmtWorld, parseReply, type SceneNewFace } from "./idol-scenes";
 import { createOrGetStorySession, createStoryGroup, loadStoryGroups, loadStoryMessages, updateStoryGroup, updateStorySession, type StorySession } from "./story-storage";
 import { simpleLLMCall } from "./api-helpers";
 import { addCompanyFacts, careerPromptBlock, completeNode, nodeById } from "./idol-career";
@@ -164,7 +164,7 @@ export function worldPromptFor(meta: SceneMeta | null, fallbackPlace: string, pa
 - 结果跟着她写的走，她认真做了的事不能硬说她没做好；挫折要有剧情里的具体原因。
 - 写到下一个需要她反应的地方就停。`,
     `【记号】回复最后另起一行写（她看不到，没有就不写）：
-- 名单里没有、但这次出场并且有名字的人：[新人:名字|一句话身份]
+- 名单里没有、但这次出场并且有名字的人：[新人:名字|一句话身份|已知资料JSON]。已知资料JSON只写本段已明确的gender、age、nationality、birthday、mbti、heightCm、appearance、isIdol、kinship，未明确的字段不填；没有资料可用原来的两字段格式。
 - 「可能碰上的人」里有人出场：[出场:名字]
 - 戏里过去了一段时间：[时间:+N分钟]
 - 这一场已经自然收尾：[收尾]
@@ -204,7 +204,7 @@ function mightMeetBlock(presentIds: string[], place: string, avoid: string[] = [
   ].filter(Boolean).join("\n");
 }
 
-export type SceneTags = { newFaces: { name: string; role: string }[]; minutes: number; closing: boolean; facts: string[]; kakao: KakaoTags };
+export type SceneTags = { newFaces: SceneNewFace[]; minutes: number; closing: boolean; facts: string[]; kakao: KakaoTags };
 
 /** 把记号从文字里摘掉，返回干净文字和记号 */
 export function extractSceneTags(text: string): { text: string; tags: SceneTags } {
@@ -214,32 +214,37 @@ export function extractSceneTags(text: string): { text: string; tags: SceneTags 
 }
 
 /** 处理记号：新面孔建成背景人物并拉进这场，时间往前拨，交换 KakaoTalk。返回新加的人名和要给她看的提示 */
-export function applySceneTags(groupId: string, sessionId: string, tags: SceneTags): { added: string[]; notes: string[] } {
+export function applySceneTags(groupId: string, sessionId: string, tags: SceneTags, introduction = ""): { added: string[]; notes: string[] } {
   if (!loadStoryGroups().some(g => g.id === groupId)) {
     if (tags.minutes > 0) shiftWorldTime(tags.minutes * 60e3);
     if (tags.facts.length) addCompanyFacts(tags.facts);
     return { added: [], notes: [] };
   }
-  return applySceneTagsTo(storyHost(groupId, sessionId), tags);
+  return applySceneTagsTo(storyHost(groupId, sessionId), tags, introduction);
 }
 
-export function applySceneTagsTo(host: SceneHost, tags: SceneTags): { added: string[]; notes: string[] } {
+export function applySceneTagsTo(host: SceneHost, tags: SceneTags, introduction = ""): { added: string[]; notes: string[] } {
   if (tags.minutes > 0) shiftWorldTime(tags.minutes * 60e3);
   if (tags.facts.length) addCompanyFacts(tags.facts);
-  const added = addFaces(host, tags.newFaces);
+  const added = addFaces(host, tags.newFaces, introduction);
   // 新面孔先建好，再处理给号 / 加你（名字对得上）
   const place = host.meta()?.place || host.fallbackPlace;
   const notes = applyKakaoTags(tags.kakao, place);
   // 给号 / 加你里提到、名单外的人也拉进这场
   const names = [...tags.kakao.gives.map(g => g.name), ...tags.kakao.adds.map(a => a.name)];
-  const extra = loadCharacters().filter(c => names.includes(c.name) && c.id !== WORLD_CHAR_ID).map(c => c.id);
+  const encountered = loadCharacters().filter(c => names.includes(c.name) && c.id !== WORLD_CHAR_ID);
+  if (introduction) for (const c of encountered) {
+    const p = getProfile(c.id);
+    if (!p.introducedIn && !p.privateLines.length) saveProfile({ ...p, introducedIn: introduction.slice(0, 12000) });
+  }
+  const extra = encountered.map(c => c.id);
   const now = host.ids();
   const missing = extra.filter(id => !now.includes(id));
   if (missing.length) host.setIds([...now, ...missing]);
   return { added, notes };
 }
 
-function addFaces(host: SceneHost, faces: SceneTags["newFaces"]): string[] {
+function addFaces(host: SceneHost, faces: SceneTags["newFaces"], introduction: string): string[] {
   if (!faces.length) return [];
   const meta = host.meta() ?? { place: host.fallbackPlace, premise: "", startAt: Date.now(), newFaces: [] };
   const ids = [...host.ids()];
@@ -251,7 +256,7 @@ function addFaces(host: SceneHost, faces: SceneTags["newFaces"]): string[] {
       if (!ids.includes(exist.id)) ids.push(exist.id);
       continue;
     }
-    const char = createPerson(f.name, { ...emptyProfile(""), layer: "background", role: f.role, met: true, metAt: { at: Date.now(), place: meta.place } }, null, genKakaoId());
+    const char = createPerson(f.name, { ...emptyProfile(""), layer: "background", role: f.role, ...f.facts, sceneFacts: f.facts, introducedIn: introduction.slice(0, 12000), met: true, metAt: { at: Date.now(), place: meta.place } }, null, genKakaoId());
     ids.push(char.id);
     meta.newFaces.push(char.id);
     added.push(char.name);

@@ -13,6 +13,7 @@ import { loadCharacters, saveCharacters, createCharacter } from "./character-sto
 import type { Character } from "./character-types";
 import { simpleLLMCall } from "./api-helpers";
 import { loadApiConfigs, loadBindingConfig, resolveBinding } from "./settings-storage";
+import { familyMemberFor, loadFamily, saveFamily } from "./idol-family-data";
 
 const PEOPLE_KEY = "idol_people_v1";
 const LISTS_KEY = "idol_contact_lists_v1";
@@ -66,6 +67,11 @@ export type IdolProfile = {
   role: string;
   age: string;
   nationality?: string;
+  /** 开局本地家庭档案：允许性格等字段留空，不自动触发 AI 补全。 */
+  familyMemberId?: string;
+  occupation?: string;
+  location?: string;
+  familyBackground?: string;
   kinship?: Kinship;
   /** 仅由用户在名片编辑页手动开启，不由AI生成或修改。 */
   allowFamilyRomance?: boolean;
@@ -180,6 +186,9 @@ export function composePersona(p: IdolProfile): string {
   if (head) out.push(`【身份】${head}`);
   const kinship = kinshipOf(p);
   if (kinship !== "none") out.push(`【与你的亲属关系】${KINSHIP_LABEL[kinship]}。${p.allowFamilyRomance ? "感情发展由当前关系和心动程度决定。" : "没有心动线。"}`);
+  if (p.familyMemberId) {
+    out.push(`【家庭资料】${p.occupation ? `职业：${p.occupation}。` : ""}${p.location ? `居住地：${p.location}。` : ""}${p.familyBackground || "关系背景未另行设置：你们原本就认识、彼此熟悉，交流自然；具体亲密程度保持未定，随实际互动与记忆发展。"}玩家填写的性格、相处方式和真实经历优先。未写的内容保持未定，不从亲属身份推断控制欲、溺爱或矛盾。联系不要求打卡，不因她未回复或没回家惩罚。见面遵守居住地和实际行程。`);
+  }
   if (p.introducedIn && !p.privateLines.length) out.push(`【首次出场已知背景】只沿用其中关于你的已定事实：\n${p.introducedIn}`);
   if (p.appearance || p.heightCm) out.push(`【外貌】${p.heightCm ? `${p.heightCm}cm。` : ""}${p.appearance || ""}`);
   if (p.isIdol && (p.publicLabels.length || p.publicText)) {
@@ -313,6 +322,7 @@ export function decayRelations(keepIds: string[] = []): void {
   for (const id of Object.keys(all)) {
     if (keep.has(id)) continue;
     const p = all[id];
+    if (p.familyMemberId) continue;
     const last = Math.max(p.metAt?.at ?? 0, ...p.events.map(e => e.at));
     if (!last || now - last < 21 * 864e5) continue;
     const rel = relationOf(p);
@@ -331,7 +341,10 @@ export function fmtDay(ms: number): string {
 
 /** 存档案，顺手把角色的 persona、名字、头像更新掉 */
 export function saveProfile(input: IdolProfile, charPatch?: Partial<Pick<Character, "name" | "avatar" | "wechatID">>): void {
-  const p = applyStartRolls(input);
+  const linked = input.familyMemberId ? familyMemberFor(input.charId) : undefined;
+  const previous = input.familyMemberId ? loadProfiles()[input.charId] : undefined;
+  const p = applyStartRolls(linked && previous && input.occupation !== previous.occupation && input.role === previous.role
+    ? { ...input, role: input.occupation ? `${linked.role} · ${input.occupation}` : linked.role } : input);
   const all = loadProfiles();
   all[p.charId] = p;
   saveProfiles(all);
@@ -340,6 +353,16 @@ export function saveProfile(input: IdolProfile, charPatch?: Partial<Pick<Charact
   if (idx >= 0) {
     chars[idx] = { ...chars[idx], ...(charPatch ?? {}), persona: composePersona(p), updatedAt: new Date().toISOString() };
     saveCharacters(chars);
+  }
+  // 通讯录手动编辑与家庭背景使用同一份资料，性格等扩展资料仍由人物档案保存。
+  if (p.familyMemberId) {
+    const f = loadFamily();
+    const member = familyMemberFor(p.charId);
+    if (f && member) saveFamily({ ...f, members: f.members.map(m => m.id !== member.id ? m : {
+      ...m, name: charPatch?.name ?? m.name, age: p.age, nationality: p.nationality ?? "", gender: p.gender ?? "",
+      occupation: p.occupation ?? "", location: p.location ?? "", background: p.familyBackground ?? "", kinship: kinshipOf(p) === "none" ? m.kinship : kinshipOf(p) as typeof m.kinship,
+      locks: { ...m.locks, ...Object.fromEntries(Object.entries({ name: charPatch?.name ?? m.name, age: p.age, nationality: p.nationality ?? "", occupation: p.occupation ?? "", location: p.location ?? "", background: p.familyBackground ?? "" }).filter(([key, value]) => value !== m[key as keyof typeof m]).map(([key]) => [key, true])) },
+    }) });
   }
 }
 

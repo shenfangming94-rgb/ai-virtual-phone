@@ -5,6 +5,7 @@
  * - 公司年末家族演唱会：提前四周定伴舞（看排名和关注度）。选上了有两次彩排 + 上台；没选上在台下看
  */
 
+import { familyContext } from "./idol-family-data";
 import { kvGet, kvSet } from "./kv-db";
 import { loadCharacters } from "./character-storage";
 import type { Character } from "./character-types";
@@ -66,7 +67,7 @@ function closeOnes(): Character[] {
   const all = loadCharacters();
   const roommates = (career.roommates ?? []).map(id => all.find(c => c.id === id)).filter((c): c is Character => Boolean(c));
   const others = all.filter(c => friends.has(c.id) && !roommates.includes(c) && !/老师|经纪|管理/.test(getProfile(c.id).role)
-    && ["朋友", "好朋友", "暧昧", "恋人"].includes(relationOf(getProfile(c.id))));
+    && (getProfile(c.id).familyMemberId || ["朋友", "好朋友", "暧昧", "恋人"].includes(relationOf(getProfile(c.id)))));
   return [...roommates, ...others].slice(0, 3);
 }
 
@@ -83,7 +84,8 @@ function birthday(year: number, now: number) {
   markDone(k);
   if (now > end) return; // 跳过去了
   const people = closeOnes();
-  const host = people[0];
+  // 家人可发祝福；家庭成员不直接被安排到首尔烤肉店当面张罗生日。
+  const host = people.find(c => !getProfile(c.id).familyMemberId);
   people.forEach((c, i) => {
     if (c === host) return;
     queueMessage(c.id, `今天（${md(start)}）是她的生日。按你们的关系和你的性格，在 KakaoTalk 上祝她生日快乐。`, (10 + i * 25) * MIN);
@@ -120,7 +122,7 @@ function holiday(year: number, now: number, which: "spring" | "chuseok") {
   const teacher = teacherOf();
   addNodes([{
     id: uid("node"), kind: "event", title: `${name}回家（${range}）`, place: "老家", dueAt: day1 + 10 * HOUR, status: "invite",
-    premise: `${name}放假，她回家过节：见家人、老朋友，吃家里的饭。三天后回宿舍。`, from: teacher?.name, fromId: teacher?.id,
+    premise: `${name}假期，可选择回家、见老朋友或留在当地，不要求回家；见面与返程遵循居住地、交通和玩家选择。${familyContext()}`, from: teacher?.name, fromId: teacher?.id,
     replyBy: Math.max(now + 6 * HOUR, day1 - 3 * DAY + 20 * HOUR),
   }]);
   void teacherSays(`${name}放假：${range}，三天。要回家的在 ${md(day1 - 3 * DAY)} 晚上之前跟你说，不回家的留宿舍，食堂照常开但只开午饭。`, `${name}放假 ${range}，要回家的 ${md(day1 - 3 * DAY)} 之前跟我说。`);

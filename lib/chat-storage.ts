@@ -1287,6 +1287,15 @@ export function saveChatContacts(contacts: ChatContact[]) {
     dbReplaceContacts(normalized.items);
 }
 
+/** 开局确认时等待联系人实际落盘，不改变既有的同步联系人接口。 */
+export async function persistChatContacts(): Promise<void> {
+    const contacts = [...loadChatContacts()];
+    await chatDb.transaction("rw", chatDb.contacts, async () => {
+        await chatDb.contacts.clear();
+        await chatDb.contacts.bulkPut(contacts);
+    });
+}
+
 export function addChatContact(characterId: string): ChatContact | null {
     // 任何一条"重新加上好友"的路径都会走到这里（通过好友申请、搜索添加、
     // 后台引擎重新建联系），统一在这里解除删除状态，不会漏。

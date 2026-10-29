@@ -6,6 +6,7 @@
 import { kvGet, kvRemove, kvSet } from "./kv-db";
 import { loadUserIdentities, saveUserIdentities } from "./settings-storage";
 import { setWorldTime } from "./world-clock";
+import { familyContext } from "./idol-family-data";
 
 const KEY = "idol_trainee_card_v1";
 export const TRAINEE_CARD_EVENT = "idol-trainee-card-changed";
@@ -103,6 +104,7 @@ export function describeTrainee(c: TraineeCard): string {
     c.weakness ? `短板：${c.weakness}` : "",
     c.mbti ? `MBTI：${c.mbti}` : "",
     c.other ? `其他：${c.other}` : "",
+    familyContext(),
     c.company ? `现在：${c.company} 练习生` : "现在：还没进任何公司，准备投递",
     c.trainLength ? `打算多久出道：${c.trainLength}` : "",
   ];

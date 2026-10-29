@@ -81,8 +81,9 @@ function pick(now: number, s: State): string | null {
   const pool: { id: string; w: number }[] = [];
   for (const c of loadCharacters()) {
     const p = profiles[c.id];
-    if (!p || !friends.has(c.id) || c.id === t || /老师|管理|经纪|室长|代表/.test(p.role)) continue;
+    if (!p || !friends.has(c.id) || c.id === t || (!p.familyMemberId && /老师|管理|经纪|室长|代表/.test(p.role))) continue;
     let w = WEIGHT[relationOf(p)] ?? 0;
+    if (p.familyMemberId) w *= 0.55; // 复用原发动机，家人偶尔联系，不额外开定时器。
     if (!w) continue;
     if (isCrush(p)) w += 2 * (night ? 2 : 1);
     const lastE = p.events[p.events.length - 1];
@@ -117,6 +118,7 @@ function instruction(charId: string, now: number, gapDays: number): string {
   ].filter(Boolean).join("；");
   return [
     worldWeatherHint(),
+    p?.familyMemberId ? `你是她的家人。${p.location ? `你住在${p.location}，私聊不代表已见面。` : ""}可以分享家里近况、关心她正在经历的事，不催回复，不因没联系或没回家责备她。` : "",
     `平常的一天，现在${new Date(now).getHours()}点，你想在 KakaoTalk 上找${her}聊几句，没什么大事。`,
     `可以接着你们最近的事（${ev || "还没什么"}），可以说你自己今天的事（你最近：${p?.status?.text || "没写"}），${next ? `可以聊她接下来的「${next.title}」（${md(next.dueAt)}）` : ""}${lastDone ? `，可以问她刚过去的「${lastDone.title}」怎么样` : ""}。挑一个最自然的，不要全说。`,
     bday ? `快到的生日：${bday}。想提就提，可以别别扭扭地暗示，也可以直说。` : "",

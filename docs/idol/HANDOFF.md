@@ -686,3 +686,20 @@ Flora 要一个专门玩「爱豆模拟器」的小手机：她是想当爱豆�
 - allowFamilyRomance仅为用户编辑字段，不加入AI的CardDraft/生成JSON或draftFields白名单，补全与改卡不会偷偷开启。persona按开关状态给出一致的亲属与感情提示。
 - 关闭会清除心动、感情方式及当前暧昧/恋人状态（回到认识或陌生），保留相处记录；界面按钮下面明确说明。原有身高偏好规则仍保留。
 - 回归覆盖默认关闭、手动开放、关闭清理状态、AI字段无法开启、persona一致性；独立临时Chrome实际点击、选择心动、保存、刷新保留、关闭保存均通过，pageerror空。脚本verify-family-romance-toggle-v1.mjs和截图family-romance-toggle-v1.png在熟悉的预览目录。全程不使用真实API、不操作用户存档，不push、不部署。本节随代码本地提交。
+
+
+### 2.43 2026-10-29 家庭背景开局（Codex，已完成本地验证）
+- Flora确认实施：在家境后增加家庭设置，沿用现有申请表UI；概览→成员编辑→预览；童星可选经济“暂不设置/普通/富裕”，不加“宽裕”，不改原family单选及名气/公司机制。
+- 本地预设/随机/手填/字段锁；结构和手足数量只有专门按钮才随机；默认女亲属在相应男亲属前，手足菜单姐姐/哥哥/妹妹/弟弟；玩家明确排序优先。
+- 新增lib/idol-family-data.ts、idol-family-presets.ts、idol-family.ts以及components/opening/family-background-step.tsx。家庭键idol_family_v1按既有worldSources随世界保存，普通备份characters模块也包含家庭/练习生/人物资料。没有家庭的旧档不迁移、不补造。
+- 最后盖章才正式本地建main人物、加KKT联系人；familyMemberId表示本地有效的简要档案，性格留空不触发fleshOut/needsFleshOut。通讯录可手填职业/居住地/关系背景/性格/外貌等，saveProfile同步家庭资料，不自动调用模型。
+- 用户后来明确更正：允许家人作为现有发动机候选，偶尔主动联系/参与剧情，不另开家庭模拟定时器。已接casual候选（较低权重）、事件上下文、生日祝福、命运已有家人。无联系衰减，不按焦虑/冷场机制催聊，不强制回家。
+- 出道通知不固定补造妈妈，计划记实际familySenderId并在原模型调用中生成祝福；无家人不发。旧计划的缺席家长来法转地点机会，不另调AI补家长。场景里的“妈妈”等称谓链接已有成员，避免重复建卡。
+- 开局确认等待联系人落盘和KV事务快照；失败保留草稿并回滚；确认期间桌面tick暂停。未push/未部署；本节与功能一并本地提交。
+- 字体实测补正：opening.css的.op-root input/textarea优先级使原输入框实际14px，普通标签13px；家庭页直接继承真实原样式。此前预览宣称全13px不准确，已在对话纠正。
+- 已通过：node docs/idol/tests/person-links.cjs（新增本地随机/锁、6国籍、未知国家手填、排序、重复确认、main+KKT、免自动补全、手动资料同步、不联系不衰减、主动发动机候选、不凭空补父母、出道实际发信人；模型为内存假实现，真实API 0）。多次tsc --noEmit --incremental false通过，git diff --check通过。
+- 独立临时Chrome：/Users/flora/work/idol-settings-preview/verify-family-opening-v1.mjs。首轮完整真实UI通过：童星开局→锁定→新增妹妹→签名盖章→通讯录→手动性格→刷新保持，拦截所有外部请求，modelRequests=[]，pageerror=[]。截图family-opening-actual-{overview,editor,review}-v1.png，报告family-opening-actual-results-v1.json。
+- 档案库和两份真实测试存档切换检查也已通过：新档家庭为空→另建只有爸爸的测试家庭→切回原档妈妈/妹妹与性格和3个联系人完整恢复→切回另一档只有该爸爸和1个联系人；modelRequests=[]、errors=[]。不要在浏览器测试跨刷新过程中改运行时代码，Next开发热更新曾导致临时ChunkLoadError。测试使用隔离浏览器，不触碰用户真实存档，无真实API。开发桥window.__idolTest已增加family/familyData/saves/trainee（仅development）。
+- Flora提醒额度快到、16点刷新，若中断按本节与工具会话继续，不要重做已完成部分。
+
+- 收尾补测：只有爸爸的家庭不会把旧计划里的“妈妈”替换成爸爸；通讯录修改家庭字段同步加锁，避免重新填写开局时被随机覆盖。最终人物回归、TypeScript与diff检查通过。

@@ -1,6 +1,11 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { loadChatContacts, saveChatContacts, persistChatContacts } from "@/lib/chat-storage";
+import { FamilyBackgroundStep } from "./family-background-step";
+import { emptyFamily, loadFamily } from "@/lib/idol-family-data";
+import { materializeFamily } from "@/lib/idol-family";
+import { kvEntries, kvRemove, kvSet, persistKvSnapshot } from "@/lib/kv-db";
 
 import {
   FAMILY_OPTIONS,
@@ -18,7 +23,7 @@ import {
 } from "@/lib/trainee-card";
 
 const CREST = "/idol/crest.png";
-const STEPS = 5;
+const STEPS = 6;
 
 function emptyCard(): TraineeCard {
   return {
@@ -49,10 +54,11 @@ function shrinkPhoto(file: File): Promise<string> {
 
 const fmtDot = (iso: string) => iso.replace(/-/g, " . ");
 
-/** 开局：练习生登记证。封面 → 五页申请表 → 证件 + 签名 → 盖章开始 */
+/** 开局：练习生登记证。封面 → 六页申请表 → 证件 + 签名 → 盖章开始 */
 export function TraineeOpening({ onDone, onNotice }: { onDone: () => void; onNotice?: (message: string) => void }) {
-  const [step, setStep] = useState(0); // 0 封面，1-5 申请表，6 证件
+  const [step, setStep] = useState(0); // 0 封面，1-6 申请表，7 证件
   const [c, setC] = useState<TraineeCard>(emptyCard);
+  const [family, setFamily] = useState(() => loadFamily() ?? emptyFamily());
   const [stamping, setStamping] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
   const set = <K extends keyof TraineeCard>(k: K, v: TraineeCard[K]) => setC(prev => ({ ...prev, [k]: v }));
@@ -74,7 +80,7 @@ export function TraineeOpening({ onDone, onNotice }: { onDone: () => void; onNot
       setC(p => ({ ...p, looks: p.looks || randomLooks(), start: p.start || `${r.startYear}-03-01`, trainLength: p.trainLength || randomLength() }));
     }
     if (step === 3 && !c.family) set("family", randomFamily());
-    if (step === 4 && !c.talents.length) set("talents", randomTalents());
+    if (step === 5 && !c.talents.length) set("talents", randomTalents());
   };
 
   const missing = (): string | null => {
@@ -100,11 +106,32 @@ export function TraineeOpening({ onDone, onNotice }: { onDone: () => void; onNot
       no: `${c.start.replace(/-/g, ".")}-${String(Math.floor(Math.random() * 9000) + 1000)}`,
       createdAt: Date.now(),
     };
-    window.setTimeout(() => {
-      stampTraineeCard(card);
-      onDone();
+    window.setTimeout(async () => {
+      const contactsBefore = [...loadChatContacts()];
+      const before = new Map(kvEntries().map(e => [e.key, e.value]));
+      const guard = window as unknown as { __idolOpeningCommit?: boolean };
+      guard.__idolOpeningCommit = true;
+      try {
+        const draft = { ...family, economy: card.family === "child" ? family.economy : "" as const,
+          groupName: card.family === "chaebol" ? family.groupName : "",
+          industry: card.family === "chaebol" ? family.industry : "",
+          wealthSource: card.family === "rich" || card.family === "chaebol" || (card.family === "child" && family.economy === "rich") ? family.wealthSource : "" };
+        setFamily(materializeFamily(draft, card));
+        stampTraineeCard(card);
+        await persistChatContacts();
+        await persistKvSnapshot();
+        onDone();
+      } catch {
+        saveChatContacts(contactsBefore);
+        for (const e of kvEntries()) if (!before.has(e.key)) kvRemove(e.key);
+        for (const [key, value] of before) kvSet(key, value);
+        setStamping(false);
+        onNotice?.("保存没有完成，资料仍保留在这里，请重试");
+      } finally { guard.__idolOpeningCommit = false; }
     }, 1500);
   };
+
+  if (step === 4) return <FamilyBackgroundStep card={c} value={family} onChange={setFamily} onBack={() => setStep(3)} onNext={() => setStep(5)} />;
 
   if (step === 0) {
     return (
@@ -122,7 +149,7 @@ export function TraineeOpening({ onDone, onNotice }: { onDone: () => void; onNot
     );
   }
 
-  if (step === 6) {
+  if (step === 7) {
     const age = ageAtStart(c);
     return (
       <div className="op-root">
@@ -147,7 +174,7 @@ export function TraineeOpening({ onDone, onNotice }: { onDone: () => void; onNot
           <SignaturePad value={c.signature} onChange={v => set("signature", v)} />
           <p className="op-final-hint">「所属」那一栏空着<br />等你进了哪家公司，这里会盖上公司的章</p>
           <div className="op-foot is-static">
-            <button type="button" className="op-frame-btn is-plain" onClick={() => setStep(5)} disabled={stamping}>返回修改</button>
+            <button type="button" className="op-frame-btn is-plain" onClick={() => setStep(6)} disabled={stamping}>返回修改</button>
             <span />
             <button type="button" className="op-frame-btn" onClick={stamp} disabled={stamping}>{stamping ? "盖章中" : "盖章 · 开始"}</button>
           </div>
@@ -218,7 +245,7 @@ export function TraineeOpening({ onDone, onNotice }: { onDone: () => void; onNot
             </>
           ) : null}
 
-          {step === 4 ? (
+          {step === 5 ? (
             <>
               <div className="op-sec">特长（可多选）</div>
               <div className="op-grid">
@@ -240,7 +267,7 @@ export function TraineeOpening({ onDone, onNotice }: { onDone: () => void; onNot
             </>
           ) : null}
 
-          {step === 5 ? (
+          {step === 6 ? (
             <>
               <div className="op-sec">其他</div>
               <textarea className="op-line" rows={6} value={c.other} placeholder="还有什么想写的都写在这里，可以不填" onChange={e => set("other", e.target.value)} />
@@ -257,8 +284,8 @@ export function TraineeOpening({ onDone, onNotice }: { onDone: () => void; onNot
       {/* 三格固定：左上一页、中随便、右下一页，每页位置和大小都一样 */}
       <div className="op-foot">
         <button type="button" className="op-frame-btn is-plain" style={{ visibility: step > 1 ? "visible" : "hidden" }} onClick={() => setStep(s => s - 1)}>上一页</button>
-        <button type="button" className="op-frame-btn is-plain" style={{ visibility: step < 5 ? "visible" : "hidden" }} onClick={random}>随便</button>
-        <button type="button" className="op-frame-btn" onClick={next}>{step === 5 ? "生成证件" : "下一页"}</button>
+        <button type="button" className="op-frame-btn is-plain" style={{ visibility: step < 6 ? "visible" : "hidden" }} onClick={random}>随便</button>
+        <button type="button" className="op-frame-btn" onClick={next}>{step === 6 ? "生成证件" : "下一页"}</button>
       </div>
     </div>
   );

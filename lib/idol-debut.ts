@@ -10,6 +10,7 @@
  * 一次 AI 调用把队名、定位、大家的话都定好（之后照着发，不会前后对不上）。
  */
 
+import { loadFamily, orderedFamilyMembers } from "./idol-family-data";
 import { fameEvent } from "./idol-fame";
 import { kvGet } from "./kv-db";
 import { loadCharacters } from "./character-storage";
@@ -51,7 +52,7 @@ export type Debut = {
   words?: Words;
 };
 type Line = { who: string; text: string };
-type Words = { teacherMsg: string; managerMsg: string; d2React: Line[]; d3Msg: string; d3React: Line[]; ddayGroup?: Line; momMsg: string; news: { title: string; text: string } };
+type Words = { teacherMsg: string; managerMsg: string; d2React: Line[]; d3Msg: string; d3React: Line[]; ddayGroup?: Line; momMsg: string; familySenderId?: string; news: { title: string; text: string } };
 
 const uid = (p: string) => `${p}_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
 const pad = (n: number) => String(n).padStart(2, "0");
@@ -225,6 +226,9 @@ const COLORS = ["#f2a7b8", "#f3c48c", "#a99ce8", "#8fcfb9", "#9cc4ea", "#e7a6d8"
 async function plan(members: { id: string; name: string; age: string; about: string }[], company: string, codename: string, manager: string, teacher: string): Promise<{ list: { name: string; ko: string; nation: string; positions: { zh: string; ko: string }[] }[]; team: Team; song: string; words: Words }> {
   const card = loadTraineeCard();
   const me = card?.name || "她";
+  const family = loadFamily();
+  const sender = orderedFamilyMembers(family).find(m => m.charId && loadCharacters().some(c => c.id === m.charId));
+  const familyInstruction = family ? sender ? `由${sender.role} ${sender.name || ""}发来的祝福。职业${sender.occupation || "未填"}，居住地${sender.location || "未填"}，关系背景${sender.background || "彼此熟悉，自然相处"}；按已定身份说话，不默认自称妈妈，不强制回复或回家` : "未设置家庭成员，写空字符串" : "妈妈发来的 KakaoTalk";
   const res = await simpleLLMCall(chatConfig(), [
     {
       role: "system",
@@ -238,7 +242,7 @@ async function plan(members: { id: string; name: string; age: string; about: str
 "d3Msg":"经纪人在群里公布队名时说的话",
 "d3React":[{"who":"成员名字","text":"看到队名海报的反应"}],
 "ddayGroup":{"who":"成员名字","text":"出道当天早上在群里说的第一句"},
-"momMsg":"出道当天早上${me}的妈妈发来的 KakaoTalk",
+"momMsg":"出道当天早上给${me}的家人消息：${familyInstruction}",
 "news":{"title":"出道当天 NAVER 新闻标题","text":"新闻摘要一句"}}
 规矩：已给定的成员国籍必须保留，不按名字猜国籍；每人一到两个定位；要有队长、主唱、主舞、门面、忙内（忙内是年龄最小的）；照每个人的特长和性格定，${me}的定位照她擅长的；d2React、d3React 各两三个人，用自己的说话方式，口语、短；队名还没公布前的话里不提队名。`,
     },
@@ -261,7 +265,8 @@ async function plan(members: { id: string; name: string; age: string; about: str
       d3Msg: String(j.d3Msg || "队名定下来了。"),
       d3React: lines(j.d3React),
       ddayGroup: j.ddayGroup?.who && j.ddayGroup?.text ? { who: String(j.ddayGroup.who), text: String(j.ddayGroup.text) } : undefined,
-      momMsg: String(j.momMsg || "宝贝今天出道快乐！妈妈晚上守着看 ❤️"),
+      momMsg: family && !sender ? "" : String(j.momMsg || (sender ? "今天出道快乐！会为你加油的。" : "宝贝今天出道快乐！妈妈晚上守着看 ❤️")),
+      familySenderId: sender?.charId,
       news: { title: String(j.news?.title || ""), text: String(j.news?.text || "") },
     },
   };
@@ -404,7 +409,18 @@ function sendDday(d: Debut, when: number) {
   const show = loadCareer().nodes.find(n => n.kind === "debut" && n.step === "showcase");
   // 出道当天早上：之前没看的通知收起来，锁屏只留这一串
   markNotesSeen();
-  pushLockNote({ app: "kakao", title: "妈妈", text: d.words?.momMsg ?? "", at: when, pin: true });
+  const family = loadFamily();
+  if (family) {
+    // 缺席家长不补造；旧计划没有对应发信人时使用本地中性祝福，避免沿用旧的“妈妈”文案。
+    const sender = orderedFamilyMembers(family).find(m => m.charId === d.words?.familySenderId)
+      ?? orderedFamilyMembers(family).find(m => m.charId && loadCharacters().some(c => c.id === m.charId));
+    if (sender?.charId) {
+      const text = d.words?.familySenderId === sender.charId && d.words.momMsg ? d.words.momMsg : "今天出道快乐！会为你加油的。";
+      const session = createOrGetSession(sender.charId);
+      pushChatMessage({ sessionId: session.id, role: "assistant", content: text, status: "sent", createdAt: iso(when) });
+      pushLockNote({ app: "kakao", title: sender.name || sender.role, text, at: when, pin: true });
+    }
+  } else pushLockNote({ app: "kakao", title: "妈妈", text: d.words?.momMsg ?? "", at: when, pin: true });
   pushLockNote({ app: "naver", title: d.words?.news.title || `${company} 新女团 ${team} 今日正式出道`, text: d.words?.news.text || `${d.members?.length ?? ""}人女团 ${team} 今天发行出道曲《${d.song ?? ""}》，晚上举行出道 Showcase。`, at: when - 6 * MIN, pin: true });
   if (show) pushLockNote({ app: "reminders", title: show.title, text: `${pad(new Date(show.dueAt).getHours())}:${pad(new Date(show.dueAt).getMinutes())} · ${show.place} · 提前三小时到后台`, at: when - 20 * MIN, pin: true });
   const g = d.words?.ddayGroup;

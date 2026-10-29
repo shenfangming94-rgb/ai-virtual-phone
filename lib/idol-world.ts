@@ -1,4 +1,5 @@
 import { IDOL_LANGUAGE_RULE } from "./idol-language";
+import { namedFamilyMember } from "./idol-family-data";
 import { worldWeatherHint } from "./idol-weather";
 /**
  * 爱豆小手机：剧情 app 的「世界」模式。
@@ -251,7 +252,8 @@ function addFaces(host: SceneHost, faces: SceneTags["newFaces"], introduction: s
   const added: string[] = [];
   for (const f of faces) {
     if (!f.name || f.name.length > 12) continue;
-    const exist = loadCharacters().find(c => c.name === f.name && c.id !== WORLD_CHAR_ID);
+    const linkedFamily = namedFamilyMember(f.name);
+    const exist = loadCharacters().find(c => (c.name === f.name || c.id === linkedFamily?.charId) && c.id !== WORLD_CHAR_ID);
     if (exist) {
       if (!ids.includes(exist.id)) ids.push(exist.id);
       continue;

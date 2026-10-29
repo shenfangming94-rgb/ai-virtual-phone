@@ -17,6 +17,7 @@ import {
 } from "@/lib/friend-request-storage";
 import { handleAcceptFriendRequest, triggerRejectReaction } from "@/lib/friend-request-engine";
 import { addByKakaoId, findByKakaoId, fleshOut, needsFleshOut, onKakaoAccepted } from "@/lib/idol-kakao";
+import { compareFamilyContacts, familyMemberFor } from "@/lib/idol-family-data";
 import { getProfile } from "@/lib/idol-people";
 import { PageShell } from "@/components/ui/page-shell";
 import { pinyin } from "pinyin-pro";
@@ -110,7 +111,7 @@ export function ChatContactsList({ onCloseApp, onSelectSession, onSelectMascot, 
             ...c,
             char: chars.find(ch => ch.id === c.characterId)
         })).filter(c => c.char);
-        enriched.sort((a, b) => (a.char?.name || "").localeCompare(b.char?.name || ""));
+        enriched.sort((a, b) => compareFamilyContacts(a.characterId, b.characterId) || (a.char?.name || "").localeCompare(b.char?.name || ""));
         setContacts(enriched);
 
         const posts = loadMomentPosts();
@@ -143,11 +144,13 @@ export function ChatContactsList({ onCloseApp, onSelectSession, onSelectMascot, 
             : contacts;
         const map: Record<string, typeof contacts> = {};
         for (const c of filtered) {
-            const letter = getInitial(c.char?.name || "");
+            const letter = familyMemberFor(c.characterId) ? "家庭" : getInitial(c.char?.name || "");
             (map[letter] ??= []).push(c);
         }
         // Sort keys: A-Z first, then #
         const sorted = Object.keys(map).sort((a, b) => {
+            if (a === "家庭") return -1;
+            if (b === "家庭") return 1;
             if (a === "#") return 1;
             if (b === "#") return -1;
             return a.localeCompare(b);

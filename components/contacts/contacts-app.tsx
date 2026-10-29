@@ -1,5 +1,7 @@
 "use client";
 
+import { compareFamilyContacts } from "@/lib/idol-family-data";
+
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { ChevronLeft, ChevronRight, Mail, MessageCircle, Phone, Plus, Search, Sparkles, Trash2, Video, X } from "lucide-react";
@@ -214,13 +216,15 @@ function ListView({ data, filter, onBack, onLists, onOpen, onMe, onAdd }: {
     .filter(c => matches(filter, c, data.profiles[c.id], data))
     .filter(c => !q.trim() || c.name.includes(q.trim())
       || (idVisible(getProfile(c.id), data.kakao.has(c.id)) && (c.wechatID ?? "").toLowerCase().includes(q.trim().toLowerCase())))
-    .sort((a, b) => comparePinyin(a.name, b.name));
+    .sort((a, b) => filter.kind === "list"
+      ? (data.lists.find(l => l.id === filter.id)?.memberIds.indexOf(a.id) ?? 0) - (data.lists.find(l => l.id === filter.id)?.memberIds.indexOf(b.id) ?? 0)
+      : compareFamilyContacts(a.id, b.id) || comparePinyin(a.name, b.name));
   const sections = new Map<string, Character[]>();
   for (const c of people) {
-    const l = initialOf(c.name);
+    const l = filter.kind === "list" ? "列表" : data.profiles[c.id]?.familyMemberId ? "家庭" : initialOf(c.name);
     sections.set(l, [...(sections.get(l) ?? []), c]);
   }
-  const letters = [...sections.keys()].sort((a, b) => (a === "#" ? 1 : b === "#" ? -1 : a.localeCompare(b)));
+  const letters = [...sections.keys()].sort((a, b) => (a === "家庭" ? -1 : b === "家庭" ? 1 : a === "#" ? 1 : b === "#" ? -1 : a.localeCompare(b)));
   const jump = (l: string) => pageRef.current?.querySelector(`[data-letter="${l}"]`)?.scrollIntoView({ block: "start" });
 
   return (
@@ -490,6 +494,8 @@ function CardView({ data, id, onBack, onEdit, onNotice }: { data: Data; id: stri
           {p.birthday ? <><hr /><div className="ct-k">生日</div><div className="ct-v">{p.birthday.split("-").map(x => String(parseInt(x, 10) || x)).join("月")}日</div></> : null}
         </div>
 
+        {p.familyMemberId ? <div className="ct-block"><div className="ct-k">家庭资料</div><div className="ct-v">{p.occupation || "职业未填写"}{p.location ? ` · ${p.location}` : ""}</div><div className="ct-v ct-prose">{p.familyBackground || "彼此熟悉、自然相处；具体亲密程度随实际互动发展。"}</div></div> : null}
+
         {p.appearance || p.heightCm ? <div className="ct-block"><div className="ct-k">外貌{p.heightCm ? ` · ${p.heightCm}cm` : ""}</div>{p.appearance ? <div className="ct-v ct-prose">{p.appearance}</div> : null}</div> : null}
 
         {p.leave?.phase === "left" && p.leave.left ? (
@@ -524,7 +530,8 @@ function CardView({ data, id, onBack, onEdit, onNotice }: { data: Data; id: stri
           </div>
         ) : null}
 
-        {!p.privateLines.length ? (
+        {!p.privateLines.length && p.familyMemberId ? <div className="ct-block"><div className="ct-k">性格与相处</div><div className="ct-v is-dim">尚未填写，可以点右上角编辑补充。</div></div> : null}
+        {!p.privateLines.length && !p.familyMemberId ? (
           <div className="ct-block">
             <div className="ct-k">性格与相处</div>
             <div className="ct-v is-dim">戏里见过，还只知道名字</div>
@@ -645,6 +652,11 @@ function EditView({ data, id, onDone, onDeleted, onNotice }: { data: Data; id: s
           </div>
         </Field>
         <Field label="国籍"><input value={p.nationality ?? ""} onChange={e => set("nationality", e.target.value)} placeholder="例如：韩国、美国" /></Field>
+        {p.familyMemberId ? <>
+          <Field label="职业"><input value={p.occupation ?? ""} onChange={e => set("occupation", e.target.value)} /></Field>
+          <Field label="居住地"><input value={p.location ?? ""} onChange={e => set("location", e.target.value)} /></Field>
+          <Field label="与你的关系背景"><textarea rows={3} value={p.familyBackground ?? ""} onChange={e => set("familyBackground", e.target.value)} placeholder="留空则彼此熟悉、自然相处" /></Field>
+        </> : null}
         <Field label="年龄"><input value={p.age} onChange={e => set("age", e.target.value)} /></Field>
         <Field label="生日"><input value={p.birthday ?? ""} onChange={e => set("birthday", e.target.value)} placeholder="月-日，比如 04-12" /></Field>
         <Field label="MBTI"><input value={p.mbti ?? ""} onChange={e => set("mbti", e.target.value.toUpperCase())} placeholder="只是参考" /></Field>

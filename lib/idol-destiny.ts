@@ -7,6 +7,7 @@
  * - 触发那一刻图鉴就翻开（去不去都翻）；要她去哪儿就进提醒事项待回复
  */
 
+import { loadFamily, namedFamilyMember, orderedFamilyMembers } from "./idol-family-data";
 import { kvGet, kvSet } from "./kv-db";
 import { loadCharacters } from "./character-storage";
 import type { Character } from "./character-types";
@@ -155,6 +156,7 @@ async function generate(): Promise<State | null> {
       "en：配一行英文，2～4 个词，小写",
       "seed：一句话，写给到时候发展剧情的人看：谁、因为什么、带来什么机会（不写结果）",
       `via：她怎么知道，只能是 ${VIAS.join(" / ")}（new=一个陌生人加她 KakaoTalk；friend=认识的人私聊她；teacher=室长找她；family=家里人发消息；stage=她在某个地点撞见）。八个里 stage 两到三个，其余分散`,
+      loadFamily() ? "family 只能选家庭背景中已存在的成员；暂不设置家人时不用 family，不创造缺席家长。邀请见面须符合家人居住地和旅行时间。" : "",
       "who：via 不是 stage 时写 {\"name\":\"韩文名的中文写法或家人称呼\",\"role\":\"身份一句\"}；friend 只能从她认识的人里选，没合适的就用 new；stage 写 null",
       "hello：via=new 时他加她说的第一句，其余写空",
       `place：via=stage 时从这些地点里选一个（照原样）：${places.join("、")}；其余写空`,
@@ -271,12 +273,15 @@ async function personFor(c: Destiny): Promise<Character | null> {
     try { const id = (JSON.parse(kvGet("idol_kakao_v1") || "null") as { teacherId?: string } | null)?.teacherId; const t = loadCharacters().find(x => x.id === id); if (t) return t; } catch { /* 没有室长就当新人 */ }
   }
   if (c.via === "family") {
-    const family = loadCharacters().filter(x => kinshipOf(getProfile(x.id)) !== "none");
+    const configured = loadFamily();
+    const family = configured ? orderedFamilyMembers(configured).flatMap(m => loadCharacters().filter(x => x.id === m.charId)) : loadCharacters().filter(x => kinshipOf(getProfile(x.id)) !== "none");
     const name = c.who?.name || "";
-    const fam = family.find(x => x.name === name)
+    const fam = family.find(x => x.id === namedFamilyMember(name)?.charId)
+      ?? family.find(x => x.name === name)
       ?? family.find(x => name && getProfile(x.id).role.includes(name))
-      ?? (family.length === 1 ? family[0] : undefined);
+      ?? (family.length === 1 && (!configured || !name) ? family[0] : undefined);
     if (fam) return fam;
+    if (configured) return null; // 已明确设置的家庭不临时生成新家长。
   }
   const have = findPerson(c.who?.name ?? "");
   if (have) return have;
@@ -305,7 +310,19 @@ async function fire(c: Destiny, s: State, notify: (m: string) => void): Promise<
   }
   save(s);
   const who = await personFor(c);
-  if (!who) return;
+  if (!who) {
+    // 兼容旧计划里已经写死的缺席家长：转为地点机会，不额外调用模型补造亲属。
+    c.via = "stage";
+    c.title = "意外的消息";
+    c.seed = "她在日常出行中碰到一个意外的机会，结合她已经确定的生活背景自然展开，不补造未设置的家人。";
+    c.place = "便利店";
+    c.who = undefined;
+    c.meet = undefined;
+    c.markUntil = now + 7 * DAY;
+    save(s);
+    notify("◐ 此刻：便利店好像有什么不一样");
+    return;
+  }
   const p = getProfile(who.id);
   saveProfile({ ...p, events: [...p.events, { id: uid("ev"), at: now, place: "", text: `你找她是因为：${c.seed}` }] });
   if (c.meet) {

@@ -167,3 +167,50 @@
 .op-root, .op-root *:not(.op-frame-btn):not(.op-text-btn), .ct-mini-id, .ct-mini-id * {
   font-family: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans SC", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif !important;
 }
+
+/* 家庭背景：沿用申请表的字体、色彩、纸张和底部双框按钮。 */
+.op-family-subtitle { text-align:center; color:#a59fbd; line-height:1.7; margin:0 0 18px; }
+.op-family-inherited { display:flex; justify-content:space-between; gap:8px; padding:10px 12px; background:#f7f4fc; border:1px solid #e8e1f2; margin-bottom:18px; }
+.op-family-inherited span:first-child { color:#9a93b2; }
+.op-family-label { display:flex; justify-content:space-between; align-items:center; gap:8px; color:#8a83a3; margin:17px 0 10px; }
+.op-family-label span, .op-family-label button { color:#a59fbd; }
+.op-family-label button, .op-family-small-btn, .op-family-back { border:0; background:none; padding:4px 0; color:#9a93b2; }
+.op-family-choices { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+.op-family-choices button { display:flex; align-items:center; gap:7px; padding:10px 8px; border:1px solid #e3dcf2; border-radius:9px; background:#fff; text-align:left; color:#4a4560; }
+.op-family-choices button:last-child { grid-column:1/-1; }
+.op-family-choices button>span { width:15px; height:15px; flex-shrink:0; border:1px solid #b9b0d6; border-radius:4px; display:flex; align-items:center; justify-content:center; color:white; }
+.op-family-choices .on { background:#f4f0fd; border-color:#a48be6; }
+.op-family-choices .on>span { background:#8f74e0; border-color:#8f74e0; }
+.op-family-income { display:flex; border:1px solid #ddd6ee; border-radius:8px; overflow:hidden; }
+.op-family-income button { flex:1; padding:9px 2px; border:0; border-right:1px solid #e6e0f3; background:white; }
+.op-family-income button:last-child { border-right:0; }
+.op-family-income .on { background:#eee8f9; color:#765bc1; }
+.op-family-member { width:100%; display:flex; align-items:center; gap:12px; background:white; border:1px solid #e3dcf2; border-radius:9px; padding:11px 12px; text-align:left; margin-top:8px; }
+.op-family-member>span:nth-child(2) { min-width:0; overflow-wrap:anywhere; }
+.op-family-monogram { display:flex; align-items:center; justify-content:center; width:35px; height:40px; flex-shrink:0; border:1px solid #e1daed; color:#9788b0; background:#f1edf8; }
+.op-family-member b { display:block; font-weight:500; }
+.op-family-member small { display:block; color:#a59fbd; margin-top:4px; }
+.op-family-arrow { margin-left:auto; color:#b0a5c5; }
+.op-family-add { width:100%; border:1px dashed #cfc5e3; border-radius:9px; background:white; padding:10px 6px; color:#8a83a3; margin-top:10px; }
+.op-family-picker { display:flex; flex-wrap:wrap; gap:7px; margin:10px 0; }
+.op-family-picker button { background:#f6f2fc; border:1px solid #ddd6ee; border-radius:6px; padding:7px 12px; }
+.op-family-small-btn { margin-top:8px; }
+.op-family-field { margin:16px 0; color:#8a83a3; }
+.op-family-field-top { display:flex; justify-content:space-between; align-items:center; gap:4px; margin-bottom:4px; }
+.op-family-field-top button { background:none; border:0; color:#aaa0bf; padding:3px; margin-left:5px; }
+.op-family-field-top .is-locked { color:#7b5bc7; }
+.op-family-field-top button:disabled { opacity:.4; cursor:default; }
+.op-family-field .op-line { color:#3d3852; display:block; }
+.op-family-person-head { text-align:center; margin:12px 0 20px; }
+.op-family-person-head .op-family-monogram { margin:auto; width:48px; height:58px; }
+.op-family-remove { display:block; margin:22px auto 4px; border:0; background:none; color:#ab8b9c; padding:8px; }
+.op-family-entry { border-bottom:1px solid #e9e3f2; padding:16px 0; overflow-wrap:anywhere; }
+.op-family-entry>div { display:flex; gap:10px; align-items:center; }
+.op-family-entry b { font-weight:500; }
+.op-family-entry span { background:#f2eef9; padding:3px 7px; color:#9a87b2; }
+.op-family-entry button { margin-left:auto; border:0; background:none; color:#a59fbd; white-space:nowrap; }
+.op-family-entry p { color:#8a83a3; line-height:1.9; margin:5px 0; }
+.op-family-end { text-align:center; letter-spacing:2px; color:#b6acc9; margin-top:25px; }
+
+.op-family-household { margin-top:16px; color:#8a83a3; }
+.op-family-household summary { cursor:pointer; padding:5px 0; }

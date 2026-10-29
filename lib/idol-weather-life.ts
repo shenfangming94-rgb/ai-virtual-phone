@@ -1,6 +1,7 @@
 /** A small seasonal event, not a reaction generator for every rainy day. */
 import { kvGet, kvSet } from './kv-db';
 import { seasonFirstSnow } from './idol-weather';
+import { loadCareer } from './idol-career';
 import { loadTraineeCard } from './trainee-card';
 import { loadCharacters } from './character-storage';
 import { composePersona, getProfile } from './idol-people';
@@ -18,7 +19,7 @@ let checkedAt=0;
 let checkedWorld=0;
 function hash(s:string){let n=0;for(const c of s)n=(Math.imul(n,31)+c.charCodeAt(0))>>>0;return n;}
 export async function firstSnowTick():Promise<void>{
-  const card=loadTraineeCard(),now=Date.now();if(busy||!card)return;
+  const card=loadTraineeCard(),now=Date.now();if(busy||!card||loadCareer().stage==='pre')return;
   if(now===checkedWorld&&realNow()-checkedAt<60000)return;
   // Most ticks stay local after the seasonal proof has been cached.
   busy=true;checkedAt=realNow();checkedWorld=now;
@@ -32,7 +33,7 @@ export async function firstSnowTick():Promise<void>{
     // No unsolicited interruptions while a scene/replay is being watched.
     if(typeof document!=='undefined'&&document.querySelector('.vn-shell[data-stage]'))return;
     const friendIds=loadChatContacts().map(x=>x.characterId);
-    const people=loadCharacters().filter(c=>friendIds.includes(c.id)&&getProfile(c.id).met&&getProfile(c.id).leave?.phase!=='left'&&!/老师|管理/.test(getProfile(c.id).role));
+    const people=loadCharacters().filter(c=>friendIds.includes(c.id)&&getProfile(c.id).met&&!getProfile(c.id).familyMemberId&&getProfile(c.id).leave?.phase!=='left'&&!/老师|管理/.test(getProfile(c.id).role));
     if(!people.length)return;
     const person=people[hash(id)%people.length],profile=getProfile(person.id);
     const slot=resolveBinding(loadBindingConfig(),person.id,'chat');

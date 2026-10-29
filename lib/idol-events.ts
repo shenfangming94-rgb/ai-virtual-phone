@@ -142,9 +142,9 @@ function rosterBlock(): string {
     .slice(0, 40)
     .map(c => {
       const p = profiles[c.id];
-      const stale = !p.status || now - p.status.at > 7 * DAY;
+      const stale = !p.familyMemberId && (!p.status || now - p.status.at > 7 * DAY);
       const worry = p.leave?.phase === "waver" || p.leave?.phase === "decided" ? `【心事：在想要不要离开公司，${p.leave.log.filter(x => x.d > 0).slice(-2).map(x => x.text).join("；")}】` : "";
-      return `- ${c.name}（${p.role || p.group || "身份没写"}${p.gender ? `，${p.gender}` : ""}${p.age ? `，${p.age}岁` : ""}；跟她：${relationOf(p)}${friends.has(c.id) ? "，KakaoTalk 好友" : ""}）最近：${p.status?.text || "没写"}${stale ? "【近况要更新】" : ""}${worry}`;
+      return `- ${c.name}（${p.role || p.group || "身份没写"}${p.gender ? `，${p.gender}` : ""}${p.age ? `，${p.age}岁` : ""}${p.familyMemberId ? `；居住地：${p.location || "未填"}；家庭关系：${p.familyBackground || "彼此熟悉，自然相处"}；偶尔自然参与，不催回复或回家` : ""}；跟她：${relationOf(p)}${friends.has(c.id) ? "，KakaoTalk 好友" : ""}）最近：${p.status?.text || "没写"}${stale ? "【近况要更新】" : ""}${worry}`;
     }).join("\n");
 }
 
@@ -171,6 +171,7 @@ const PLAN_RULES = `你在给一出韩国娱乐圈练习生的戏排接下来几
 - 她的生日、春节和中秋放假、公司年末演唱会另外有人安排，你不要排这几件。
 - 可以发生的事：${ENGINE_EVENTS}
 - 恋爱禁令是公司规矩。
+- 家人可偶尔参与与她或家庭有关的事，不需要持续更新所有家人的近况；不因玩家长期未回复或未回家制造惩罚、催促或强制任务。涉及见面须遵循家人的居住地。已设置家庭中的缺席成员不另造人物填补。
 - 人物只用下面名单里的名字、群里的路人名字；要新出场有名字的人就写进 newPeople。
 - 消息要像真人发的 KakaoTalk：口语、短，一个人一次一到三条。where 写 group（练习生群）或 private（私聊她）。
 - 每句话都要合情合理、前因后果对得上：只有影响到群里大家的事才在群里通知，个人的事走私聊或者当八卦传。

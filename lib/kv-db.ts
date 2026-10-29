@@ -217,6 +217,14 @@ export async function kvSetAsync(key: string, value: string): Promise<void> {
     }
 }
 
+/** 确认开局等关键操作：等待当前 KV 快照在同一事务中落盘，失败由界面处理。 */
+export async function persistKvSnapshot(): Promise<void> {
+    const entries = kvEntries();
+    await kvDb.transaction("rw", kvDb.entries, async () => {
+        await kvDb.entries.bulkPut(entries);
+    });
+}
+
 // ── Delete ──
 export function kvRemove(key: string): void {
     _cache.delete(key);

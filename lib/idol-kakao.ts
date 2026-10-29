@@ -145,6 +145,7 @@ export async function fleshOut(charId: string, reroll = false): Promise<void> {
   const c = loadCharacters().find(x => x.id === charId);
   if (!c) return;
   const p = getProfile(charId);
+  if (p.familyMemberId && !reroll) return;
   if (!reroll && p.privateLines.length) return;
   const face = reroll ? rollFace() : p.face;
   const task = (async () => {
@@ -165,7 +166,7 @@ export async function fleshOut(charId: string, reroll = false): Promise<void> {
 
 export function needsFleshOut(charId: string): boolean {
   const p = loadProfiles()[charId];
-  return Boolean(p && p.privateLines.length === 0);
+  return Boolean(p && !p.familyMemberId && p.privateLines.length === 0);
 }
 
 function promote(charId: string) {

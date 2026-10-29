@@ -1,3 +1,4 @@
+import { familyMemberFor } from "./idol-family-data";
 /**
  * Background follow-up service.
  * Runs independently of any React component — fires follow-ups
@@ -169,6 +170,13 @@ export function stopFollowUpService() {
 /** Schedule a follow-up for a session (called by ChatRoom after AI replies).
  *  Purely anxiety-driven: no anxiety field or below threshold → no follow-up. */
 export function scheduleFollowUp(sessionId: string, count: number, stateValues?: StateValue[]) {
+    // 家人由既有剧情/闲聊发动机偶尔联系，不因未回复产生焦虑催聊。
+    const familySession = loadChatSessions().find(s => s.id === sessionId);
+    if (familySession && familyMemberFor(familySession.contactId)) {
+        clearFollowUpSchedule(sessionId);
+        cancelFollowUpBailout(sessionId);
+        return;
+    }
     const config = loadFollowUpConfig();
 
     if (!stateValues || stateValues.length === 0) {
@@ -543,6 +551,7 @@ function pollIdleReconnect(now: number) {
     lastIdleReconnectPollAt = now;
 
     for (const rule of loadIdleReconnectRules()) {
+        if (familyMemberFor(rule.characterId)) continue;
         if (idleReconnectFiringSet.has(rule.id)) continue;
         if (firingSet.has(rule.sessionId)) continue;
         // 追问链正在管这个会话时不叠加打扰

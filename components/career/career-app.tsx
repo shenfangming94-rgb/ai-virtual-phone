@@ -443,35 +443,35 @@ function TimetablePage({ onBack }: { onBack: () => void }) {
   const [, set] = useState(0);
   useEffect(() => { const f = () => set(x => x + 1); window.addEventListener(STARROAD_EVENT, f); return () => window.removeEventListener(STARROAD_EVENT, f); }, []);
   const [offset, setOffset] = useState(0);
+  const [selectedDay, setSelectedDay] = useState(() => (new Date().getDay() + 6) % 7);
   const mon = (() => { const d = new Date(); d.setHours(0, 0, 0, 0); d.setDate(d.getDate() - ((d.getDay() + 6) % 7) + offset * 7); return d.getTime(); })();
   const week = weekTimetable(mon);
+  const selected = week[selectedDay];
+  const company = companyOf(loadCareer().companyId);
   const today = new Date().toDateString();
+  const start = new Date(mon), end = new Date(mon + 6 * DAY);
+  const colors = ["#9c94c6", "#85a89e", "#d5a37e", "#8da7c7"];
+  const statusOf = (c: NonNullable<typeof selected>["classes"][number]) => {
+    if (c.status) return MARK[c.status];
+    if (c.leave) return "已请假";
+    const now = Date.now(), date = selected?.day ?? mon;
+    const at = (value: string) => { const [h,m] = value.split(":").map(Number); const d = new Date(date); d.setHours(h,m,0,0); return d.getTime(); };
+    return now < at(c.start) ? "待上课" : now < at(c.end) ? "上课时段" : "待记录";
+  };
   return (
-    <div className="rm-page">
+    <div className="rm-page rm-tt-page">
       <div className="rm-top"><button type="button" className="rm-circle" onClick={onBack} aria-label="返回"><ChevronLeft size={22} /></button><span /></div>
-      <h1 style={{ color: "#5e5ce6" }}>课表</h1>
-      <div className="rm-tt-week">
-        <button type="button" onClick={() => setOffset(o => o - 1)} disabled={offset <= -1}><ChevronLeft size={18} /></button>
-        <span>{offset === 0 ? "这周" : offset < 0 ? "上周" : "下周"}</span>
-        <button type="button" onClick={() => setOffset(o => o + 1)} disabled={offset >= 1}><ChevronRight size={18} /></button>
+      <div className="tt-heading"><small>{company?.name || "STAR ROAD"} · TRAINEE SCHEDULE</small><h1>课程表</h1><p>按自己的节奏，一点一点进步。</p></div>
+      <div className="tt-week">
+        <button type="button" aria-label="上一周" onClick={() => setOffset(o => o - 1)} disabled={offset <= -1}><ChevronLeft size={18} /></button>
+        <div><b>{offset === 0 ? "这周" : offset < 0 ? "上周" : "下周"}</b><small>{start.getFullYear()}年{start.getMonth()+1}月{start.getDate()}日 — {end.getFullYear() !== start.getFullYear() ? `${end.getFullYear()}年` : ""}{end.getMonth()+1}月{end.getDate()}日</small></div>
+        <button type="button" aria-label="下一周" onClick={() => setOffset(o => o + 1)} disabled={offset >= 1}><ChevronRight size={18} /></button>
       </div>
-      {week.filter(d => d.classes.length).map(d => (
-        <div key={d.day}>
-          <div className={`rm-sec ${new Date(d.day).toDateString() === today ? "rm-tt-today" : ""}`}>{d.label}</div>
-          <div className="rm-group">
-            {d.classes.map(c => (
-              <div key={c.start + c.label} className="rm-kv rm-tt-row">
-                <span>{c.start}～{c.end}</span>
-                <b>{c.label}</b>
-                <em className={c.status ? `st-${c.status}` : c.leave ? "st-leave" : ""}>{c.status ? MARK[c.status] : c.leave ? "已请假" : ""}</em>
-              </div>
-            ))}
-          </div>
-        </div>
-      ))}
-      {!week.some(d => d.classes.length) ? <p className="rm-empty">进了公司才有课表</p> : null}
-      <p className="rm-tt-tip">课默认都去了，不用打勾。上课时间人在公司外（此刻里去了别处、答应了别人的约）算旷课。请假在 KakaoTalk 找室长。</p>
-      <div style={{ height: 60 }} />
+      <div className="tt-days" role="group" aria-label="选择课程日期">{week.map((day,i) => <button type="button" key={day.day} className={i === selectedDay ? "selected" : ""} aria-pressed={i === selectedDay} aria-label={day.label} onClick={() => setSelectedDay(i)}><small>周{WEEK[new Date(day.day).getDay()]}</small><b>{new Date(day.day).getDate()}</b><i style={{ visibility: day.classes.length ? "visible" : "hidden" }} /></button>)}</div>
+      <div className="tt-dayhead"><b>周{selected ? WEEK[new Date(selected.day).getDay()] : "一"}{selected && new Date(selected.day).toDateString() === today ? <span> · 今天</span> : null}</b><small>{selected?.classes.length ?? 0} 节课程</small></div>
+      <div className="tt-timeline">{selected?.classes.map((c,i) => <div className="tt-class" key={`${selected.day}-${c.start}-${c.label}`} style={{ ["--accent" as string]: colors[i % colors.length] }}><div className="tt-time">{c.start}<small>{c.end}</small></div><div className="tt-course"><span className="tt-course-tag">{c.extra ? "加强课程" : "公司课程"}</span><b>{c.label}</b><div><span>{company?.name || "公司"} · 练习生课程</span><em className={c.status ? `st-${c.status}` : c.leave ? "st-leave" : ""}>{statusOf(c)}</em></div></div></div>)}</div>
+      {!selected?.classes.length ? <p className="rm-empty">{week.some(d => d.classes.length) ? "今天没有安排课程" : "这一周暂无课程安排"}</p> : null}
+      <div className="tt-foot">课程默认参加，无需逐节打勾。<br />需要请假时，在 KakaoTalk 联系室长。<br />上课时外出游玩会算旷课，请留意撞课提示。</div>
     </div>
   );
 }

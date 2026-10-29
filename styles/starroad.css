@@ -73,3 +73,10 @@
 .sr-card .no { position: absolute; left: 8px; top: 7px; font: 600 6px "Source Han Serif CN VF", "Noto Serif SC", serif; letter-spacing: .2em; color: rgba(40,38,32,.55); }
 .sr-card .t { position: absolute; left: 4px; right: 4px; bottom: 20px; text-align: center; font: 700 10px "Source Han Serif CN VF", "Noto Serif SC", serif; letter-spacing: .14em; color: #2b2a25; }
 .sr-card .en { position: absolute; left: 0; right: 0; bottom: 5px; text-align: center; font: 12px "SR Mrs Saint Delafield", cursive; color: rgba(43,42,37,.75); transform: rotate(-4deg); }
+
+/* Personal details: equal value lines, centered labels and values. */
+.sr-fields { display: grid; grid-template-columns: 44px minmax(0,1fr); column-gap: 6px; row-gap: 8px; align-content: start; }
+.sr-fields > div { display: contents; }
+.sr-fields .sr-label { text-align: center; align-self: end; font-size: 9.5px; letter-spacing: .06em; }
+.sr-fields u { display: block; margin: 0; width: 100%; min-width: 0; text-align: center; }
+.sr-info { align-items: center; }

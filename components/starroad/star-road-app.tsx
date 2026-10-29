@@ -74,11 +74,11 @@ export function StarRoadApp({ onClose, onNotice }: { onClose: () => void; onNoti
               <div className="sr-sub">TRAINEE TRANSCRIPT</div>
               <div className="sr-info">
                 <div className="sr-fields">
-                  <div>NAME<u>{card?.name || " "}</u></div>
-                  <div>BIRTH<u>{card?.birthday ? card.birthday.replace(/-/g, ".") : " "}</u></div>
-                  <div>AGENCY<u>{company?.name || " "}</u></div>
-                  <div>SINCE<u>{career.signedAt ? ymd(career.signedAt) : " "}</u></div>
-                  <div>DAY<u>{days ? `第 ${days} 天` : " "}</u></div>
+                  <div><span className="sr-label">NAME</span><u>{card?.name || " "}</u></div>
+                  <div><span className="sr-label">BIRTH</span><u>{card?.birthday ? card.birthday.replace(/-/g, ".") : " "}</u></div>
+                  <div><span className="sr-label">AGENCY</span><u>{company?.name || " "}</u></div>
+                  <div><span className="sr-label">SINCE</span><u>{career.signedAt ? ymd(career.signedAt) : " "}</u></div>
+                  <div><span className="sr-label">DAY</span><u>{days ? `第 ${days} 天` : " "}</u></div>
                 </div>
                 <div className="sr-photo">{card?.photo ? <img src={card.photo} alt="" /> : null}</div>
               </div>

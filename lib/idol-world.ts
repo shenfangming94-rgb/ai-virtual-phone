@@ -1,3 +1,4 @@
+import { ROMANCE_EXTRACTION_RULE, romanceSceneHint, recordSceneRomance, type RomanceObservation } from "./idol-romance";
 import { IDOL_LANGUAGE_RULE } from "./idol-language";
 import { namedFamilyMember } from "./idol-family-data";
 import { worldWeatherHint } from "./idol-weather";
@@ -94,6 +95,7 @@ export type SceneHost = {
   ids(): string[];
   setIds(ids: string[]): void;
   transcript(): string;
+  witnessTranscript?(id: string): string;
   fallbackPlace: string;
 };
 
@@ -153,6 +155,7 @@ export function worldPromptFor(meta: SceneMeta | null, fallbackPlace: string, pa
     `【她是谁】\n${whoIsShe()}\n${kakaoPromptLine()}`,
     careerPromptBlock(),
     eventsPromptBlock(),
+    romanceSceneHint(),
     worldWeatherHint(),
     sceneTimeBoundaryHint(meta?.nodeId),
     `【时间和地点】\n现在：${fmtWorld(Date.now())}\n地点：${meta?.place || fallbackPlace || "某个地方"}${meta?.premise ? `\n开头：${meta.premise}` : ""}`,
@@ -287,6 +290,7 @@ export async function closeWorldScene(groupId: string, sessionId: string): Promi
 
 export async function closeSceneWith(host: SceneHost): Promise<SceneCloseResult> {
   const meta = host.meta() ?? { place: host.fallbackPlace, premise: "", startAt: Date.now(), newFaces: [] };
+  if (meta.ended) return { summary: meta.summary || "", recorded: [], firstMeet: [] };
   const chars = loadCharacters();
   const present = host.ids().filter(id => id !== WORLD_CHAR_ID).map(id => chars.find(c => c.id === id)).filter((c): c is Character => Boolean(c));
   const transcript = host.transcript().slice(-12000);
@@ -296,12 +300,13 @@ export async function closeSceneWith(host: SceneHost): Promise<SceneCloseResult>
   let summary = "";
   if (present.length && transcript) {
     const res = await simpleLLMCall(chatConfig(), [
-      { role: "system", content: `把这场戏记下来。只输出 JSON：{"summary":"这场戏两三句",${examNode ? `"performance":"good/ok/bad：这场${examNode.title}她表现得怎么样，按她在戏里实际做了什么、准备得怎么样判断，她认真准备了不能硬说不好","performanceWhy":"一句话原因",` : ""}"practice":["她这场里真的在练/上课的科目，只能写 vocal dance rap compose acting variety language visual，没练写空数组"],"people":[{"name":"","event":"站在这个人的角度，这场里他和她之间发生了什么，一句话；没交集就写空","impression":"只给第一次见她的人写：他对她的第一印象，一两句；其他人写空","relation":"up/down/same","heart":"up/down/same","secretLearned":"她这场知道了他的秘密就写她是怎么知道的，一句话；没有就写空","status":"这场之后他最近在忙什么，世界视角一句；没变就写空","kakao":"他会写在 KakaoTalk 状态消息里的短句；没变就写空","stay":"只给同公司的练习生写：这场之后他更想留在公司写 stay、更想离开写 leave、没影响写 same","stayWhy":"stay 或 leave 时一句原因"}],"video":null}\nvideo：只有这场里她确实给公司拍了要传到公司公开 YouTube 的视频（翻跳、唱歌、vlog、伴舞直拍之类）才写成 {"title":"真 YouTube 那样的韩文或英文标题","titleZh":"","kind":"练习生/直拍/vlog","dur":"m:ss","img":"画面两三句，照戏里实际拍到的写，写名字和谁站哪，她就写她的名字，不编戏里没有的事","cast":[{"pos":"左一/中间/右二…","name":""}]}，否则写 null。\n关系和心动只按这场里真的发生的事判断，一场最多动一格，没发生什么就写 same；没有心动线的人 heart 写 same。\n第一次见她的人：${firstMeet.join("、") || "无"}` },
+      { role: "system", content: `把这场戏记下来。只输出 JSON：{"summary":"这场戏两三句",${examNode ? `"performance":"good/ok/bad：这场${examNode.title}她表现得怎么样，按她在戏里实际做了什么、准备得怎么样判断，她认真准备了不能硬说不好","performanceWhy":"一句话原因",` : ""}"practice":["她这场里真的在练/上课的科目，只能写 vocal dance rap compose acting variety language visual，没练写空数组"],"people":[{"name":"","event":"站在这个人的角度，这场里他和她之间发生了什么，一句话；没交集就写空","impression":"只给第一次见她的人写：他对她的第一印象，一两句；其他人写空","relation":"up/down/same","heart":"up/down/same","secretLearned":"她这场知道了他的秘密就写她是怎么知道的，一句话；没有就写空","status":"这场之后他最近在忙什么，世界视角一句；没变就写空","kakao":"他会写在 KakaoTalk 状态消息里的短句；没变就写空","stay":"只给同公司的练习生写：这场之后他更想留在公司写 stay、更想离开写 leave、没影响写 same","stayWhy":"stay 或 leave 时一句原因"}],"video":null}\nvideo：只有这场里她确实给公司拍了要传到公司公开 YouTube 的视频（翻跳、唱歌、vlog、伴舞直拍之类）才写成 {"title":"真 YouTube 那样的韩文或英文标题","titleZh":"","kind":"练习生/直拍/vlog","dur":"m:ss","img":"画面两三句，照戏里实际拍到的写，写名字和谁站哪，她就写她的名字，不编戏里没有的事","cast":[{"pos":"左一/中间/右二…","name":""}]}，否则写 null。\n关系和心动只按这场里真的发生的事判断，一场最多动一格，没发生什么就写 same；没有心动线的人 heart 写 same。\n${ROMANCE_EXTRACTION_RULE}\n${romanceSceneHint()}\n人物日常event/status/kakao只写本人实际知情的事，不把未证实的恋爱猜测写成事实；私密知情与处理细节只放romance字段，不放公开状态或其他人的记忆。\n第一次见她的人：${firstMeet.join("、") || "无"}` },
       { role: "user", content: `地点：${meta.place}\n在场：\n${present.map(c => { const pp = getProfile(c.id); return `- ${c.name}：关系 ${relationOf(pp)}${pp.canCrush && pp.heart ? `，心动 ${pp.heart}` : "，没有心动线"}${pp.secret && pp.secret.kind !== "none" && pp.secret.text && !pp.secret.revealed ? `，秘密：${pp.secret.text}` : ""}`; }).join("\n")}\n\n${transcript}` },
     ], { temperature: 0.4, label: "剧情记账" });
     if (!res.content) throw new Error(res.error || "AI 没回");
-    const j = JSON.parse(res.content.match(/\{[\s\S]*\}/)?.[0] ?? "{}") as { practice?: string[]; video?: SceneVideo | null; summary?: string; performance?: string; performanceWhy?: string; people?: { name?: string; event?: string; impression?: string; relation?: string; heart?: string; secretLearned?: string; status?: string; kakao?: string; stay?: string; stayWhy?: string }[] };
+    const j = JSON.parse(res.content.match(/\{[\s\S]*\}/)?.[0] ?? "{}") as { romanceObservations?: RomanceObservation[]; romanceOutcomes?: { observer?: string; partner?: string; quote?: string; text?: string }[]; practice?: string[]; video?: SceneVideo | null; summary?: string; performance?: string; performanceWhy?: string; people?: { name?: string; event?: string; impression?: string; relation?: string; heart?: string; secretLearned?: string; status?: string; kakao?: string; stay?: string; stayWhy?: string }[] };
     summary = String(j.summary ?? "");
+    recordSceneRomance({ sourceId: `scene:${host.key}`, at: Date.now(), transcript, present, people: chars, playerName: loadTraineeCard()?.name, witnessTranscript: host.witnessTranscript, observations: j.romanceObservations, outcomes: j.romanceOutcomes });
     if (j.video && typeof j.video === "object") recordSceneVideo(j.video, meta.startAt);
     if (examNode && j.performance) recordPerformance(examNode, String(j.performance), String(j.performanceWhy ?? ""));
     if (examNode) onNodeDone(examNode, String(j.performance ?? "ok"));

@@ -415,6 +415,17 @@ export function stageHost(chapterId: string): SceneHost | null {
       .map(m => frameText(m.rawContent, m.role))
       .filter(Boolean)
       .join("\n\n"),
+    witnessTranscript: id => {
+      const span = get()?.spans?.[id] ?? { from: 0 };
+      let segment = 0;
+      return loadVnMessagesForChapter(session.id, ch.index)
+        .filter(m => {
+          if (m.role !== "user" && m.role !== "assistant") return false;
+          const i = m.role === "assistant" ? segment++ : segment;
+          return i >= span.from && (span.to === undefined || i <= span.to);
+        })
+        .map(m => frameText(m.rawContent, m.role)).filter(Boolean).join("\n\n");
+    },
     fallbackPlace: get()?.place || "某个地方",
   };
 }

@@ -1,3 +1,4 @@
+import { recordInsRomance } from "./idol-romance";
 /**
  * 爱豆小手机：ins。
  *
@@ -250,14 +251,16 @@ export function insTick(notify: (m: string) => void): void {
 
 function leak(p: Post, notify: (m: string) => void) {
   const love = Boolean(p.risk?.love);
-  const what = love ? "她 ins 小号上秀恩爱的帖子被扒出来了" : p.risk?.level === "high" ? "她 ins 小号上的帖子被扒出来，传开了" : "她的 ins 小号被扒出来了，有人在网上讨论";
+  const what = love ? "她 ins 上一条被解读为恋情线索的帖子被传播了" : p.risk?.level === "high" ? "她 ins 小号上的帖子被扒出来，传开了" : "她的 ins 小号被扒出来了，有人在网上讨论";
   fameEvent(p.risk?.level === "high" || love ? "medium" : "small", what, Date.now());
   addWorldFeed(`${what}（${p.risk?.why ?? ""}）`);
   notify(`❗ 被扒了：${p.risk?.why || "你 ins 上的一条帖子"}`);
   const t = teacherOf();
-  if (t) queueMessage(t.id, love
-    ? `她 ins 私人小号上秀恩爱的帖子被网上扒出来了（${p.risk?.why}）。按公司的恋爱禁令严肃地私聊她，叫她来办公室谈。`
-    : `她的 ins 私人小号被网上扒出来了（${p.risk?.why}）。私聊她，提醒她锁好或者删掉，语气按你的性格。`, rnd(1, 4) * HOUR);
+  if (love) {
+    const ids = new Set(p.imgs.flatMap(i => i.who || []).filter(id => id !== SELF_REFERENCE_ID));
+    const people = loadCharacters().filter(c => ids.has(c.id));
+    recordInsRomance(p.id, p.risk?.why || "帖子被解读为恋情线索", t, people.length === 1 ? people[0] : undefined);
+  } else if (t) queueMessage(t.id, `她的 ins 私人小号被网上扒出来了（${p.risk?.why}）。私聊她，提醒她锁好或者删掉，语气按你的性格。`, rnd(1, 4) * HOUR);
 }
 
 // ── 打开 ins：补上次以来大家的帖子和快拍 ──

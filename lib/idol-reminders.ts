@@ -1,3 +1,4 @@
+import { loadRomance, romanceActorHint, romanceMessageDelivered, romanceMessageExpired } from "./idol-romance";
 /**
  * 爱豆小手机：提醒事项的规矩。
  *
@@ -38,7 +39,7 @@ const DAY = 24 * HOUR;
 /** 过了开始时间多久还没动就算缺席 */
 export const ABSENT_AFTER = 2 * HOUR;
 
-type Outbox = { id: string; charId: string; instruction: string; at: number; node?: CareerNode; strictPersona?: boolean; important?: boolean; birthdayDate?: string; requireFriend?: boolean; attempts?: number; paused?: boolean; dedupeKey?: string; delivered?: { sessionId: string; messageId: string } };
+type Outbox = { romanceId?: string; id: string; charId: string; instruction: string; at: number; node?: CareerNode; strictPersona?: boolean; important?: boolean; birthdayDate?: string; requireFriend?: boolean; attempts?: number; paused?: boolean; dedupeKey?: string; delivered?: { sessionId: string; messageId: string } };
 type State = { outbox: Outbox[]; absences: number; sentKeys?: string[] };
 
 function load(): State {
@@ -215,7 +216,7 @@ function chatConfig() {
   return config;
 }
 
-export function queueMessage(charId: string, instruction: string, delay: number, options: Pick<Outbox, "node" | "strictPersona" | "important" | "birthdayDate" | "requireFriend" | "dedupeKey"> = {}) {
+export function queueMessage(charId: string, instruction: string, delay: number, options: Pick<Outbox, "node" | "strictPersona" | "important" | "birthdayDate" | "requireFriend" | "dedupeKey" | "romanceId"> = {}) {
   const s = load();
   if (options.dedupeKey && (s.sentKeys?.includes(options.dedupeKey) || s.outbox.some(o => o.dedupeKey === options.dedupeKey))) return;
   save({ ...s, outbox: [...s.outbox, { id: uid("out"), charId, instruction, at: Date.now() + delay, ...options }] });
@@ -324,12 +325,18 @@ export function reminderTick(notify: (msg: string) => void): void {
   const queued = s.outbox.find(o => !o.paused && o.at <= now && (!o.requireFriend || loadChatContacts().some(c => c.characterId === o.charId)));
   if (!queued) return;
   const due = { ...queued };
+  if (due.romanceId && loadRomance().knowledge.find(k => k.id === due.romanceId)?.supersededBy && !due.delivered) {
+    save({ ...s, outbox: s.outbox.filter(o => o.id !== due.id) }); return;
+  }
   const today = `${new Date(now).getFullYear()}-${String(new Date(now).getMonth()+1).padStart(2,"0")}-${String(new Date(now).getDate()).padStart(2,"0")}`;
   const lateBirthday = due.birthdayDate && due.birthdayDate < today;
   if (lateBirthday || (due.node && due.node.dueAt <= now && due.dedupeKey?.startsWith("birthday:"))) {
     due.node = undefined;
     due.instruction = `这条生日祝福原定在${due.birthdayDate || "她生日当天"}送达，现在时间已经过去。沿用你的人设、关系与记忆，自然送上迟到的祝福，不再说今天生日，不责怪她没上线，不重复发起已经过期的庆祝邀请。`;
-  } else if (due.node && due.node.dueAt <= now && !due.delivered) { save({ ...s, outbox: s.outbox.filter(o => o.id !== due.id) }); return; }
+  } else if (due.node && due.node.dueAt <= now && !due.delivered) {
+    if (due.romanceId) romanceMessageExpired(due.romanceId);
+    save({ ...s, outbox: s.outbox.filter(o => o.id !== due.id) }); return;
+  }
   busy = true;
   const existing = due.node ? loadCareer().nodes.find(n => n.id === due.node!.id) : undefined;
   const instruction = `${due.instruction}${due.node ? `\n本轮对应事项编号${due.node.id}，标题「${due.node.title}」，${noticeTime(due.node.dueAt)}，地点${due.node.place}。${existing && existing.status !== "invite" ? `她已处理此邀请，当前状态${existing.status}，不要重复询问。` : "自然说出邀请的具体时间地点并问她愿不愿意，不替她答应。"}这条邀请由系统随消息发布，不另写创建邀约标记。` : ""}`;
@@ -347,6 +354,7 @@ export function reminderTick(notify: (msg: string) => void): void {
         saveCareer({ ...career, nodes: old ? career.nodes.map(n => n.id === node.id ? node : n) : [...career.nodes, node].sort((a,b) => a.dueAt-b.dueAt) });
       }
       const latest = load(); save({ ...latest, outbox: latest.outbox.filter(o => o.id !== due.id), sentKeys: due.dedupeKey ? [...(latest.sentKeys || []), due.dedupeKey].slice(-300) : latest.sentKeys });
+      if (due.romanceId) romanceMessageDelivered(due.romanceId, first);
       notify(`💬 ${loadCharacters().find(c => c.id === due.charId)?.name}：${first.content}`);
     })
     .catch(() => {
@@ -365,7 +373,7 @@ const proactive = new Map<string, string>();
 
 export function buildIdolChatHint(characterId: string, isGroup: boolean): string {
   if (isGroup || typeof window === "undefined") return "";
-  const out: string[] = [];
+  const out: string[] = [romanceActorHint(characterId)];
   const intent = proactive.get(characterId);
   if (intent) {
     out.push("### 这一条是你主动发的", "她没有给你发消息，是你自己想找她：", intent);

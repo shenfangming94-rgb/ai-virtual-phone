@@ -1,3 +1,4 @@
+import { ROMANCE_PRIVACY_RULE, romanceSceneHint } from "./idol-romance";
 import { chatNotice, type ScheduleNotice } from "./idol-schedule-notices";
 import { worldWeatherHint } from "./idol-weather";
 /**
@@ -171,11 +172,11 @@ const PLAN_RULES = `你在给一出韩国娱乐圈练习生的戏排接下来几
 - 不替她决定她的表现、心情和身体，不写她说了什么、做了什么；她的失误类事情只发生在别人身上。
 - 她的生日、春节和中秋放假、公司年末演唱会另外有人安排，你不要排这几件。
 - 可以发生的事：${ENGINE_EVENTS}
-- 恋爱禁令是公司规矩。
+- 恋爱禁令是公司规矩。${ROMANCE_PRIVACY_RULE} 已知情后的首次反应由专门流程处理，不另排重复约谈；不得随机生成她已被发现、被偷拍或向外泄露的既成事实。
 - 家人可偶尔参与与她或家庭有关的事，不需要持续更新所有家人的近况；不因玩家长期未回复或未回家制造惩罚、催促或强制任务。涉及见面须遵循家人的居住地。已设置家庭中的缺席成员不另造人物填补。
 - 人物只用下面名单里的名字、群里的路人名字；要新出场有名字的人就写进 newPeople。
 - 消息要像真人发的 KakaoTalk：口语、短，一个人一次一到三条。where 写 group（练习生群）或 private（私聊她）。
-- 每句话都要合情合理、前因后果对得上：只有影响到群里大家的事才在群里通知，个人的事走私聊或者当八卦传。
+- 每句话都要合情合理、前因后果对得上：只有影响到群里大家的事才在群里通知，个人的事走私聊或者当八卦传。她的恋情不走这条八卦传播路径：仅按知情账让知情者本人私聊，不写进群聊，不新增知情人或场外传播。
 - 每个invite必须有同一发起人在lines里实际发出的邀请消息，写清同一时间地点；通知与邀请同时送达，不替她接受。
 - 机会和约要她回复的写 invite（title、at 开始时间、place、replyBy 回复截止、from 谁通知或谁约的），kind 写 chance 或 date；同时写一条通知她的消息。
 - invite 的 place：先从「地点名单」里挑最合适的，照名单原样写（比如吃烤肉写「江南·烤肉店」、公司里的事写「公司·会议室」）；名单里实在没有合适的才自己写一个具体地点。
@@ -213,6 +214,7 @@ async function plan(from: number, to: number): Promise<void> {
     `【她是谁】\n${card ? describeTrainee(card) : "一个想当爱豆的女生"}\n关注度：${fameWord(s.fame)}${s.health && s.health.until > now ? `\n身体：${s.health.what}` : ""}`,
     careerPromptBlock(),
     worldWeatherHint() ? `【此刻的天气，仅代表现在，不代表未来三天】${worldWeatherHint()}` : "",
+    romanceSceneHint(),
     `【名单】\n${rosterBlock() || "（还没有）"}`,
     `【地点名单】${allScenePlaces().filter(x => !placeLocked(x)).map(x => x.key).join("、")}`,
     crowd ? `【练习生群里的路人】${crowd}` : "",

@@ -1,3 +1,4 @@
+import { romanceActorHint } from "./idol-romance";
 import { idolLanguageHint } from "./idol-language";
 // lib/group-chat-engine.ts
 // Group chat engine: single API call for all characters.
@@ -436,7 +437,7 @@ async function buildGroupChatPromptMessages(
         hint: buildChatPluginPromptFragments(session.id),
     });
     const pluginPromptHint = pluginPrompt.hint?.trim() ? `\n\n### 扩展插件\n${pluginPrompt.hint.trim()}\n` : "";
-    const customAppRichMediaDirectives = formatCustomAppChatDirectivesForPrompt({ group: true }) + idolLanguageHint(members.map(m => m.character)) + buildScreenEffectPromptHint() + pluginPromptHint;
+    const customAppRichMediaDirectives = formatCustomAppChatDirectivesForPrompt({ group: true }) + idolLanguageHint(members.map(m => m.character)) + "\n" + members.map(m => `${m.character.name}的私有信息（其他人不得据此知情）：${romanceActorHint(m.character.id)}`).join("\n") + buildScreenEffectPromptHint() + pluginPromptHint;
     const toolsPrompt = usesNativeActions
         ? "需要动作时使用可用动作接口。"
         : formatToolsForPrompt(enabledTools);

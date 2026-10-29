@@ -1,5 +1,7 @@
 "use client";
 
+import { romanceTick } from "@/lib/idol-romance-reactions";
+
 import { GlobalCallHost } from "./chat/global-call-host";
 import { AlbumApp } from "./album/album-app";
 import { worldWeatherTick } from "@/lib/idol-weather";
@@ -1143,6 +1145,7 @@ export function DesktopShell({ initialThemeProfile, initialThemeAssets }: Deskto
       try { yearlyTick(idolNotify); } catch { /* 同上 */ }
       try { searchTick(idolNotify); } catch { /* 同上 */ }
       try { mailAppTick(idolNotify); } catch { /* 同上 */ }
+      try { romanceTick(); } catch { /* 恋情处理失败不影响其他App */ }
       try { insTick(idolNotify); } catch { /* 同上 */ }
       try { ytTick(idolNotify); } catch { /* 同上 */ }
       try { leaveTick(); } catch { /* 同上 */ }

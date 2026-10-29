@@ -15,6 +15,9 @@ import { loadApiConfigs, loadBindingConfig, resolveBinding } from "./settings-st
 import { loadTraineeCard, saveTraineeCard, describeTrainee } from "./trainee-card";
 import { upsertCalendarScheduleItem } from "./calendar-storage";
 import { getWeekStartIso } from "./calendar-utils";
+import { deleteCalendarScheduleItem } from "./calendar-storage";
+import { announceSchedule, type ScheduleNotice } from "./idol-schedule-notices";
+import { addMail, recordMailReply } from "./idol-mail";
 import { debutPromptBlock, onSelection, revealName, type Debut } from "./idol-debut";
 import { starPromptBlock } from "./idol-starroad";
 
@@ -31,7 +34,7 @@ export const COMPANIES: Company[] = [
 
 export const companyOf = (id?: string) => COMPANIES.find(c => c.id === id);
 
-export type Offer = { id: string; companyId: string; kind: "scout" | "audition"; at: number; message: string; place: string; status: "new" | "accepted" | "declined"; notified?: boolean };
+export type Offer = { id: string; companyId: string; kind: "scout" | "audition"; at: number; message: string; place: string; status: "new" | "accepted" | "declined"; notified?: boolean; notice?: ScheduleNotice };
 export type NodeKind = "audition" | "first_day" | "weekly" | "monthly" | "talk" | "makeup" | "chance" | "date" | "custom" | "selection" | "debut" | "event" | "homework" | "practice";
 /** invite = 待回复；pending = 定了还没到/没做；done = 演了或打勾；leave = 请假；absent = 缺席；declined = 不去/过期；passed = 旧数据（当缺席） */
 export type NodeStatus = "invite" | "pending" | "done" | "leave" | "absent" | "declined" | "passed";
@@ -56,6 +59,10 @@ export type CareerNode = {
   /** 她想要的结果（考前定） */
   wish?: string;
   note?: string;
+  notice?: ScheduleNotice;
+  inviterIds?: string[];
+  participantIds?: string[];
+  occasion?: string;
   doneAt?: number;
   /** 出道那几件事：name 队名公布 / record 录音 / mv / showcase */
   step?: string;
@@ -104,7 +111,33 @@ export function loadCareer(): Career {
 }
 
 export function saveCareer(c: Career): void {
-  kvSet(KEY, JSON.stringify(c));
+  const previous = loadCareer();
+  const announce: CareerNode[] = [];
+  const changes: CareerNode[] = [];
+  const nodes = c.nodes.map(n => {
+    const old = previous.nodes.find(p => p.id === n.id);
+    const next = { ...n, notice: n.notice ?? old?.notice, ...(old && old.dueAt !== n.dueAt ? { remindedDue: false, remindedEve: false } : {}) };
+    if (!old && !next.notice && n.kind !== "custom" && n.kind !== "practice" && (n.status === "pending" || n.status === "invite")) announce.push(next);
+    if (n.kind !== "custom" && n.kind !== "practice" && old && (!n.notice || n.notice.refId === old.notice?.refId) && (old.status === "pending" || old.status === "invite") && ((old.dueAt !== n.dueAt || old.place !== n.place || old.title !== n.title) || (n.status === "declined" && old.status !== "invite") || n.status === "leave")) changes.push(next);
+    return next;
+  });
+  if (announce.length) {
+    // 按发信人分批，不能把不同人的邀请冒充成同一个人的通知。
+    for (const sender of new Set(announce.map(n => n.fromId || n.from || n.companyId || "system"))) {
+      const batch = announce.filter(n => (n.fromId || n.from || n.companyId || "system") === sender);
+      const receipt = announceSchedule(batch);
+      batch.forEach(n => { n.notice = receipt; });
+    }
+  }
+  for (const n of changes) n.notice = announceSchedule([n], n.status === "leave" || n.status === "declined" ? "取消" : "变更");
+  kvSet(KEY, JSON.stringify({ ...c, nodes }));
+  for (const old of previous.nodes) {
+    const next = nodes.find(n => n.id === old.id);
+    if (old.status === "pending" && (!next || next.dueAt !== old.dueAt || next.status === "declined" || next.status === "leave" || next.status === "invite")) {
+      try { deleteCalendarScheduleItem("user", "self", getWeekStartIso(new Date(old.dueAt)), `idol_${old.id}`); } catch { /* 不影响事项 */ }
+    }
+  }
+  for (const n of nodes) if (n.status === "pending" && previous.nodes.some(p => p.id === n.id && (p.dueAt !== n.dueAt || p.place !== n.place || p.title !== n.title))) addToCalendar(n);
   if (typeof window !== "undefined") window.dispatchEvent(new Event(CAREER_EVENT));
 }
 
@@ -129,6 +162,7 @@ const isoDate = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(
 const hhmm = (d: Date) => `${pad(d.getHours())}:${pad(d.getMinutes())}`;
 
 export function addToCalendar(node: CareerNode): void {
+  if (node.status !== "pending") return;
   try {
     const d = new Date(node.dueAt);
     const end = new Date(node.dueAt + 2 * HOUR);
@@ -173,7 +207,7 @@ export function acceptOffer(offerId: string): CareerNode | null {
   const career = loadCareer();
   const offer = career.offers.find(o => o.id === offerId);
   const c = companyOf(offer?.companyId);
-  if (!offer || !c) return null;
+  if (!offer || !c || offer.status !== "new" || !offer.notified) return null;
   career.offers = career.offers.map(o => o.id === offerId ? { ...o, status: "accepted" } : o);
   const base = new Date(Math.max(Date.now(), offer.at));
   const due = new Date(base.getFullYear(), base.getMonth(), base.getDate() + 2, 14, 0, 0).getTime();
@@ -186,7 +220,9 @@ export function acceptOffer(offerId: string): CareerNode | null {
     dueAt: due,
     status: "pending",
     companyId: c.id,
+    notice: offer.notice,
   };
+  if (offer.notice?.channel === "mail") recordMailReply(offer.notice.refId, true, `${new Date(due).toLocaleString("zh-CN")} · ${node.place}`);
   career.nodes = [...career.nodes, node];
   saveCareer(career);
   addToCalendar(node);
@@ -195,6 +231,9 @@ export function acceptOffer(offerId: string): CareerNode | null {
 
 export function declineOffer(offerId: string): void {
   const career = loadCareer();
+  const offer = career.offers.find(o => o.id === offerId);
+  if (!offer || offer.status !== "new") return;
+  if (offer.notice?.channel === "mail") recordMailReply(offer.notice.refId, false);
   career.offers = career.offers.map(o => o.id === offerId ? { ...o, status: "declined" } : o);
   saveCareer(career);
 }
@@ -401,9 +440,10 @@ export function careerTick(notify: (msg: string) => void): void {
     // 时钟被往回拨了，邀请远在未来：改成一小时后到
     if (o.status === "new" && !o.notified && o.at - now > 7 * DAY) { changed = true; return { ...o, at: now + HOUR }; }
     if (o.status === "new" && !o.notified && now >= o.at) {
+      const mail = addMail({ from: `${companyOf(o.companyId)?.name} 选角组`, addr: `${o.companyId}@audition.local`, logo: companyOf(o.companyId)?.name.slice(0, 1) || "A", color: "#a99ce8", subject: o.kind === "scout" ? "试镜邀请" : "试镜通知", body: [{ zh: o.message }], at: now });
       notify(`📩 ${companyOf(o.companyId)?.name} 发来了${o.kind === "scout" ? "试镜邀请" : "试镜通知"}，去「提醒事项」看看`);
       changed = true;
-      return { ...o, notified: true };
+      return { ...o, notified: true, notice: { channel: "mail" as const, refId: mail.id, at: now } };
     }
     return o;
   });

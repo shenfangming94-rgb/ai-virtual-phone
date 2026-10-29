@@ -377,7 +377,7 @@ export function startNodeStage(node: CareerNode): { chapterIndex: number; scene:
   }
   const key = placeKeyFromText(node.place);
   // 写的就是地图上的地点（「江南·烤肉店」）：用地图的说法；不是的照它原来写的
-  return startStageScene({ placeKey: key, placeName: placeByKey(node.place.trim()) ? placeFullName(key) : node.place, nodeId: node.id, premise });
+  return startStageScene({ placeKey: key, placeName: placeByKey(node.place.trim()) ? placeFullName(key) : node.place, nodeId: node.id, premise, ...(node.participantIds || node.inviterIds ? { meetIds: [...new Set([...(node.participantIds || []), ...(node.inviterIds || []), ...(node.fromId ? [node.fromId] : [])])] } : {}) });
 }
 
 function frameText(raw: string, role: string): string {

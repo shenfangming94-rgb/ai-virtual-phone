@@ -325,6 +325,7 @@ async function fire(c: Destiny, s: State, notify: (m: string) => void): Promise<
   }
   const p = getProfile(who.id);
   saveProfile({ ...p, events: [...p.events, { id: uid("ev"), at: now, place: "", text: `你找她是因为：${c.seed}` }] });
+  let invitation: CareerNode | undefined;
   if (c.meet) {
     const due = new Date(now + c.meet.days * DAY); due.setHours(c.meet.hour, 0, 0, 0);
     const career = loadCareer();
@@ -332,17 +333,17 @@ async function fire(c: Destiny, s: State, notify: (m: string) => void): Promise<
       id: uid("node"), kind: "chance", title: c.meet.title, place: c.meet.place || "", premise: `${c.seed}（她命运里的一件事）`,
       dueAt: due.getTime(), status: "invite", replyBy: now + 2 * DAY, from: who.name, fromId: who.id, note: c.seed,
     };
-    saveCareer({ ...career, nodes: [...career.nodes, node].sort((a, b) => a.dueAt - b.dueAt) });
-    addToCalendar(node);
+    invitation = node;
   }
   const ask = c.meet ? `，顺便约她${c.meet.days}天后${c.meet.hour}点去${c.meet.place || "见面"}（${c.meet.title}），问她来不来` : "";
+  const { queueMessage } = await import("./idol-reminders");
+  queueMessage(who.id, `你有件事想跟她说：${c.seed}。按你们的关系和你的性格，自然地在 KakaoTalk 上说${ask}。一到三条。`, (3 + Math.random() * 20) * MIN, { node: invitation, requireFriend: c.via === "new", dedupeKey: `destiny:${c.id}` });
   if (c.via === "new") {
     // 陌生人：进「新的朋友」。她接受后他回的那句会照「你找她是因为」开口
     queueFriendRequest(who.id, c.hello || "你好，冒昧加你", "", now + (5 + Math.random() * 25) * MIN);
     return;
   }
-  const { queueMessage } = await import("./idol-reminders");
-  queueMessage(who.id, `你有件事想跟她说：${c.seed}。按你们的关系和你的性格，自然地在 KakaoTalk 上说${ask}。一到三条。`, (3 + Math.random() * 20) * MIN);
+
 }
 
 /** 跳时间停在下一个一定会来的命运前（到点就来的、保底那个） */

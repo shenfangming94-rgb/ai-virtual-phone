@@ -9,7 +9,10 @@
 import { kvGet, kvSet } from "./kv-db";
 import { loadCharacters } from "./character-storage";
 import type { Character } from "./character-types";
-import { loadChatMessages, addChatContact, createOrGetSession, loadChatContacts, pushChatMessage } from "./chat-storage";
+import { loadChatMessages, loadChatSessions, addChatContact, createOrGetSession, loadChatContacts, pushChatMessage, type ChatMessage } from "./chat-storage";
+import { applyInvitationActions, extractInvitationActions, type InvitationAction } from "./idol-invitation-chat";
+import { chatNotice, noticeTime, recordScheduleReply } from "./idol-schedule-notices";
+import { loadMails, updateMail, recordMailReply, MAIL_EVENT } from "./idol-mail";
 import { simpleLLMCall } from "./api-helpers";
 import { loadApiConfigs, loadBindingConfig, resolveBinding, resolveUserIdentity } from "./settings-storage";
 import { getChatPluginHookBus } from "./chat-plugin-hooks";
@@ -35,17 +38,17 @@ const DAY = 24 * HOUR;
 /** 过了开始时间多久还没动就算缺席 */
 export const ABSENT_AFTER = 2 * HOUR;
 
-type Outbox = { id: string; charId: string; instruction: string; at: number };
-type State = { outbox: Outbox[]; absences: number };
+type Outbox = { id: string; charId: string; instruction: string; at: number; node?: CareerNode; strictPersona?: boolean; important?: boolean; birthdayDate?: string; requireFriend?: boolean; attempts?: number; paused?: boolean; dedupeKey?: string; delivered?: { sessionId: string; messageId: string } };
+type State = { outbox: Outbox[]; absences: number; sentKeys?: string[] };
 
 function load(): State {
   try {
     const raw = JSON.parse(kvGet(KEY) || "null") as State | null;
-    if (raw) return { outbox: raw.outbox ?? [], absences: raw.absences ?? 0 };
+    if (raw) return { outbox: raw.outbox ?? [], absences: raw.absences ?? 0, sentKeys: raw.sentKeys ?? [] };
   } catch { /* 坏数据当新的 */ }
   return { outbox: [], absences: 0 };
 }
-function save(s: State) { kvSet(KEY, JSON.stringify(s)); }
+function save(s: State) { kvSet(KEY, JSON.stringify(s)); if (typeof window !== "undefined") window.dispatchEvent(new Event("idol-notice-outbox-updated")); }
 
 const uid = (p: string) => `${p}_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
 
@@ -136,18 +139,38 @@ function closeFriend(exclude: (string | undefined)[]): Character | undefined {
 
 // ── 待回复 ──
 
-export function acceptInvite(id: string): CareerNode | undefined {
+export function acceptInvite(id: string, source: "reminder" | "chat" = "reminder"): CareerNode | undefined {
   if (loadCareer().offers.some(o => o.id === id)) return acceptOffer(id) ?? undefined;
+  const before = loadCareer().nodes.find(n => n.id === id);
+  if (!before || before.status !== "invite" || (before.replyBy && before.replyBy < Date.now())) return undefined;
   const node = patchNode(id, { status: "pending" });
   if (node) addToCalendar(node);
-  if (node?.kind === "date") noteToPerson(node.fromId, `她答应了「${node.title}」`, Date.now());
+  if (node) {
+    if (node.notice?.channel === "mail") {
+      const mail = loadMails().find(m => m.id === node.notice!.refId);
+      if (mail?.action) updateMail(mail.id, { action: { ...mail.action, status: "accepted", nodeId: node.id } });
+      if (mail) recordMailReply(mail.id, true, `${noticeTime(node.dueAt)} · ${node.place}`);
+    }
+    for (const actor of new Set([node.fromId, ...(node.inviterIds || [])])) noteToPerson(actor, `她答应了「${node.title}」：${noticeTime(node.dueAt)}，${node.place}`, Date.now());
+    if (source === "reminder") recordScheduleReply(node, true);
+  }
   return node;
 }
 
-export function declineInvite(id: string): void {
+export function declineInvite(id: string, source: "reminder" | "chat" = "reminder"): void {
   if (loadCareer().offers.some(o => o.id === id)) { declineOffer(id); return; }
+  const before = loadCareer().nodes.find(n => n.id === id);
+  if (!before || before.status !== "invite") return;
   const node = patchNode(id, { status: "declined", result: "没去" });
-  if (node?.kind === "date") noteToPerson(node.fromId, `她没答应「${node.title}」`, Date.now());
+  if (node) {
+    if (node.notice?.channel === "mail") {
+      const mail = loadMails().find(m => m.id === node.notice!.refId);
+      if (mail?.action) updateMail(mail.id, { action: { ...mail.action, status: "declined", nodeId: node.id } });
+      if (mail) recordMailReply(mail.id, false);
+    }
+    for (const actor of new Set([node.fromId, ...(node.inviterIds || [])])) noteToPerson(actor, `她没答应「${node.title}」`, Date.now());
+    if (source === "reminder") recordScheduleReply(node, false);
+  }
 }
 
 /** 她自己记一笔 */
@@ -179,7 +202,7 @@ function activeTimeNodeId(): string | undefined {
 export function capJump(target: number, options: TimeJumpOptions = {}): { target: number; stoppedBy?: string } {
   const now = Date.now();
   const career = loadCareer();
-  const stops = [...plannedStops(), ...yearlyStops(), ...destinyStops()];
+  const stops = [...plannedStops(), ...yearlyStops(), ...destinyStops(), ...load().outbox.filter(o => (o.node || o.important) && !o.paused && (!o.requireFriend || loadChatContacts().some(c => c.characterId === o.charId))).map(o => ({ at: o.at, title: o.node ? `新邀请：${o.node.title}` : "生日祝福消息" }))];
   return findTimeJumpStop(now, target, career.nodes, career.offers, stops, { activeNodeId: options.activeNodeId ?? activeTimeNodeId() });
 }
 
@@ -192,15 +215,23 @@ function chatConfig() {
   return config;
 }
 
-export function queueMessage(charId: string, instruction: string, delay: number) {
+export function queueMessage(charId: string, instruction: string, delay: number, options: Pick<Outbox, "node" | "strictPersona" | "important" | "birthdayDate" | "requireFriend" | "dedupeKey"> = {}) {
   const s = load();
-  save({ ...s, outbox: [...s.outbox, { id: uid("out"), charId, instruction, at: Date.now() + delay }] });
+  if (options.dedupeKey && (s.sentKeys?.includes(options.dedupeKey) || s.outbox.some(o => o.dedupeKey === options.dedupeKey))) return;
+  save({ ...s, outbox: [...s.outbox, { id: uid("out"), charId, instruction, at: Date.now() + delay, ...options }] });
+}
+
+export function pendingNoticeFailures(): { id: string; title: string }[] {
+  return load().outbox.filter(o => o.paused).map(o => ({ id: o.id, title: o.node?.title || `${loadCharacters().find(c => c.id === o.charId)?.name || "联系人"}的消息` }));
+}
+export function retryNotice(id: string): void {
+  const s = load(); save({ ...s, outbox: s.outbox.map(o => o.id === id ? { ...o, paused: false, attempts: 0, at: Date.now() } : o) });
 }
 
 /** 让某人在 KakaoTalk 私聊给她发消息（没加过就先加上，比如老师）。
  *  走正常的 KakaoTalk 聊天引擎（她的预设、世界书、正则、聊天记录都在），为什么来找她放进 buildIdolChatHint 悄悄告诉他；
  *  聊天引擎失败就退回简单调用 */
-async function sendAs(charId: string, instruction: string): Promise<string | null> {
+async function sendAs(charId: string, instruction: string, strictPersona = false): Promise<ChatMessage | null> {
   const char = loadCharacters().find(c => c.id === charId);
   if (!char) return null;
   if (!loadChatContacts().some(c => c.characterId === charId)) addChatContact(charId);
@@ -210,10 +241,14 @@ async function sendAs(charId: string, instruction: string): Promise<string | nul
     proactive.set(charId, instruction);
     const { requestBackgroundChatReply } = await import("./follow-up-service");
     const r = await requestBackgroundChatReply(session.id);
-    proactive.delete(charId);
-    const fresh = loadChatMessages(session.id).slice(before).filter(m => m.role === "assistant" && m.content.trim());
-    if (r.ok && fresh.length) return fresh[0].content;
-  } catch { proactive.delete(charId); }
+    const fresh = loadChatMessages(session.id).slice(before).filter(m => m.role === "assistant" && m.content.trim() && m.status !== "rejected" && m.status !== "failed");
+    if (fresh.length) return fresh[0]; // 已送达就不能因后续处理失败再生成一遍。
+    if (r.skipped === "already_running") return null;
+  } catch { /* 下面按该消息的重试策略处理 */ }
+  finally { proactive.delete(charId); }
+  const alreadySent = loadChatMessages(session.id).slice(before).find(m => m.role === "assistant" && m.content.trim() && m.status !== "rejected" && m.status !== "failed");
+  if (alreadySent) return alreadySent;
+  if (strictPersona) return null;
   const me = resolveUserIdentity(charId, "chat")?.name || "她";
   const res = await simpleLLMCall(chatConfig(), [
     { role: "system", content: `你是${char.name}。${char.persona}\n\n你在 KakaoTalk 上给${me}发私聊消息。只输出要发的消息本身，一到三条，每条一行，口语，不要旁白、不要引号。` },
@@ -221,8 +256,8 @@ async function sendAs(charId: string, instruction: string): Promise<string | nul
   ], { temperature: 0.85, label: "有人来找你" });
   const lines = (res.content || "").split("\n").map(l => l.trim().replace(/^["「]|["」]$/g, "")).filter(Boolean).slice(0, 3);
   if (!lines.length) return null;
-  for (const l of lines) pushChatMessage({ sessionId: session.id, role: "assistant", content: l, status: "sent" });
-  return lines[0];
+  const sent = lines.map(l => pushChatMessage({ sessionId: session.id, role: "assistant", content: l, status: "sent" }));
+  return sent.find(m => m.status !== "rejected" && m.status !== "failed") || null;
 }
 
 /** 缺席的后果：公司的事老师来问，第二次起叫去办公室；约好的事那个人来问 */
@@ -286,13 +321,39 @@ export function reminderTick(notify: (msg: string) => void): void {
   for (const n of absent) { notify(`❗ ${n.title} 没去，算缺席了`); onAbsent(n); }
 
   const s = load();
-  const due = s.outbox.find(o => o.at <= now);
-  if (!due) return;
+  const queued = s.outbox.find(o => !o.paused && o.at <= now && (!o.requireFriend || loadChatContacts().some(c => c.characterId === o.charId)));
+  if (!queued) return;
+  const due = { ...queued };
+  const today = `${new Date(now).getFullYear()}-${String(new Date(now).getMonth()+1).padStart(2,"0")}-${String(new Date(now).getDate()).padStart(2,"0")}`;
+  const lateBirthday = due.birthdayDate && due.birthdayDate < today;
+  if (lateBirthday || (due.node && due.node.dueAt <= now && due.dedupeKey?.startsWith("birthday:"))) {
+    due.node = undefined;
+    due.instruction = `这条生日祝福原定在${due.birthdayDate || "她生日当天"}送达，现在时间已经过去。沿用你的人设、关系与记忆，自然送上迟到的祝福，不再说今天生日，不责怪她没上线，不重复发起已经过期的庆祝邀请。`;
+  } else if (due.node && due.node.dueAt <= now && !due.delivered) { save({ ...s, outbox: s.outbox.filter(o => o.id !== due.id) }); return; }
   busy = true;
-  save({ ...s, outbox: s.outbox.filter(o => o.id !== due.id) });
-  void sendAs(due.charId, due.instruction)
-    .then(first => { if (first) notify(`💬 ${loadCharacters().find(c => c.id === due.charId)?.name}：${first}`); })
-    .catch(() => undefined)
+  const existing = due.node ? loadCareer().nodes.find(n => n.id === due.node!.id) : undefined;
+  const instruction = `${due.instruction}${due.node ? `\n本轮对应事项编号${due.node.id}，标题「${due.node.title}」，${noticeTime(due.node.dueAt)}，地点${due.node.place}。${existing && existing.status !== "invite" ? `她已处理此邀请，当前状态${existing.status}，不要重复询问。` : "自然说出邀请的具体时间地点并问她愿不愿意，不替她答应。"}这条邀请由系统随消息发布，不另写创建邀约标记。` : ""}`;
+  const delivered = due.delivered ? loadChatMessages(due.delivered.sessionId).find(m => m.id === due.delivered!.messageId) : undefined;
+  const sending = delivered ? Promise.resolve(delivered) : sendAs(due.charId, instruction, Boolean(due.strictPersona));
+  void sending
+    .then(first => {
+      if (!first) throw new Error("消息未送达");
+      const received = load(); save({ ...received, outbox: received.outbox.map(o => o.id === due.id ? { ...o, delivered: { sessionId: first.sessionId, messageId: first.id } } : o) });
+      if (due.node) {
+        const career = loadCareer();
+        const old = career.nodes.find(n => n.id === due.node!.id);
+        const card = loadChatMessages(first.sessionId).find(m => m.idolScheduleId === due.node!.id && m.role === "system") || pushChatMessage({ sessionId: first.sessionId, role: "system", idolScheduleId: due.node.id, content: `邀请信息：「${due.node.title}」 · ${noticeTime(due.node.dueAt)} · ${due.node.place}${old && old.status !== "invite" ? ` · ${old.status === "pending" ? "已接受" : "已处理"}` : " · 待回复"}`, status: "sent" });
+        const node = { ...(old || due.node), notice: chatNotice(first.sessionId, card.id, due.charId) };
+        saveCareer({ ...career, nodes: old ? career.nodes.map(n => n.id === node.id ? node : n) : [...career.nodes, node].sort((a,b) => a.dueAt-b.dueAt) });
+      }
+      const latest = load(); save({ ...latest, outbox: latest.outbox.filter(o => o.id !== due.id), sentKeys: due.dedupeKey ? [...(latest.sentKeys || []), due.dedupeKey].slice(-300) : latest.sentKeys });
+      notify(`💬 ${loadCharacters().find(c => c.id === due.charId)?.name}：${first.content}`);
+    })
+    .catch(() => {
+      const latest = load(); const attempts = (due.attempts || 0) + 1;
+      save({ ...latest, outbox: latest.outbox.map(o => o.id === due.id ? { ...o, attempts, paused: attempts >= 3, at: Date.now() + attempts * 5 * MIN } : o) });
+      if (attempts >= 3) notify("有一条消息尚未送达，可在提醒事项中重试");
+    })
     .finally(() => { busy = false; });
 }
 
@@ -307,7 +368,6 @@ export function buildIdolChatHint(characterId: string, isGroup: boolean): string
   const out: string[] = [];
   const intent = proactive.get(characterId);
   if (intent) {
-    proactive.delete(characterId);
     out.push("### 这一条是你主动发的", "她没有给你发消息，是你自己想找她：", intent);
   }
   const now = Date.now();
@@ -322,45 +382,69 @@ export function buildIdolChatHint(characterId: string, isGroup: boolean): string
       "【规则】她找你请假时，按你的性格、她的理由和她最近的表现决定批不批。批了就在回复末尾另起一行写记号：日程写 [准假:日程名]（照上面写）；请一整天的课写 [准假:几月几日]；只请一节课写 [准假:几月几日 课名]。那天有日程也要请就各写一行。没批就正常回她，不写记号。",
     );
   }
-  const asked = loadCareer().nodes.filter(n => n.status === "invite" && n.fromId === characterId);
+  const asked = loadCareer().nodes.filter(n => n.fromId === characterId || n.inviterIds?.includes(characterId));
   if (asked.length) out.push(
     "### 等她回复的事",
-    `你问过她：${asked.map(n => `「${n.title}」`).join("、")}`,
-    "【规则】她在聊天里明确答应了，就在回复末尾另起一行写 [答应:事情名]；明确说不去，就写 [不去:事情名]；没说清楚就不写。",
+    `你约过她：${asked.slice(-12).map(n => `编号${n.id}「${n.title}」${noticeTime(n.dueAt)} ${n.place}：${n.status === "invite" ? "待回复，尚未决定" : n.status === "pending" ? "已接受" : n.status === "declined" ? n.result || "已拒绝" : n.status}`).join("；")}`,
+    "【规则】只依据她这一轮的明确答复更新对应邀请，不能把闲聊、假设、引用、模糊意向或历史答复当成接受。确定答应写 [邀请回复:事项编号|accept|她本轮明确答复原文]；确定拒绝写 [邀请回复:事项编号|decline|她本轮明确答复原文]。多件事分不清时先问清楚，不写标记；待回复不等于拒绝，不催打卡。",
   );
+  out.push("### 邀约记录\n本轮主动提出具体时间地点的生活邀约时，末尾写 [新增邀约:{\"title\":\"简短事项名\",\"at\":\"YYYY-MM-DD HH:mm\",\"place\":\"具体地点\",\"replyBy\":\"YYYY-MM-DD HH:mm\"}]。尚未商定的模糊提议不建事项，不替她接受。改变你发起的邀约时间地点写 [改期邀约:{\"id\":\"原事项编号\",\"at\":\"YYYY-MM-DD HH:mm\",\"place\":\"地点\"}]，更改后需重新确认；你取消自己发起的邀约写 [取消邀约:事项编号]。只改你本人相关的事项，不处理别人的邀请。");
   return out.length ? ["", "", ...out, ""].join("\n") : "";
 }
 
 let hooked = false;
+let syncingMails = false;
+/** 邮件送达即发布待回复邀请；两个入口共用同一个nodeId和接受状态。 */
+export function syncMailInvitations(): void {
+  if (syncingMails) return;
+  syncingMails = true;
+  try {
+    for (const mail of loadMails()) {
+      const action = mail.action;
+      if (!action || action.status !== "new" || action.at <= Date.now() || action.nodeId) continue;
+      const career = loadCareer(), id = `mail_invite_${mail.id}`;
+      const node: CareerNode = { id, kind: "audition", title: `${companyOf(action.companyId)?.name || mail.from} 试镜`, place: action.place, premise: mail.body.map(p => p.zh).join("\n"), dueAt: action.at, status: "invite", companyId: action.companyId, from: mail.from, note: action.prep, replyBy: action.at - HOUR, notice: { channel: "mail", refId: mail.id, at: mail.at } };
+      if (!career.nodes.some(n => n.id === id)) saveCareer({ ...career, nodes: [...career.nodes, node] });
+      updateMail(mail.id, { action: { ...action, nodeId: id } });
+    }
+  } finally { syncingMails = false; }
+}
 
 /** 装一次：消息落库前摘掉老师回复里的 [准假:…]，把对应日程改成已请假 */
 export function installIdolChatHooks(notify: (msg: string) => void): void {
   if (hooked || typeof window === "undefined") return;
   hooked = true;
+  window.addEventListener(MAIL_EVENT, syncMailInvitations);
+  syncMailInvitations();
+  const actions = new Map<string, InvitationAction[]>();
   getChatPluginHookBus().registerTransform("idol-reminders", "message.beforePersist", (raw: unknown) => {
-    const payload = raw as { message: { role: string; content: string } };
+    const payload = raw as { message: ChatMessage };
     const msg = payload.message;
-    if (msg.role !== "assistant" || !/准假|答应|不去/.test(msg.content || "")) return payload;
+    if (msg.role !== "assistant") return payload;
+    const extracted = extractInvitationActions(msg.content || "");
+    if (extracted.actions.length) actions.set(msg.id, extracted.actions);
+    while (actions.size > 128) actions.delete(actions.keys().next().value!);
+    // 准假仍兼容，但只有真实室长的会话能批准，不能由其他角色改全局日程。
+    const session = loadChatSessions().find(s => s.id === msg.sessionId);
+    const actor = session?.isGroup ? msg.senderCharacterId : session?.contactId;
     const titles: string[] = [];
-    const yes: string[] = [];
-    const no: string[] = [];
-    const content = msg.content
-      .replace(/\[准假[:：]\s*([^\]]+)\]/g, (_, t: string) => { titles.push(t.trim()); return ""; })
-      .replace(/\[答应[:：]\s*([^\]]+)\]/g, (_, t: string) => { yes.push(t.trim()); return ""; })
-      .replace(/\[不去[:：]\s*([^\]]+)\]/g, (_, t: string) => { no.push(t.trim()); return ""; })
-      .trim();
-    if (!titles.length && !yes.length && !no.length) return payload;
-    const match = (t: string) => loadCareer().nodes.find(n => n.status === "invite" && (n.title === t || t.includes(n.title) || n.title.includes(t)));
-    for (const t of yes) { const n = match(t); if (n) { acceptInvite(n.id); notify(`📅 ${n.title}：答应了，写进日程`); } }
-    for (const t of no) { const n = match(t); if (n) { declineInvite(n.id); notify(`${n.title}：回了不去`); } }
-    const teacher = teacherOf();
-    for (const t of titles) {
-      const node = loadCareer().nodes.find(n => n.status === "pending" && (n.title === t || t.includes(n.title) || n.title.includes(t)));
-      if (node) { leaveNode(node.id, "", teacher?.name); notify(`📝 ${node.title} 请好假了`); continue; }
-      const cls = leaveFromMarker(t);
-      if (cls) notify(`📝 ${cls}`);
+    const content = extracted.content.replace(/\[准假[:：]\s*([^\]]+)\]/g, (_, t: string) => { titles.push(t.trim()); return ""; }).trim();
+    if (actor === teacherOf()?.id && actor && !session?.isBlacklisted && !proactive.has(actor) && msg.status !== "rejected" && msg.status !== "failed") {
+      for (const t of titles) {
+        const matches = loadCareer().nodes.filter(n => n.status === "pending" && n.title === t);
+        if (matches.length === 1) { leaveNode(matches[0].id, "", teacherOf()?.name); notify(`📝 ${matches[0].title} 请好假了`); }
+        else if (!matches.length && leaveFromMarker(t)) notify(`📝 ${t} 请好假了`);
+      }
     }
     return { ...payload, message: { ...msg, content } };
+  });
+  getChatPluginHookBus().registerEvent("idol-reminders", "message.persisted", (raw: unknown) => {
+    const msg = (raw as { message: ChatMessage }).message;
+    const parsed = actions.get(msg.id); actions.delete(msg.id);
+    const session = loadChatSessions().find(s => s.id === msg.sessionId);
+    const actor = session?.isGroup ? msg.senderCharacterId : session?.contactId;
+    if (!parsed || !actor || proactive.has(actor)) return;
+    applyInvitationActions(msg, parsed, { accept: id => { acceptInvite(id, "chat"); }, decline: id => { declineInvite(id, "chat"); }, notify });
   });
 }
 

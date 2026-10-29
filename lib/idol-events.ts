@@ -1,3 +1,4 @@
+import { chatNotice, type ScheduleNotice } from "./idol-schedule-notices";
 import { worldWeatherHint } from "./idol-weather";
 /**
  * 爱豆小手机：事情发动机。
@@ -175,6 +176,7 @@ const PLAN_RULES = `你在给一出韩国娱乐圈练习生的戏排接下来几
 - 人物只用下面名单里的名字、群里的路人名字；要新出场有名字的人就写进 newPeople。
 - 消息要像真人发的 KakaoTalk：口语、短，一个人一次一到三条。where 写 group（练习生群）或 private（私聊她）。
 - 每句话都要合情合理、前因后果对得上：只有影响到群里大家的事才在群里通知，个人的事走私聊或者当八卦传。
+- 每个invite必须有同一发起人在lines里实际发出的邀请消息，写清同一时间地点；通知与邀请同时送达，不替她接受。
 - 机会和约要她回复的写 invite（title、at 开始时间、place、replyBy 回复截止、from 谁通知或谁约的），kind 写 chance 或 date；同时写一条通知她的消息。
 - invite 的 place：先从「地点名单」里挑最合适的，照名单原样写（比如吃烤肉写「江南·烤肉店」、公司里的事写「公司·会议室」）；名单里实在没有合适的才自己写一个具体地点。
 - 有人「【近况要更新】」的，在 status 里给他写新的近况：status 世界视角一句他最近在忙什么，kakao 他自己会写在 KakaoTalk 状态消息里的短句。有事发生在谁身上，也更新他的近况。
@@ -287,7 +289,8 @@ export function sayInGroup(who: string, text: string, at: number) {
   const c = charByName(who);
   const senderId = c?.id ?? crowdIdByName(who);
   if (!senderId) return;
-  pushChatMessage({ sessionId: gid, role: "assistant", content: text, senderCharacterId: senderId, senderName: who, status: "sent", createdAt: new Date(at).toISOString() });
+  const message = pushChatMessage({ sessionId: gid, role: "assistant", content: text, senderCharacterId: senderId, senderName: who, status: "sent", createdAt: new Date(at).toISOString() });
+  return message.status !== "rejected" && message.status !== "failed" ? chatNotice(gid, message.id, senderId) : undefined;
 }
 
 function sayPrivate(who: string, text: string, at: number) {
@@ -299,7 +302,8 @@ function sayPrivate(who: string, text: string, at: number) {
     addChatContact(c.id);
   }
   const session = createOrGetSession(c.id);
-  pushChatMessage({ sessionId: session.id, role: "assistant", content: text, status: "sent", createdAt: new Date(at).toISOString() });
+  const message = pushChatMessage({ sessionId: session.id, role: "assistant", content: text, status: "sent", createdAt: new Date(at).toISOString() });
+  return message.status !== "rejected" && message.status !== "failed" ? chatNotice(session.id, message.id, c.id) : undefined;
 }
 
 function runEvent(e: PlannedEvent, notify: (m: string) => void) {
@@ -307,19 +311,22 @@ function runEvent(e: PlannedEvent, notify: (m: string) => void) {
   if (e.fame) fameEvent(e.fame, e.about, e.at);
   const late = now - e.at > 2 * HOUR;
   // 要她回的（私聊）落地时才发，时间是现在；不用回的（群、八卦）按原来的时间
+  const receipts: { who: string; notice: ScheduleNotice }[] = [];
   for (const l of e.lines) {
-    if (l.where === "group") sayInGroup(l.who, l.text, e.at);
-    else sayPrivate(l.who, l.text, late ? now : e.at);
+    const receipt = l.where === "group" ? sayInGroup(l.who, l.text, e.at) : sayPrivate(l.who, l.text, late ? now : e.at);
+    if (receipt) receipts.push({ who: l.who, notice: receipt });
   }
   const firstPrivate = e.lines.find(l => l.where === "private");
   if (firstPrivate && charByName(firstPrivate.who)) notify(`💬 ${firstPrivate.who}：${firstPrivate.text}`);
   if (e.invite) {
+    const delivered = receipts.find(r => r.who === e.invite!.from);
+    if (!delivered) return; // 通知没有送达就不发布一个无来源的邀请。
     const fromChar = charByName(e.invite.from);
     const node: CareerNode = {
       id: uid("node"), kind: e.kind === "date" ? "date" : "chance", title: e.invite.title, place: e.invite.place, premise: e.about,
       dueAt: e.invite.at, status: "invite", from: e.invite.from || undefined, fromId: fromChar?.id,
       replyBy: e.invite.replyBy && e.invite.replyBy > now ? e.invite.replyBy : e.invite.at - 6 * HOUR,
-      note: e.about,
+      note: e.about, notice: delivered.notice,
     };
     if (node.dueAt > now) {
       const career = loadCareer();

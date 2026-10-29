@@ -16,7 +16,7 @@ import { COMPANIES, addToCalendar, companyOf, loadCareer, saveCareer, type Caree
 import { loadTraineeCard, describeTrainee } from "./trainee-card";
 import { idolWorldPrompt } from "./idol-worldbook";
 import { fameNow } from "./idol-events";
-import { addMail, loadMails, updateMail, type InviteAction, type MailPara } from "./idol-mail";
+import { recordMailReply, addMail, loadMails, updateMail, type InviteAction, type MailPara } from "./idol-mail";
 import { loadInstalledCustomApps, readCustomAppCollection, writeCustomAppCollection } from "./custom-app-storage";
 import { toCustomAppIconId } from "./custom-app-types";
 import { findGroup, groupLine, groupsOf, rosterPrompt, upsertGroups, type Group } from "./idol-groups";
@@ -387,20 +387,25 @@ export function acceptInviteMail(mailId: string, at?: number): CareerNode | null
   const app = load().apps.find(a => a.id === act.appId);
   const dueAt = at ?? act.at;
   const node: CareerNode = {
-    id: uid("node"), kind: "audition", title: `${c.name} 试镜`, place: `${c.name} 公司大楼 试镜室`,
+    id: act.nodeId || uid("node"), kind: "audition", title: `${c.name} 试镜`, place: `${c.name} 公司大楼 试镜室`,
     premise: `她自己在网上投递了 ${c.name}，资料审核通过，被邀请来线下试镜。${app?.reason ? `公司看中她的地方：${app.reason}。` : ""}她报的方向：${app?.areas.join("、") ?? ""}。要准备：${act.prep}。她要在评委面前表演。`,
-    dueAt, status: "pending", companyId: c.id, from: `${c.name} 오디션팀`,
+    dueAt, status: "pending", companyId: c.id, from: `${c.name} 오디션팀`, notice: { channel: "mail", refId: mail.id, at: mail.at },
   };
   const career = loadCareer();
-  saveCareer({ ...career, nodes: [...career.nodes, node] });
+  saveCareer({ ...career, nodes: [...career.nodes.filter(n => n.id !== node.id), node] });
   addToCalendar(node);
   updateMail(mailId, { action: { ...act, at: dueAt, status: "accepted", nodeId: node.id } });
+  recordMailReply(mailId, true, `${new Date(dueAt).toLocaleString("zh-CN")} · ${node.place}`);
   return node;
 }
 
 export function declineInviteMail(mailId: string): void {
   const mail = loadMails().find(m => m.id === mailId);
-  if (mail?.action) updateMail(mailId, { action: { ...mail.action, status: "declined" } });
+  if (mail?.action) {
+    updateMail(mailId, { action: { ...mail.action, status: "declined" } });
+    recordMailReply(mailId, false);
+    if (mail.action.nodeId) { const career=loadCareer(); saveCareer({ ...career, nodes: career.nodes.map(n=>n.id===mail.action!.nodeId?{...n,status:"declined" as const,result:"已拒绝"}:n) }); }
+  }
 }
 
 /** 给世界看的一行：她投了哪些 */

@@ -5,15 +5,12 @@
  * - 公司年末家族演唱会：提前四周定伴舞（看排名和关注度）。选上了有两次彩排 + 上台；没选上在台下看
  */
 
+import { birthdayTick } from "./idol-birthday";
 import { familyContext } from "./idol-family-data";
 import { kvGet, kvSet } from "./kv-db";
-import { loadCharacters } from "./character-storage";
-import type { Character } from "./character-types";
-import { loadChatContacts } from "./chat-storage";
 import { simpleLLMCall } from "./api-helpers";
 import { loadApiConfigs, loadBindingConfig, resolveBinding } from "./settings-storage";
 import { addToCalendar, companyOf, loadCareer, saveCareer, type CareerNode } from "./idol-career";
-import { getProfile, relationOf } from "./idol-people";
 import { loadTraineeCard } from "./trainee-card";
 import { queueMessage, teacherOf } from "./idol-reminders";
 import { fameNow, sayInGroup } from "./idol-events";
@@ -60,47 +57,14 @@ async function teacherSays(instruction: string, fallback: string): Promise<void>
   sayInGroup(t.name, text, Date.now());
 }
 
-/** 跟她要好的人（室友优先，不算老师经纪人），最多三个 */
-function closeOnes(): Character[] {
-  const career = loadCareer();
-  const friends = new Set(loadChatContacts().map(c => c.characterId));
-  const all = loadCharacters();
-  const roommates = (career.roommates ?? []).map(id => all.find(c => c.id === id)).filter((c): c is Character => Boolean(c));
-  const others = all.filter(c => friends.has(c.id) && !roommates.includes(c) && !/老师|经纪|管理/.test(getProfile(c.id).role)
-    && (getProfile(c.id).familyMemberId || ["朋友", "好朋友", "暧昧", "恋人"].includes(relationOf(getProfile(c.id)))));
-  return [...roommates, ...others].slice(0, 3);
-}
-
-// ── 她的生日 ──
-
+// ── 她的生日：未签约也可触发，具体安排交给生日模块 ──
 function birthday(year: number, now: number) {
-  const card = loadTraineeCard();
-  if (!card?.birthday || !/^\d{4}-\d{2}-\d{2}$/.test(card.birthday)) return;
-  const k = `bday-${year}`;
-  if (loadDone().includes(k)) return;
-  const iso = `${year}-${card.birthday.slice(5)}`;
-  const start = at(iso, 8), end = at(iso, 23, 59);
-  if (now < start) return;
-  markDone(k);
-  if (now > end) return; // 跳过去了
-  const people = closeOnes();
-  // 家人可发祝福；家庭成员不直接被安排到首尔烤肉店当面张罗生日。
-  const host = people.find(c => !getProfile(c.id).familyMemberId);
-  people.forEach((c, i) => {
-    if (c === host) return;
-    queueMessage(c.id, `今天（${md(start)}）是她的生日。按你们的关系和你的性格，在 KakaoTalk 上祝她生日快乐。`, (10 + i * 25) * MIN);
-  });
-  if (!host) return;
-  const due = at(iso, 19);
-  if (due > now + HOUR) {
-    addNodes([{
-      id: uid("node"), kind: "date", title: `${host.name}约你过生日`, place: "江南·烤肉店", dueAt: due, status: "invite",
-      premise: `今天是她的生日，${host.name}张罗着给她过，叫了几个跟她要好的人。`, from: host.name, fromId: host.id, replyBy: due - 2 * HOUR,
-    }]);
-    queueMessage(host.id, `今天是她的生日。你想晚上七点在宿舍附近的烤肉店给她过生日（会叫上几个要好的人），先祝她生日快乐，再约她，问她来不来。`, 5 * MIN);
-  } else {
-    queueMessage(host.id, `今天（${md(start)}）是她的生日。按你们的关系和你的性格，在 KakaoTalk 上祝她生日快乐。`, 5 * MIN);
-  }
+  const card=loadTraineeCard(), key=`bday-${year}`;
+  if(!card?.birthday||!/^\d{4}-\d{2}-\d{2}$/.test(card.birthday)||loadDone().includes(key))return;
+  const date=`${year}-${card.birthday.slice(5)}`;
+  if(now<at(date,8))return;
+  if(now>at(date,23,59)){markDone(key);return;}
+  birthdayTick(year,now,()=>markDone(key));
 }
 
 // ── 春节、中秋 ──
@@ -172,7 +136,6 @@ let busy = false;
 export function yearlyTick(notify: (m: string) => void): void {
   if (busy || !loadTraineeCard()) return;
   const career = loadCareer();
-  if (career.stage === "pre") return;
   busy = true;
   try {
     const now = Date.now();
@@ -197,7 +160,7 @@ export function yearlyTick(notify: (m: string) => void): void {
 export function yearlyStops(): { at: number; title: string }[] {
   const card = loadTraineeCard();
   const career = loadCareer();
-  if (!card || career.stage === "pre") return [];
+  if (!card) return [];
   const now = Date.now();
   const y = new Date(now).getFullYear();
   const done = loadDone();
@@ -207,6 +170,7 @@ export function yearlyStops(): { at: number; title: string }[] {
       const date = `${year}-${card.birthday.slice(5)}`;
       if (now <= at(date, 23, 59)) out.push({ at: Math.max(now, at(date, 8)), title: "你的生日" });
     }
+    if (career.stage === "pre") continue;
     for (const which of ["spring", "chuseok"] as const) {
       const iso = which === "spring" ? findLunar(year, "正月", "初一", [0, 15], [1, 25]) : findLunar(year, "八月", "十五", [8, 1], [9, 15]);
       if (iso && now <= at(iso, 0) - DAY && !done.includes(`${which}-${year}`)) out.push({ at: Math.max(now, at(iso, 0) - 8 * DAY + 10 * HOUR), title: which === "spring" ? "春节放假通知" : "中秋放假通知" });

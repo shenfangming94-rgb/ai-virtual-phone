@@ -716,3 +716,17 @@ Flora 要一个专门玩「爱豆模拟器」的小手机：她是想当爱豆�
 - 单元回归node docs/idol/tests/time-jump.cjs通过：临近/开始/已开始日程、处理后恢复快进、回复截止及无一分钟循环、三类事件源与到点未tick事件、公司消息、回拨/无效目标、在演日程与其他日程、普通缺席结算、场外文字指令、现实模式、当天未执行/已执行生日。真实模块+内存时钟/存档，不联网。
 - 人物与家庭回归node docs/idol/tests/person-links.cjs通过；TypeScript检查通过。独立Chrome verify-time-jump-v1.mjs实测时钟周/天/自定义日期/第二天早上/现实模式、临近日程、邀请截止重复点击、设置周快进全部通过；modelRequests=[]，errors=[]，真实API0。脚本/截图time-jump-{clock,settings}-stopped-v1.png/报告time-jump-results-v1.json在/Users/flora/work/idol-settings-preview。
 - 本轮仅本地提交，不push、不部署；用户此前担心Netlify额度，继续遵守。
+
+
+### 2.45 2026-10-29 生日与通知/邀请统一（Codex）
+- Flora授权完整实施：她的生日家人独立保证祝福、不占朋友名额；朋友至少3位、通常5～6位（实际不足按已有关系，不造人凑数）；祝福逐人走原KKT，保留各自API/预设/记忆。庆祝1～2位发起人，可共同一场，时间地点参与者依人设与近期剧情，不固定七点烤肉店；未签约也运行生日。别人的生日仍保留日历标注主动参与，节日扩展不做。
+- lib/idol-birthday.ts新增一次生日规划（人选+庆祝，不生成祝福台词），实际祝福逐人调用原requestBackgroundChatReply。birthday年计划、队列dedupeKey/已发sentKeys随世界保存，重复tick/刷新不重复安排。海外家人不突然到首尔。规划失败有本地合理安排兜底，逐人祝福strictPersona不退回通用口吻。迟到祝福不再说今天生日，不补建过期庆祝。
+- 新增lib/idol-schedule-notices.ts通知凭据。saveCareer统一让新自动日程先送达本地通知（已有角色私聊/公司群，或明确系统通知），再保存事项；同批公司排期合成通知。生日与命运邀请先排消息，消息成功后才发布同一份待回复节点；共同发起人不重复创建、不重置已接受状态。活动发动机邀请须有实际送达的对应邀请人消息。公司邀约实际生成邮件后才在提醒事项显示。个人新建/自选练习直接保存。
+- 接受才写日历，拒绝/取消撤出正式日历；改期通知与日期地点、日历同步，避免旧时间留存；生日节点保存participantIds，去演场景带入参与者。通知来源显示在事项行。原未带来源的旧事项不编造过去聊天。
+- 提醒事项接受/拒绝为本地操作：更新 canonical 节点及相关人的相处记录，原私聊/群渠道留role=system回复记录，不伪造用户台词，不额外AI生成对方反应。邮件与提醒共用同一nodeId，接受/拒绝状态及回复记录同步，含公司原有offer邀请。
+- 新增lib/idol-invitation-chat.ts：原AI回复携带结构化事项ID/动作/用户本轮原文，message.beforePersist摘掉标记，message.persisted后按真实会话发送者权限应用。明确同意/拒绝双向同步；不确定/假设/引用/历史答复/同名歧义不自动处理，不允许其他角色改全局同名事项。兼容旧答应/不去标记，但要求唯一明确匹配与本轮实际答复。自然私聊新邀约/改期/取消同样落统一节点；后台主动消息不能套用历史用户答复擅自接受。
+- 失败处理：一条消息总共最多尝试3次（首次+最多两次自动重试，间隔游戏时间5/10分钟），仍失败暂停，提醒事项显示手动重试入口；不是无限重试。重试会再次请求API。已送达保存receipt供恢复，不重复生成；未送达不出现无来源邀请。并非报告功能测试有bug，已向Flora解释此为网络/接口故障兜底。
+- 普通备份增加career/reminders/yearly/birthday/mail键；世界存档原includeAll机制直接复用。
+- 验证通过：node docs/idol/tests/birthday-invites.cjs（真实模块、内存存档、假模型）；原person-links.cjs和time-jump.cjs回归通过；tsc --noEmit --incremental false与git diff --check通过。
+- 独立Chrome verify-birthday-invites-v1.mjs实际跑通：一次规划+八人独立祝福，人设/各自聊天历史在输入中，角色单独绑定mock-special接口保留；两位发起人同一任务、消息前无事项；提醒事项接受不增加API；真实聊天引擎生成带标记回复后接受同步，模糊答复保持待回复。model均为假AI，真实API0，errors=[]。截图birthday-invite-delivered-v1.png、报告birthday-invites-results-v1.json在/Users/flora/work/idol-settings-preview。
+- 本节与功能一并本地提交；不push、不部署，不占Netlify部署额度。

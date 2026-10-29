@@ -16,7 +16,7 @@ import {
   type CareerNode,
 } from "@/lib/idol-career";
 import {
-  acceptInvite, addMine, checkNode, declineInvite, deleteNode, isNightNow, leaveNode, setNote, setWish, teacherOf, uncheckNode,
+  pendingNoticeFailures, retryNotice, acceptInvite, addMine, checkNode, declineInvite, deleteNode, isNightNow, leaveNode, setNote, setWish, teacherOf, uncheckNode,
 } from "@/lib/idol-reminders";
 import { loadMonths, overrideMyRank, RANK_EVENT } from "@/lib/idol-ledger";
 import { STARROAD_EVENT, classAt, weekTimetable } from "@/lib/idol-starroad";
@@ -45,6 +45,7 @@ function useCareer(): Career {
   useEffect(() => {
     const bump = () => setTick(t => t + 1);
     window.addEventListener(CAREER_EVENT, bump);
+    window.addEventListener("idol-notice-outbox-updated", bump);
     const timer = window.setInterval(bump, 10000);
     return () => { window.removeEventListener(CAREER_EVENT, bump); window.clearInterval(timer); };
   }, []);
@@ -53,11 +54,11 @@ function useCareer(): Career {
 
 function allItems(career: Career): Item[] {
   const now = Date.now();
-  const offers: Item[] = career.offers.filter(o => o.status === "new" && now >= o.at).map(o => {
+  const offers: Item[] = career.offers.filter(o => o.status === "new" && o.notified && now >= o.at).map(o => {
     const c = companyOf(o.companyId)!;
     return {
       id: o.id, offerId: o.id, kind: "audition", title: `${c.name} ${o.kind === "scout" ? "试镜邀请" : "试镜通知"}`, place: o.place,
-      premise: "", dueAt: o.at, status: "invite", from: c.name, note: o.message,
+      premise: "", dueAt: o.at, status: "invite", from: c.name, note: o.message, notice: o.notice,
     };
   });
   return [...offers, ...career.nodes];
@@ -163,12 +164,13 @@ function Row({ item, swiped, onSwipe, onCheck, onInfo, onLeave, onDelete, onNoti
           <div className={`rm-ti ${item.status !== "pending" && item.status !== "invite" ? "dim" : ""}`}>{item.title}</div>
           <div className={`rm-tm ${red ? "red" : ""}`}>{whenText(item.dueAt)}</div>
           {item.from || item.place ? <div className="rm-sub">{[item.from ? `${item.from}${item.kind === "date" ? "约的" : "通知"}` : "", item.place].filter(Boolean).join(" · ")}</div> : null}
+          {item.notice ? <div className="rm-sub">通知来源：{({private:"KakaoTalk 私聊",group:"KakaoTalk 群通知",mail:"邮件",system:"通知"})[item.notice.channel]}</div> : null}
           {item.status === "invite" && item.note ? <div className="rm-sub rm-clamp">{item.note}</div> : null}
           {st ? <span className={`rm-res s-${item.status}`}>{st}</span> : null}
           {item.wish && item.status === "pending" ? <span className="rm-res s-wish">想要：{item.wish}</span> : null}
           {item.status === "invite" ? (
             <div className="rm-reply" onClick={e => e.stopPropagation()}>
-              <button type="button" className="yes" onClick={() => { const n = acceptInvite(item.id); if (n) onNotice?.(`${n.title}：${whenText(n.dueAt)}，写进日历了`); }}>{item.offerId ? "去试镜" : "报名"}</button>
+              <button type="button" className="yes" onClick={() => { const n = acceptInvite(item.id); if (n) onNotice?.(`${n.title}：${whenText(n.dueAt)}，写进日历了`); }}>{item.offerId ? "去试镜" : "接受"}</button>
               <button type="button" onClick={() => { declineInvite(item.id); onNotice?.(item.offerId ? `婉拒了 ${item.from}` : "回了不去"); }}>{item.offerId ? "婉拒" : "不了"}</button>
             </div>
           ) : null}
@@ -291,6 +293,7 @@ export function CareerApp({ onClose, onNotice }: { onClose: () => void; onNotice
   return (
     <div className={`rm-app ${dark ? "rm-dark" : ""}`}>
       {body}
+      {pendingNoticeFailures().length ? <div className="rm-group" style={{margin:"12px 20px"}}>{pendingNoticeFailures().map(item=><button type="button" className="rm-lrow" key={item.id} onClick={()=>{retryNotice(item.id);onNotice?.("会重新尝试送达这条消息");}}><span className="rm-lt">{item.title}<small>尚未送达 · 点此重试</small></span></button>)}</div> : null}
       {!detail && (page.p === "home" || page.p === "list") ? <button type="button" className="rm-fab" onClick={() => setAdding(true)} aria-label="新提醒"><Plus size={26} strokeWidth={2.6} /></button> : null}
       {checking ? <CheckSheet item={checking} onClose={() => setCheckId(null)} onDone={async text => { setCheckId(null); await checkNode(checking.id, text); onNotice?.(`${checking.title}：完成`); }} /> : null}
       {leaving ? <LeaveSheet item={leaving} onClose={() => setLeaveId(null)} onDone={reason => { setLeaveId(null); leaveNode(leaving.id, reason); onNotice?.(`${leaving.title}：请好假了`); }} /> : null}
@@ -427,7 +430,7 @@ function Detail({ item, onBack, onGo, onCheck, onLeave, onDelete, onAccept, onDe
         <div className="rm-group"><textarea className="rm-in flat" rows={3} value={note} onChange={e => setNoteText(e.target.value)} onBlur={() => setNote(item.id, note)} placeholder="只有你看得到" /></div>
       </>}
       <div className="rm-dbtns">
-        {item.status === "invite" ? <><button type="button" className="p" onClick={onAccept}>{item.offerId ? "去试镜" : "报名"}</button><button type="button" onClick={onDecline}>{item.offerId ? "婉拒" : "不了"}</button></> : null}
+        {item.status === "invite" ? <><button type="button" className="p" onClick={onAccept}>{item.offerId ? "去试镜" : "接受"}</button><button type="button" onClick={onDecline}>{item.offerId ? "婉拒" : "不了"}</button></> : null}
         {playable ? <button type="button" className="p" onClick={() => { setWish(item.id, wish); onGo(); }}>去演</button> : null}
         {open ? <button type="button" onClick={onCheck}>打勾</button> : null}
         {playable ? <button type="button" onClick={onLeave}>{item.kind === "date" ? "去不了" : "请假"}</button> : null}

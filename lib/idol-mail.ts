@@ -35,6 +35,7 @@ export type Mail = {
   read?: boolean;
   starred?: boolean;
   action?: InviteAction;
+  reply?: { accepted: boolean; at: number };
 };
 
 const KEY = "idol_mail_v1";
@@ -61,6 +62,13 @@ export function mailById(id: string): Mail | undefined {
 
 export function updateMail(id: string, patch: Partial<Mail>): void {
   save(loadMails().map(m => (m.id === id ? { ...m, ...patch } : m)));
+}
+
+/** 本地回复记录，不生成玩家台词；原邮件渠道也能看见接受/拒绝结果。 */
+export function recordMailReply(id: string, accepted: boolean, detail = ""): void {
+  const mail = mailById(id);
+  if (!mail || mail.reply?.accepted === accepted) return;
+  updateMail(id, { reply: { accepted, at: Date.now() }, body: [...mail.body.filter(p => !p.zh.startsWith("【回复记录】")), { zh: `【回复记录】已${accepted ? "接受" : "拒绝"}此邀请${detail ? ` · ${detail}` : ""}` }] });
 }
 
 export function deleteMail(id: string): void {

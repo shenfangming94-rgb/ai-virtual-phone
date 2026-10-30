@@ -4195,7 +4195,8 @@ export function ChatRoom({ session, onBack, onDeleted }: ChatRoomProps) {
             };
             updateMessageMediaData(invite.id, nextMediaData);
             setMessages((current) => current.map((item) => item.id === invite.id ? { ...item, mediaData: nextMediaData } : item));
-            window.dispatchEvent(new CustomEvent("open-app", { detail: { appId: "story" } }));
+            // 不再抢跳剧情 app：见面分线已建好，她自己想开始的时候去剧情 app 就会自动开戏。
+            showChatToast("已同意，见面剧情准备好了，去剧情 app 就能开始");
         } catch (error) {
             showChatToast(error instanceof Error ? error.message : "创建见面剧情失败，请稍后再试");
         }

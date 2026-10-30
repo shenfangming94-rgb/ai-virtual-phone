@@ -19,8 +19,8 @@ export const viewport: Viewport = {
 };
 
 export const metadata: Metadata = {
-  title: "float",
-  description: "float",
+  title: "SEOUL:AM",
+  description: "SEOUL:AM",
 };
 
 export default function RootLayout({
@@ -35,10 +35,10 @@ export default function RootLayout({
         <script dangerouslySetInnerHTML={{ __html: WORLD_CLOCK_BOOT_SCRIPT }} />
         <link rel="manifest" href="/manifest.webmanifest" crossOrigin="use-credentials" />
         <meta name="theme-color" content="#f8f7f2" />
-        <link rel="apple-touch-icon" href="/icon-192.png" />
-        <link rel="icon" href="/icon-192.png" type="image/png" />
+        <link rel="apple-touch-icon" href="/seoulam-icon-180.png" />
+        <link rel="icon" href="/seoulam-icon-192.png" type="image/png" />
         <meta name="apple-mobile-web-app-capable" content="yes" />
-        <meta name="apple-mobile-web-app-title" content="float" />
+        <meta name="apple-mobile-web-app-title" content="SEOUL:AM" />
         <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
         <meta name="mobile-web-app-capable" content="yes" />
       </head>

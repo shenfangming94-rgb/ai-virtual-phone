@@ -1,12 +1,12 @@
-const CACHE_VERSION = "ai-phone-pwa-v12";
+const CACHE_VERSION = "ai-phone-pwa-v13";
 const STATIC_CACHE = `${CACHE_VERSION}-static`;
 const RUNTIME_CACHE = `${CACHE_VERSION}-runtime`;
 
 const PRECACHE_URLS = [
   "/",
   "/manifest.json",
-  "/icon-192.png",
-  "/icon-512.png",
+  "/seoulam-icon-192.png",
+  "/seoulam-icon-512.png",
 ];
 
 self.addEventListener("install", (event) => {
@@ -110,8 +110,8 @@ self.addEventListener("push", (event) => {
     }
     await self.registration.showNotification(title, {
       body: (declarative && declarative.body) || data.body || "",
-      icon: (declarative && declarative.icon) || data.icon || "/icon-192.png",
-      badge: (declarative && declarative.badge) || "/icon-192.png",
+      icon: (declarative && declarative.icon) || data.icon || "/seoulam-icon-192.png",
+      badge: (declarative && declarative.badge) || "/seoulam-icon-192.png",
       tag: (declarative && declarative.tag) || data.tag || `push-${Date.now()}`,
       data: {
         url: (declarative && declarative.navigate) || notificationData.url || "/",

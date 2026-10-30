@@ -1,7 +1,7 @@
 {
-    "name": "float",
-    "short_name": "float",
-    "description": "float",
+    "name": "SEOUL:AM",
+    "short_name": "SEOUL:AM",
+    "description": "SEOUL:AM",
     "id": "/",
     "start_url": "/",
     "scope": "/",
@@ -20,13 +20,13 @@
     ],
     "icons": [
         {
-            "src": "/icon-192.png",
+            "src": "/seoulam-icon-192.png",
             "sizes": "192x192",
             "type": "image/png",
             "purpose": "any"
         },
         {
-            "src": "/icon-512.png",
+            "src": "/seoulam-icon-512.png",
             "sizes": "512x512",
             "type": "image/png",
             "purpose": "any"

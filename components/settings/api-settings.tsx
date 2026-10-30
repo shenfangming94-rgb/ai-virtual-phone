@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useContext } from "react";
+import { createPortal } from "react-dom";
 import { Plus, RefreshCw, Rss, AlertCircle, FileEdit, Trash2, X, Check } from "lucide-react";
 import { SettingsContext } from "../phone-settings-app";
 import type { ApiConfig } from "@/lib/settings-types";
@@ -277,7 +278,7 @@ export function ApiSettings() {
                 </div>
             )}
 
-            {editingId && (
+            {editingId && typeof document !== "undefined" && createPortal(
                 <div className="modal-overlay modal-overlay-bottom">
                     <div className="modal-sheet" data-ui="modal-sheet">
                         <div className="modal-header" data-ui="modal-header">
@@ -446,10 +447,11 @@ export function ApiSettings() {
                             })()}
                         </div>
                     </div>
-                </div>
+                </div>,
+                document.body
             )}
 
-            {confirmDeleteId && (
+            {confirmDeleteId && typeof document !== "undefined" && createPortal(
                 <ConfirmDialog
                     title="确认删除？"
                     message="删除配置后无法恢复。是否继续？"
@@ -462,7 +464,8 @@ export function ApiSettings() {
                         setConfirmDeleteId(null);
                     }}
                     onCancel={() => setConfirmDeleteId(null)}
-                />
+                />,
+                document.body
             )}
         </div>
     );

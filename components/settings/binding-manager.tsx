@@ -60,6 +60,7 @@ import {
     loadRegexes,
     loadUserIdentities,
     ensureSettingsStorageHydrated,
+    IDOL_WORLD_BOOK_ID,
 } from "@/lib/settings-storage";
 import { getActiveImageGenerationBindingId, getImageGenerationBindingOptions } from "@/lib/image-generation-binding";
 import { hydrateKvDb } from "@/lib/kv-db";
@@ -477,7 +478,7 @@ export function BindingManager() {
             case "voiceConfigId": return "语音合成 API 方案";
             case "presetId": return "提示词预设";
             case "userIdentityId": return "用户身份";
-            case "worldBookIds": return "启用的世界书";
+            case "worldBookIds": return "爱豆世界自动附带，可再选世界书";
             case "regexIds": return "启用的正则规则";
         }
     };
@@ -525,6 +526,10 @@ export function BindingManager() {
         const options = getBindingFieldOptions(field);
         if (isMultiBindingField(field)) {
             const selectedIds = (slot[field] || []).filter(id => options.some(item => item.id === id));
+            if (field === "worldBookIds" && options.some(item => item.id === IDOL_WORLD_BOOK_ID)) {
+                const extraCount = selectedIds.filter(id => id !== IDOL_WORLD_BOOK_ID).length;
+                return { text: extraCount > 0 ? `自动 + ${extraCount} 项` : "自动附带", isEmpty: false };
+            }
             if (selectedIds.length === 0) return { text: "", isEmpty: true };
             if (selectedIds.length === 1) {
                 return { text: options.find(item => item.id === selectedIds[0])?.name || "1 项已选", isEmpty: false };
@@ -687,8 +692,14 @@ export function BindingManager() {
         const label = getBindingFieldLabel(field);
         const options = getBindingFieldOptions(field);
         const isMulti = isMultiBindingField(field);
+        const automaticWorldBook = field === "worldBookIds"
+            ? options.find(item => item.id === IDOL_WORLD_BOOK_ID)
+            : undefined;
+        const selectableOptions = automaticWorldBook
+            ? options.filter(item => item.id !== IDOL_WORLD_BOOK_ID)
+            : options;
         const hideUnsetOption = isRequiredGlobalField(field);
-        const selectedIds = isMulti ? (config.globalDefaults[field] || []).filter(id => options.some(item => item.id === id)) : [];
+        const selectedIds = isMulti ? (config.globalDefaults[field] || []).filter(id => selectableOptions.some(item => item.id === id)) : [];
         const selectedValue = !isMulti ? config.globalDefaults[field] : undefined;
 
         const clearSelection = () => {
@@ -737,6 +748,11 @@ export function BindingManager() {
                     </div>
                     <div className="binding-picker-body">
                         <div className="binding-sheet-list">
+                            {automaticWorldBook && (
+                                <p className="binding-auto-worldbook-note">
+                                    {automaticWorldBook.name} 会自动加入所有 APP；下面只选择额外世界书。
+                                </p>
+                            )}
                             {!hideUnsetOption && (
                                 <button
                                     type="button"
@@ -745,13 +761,15 @@ export function BindingManager() {
                                     onClick={clearSelection}
                                 >
                                     <span className="binding-sheet-check">{(isMulti ? selectedIds.length === 0 : !selectedValue) && <Check size={15} />}</span>
-                                    <span className="binding-sheet-option-text">未设置</span>
+                                    <span className="binding-sheet-option-text">{automaticWorldBook ? "仅使用自动附带" : "未设置"}</span>
                                 </button>
                             )}
-                            {options.length === 0 ? (
-                                <div className="binding-sheet-empty">暂无可选{label}，请先在对应设置页面创建。</div>
+                            {selectableOptions.length === 0 ? (
+                                <div className="binding-sheet-empty">
+                                    {automaticWorldBook ? "暂无额外世界书可选，爱豆世界会自动附带。" : `暂无可选${label}，请先在对应设置页面创建。`}
+                                </div>
                             ) : (
-                                options.map(option => {
+                                selectableOptions.map(option => {
                                     const selected = isMulti ? selectedIds.includes(option.id) : selectedValue === option.id;
                                     return (
                                         <button
@@ -788,9 +806,17 @@ export function BindingManager() {
         const label = getBindingFieldLabel(field);
         const options = getBindingFieldOptions(field);
         const isMulti = isMultiBindingField(field);
-        const selectedIds = isMulti ? ((currentSlot[field as MultiBindingField] || []).filter(id => options.some(item => item.id === id))) : [];
+        const automaticWorldBook = field === "worldBookIds"
+            ? options.find(item => item.id === IDOL_WORLD_BOOK_ID)
+            : undefined;
+        const selectableOptions = automaticWorldBook
+            ? options.filter(item => item.id !== IDOL_WORLD_BOOK_ID)
+            : options;
+        const selectedIds = isMulti ? ((currentSlot[field as MultiBindingField] || []).filter(id => selectableOptions.some(item => item.id === id))) : [];
         const selectedValue = !isMulti ? currentSlot[field as SingleBindingField] : undefined;
-        const emptyLabel = level === "global" ? "未设置" : getInheritedFieldLabel(field, inheritLabel);
+        const emptyLabel = automaticWorldBook
+            ? "仅使用自动附带"
+            : level === "global" ? "未设置" : getInheritedFieldLabel(field, inheritLabel);
 
         const clearSelection = () => {
             handleUpdate(field, undefined);
@@ -838,6 +864,11 @@ export function BindingManager() {
                     </div>
                     <div className="binding-picker-body">
                         <div className="binding-sheet-list">
+                            {automaticWorldBook && (
+                                <p className="binding-auto-worldbook-note">
+                                    {automaticWorldBook.name} 会自动加入所有 APP；下面只选择额外世界书。
+                                </p>
+                            )}
                             {/* 全局层的 API/预设/身份不提供"未设置"（角色/应用层保留"跟随上级"） */}
                             {!(level === "global" && isRequiredGlobalField(field)) && (
                                 <button
@@ -850,10 +881,12 @@ export function BindingManager() {
                                     <span className="binding-sheet-option-text">{emptyLabel}</span>
                                 </button>
                             )}
-                            {options.length === 0 ? (
-                                <div className="binding-sheet-empty">暂无可选{label}，请先在对应设置页面创建。</div>
+                            {selectableOptions.length === 0 ? (
+                                <div className="binding-sheet-empty">
+                                    {automaticWorldBook ? "暂无额外世界书可选，爱豆世界会自动附带。" : `暂无可选${label}，请先在对应设置页面创建。`}
+                                </div>
                             ) : (
-                                options.map(option => {
+                                selectableOptions.map(option => {
                                     const selected = isMulti ? selectedIds.includes(option.id) : selectedValue === option.id;
                                     return (
                                         <button
@@ -1004,7 +1037,7 @@ export function BindingManager() {
     };
 
     return (
-        <div className="flex flex-col gap-[24px]">
+        <div className="binding-manager flex flex-col gap-[18px]">
             {/* Level 1: Global defaults + character action */}
             {level === "global" && (
                 <>
@@ -1014,7 +1047,7 @@ export function BindingManager() {
                             <button
                                 type="button"
                                 onClick={() => setShowCharacterPicker(true)}
-                                className="inline-flex h-9 shrink-0 items-center justify-center gap-1.5 rounded-[18px] bg-black px-3 text-[calc(11px*var(--app-text-scale,1))] font-bold text-white shadow-sm transition-all hover:bg-gray-800 hover:shadow-md active:scale-95 focus:outline-none"
+                                className="binding-role-setup-button inline-flex h-8 shrink-0 items-center justify-center gap-1.5 rounded-full px-3 text-[calc(10.5px*var(--app-text-scale,1))] font-semibold transition-all active:scale-95 focus:outline-none"
                             >
                                 <UserPlus size={14} strokeWidth={1.8} />
                                 为角色配置专属绑定
@@ -1025,7 +1058,7 @@ export function BindingManager() {
 
                     <section className="flex flex-col gap-3">
                         <p className="settings-menu-section-title">Application Binding</p>
-                        <div className="binding-aux-select">
+                        <div className="binding-aux-select binding-aux-select-single">
                             <button
                                 type="button"
                                 className="binding-aux-trigger"
@@ -1059,7 +1092,7 @@ export function BindingManager() {
 
                     <section className="flex flex-col gap-3">
                         <p className="settings-menu-section-title">Auxiliary API</p>
-                        <div className="flex flex-col gap-3">
+                        <div className="binding-aux-list flex flex-col gap-3">
                             {renderAuxSelect("memorySummaryApiConfigId", "记忆总结 API")}
                             {renderAuxSelect("embeddingApiConfigId", "向量召回 API")}
                             {renderAuxSelect("mascotApiConfigId", "小卷助手 API")}

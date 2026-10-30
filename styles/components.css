@@ -300,27 +300,20 @@
 .binding-global-grid {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 0;
+  min-width: 0;
+  padding: 0 14px;
+  overflow: hidden;
+  border-radius: var(--ui-radius-card);
+  background: var(--c-card);
+  box-shadow: 0 1px 3px rgba(28,28,30,0.045),
+              inset 0 1px 0 rgba(255,255,255,0.9);
 }
 
 .binding-global-primary-row,
 .binding-global-compact-row {
-  display: grid;
+  display: contents;
   min-width: 0;
-  gap: 12px;
-}
-
-.binding-global-primary-row {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-}
-
-.binding-global-primary-row[data-count="3"] {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-}
-
-.binding-global-primary-row[data-count="3"] > :last-child {
-  grid-column: 1 / -1;
-  min-height: 88px;
 }
 
 .binding-priority-note {
@@ -328,15 +321,6 @@
   color: var(--c-text-muted);
   font-size: calc(11px * var(--app-text-scale, 1));
   line-height: 1.5;
-}
-
-.binding-global-compact-row {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 10px;
-}
-
-.binding-global-compact-row[data-count="2"] {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 .binding-app-grid {
@@ -713,6 +697,166 @@
   opacity: 0.55;
 }
 
+/* Settings > Binding: grouped rows that match the other settings subpages. */
+.binding-role-setup-button {
+  color: #1475df;
+  background: color-mix(in srgb, #007aff 9%, var(--c-page-body-bg));
+  box-shadow: none;
+}
+
+.binding-role-setup-button:hover {
+  background: color-mix(in srgb, #007aff 14%, var(--c-page-body-bg));
+}
+
+.binding-global-grid .binding-choice-card-global {
+  min-height: 62px;
+  padding: 9px 0;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  gap: 9px;
+  border: 0;
+  border-bottom: 1px solid var(--c-panel-border);
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+.binding-global-grid > .binding-choice-card-wide:last-child {
+  border-bottom: 0;
+}
+
+.binding-global-grid .binding-card-main {
+  min-width: 0;
+  flex: 1 1 auto;
+  flex-direction: row;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 10px;
+}
+
+.binding-global-grid .binding-choice-icon {
+  order: 0;
+  width: 34px;
+  height: 34px;
+}
+
+.binding-global-grid .binding-card-copy {
+  min-width: 0;
+  flex: 1 1 auto;
+  order: 1;
+  gap: 2px;
+}
+
+.binding-global-grid .binding-choice-label,
+.binding-global-grid .binding-choice-card-small .binding-choice-label {
+  font-size: calc(12.5px * var(--app-text-scale, 1));
+  line-height: 1.25;
+  font-weight: 650;
+  color: var(--c-text-title);
+}
+
+.binding-global-grid .binding-choice-desc {
+  font-size: calc(10px * var(--app-text-scale, 1));
+  line-height: 1.25;
+  color: var(--c-text-muted);
+}
+
+.binding-global-grid .binding-choice-row {
+  width: auto;
+  min-width: 78px;
+  max-width: 43%;
+  flex: 0 1 43%;
+  align-self: center;
+  justify-content: flex-end;
+  gap: 5px;
+  border: 0;
+  padding: 0;
+}
+
+.binding-global-grid .binding-choice-value,
+.binding-global-grid .binding-choice-card-wide .binding-choice-value {
+  text-align: right;
+  font-size: calc(10px * var(--app-text-scale, 1));
+  color: var(--c-text-muted);
+}
+
+/* `.is-empty` is also used by IdolSearch's empty-state panel. Keep its
+   large empty-state padding from leaking into binding values. */
+.binding-global-grid .binding-choice-value.is-empty,
+.binding-aux-list .binding-choice-value.is-empty,
+.binding-aux-select-single .binding-choice-value.is-empty {
+  height: auto;
+  padding: 0;
+  line-height: 1.25;
+}
+
+.binding-aux-select-single {
+  padding: 0 14px;
+}
+
+.binding-aux-select-single .binding-aux-trigger {
+  min-height: 62px;
+  padding: 9px 0;
+  gap: 10px;
+}
+
+.binding-aux-list {
+  gap: 0 !important;
+  padding: 0 14px;
+  overflow: hidden;
+  border-radius: var(--ui-radius-card);
+  background: var(--c-card);
+  backdrop-filter: blur(var(--ui-blur)) saturate(var(--ui-saturate));
+  -webkit-backdrop-filter: blur(var(--ui-blur)) saturate(var(--ui-saturate));
+  box-shadow: 0 1px 3px rgba(28,28,30,0.045),
+              inset 0 1px 0 rgba(255,255,255,0.9);
+}
+
+.binding-aux-list .binding-aux-select {
+  overflow: visible;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+.binding-aux-list .binding-aux-select:not(:last-child) {
+  border-bottom: 1px solid var(--c-panel-border);
+}
+
+.binding-aux-list .binding-aux-trigger {
+  min-height: 62px;
+  padding: 9px 0;
+  gap: 10px;
+}
+
+.binding-aux-list .binding-choice-icon-inline {
+  width: 34px;
+  height: 34px;
+}
+
+.binding-aux-list .binding-card-copy {
+  gap: 2px;
+}
+
+.binding-aux-list .binding-choice-label {
+  font-size: calc(12.5px * var(--app-text-scale, 1));
+  font-weight: 650;
+}
+
+.binding-aux-list .binding-choice-desc {
+  font-size: calc(10px * var(--app-text-scale, 1));
+}
+
+.binding-aux-list .binding-choice-row {
+  min-width: 90px;
+  gap: 5px;
+}
+
 .binding-picker-dialog {
   width: min(78%, 300px);
   max-height: 72vh;
@@ -785,6 +929,16 @@
   flex-direction: column;
   gap: 6px;
   padding-bottom: 16px;
+}
+
+.binding-auto-worldbook-note {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: var(--c-input);
+  color: var(--c-text);
+  font-size: calc(10.8px * var(--app-text-scale, 1));
+  line-height: 1.45;
 }
 
 .binding-sheet-option {

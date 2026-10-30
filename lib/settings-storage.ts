@@ -1038,7 +1038,7 @@ export function setCharacterBinding(config: BindingConfig, binding: CharacterBin
  * undefined/empty fields mean "inherit from parent level".
  */
 /** 爱豆小手机：自动更新的世界书（lib/idol-worldbook.ts）不用勾，所有 app 都带上 */
-const IDOL_WORLD_BOOK_ID = "wb_idol_world_auto";
+export const IDOL_WORLD_BOOK_ID = "wb_idol_world_auto";
 export function resolveBinding(
     config: BindingConfig,
     characterId?: string,

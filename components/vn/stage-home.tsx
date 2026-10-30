@@ -68,6 +68,9 @@ export function StageHome({ onClose, onPlay, onReplay }: Props) {
   const saved = looks[lookKey] ?? { pins: {} };
   const builtin = DEFAULT_MAPS[lookKey];
   const usingBuiltin = !saved.imageAssetId && !saved.noImage && Boolean(builtin);
+  const d = new Date(now);
+  // 18:00～6:00 用夜版图（钉子和日版同一套）
+  const isNight = d.getHours() >= 18 || d.getHours() < 6;
   // 用自带的图时：自带的钉子位置打底，她拖过的盖上去
   const look: MapLook = usingBuiltin ? { ...saved, pins: { ...builtin!.pins, ...saved.pins } } : saved;
   const [muted, setMuted] = useState(() => loadBgmMuted());
@@ -115,10 +118,10 @@ export function StageHome({ onClose, onPlay, onReplay }: Props) {
 
   useEffect(() => {
     let off = false;
-    if (!saved.imageAssetId) { setMapUrl(usingBuiltin ? builtin!.image : ""); return; }
+    if (!saved.imageAssetId) { setMapUrl(usingBuiltin ? (builtin!.night && isNight ? builtin!.night : builtin!.image) : ""); return; }
     void getThemeAssetMap([saved.imageAssetId]).then(m => { if (!off) setMapUrl(m[saved.imageAssetId!] || ""); });
     return () => { off = true; };
-  }, [saved.imageAssetId, usingBuiltin, builtin]);
+  }, [saved.imageAssetId, usingBuiltin, builtin, isNight]);
 
   const updateLook = (next: MapLook) => {
     saveMapLook(lookKey, next);
@@ -134,7 +137,6 @@ export function StageHome({ onClose, onPlay, onReplay }: Props) {
   const marks = destinyMarks(now);
   const marked = (pl: StagePlace) => marks.some(m => m.place === pl.key || (pl.sub && mapOfPlace(m.place)?.id === pl.sub)) ? "1" : undefined;
   const openScenes = openStageScenes();
-  const d = new Date(now);
   const clock = `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
   const [hideClock, setHideClock] = useState(() => Boolean(loadStageSettings().hideClock));
 
@@ -161,7 +163,7 @@ export function StageHome({ onClose, onPlay, onReplay }: Props) {
         <MapImage key={`${lookKey}:${mapUrl}`} url={mapUrl} places={map.places} look={look} editing={pinEdit} onTap={tapPlace} marked={marked}
           onPlace={(x, y) => { if (pinEdit) { updateLook({ ...saved, pins: { ...saved.pins, [pinEdit]: { x, y } } }); setPinEdit(""); } }} />
       ) : (
-        <div className="stg-grid-wrap" style={{ ["--stg-under" as string]: `url(${DEFAULT_MAPS.seoul.image})` }}>
+        <div className="stg-grid-wrap" style={{ ["--stg-under" as string]: `url(${DEFAULT_MAPS.seoul.night && isNight ? DEFAULT_MAPS.seoul.night : DEFAULT_MAPS.seoul.image})` }}>
           <div className="stg-grid">
             {map.places.map(pl => {
               const lock = placeLocked(pl);

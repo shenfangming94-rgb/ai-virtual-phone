@@ -154,10 +154,11 @@ export function placeKeyFromText(text: string): string {
 export type MapLook = { imageAssetId?: string; pins: Record<string, { x: number; y: number }>; /** 默认图也不要，用卡片 */ noImage?: boolean };
 const LOOK_KEY = "idol_stage_maps_v1";
 
-/** 自带的地图（她挑的图，10-28 钉好的位置）；她上传了自己的图就用她的 */
-export const DEFAULT_MAPS: Record<string, { image: string; pins: MapLook["pins"] }> = {
+/** 自带的地图（她挑的图，10-28 钉好的位置）；她上传了自己的图就用她的。night = 夜版图，18:00～6:00 用（钉子同一套） */
+export const DEFAULT_MAPS: Record<string, { image: string; night?: string; pins: MapLook["pins"] }> = {
   seoul: {
     image: "/idol/maps/seoul.jpg",
+    night: "/idol/maps/seoul-night.jpg",
     pins: {
       家: { x: 16.1, y: 25 }, 宿舍: { x: 87.4, y: 76.5 }, 公司: { x: 74.6, y: 62 }, 便利店: { x: 49.6, y: 52.3 }, 汉江公园: { x: 51.9, y: 76.5 },
       南山塔: { x: 37.1, y: 29 }, 弘大: { x: 22.7, y: 81.8 }, 明洞: { x: 21.6, y: 58.1 }, 圣水洞: { x: 45.4, y: 36.3 }, 清潭洞: { x: 49.9, y: 65.8 },

@@ -249,12 +249,45 @@ async function ensureRoommates(mates: Character[]): Promise<void> {
   saveCareer({ ...loadCareer(), roommates: picks.map(m => m.id) });
 }
 
+/** 室长加她 KakaoTalk，私聊一句：自我介绍、没见过的室友是谁、马上拉群 */
+async function teacherAddsHer(teacher: Character, company: string, groupName: string, unmet: string[]): Promise<void> {
+  addChatContact(teacher.id);
+  clearRequestsForCharacter(teacher.id);
+  dispatchFriendRequestUpdated();
+  promote(teacher.id);
+  const p = getProfile(teacher.id);
+  if (!p.met) saveProfile({ ...p, met: true, metAt: { at: Date.now(), place: `${company}（KakaoTalk）` } });
+  const session = createOrGetSession(teacher.id);
+  const userName = resolveUserIdentity(teacher.id, "chat")?.name || "她";
+  pushChatMessage({ sessionId: session.id, role: "system", content: `${teacher.name}加了${userName}为 KakaoTalk 好友`, status: "sent" });
+  const roomLine = unmet.length ? `你宿舍的室友是${unmet.join("、")}。` : "";
+  const fallback = `我是${company}带新人练习生的室长${teacher.name}。${roomLine}等下拉你进「${groupName}」，日程都在群里发，记得看。`;
+  let text = fallback;
+  try {
+    const res = await simpleLLMCall(chatConfig(), [
+      { role: "system", content: `你是${teacher.name}。${teacher.persona}\n\n新练习生${userName}今天刚进公司，你第一次在 KakaoTalk 私聊她。只输出要发的那一条消息，两三句，用你自己的说话方式：说你是谁${unmet.length ? `，告诉她宿舍室友是${unmet.join("、")}` : ""}，说马上拉她进「${groupName}」群，日程在群里通知。` },
+      { role: "user", content: "发消息。" },
+    ], { temperature: 0.8, label: "室长加好友" });
+    text = res.content?.trim().replace(/^["「]|["」]$/g, "") || fallback;
+  } catch { /* 用兜底 */ }
+  pushChatMessage({ sessionId: session.id, role: "assistant", content: text, senderCharacterId: teacher.id, senderName: teacher.name, status: "sent" });
+}
+
 let groupBusy = false;
 
 /** 进公司第一天之后：室长把她拉进练习生群（第一天那场戏里的老师和同期一起进群） */
 export async function ensureTraineeGroup(present: Character[], notify?: (msg: string) => void): Promise<void> {
   const s = load();
-  if (groupBusy || (s.groupId && loadChatSessions().some(x => x.id === s.groupId))) return;
+  if (groupBusy) return;
+  if (s.groupId && loadChatSessions().some(x => x.id === s.groupId)) {
+    // 旧存档：室友当初没进群，补进去
+    const rm = loadCareer().roommates ?? [];
+    const sessions = loadChatSessions();
+    const g = sessions.find(x => x.id === s.groupId)!;
+    const missing = rm.filter(id => !(g.participantIds ?? []).includes(id));
+    if (missing.length) saveChatSessions(sessions.map(x => x.id === g.id ? { ...x, participantIds: [...(x.participantIds ?? []), ...missing] } : x));
+    return;
+  }
   const career = loadCareer();
   const c = companyOf(career.companyId);
   if (!c) return;
@@ -263,12 +296,20 @@ export async function ensureTraineeGroup(present: Character[], notify?: (msg: st
     const teacher = present.find(isTeacher) ?? (s.teacherId ? loadCharacters().find(x => x.id === s.teacherId) : undefined) ?? await makeTeacher(c.name);
     const mates = present.filter(x => x.id !== teacher.id && isTrainee(x));
     await ensureRoommates(mates);
+    const all = loadCharacters();
+    const roommates = (loadCareer().roommates ?? []).map(id => all.find(x => x.id === id)).filter((x): x is Character => Boolean(x));
     const name = `${c.name} 新人练习生`;
-    const session = createGroupSession(name, [teacher.id, ...mates.map(m => m.id)]);
+    // 戏里没给过 KakaoTalk 的话，室长先加她、私聊交代一句（没见过的室友顺带介绍），再拉群
+    if (!isKakaoFriend(teacher.id)) {
+      const unmet = roommates.filter(r => !present.some(p => p.id === r.id)).map(r => r.name);
+      await teacherAddsHer(teacher, c.name, name, unmet);
+    }
+    const memberIds = [...new Set([teacher.id, ...mates.map(m => m.id), ...roommates.map(m => m.id)])];
+    const session = createGroupSession(name, memberIds);
     saveChatSessions(loadChatSessions().map(x => x.id === session.id ? { ...x, groupOwnerId: teacher.id } : x));
     const userName = resolveUserIdentity()?.name || "她";
     pushChatMessage({ sessionId: session.id, role: "system", content: `${teacher.name}邀请${userName}加入了群聊「${name}」`, status: "sent" });
-    seedCrowd(session.id, 30 + Math.floor(Math.random() * 30), [teacher.name, ...mates.map(m => m.name)]);
+    seedCrowd(session.id, 30 + Math.floor(Math.random() * 30), [teacher.name, ...mates.map(m => m.name), ...roommates.map(m => m.name)]);
     save({ ...load(), groupId: session.id, teacherId: teacher.id });
     notify?.(`💬 KakaoTalk：${teacher.name} 把你拉进了群「${name}」`);
   } finally {
@@ -360,9 +401,12 @@ export function kakaoTick(notify: (msg: string) => void): void {
     return;
   }
   // 第一天那场没演、平常地过去了：老师照样拉群
-  if (!s.groupId && career.nodes.some(n => n.kind === "first_day" && n.status !== "pending")) {
-    void ensureTraineeGroup([], notify);
-    return;
+  if (career.nodes.some(n => n.kind === "first_day" && n.status !== "pending")) {
+    if (!s.groupId) {
+      void ensureTraineeGroup([], notify);
+      return;
+    }
+    void ensureTraineeGroup([]);
   }
   const teacher = s.teacherId ? loadCharacters().find(c => c.id === s.teacherId) : undefined;
   if (!s.groupId || !teacher || !loadChatSessions().some(x => x.id === s.groupId)) return;

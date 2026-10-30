@@ -98,10 +98,10 @@ export function crowdPromptBlock(sessionId: string): string {
   if (!list.length) return "";
   // 最近说过话的路人排前面（接得上话），再随机补几个
   const spoke = new Set(loadChatMessages(sessionId).slice(-60).map(m => m.senderCharacterId).filter(isCrowdId));
-  const sample = [...list.filter(m => spoke.has(m.id)), ...[...list.filter(m => !spoke.has(m.id))].sort(() => Math.random() - 0.5)].slice(0, 15);
+  const sample = [...list.filter(m => spoke.has(m.id)), ...[...list.filter(m => !spoke.has(m.id))].sort(() => Math.random() - 0.5)].slice(0, 20);
   return [
-    `【群里的其他人】这个群人很多：上面的成员之外还有 ${list.length} 个人，平时大多不说话。`,
-    "偶尔可以有一两个路人冒一句（收到、问个小事、接一句玩笑），用同样的 [名字]: 格式，只用下面这些名字；每轮最多一两个路人，话要短，不抢成员的戏，大多数轮次一个路人都不出现。",
+    `【群里的其他人】这是公司的练习生大群，上面的成员之外还有 ${list.length} 个人。`,
+    "每轮至少五六个不同的人说话，成员和下面这些路人都算，一人一两句，话要短，各说各的。路人用同样的 [名字]: 格式，只用下面这些名字。",
     sample.map(m => `${m.name}（${m.role}）`).join("、"),
   ].join("\n");
 }

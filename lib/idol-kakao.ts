@@ -149,7 +149,8 @@ export async function fleshOut(charId: string, reroll = false): Promise<void> {
   if (!reroll && p.privateLines.length) return;
   const face = reroll ? rollFace() : p.face;
   const task = (async () => {
-    const d = await completeCard({ ...p, face }, c.name, reroll ? rollSecretKind() : undefined);
+    const { personSceneText } = await import("./idol-stage");
+    const d = await completeCard({ ...p, face }, c.name, reroll ? rollSecretKind() : undefined, personSceneText(charId, c.name));
     // 补全期间可能已经加好友或新增相处记录，保存时使用最新状态。
     if (!loadCharacters().some(x => x.id === charId)) return;
     const current = getProfile(charId);

@@ -182,7 +182,7 @@ export function rollFace(): FaceRelation {
 /** 档案拼成给 AI 读的人设 */
 export function composePersona(p: IdolProfile): string {
   const out: string[] = [];
-  const head = [p.role, p.nationality ? `国籍：${p.nationality}` : "", p.gender, p.age ? `${p.age}岁` : "", p.birthday ? `生日 ${p.birthday.replace("-", "月")}日` : "", p.mbti ? `MBTI ${p.mbti}（只是参考，不刻板）` : ""].filter(Boolean).join("，");
+  const head = [p.role, p.nationality ? `国籍：${p.nationality}` : "", p.gender, p.age ? `${p.age}岁` : "", p.birthday ? `生日 ${p.birthday.replace("-", "月")}日` : ""].filter(Boolean).join("，");
   if (head) out.push(`【身份】${head}`);
   const kinship = kinshipOf(p);
   if (kinship !== "none") out.push(`【与你的亲属关系】${KINSHIP_LABEL[kinship]}。${p.allowFamilyRomance ? "感情发展由当前关系和心动程度决定。" : "没有心动线。"}`);
@@ -195,10 +195,10 @@ export function composePersona(p: IdolProfile): string {
     out.push(`【公开人设】${p.publicLabels.length ? `标签：${p.publicLabels.join("、")}。` : ""}${p.publicText}`);
   }
   if (p.privateLines.length) {
-    const title = p.isIdol ? `【私下】（跟公开人设：${FACE_LABEL[p.face]}）` : "【性格与相处】";
+    const title = p.isIdol ? "【私下】" : "【性格与相处】";
     out.push(`${title}\n${p.privateLines.map(l => `- ${l}`).join("\n")}`);
   }
-  out.push("【人物一致性】性格是稳定倾向，结合关系、处境和经历自然反应，不必每句话都展示；变化要有原因。MBTI只是辅助参考，人物设定和实际经历优先。");
+  out.push("【人物一致性】照你在戏里和记忆里已经表现出来的样子演，前后一致，变化要有原因。");
   if (p.canCrush && p.romanceStyle) out.push(`【感情里的你】${p.romanceStyle}\n以当前关系和心动程度为准，未确定关系不提前表现成恋人，确定关系后的亲密表达与期待要有自然变化。`);
   out.push(`【说话语言】${IDOL_LANGUAGE_RULE}`);
   if (p.speech) out.push(`【说话】${p.speech}`);
@@ -471,9 +471,9 @@ const CARD_RULES = `写人物卡的规矩：
 - 这是一个以韩国娱乐圈为背景的故事，主角是「她」（用户），一个想当爱豆的女生。
 - 大多数人是普通人：性格正常，会开玩笑，也会笨拙、说错话。不面瘫、不病弱、不高冷，不硬塞创伤和秘密，不写「怕什么、想要什么」。
 - 只写具体会做的事和具体的说话方式，不写抽象形容词堆砌。
-- 只有已经出道的爱豆才有公开人设（标签 + 两三句粉丝眼里的他）；不是爱豆的人公开人设留空。
-- 私下（爱豆）或性格与相处（非爱豆）写成简短连贯的描述，放入 privateLines 的一两段里：说明稳定的处事倾向、熟悉前后的相处差别，以及压力或冲突下的反应。爱豆私下和公开人设的关系按给定的骰子结果写。
-- 性格是稳定倾向，结合关系、处境和经历自然反应，变化要有原因。MBTI只作辅助参考，人物设定和实际经历优先。
+- 只有已经出道的爱豆才有公开人设（标签 + 两三句粉丝眼里的他），只写粉丝看到的样子，不跟私下对照；不是爱豆的人公开人设留空。
+- privateLines（爱豆是私下，非爱豆是性格与相处）最多一两句，speech 最多一句；两者只从给出的他在戏里的原文提炼，原文没体现的不写；没有给原文就都留空。
+- MBTI 只是资料，不用来写性格。
 - 雷区可以没有。
 - 不写他对她的第一印象，他们还没见过。
 - 名字用韩国人名的中文写法（外国人按国籍）。
@@ -542,7 +542,7 @@ function parseDraft(text: string): CardDraft {
 }
 
 const DETAIL_RULES = `人物补充：
-- 外貌：包含身高、整体好看程度、长相风格，以及简短的外貌描述。外貌不决定性格。身高以厘米数字写在heightCm，其他外貌内容写在appearance。
+- 外貌：包含身高、整体好看程度、长相风格，以及简短的外貌描述，写一个确定的样子，不给备选。外貌不决定性格。身高以厘米数字写在heightCm，其他外貌内容写在appearance。
 - 有心动线的男性，身高在180～190cm之间，含两端。
 - 只有有心动线的人写romanceStyle：用简短连贯的描述写喜欢但尚未确定关系时如何靠近与表露、确定关系后的亲密表达与期待，以及分歧时的沟通、边界和修复。结合人物性格，不预设他现在已经喜欢她；实际表现由当前关系和心动程度决定。
 - 没有心动线的人romanceStyle留空。`;
@@ -571,7 +571,7 @@ async function addPersonalDetails(draft: CardDraft, source?: IdolProfile): Promi
 export async function draftPerson(wish: string, face: FaceRelation, secret: SecretKind = rollSecretKind(), context?: { family: boolean }): Promise<CardDraft & { secretKind: SecretKind }> {
   const res = await simpleLLMCall(chatConfig(), [
     { role: "system", content: CARD_RULES },
-    { role: "user", content: `${rosterLine()}\n${herLine()}\n骰子：如果他是爱豆，私下跟公开人设「${FACE_LABEL[face]}」；秘密：${SECRET_DICE[secret]}。\n她想要的人：${wish.trim() || "随你，照这个世界里合理会出现的人来"}` },
+    { role: "user", content: `${rosterLine()}\n${herLine()}\n秘密：${SECRET_DICE[secret]}。\n她想要的人：${wish.trim() || "随你，照这个世界里合理会出现的人来"}` },
   ], { temperature: 0.95, label: "通讯录捏人" });
   if (!res.content) throw new Error(res.error || "AI 没回");
   const draft = parseDraft(res.content);
@@ -588,7 +588,7 @@ export async function reviseCard(p: IdolProfile, name: string, direction: string
   };
   const res = await simpleLLMCall(chatConfig(), [
     { role: "system", content: `${CARD_RULES}\n${DETAIL_RULES}\n输出JSON在原字段之外包含heightCm、appearance、romanceStyle。\n这次是改一张已有的卡：只改她要求的地方，其余照抄，名字不改。` },
-    { role: "user", content: `${rosterLine(p.charId)}\n${herLine()}\n私下跟公开人设：${FACE_LABEL[p.face]}；秘密：${SECRET_DICE[p.secret?.kind ?? "none"]}\n有心动线：${Boolean(p.canCrush)}\n现在的卡：${JSON.stringify(current)}\n她要的方向：${direction}` },
+    { role: "user", content: `${rosterLine(p.charId)}\n${herLine()}\n秘密：${SECRET_DICE[p.secret?.kind ?? "none"]}\n有心动线：${Boolean(p.canCrush)}\n现在的卡：${JSON.stringify(current)}\n她要的方向：${direction}` },
   ], { temperature: 0.8, label: "通讯录改卡" });
   if (!res.content) throw new Error(res.error || "AI 没回");
   const draft = parseDraft(res.content);
@@ -603,10 +603,11 @@ export async function reviseCard(p: IdolProfile, name: string, direction: string
 }
 
 /** 她搜 ID 搜到一个只有名字的人：照模板把卡补全（名字、身份、你们见过的事不改） */
-export async function completeCard(p: IdolProfile, name: string, secretKind: SecretKind = p.secret?.kind ?? rollSecretKind()): Promise<CardDraft & { secretKind: SecretKind }> {
+export async function completeCard(p: IdolProfile, name: string, secretKind: SecretKind = p.secret?.kind ?? rollSecretKind(), sceneText = ""): Promise<CardDraft & { secretKind: SecretKind }> {
   const known = [
     `已有资料（已填字段保留）：${JSON.stringify({ role: p.role, group: p.group, kinship: p.kinship, gender: p.gender, age: p.age, birthday: p.birthday, mbti: p.mbti, nationality: p.nationality, heightCm: p.heightCm, appearance: p.appearance, sceneFacts: p.sceneFacts })}`,
     p.introducedIn ? `首次出场原文（只提取${name}已经明确的背景，不与之矛盾）：\n${p.introducedIn}` : "",
+    sceneText ? `${name}在戏里的原文（性格与说话方式只从这里和首次出场原文提炼，不与之矛盾）：\n${sceneText}` : "",
     p.role ? `身份：${p.role}` : "",
     p.nationality ? `国籍：${p.nationality}（保留，不改）` : "",
     p.metAt ? `${fmtDay(p.metAt.at)}在「${p.metAt.place}」见过她` : "",
@@ -615,7 +616,7 @@ export async function completeCard(p: IdolProfile, name: string, secretKind: Sec
   ].filter(Boolean).join("\n");
   const res = await simpleLLMCall(chatConfig(), [
     { role: "system", content: `${CARD_RULES.replace("- 不写他对她的第一印象，他们还没见过。\n", "")}\n这次是把一个戏里出现过的人补成完整的卡：名字不改，已知的身份和发生过的事要对得上。` },
-    { role: "user", content: `${rosterLine(p.charId)}\n${herLine()}\n骰子：如果他是爱豆，私下跟公开人设「${FACE_LABEL[p.face]}」；秘密：${SECRET_DICE[secretKind]}。\n名字：${name}\n${known || "只知道名字"}` },
+    { role: "user", content: `${rosterLine(p.charId)}\n${herLine()}\n秘密：${SECRET_DICE[secretKind]}。\n名字：${name}\n${known || "只知道名字"}` },
   ], { temperature: 0.9, label: "通讯录补全卡" });
   if (!res.content) throw new Error(res.error || "AI 没回");
   const draft = parseDraft(res.content);

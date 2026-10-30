@@ -9,7 +9,7 @@
 
 import { kvGet, kvSet } from "./kv-db";
 import { WORLD_CHAR_ID, closeSceneWith, ensureWorldCharacter, worldPromptFor, type SceneCloseResult, type SceneHost, type SceneMeta } from "./idol-world";
-import { createOrGetVnSession, loadVnMessagesForChapter, startNewChapter, archiveChapter, updateVnMessageSummary, type VnSession } from "./vn-storage";
+import { createOrGetVnSession, loadVnMessagesForChapter, startNewChapter, archiveChapter, updateVnMessageSummary, deleteVnMessage, type VnSession } from "./vn-storage";
 import { simpleLLMCall } from "./api-helpers";
 import { resolveVnConfigs } from "./vn-engine";
 import { formatChatTimestamp } from "./llm-prompt-assembler";
@@ -494,6 +494,16 @@ export async function closeStageScene(chapterIndex: number): Promise<SceneCloseR
   return res;
 }
 
+/** 删掉一整场：戏的内容和每段小总结一起删（短期记忆里也就没了）。从提醒事项进来、还没演完的那件事照旧是「还没演」 */
+export function deleteStageScene(chapterIndex: number): void {
+  const chId = chapterIdOf(chapterIndex);
+  if (!chId) return;
+  for (const m of loadVnMessagesForChapter(worldVnSession().id, chapterIndex)) deleteVnMessage(m.id);
+  const all = loadScenes();
+  delete all[chId];
+  kvSet(SCENES_KEY, JSON.stringify(all));
+}
+
 /** 还没结束的那几场（最近的在前） */
 export function openStageScenes(): { chapterIndex: number; title: string; subtitle?: string; scene: StageScene }[] {
   const session = worldVnSession();
@@ -624,6 +634,41 @@ export function loadStageProjectionEntries(characterId: string, options?: { afte
     });
   }
   return out.sort((a, b) => a.timestamp.localeCompare(b.timestamp));
+}
+
+/** 补卡用：这个人在此刻各场戏里的原文（他说的话、写到他的旁白，连着她前一句），第一场必带，其余从最近往前，总长约 max 字 */
+export function personSceneText(characterId: string, name: string, max = 4000): string {
+  const all = loadScenes();
+  const session = worldVnSession();
+  const blocks: string[] = [];
+  for (const ch of session.chapters) {
+    const sc = all[ch.id];
+    if (!sc || !(sc.ids.includes(characterId) || sc.newFaces?.includes(name))) continue;
+    const msgs = loadVnMessagesForChapter(session.id, ch.index);
+    const lines: string[] = [];
+    let prev = "";
+    for (const m of msgs) {
+      for (const line of frameText(m.rawContent, m.role).split("\n")) {
+        if (!line.trim()) continue;
+        if (m.role === "assistant" && line.includes(name)) {
+          if (prev && !lines.includes(prev)) lines.push(prev);
+          lines.push(line);
+        }
+        prev = m.role === "user" ? line : "";
+      }
+    }
+    if (lines.length) blocks.push(`【${fmtWorld(sc.startAt)} 在${sc.place}】\n${lines.join("\n")}`);
+  }
+  if (!blocks.length) return "";
+  const picked = [blocks[0]];
+  let used = blocks[0].length;
+  const rest: string[] = [];
+  for (let i = blocks.length - 1; i > 0; i--) {
+    if (used + blocks[i].length > max) continue;
+    rest.unshift(blocks[i]);
+    used += blocks[i].length;
+  }
+  return [...picked, ...rest].join("\n\n").slice(0, max + 2000);
 }
 
 // ── AI 写出来以后代码兜底：台词写进旁白的拆出来，太长的旁白在句号处切开 ──

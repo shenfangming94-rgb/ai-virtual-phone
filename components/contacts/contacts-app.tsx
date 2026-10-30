@@ -11,7 +11,6 @@ import { loadCharacters, CHARACTERS_UPDATED_EVENT } from "@/lib/character-storag
 import type { Character } from "@/lib/character-types";
 import { createOrGetSession, loadChatContacts } from "@/lib/chat-storage";
 import {
-  FACE_LABEL,
   PEOPLE_UPDATED_EVENT,
   comparePinyin,
   createPerson,
@@ -490,7 +489,7 @@ function CardView({ data, id, onBack, onEdit, onNotice }: { data: Data; id: stri
 
         <div className="ct-block">
           <div className="ct-k"><span>KakaoTalk ID</span><span className={`ct-kakao ${added ? "on" : ""}`}>{added ? "已加" : "还没加"}</span></div>
-          <div className="ct-v">{idKnown ? (char.wechatID || "—") : "他还没给你"}</div>
+          <div className="ct-v">{idKnown ? (char.wechatID || "—") : `${p.gender === "女" ? "她" : p.gender === "男" ? "他" : "TA"}还没给你`}</div>
           <hr />
           <div className="ct-k">认识</div>
           <div className="ct-v">{p.met ? (p.metAt ? `${fmtDay(p.metAt.at)}${p.metAt.place ? ` · ${p.metAt.place}` : ""}` : "见过") : "还没见过"}</div>
@@ -550,7 +549,7 @@ function CardView({ data, id, onBack, onEdit, onNotice }: { data: Data; id: stri
 
         {p.privateLines.length ? (
           <div className="ct-block">
-            <div className="ct-k"><span>{p.isIdol ? "私下" : "性格与相处"}</span>{p.isIdol ? <span className="ct-chips"><span>{FACE_LABEL[p.face]}</span></span> : null}</div>
+            <div className="ct-k"><span>{p.isIdol ? "私下" : "性格与相处"}</span></div>
             <div className="ct-v ct-prose">{p.privateLines.join("\n\n")}</div>
           </div>
         ) : null}
@@ -697,13 +696,6 @@ function EditView({ data, id, onDone, onDeleted, onNotice }: { data: Data; id: s
           <>
             <Field label="人设标签"><input value={p.publicLabels.join("、")} onChange={e => set("publicLabels", e.target.value.split(/[、,，\s]+/).filter(Boolean))} placeholder="用顿号隔开" /></Field>
             <Field label="粉丝眼里的他"><textarea rows={3} value={p.publicText} onChange={e => set("publicText", e.target.value)} /></Field>
-            <Field label="私下跟人设">
-              <div className="ct-seg">
-                {(Object.keys(FACE_LABEL) as FaceRelation[]).map(f => (
-                  <button key={f} type="button" className={p.face === f ? "on" : ""} onClick={() => set("face", f)}>{FACE_LABEL[f]}</button>
-                ))}
-              </div>
-            </Field>
           </>
         ) : null}
         <Field label={p.isIdol ? "私下" : "性格与相处"}><textarea rows={5} value={p.privateLines.join("\n")} onChange={e => set("privateLines", lines(e.target.value))} /></Field>
@@ -927,7 +919,7 @@ function AddSheet({ onClose, onCreated, onNotice }: { onClose: () => void; onCre
               ) : null}
               {draft.privateLines.length ? (
                 <div className="ct-white">
-                  <div className="ct-k"><span>{draft.isIdol ? "私下" : "性格与相处"}</span>{draft.isIdol ? <span className="ct-chips is-light"><span>{FACE_LABEL[face]}</span></span> : null}</div>
+                  <div className="ct-k"><span>{draft.isIdol ? "私下" : "性格与相处"}</span></div>
                   <div className="ct-v ct-prose">{draft.privateLines.join("\n\n")}</div>
                 </div>
               ) : null}

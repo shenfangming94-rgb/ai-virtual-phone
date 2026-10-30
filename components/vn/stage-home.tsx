@@ -11,7 +11,7 @@ import "@/styles/stage-replay.css";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ChevronLeft, MoreHorizontal, X, Lock, Music2, VolumeX, Image as ImageIcon, Check, Search, Play } from "lucide-react";
 import {
-  DEFAULT_MAPS, mapLookKey, addBackground, addCustomPlace, loadCustomPlaces, pickBackground, placeBackgrounds, removeBackground, removeCustomPlace, thumbsOf, STAGE_APP_NAME, STAGE_OPEN_EVENT, loadBgmMap, loadBgmModes, loadMapLooks, loadStageSettings, mapById, mapBgmKey, mapOfPlace, openStageScenes, pastStageScenes, placeLocked,
+  DEFAULT_MAPS, mapLookKey, addBackground, addCustomPlace, loadCustomPlaces, pickBackground, placeBackgrounds, removeBackground, removeCustomPlace, thumbsOf, STAGE_APP_NAME, STAGE_OPEN_EVENT, loadBgmMap, loadBgmModes, loadMapLooks, loadStageSettings, mapById, mapBgmKey, mapOfPlace, openStageScenes, pastStageScenes, deleteStageScene, placeLocked,
   saveBgmFor, saveBgmMode, saveMapLook, saveStageSettings, startNodeStage, startStageScene, takePendingStage, type BgmMode, type BgmSong, type MapLook, type StagePlace, type StageSettings,
 } from "@/lib/idol-stage";
 import { loadBgmMuted, saveBgmMuted, setStageBgmVolume, useStageBgm } from "./stage-bgm";
@@ -619,13 +619,25 @@ function PastSheet({ onClose, onPlay, onReplay }: { onClose: () => void; onPlay:
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<"all" | "open" | "ended">("all");
   const [limit, setLimit] = useState(20);
-  const scenes = useMemo(() => [...openStageScenes().map(s => ({ ...s, ended: false })), ...pastStageScenes().map(s => ({ ...s, ended: true }))].sort((a, b) => b.scene.startAt - a.scene.startAt), []);
+  // 左滑一张卡露出「删除」
+  const [swiped, setSwiped] = useState<number | null>(null);
+  const [ver, setVer] = useState(0);
+  const touchX = useRef(0);
+  const scenes = useMemo(() => [...openStageScenes().map(s => ({ ...s, ended: false })), ...pastStageScenes().map(s => ({ ...s, ended: true }))].sort((a, b) => b.scene.startAt - a.scene.startAt), [ver]);
+  const remove = (i: number) => {
+    if (!window.confirm("删掉这一场？戏的内容和小总结会一起删掉，删了找不回来。")) return;
+    deleteStageScene(i);
+    setSwiped(null);
+    setVer(v => v + 1);
+  };
   const matching = scenes.filter(s => (filter === "all" || (filter === "ended") === s.ended) && `${s.title} ${s.subtitle || ""} ${s.scene.place} ${s.scene.summary || ""} ${new Date(s.scene.startAt).toLocaleDateString("zh-CN")}`.toLowerCase().includes(query.trim().toLowerCase()));
   return <div className="stg-mask" onClick={onClose}><div className="stg-sheet stg-picker" onClick={e => e.stopPropagation()}>
     <div className="stg-picker-head"><b>{STAGE_APP_NAME} · 以前的场景</b><button type="button" className="stg-done" onClick={onClose}>完成</button></div>
     <div className="stg-search"><Search size={15} /><input aria-label="搜索场景" value={query} placeholder="搜索地点、事情、日期" onChange={e => { setQuery(e.target.value); setLimit(20); }} /></div>
     <div className="stg-history-filters">{([["all", "全部"], ["open", "进行中"], ["ended", "已结束"]] as const).map(([key, name]) => <button key={key} data-on={filter === key || undefined} onClick={() => { setFilter(key); setLimit(20); }}>{name}</button>)}</div>
-    {matching.slice(0, limit).map(s => <div className="stg-history-card" key={s.chapterIndex}><b>{s.title}</b><small>{new Date(s.scene.startAt).toLocaleString("zh-CN", { year: "numeric", month: "long", day: "numeric", hour: "2-digit", minute: "2-digit" })} · {s.scene.place} · {s.ended ? "已结束" : "进行中"}</small>{s.scene.summary ? <p>{s.scene.summary}</p> : null}<div className="stg-history-actions">{!s.ended ? <button onClick={() => onPlay(s.chapterIndex)}>继续这一场</button> : null}<button onClick={() => onReplay(s.chapterIndex)}>重播这一场</button><button onClick={() => onPlay(s.chapterIndex)}>回顾</button></div></div>)}
+    {matching.slice(0, limit).map(s => <div className="stg-history-row" key={s.chapterIndex}><button type="button" className="stg-history-del" onClick={() => remove(s.chapterIndex)}>删除</button><div className="stg-history-card" data-swiped={swiped === s.chapterIndex || undefined}
+      onTouchStart={e => { touchX.current = e.touches[0].clientX; }}
+      onTouchEnd={e => { const dx = e.changedTouches[0].clientX - touchX.current; if (dx < -40) setSwiped(s.chapterIndex); else if (dx > 30 && swiped === s.chapterIndex) setSwiped(null); }}><b>{s.title}</b><small>{new Date(s.scene.startAt).toLocaleString("zh-CN", { year: "numeric", month: "long", day: "numeric", hour: "2-digit", minute: "2-digit" })} · {s.scene.place} · {s.ended ? "已结束" : "进行中"}</small>{s.scene.summary ? <p>{s.scene.summary}</p> : null}<div className="stg-history-actions">{!s.ended ? <button onClick={() => onPlay(s.chapterIndex)}>继续这一场</button> : null}<button onClick={() => onReplay(s.chapterIndex)}>重播这一场</button><button onClick={() => onPlay(s.chapterIndex)}>回顾</button></div></div></div>)}
     {matching.length > limit ? <button className="stg-history-more" onClick={() => setLimit(n => n + 20)}>加载更多（还有 {matching.length - limit} 场）</button> : null}
     {!matching.length ? <p className="stg-empty">{scenes.length ? "没有找到符合条件的场景" : "还没有过场景"}</p> : null}
   </div></div>;

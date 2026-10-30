@@ -162,27 +162,50 @@ export async function buildSite(companyId: string, force = false): Promise<void>
     const year = worldYear();
     const mine = groupsOf(companyId);
     const others = rosterPrompt();
-    const res = await simpleLLMCall(config(), [
+    const brief = `公司资料：\n规模：${c.scale}\n风格：${c.style}\n练习生：${c.trainee}\n招人：${c.recruit}\n名声：${c.fame}\n\n日历里出现过的圈内事：${knownCircle() || "还没有"}\n\n${ctx()}`;
+
+    // 一节输出有上限（模型写到一半会断），所以拆成两次：先简介+年表，再团+公告
+    const head = await simpleLLMCall(config(), [
       {
         role: "system",
-        content: `你在给一出韩国娱乐圈的戏写「${c.name}」${year}年的官网。照这家公司在${year}年当时的样子写：当时叫什么名字、总部在哪、规模多大（如果那年公司叫别的名字，nameNote 写一句说明）。旗下艺人和年表里的团、人全部虚构，不写真实艺人。这家已经有的团必须全部写进 artists，团名、男团女团、出道年份、成员、粉丝名照抄不能改，只能补没写到的和更新「最近」；可以再加新团，一共三到五个，不能跟别家已有的团重名。出道年份照这个比例（算上已有的）：至少两个是${year - 4}～${year - 1}年出道的新团，一个${year - 8}～${year - 5}年出道，最多一个更早的老前辈；${year}年当年出道的只能写还没出道或刚出道。韩文要地道，中文是它的翻译。只输出 JSON：
-{"motto_ko":"社训或口号","motto_zh":"","founded":"成立年份","hq_ko":"本社地址（到洞）","hq_zh":"","nameNote":"","about":[{"h_ko":"小标题","h_zh":"","ko":"两三句","zh":""}],"history":[{"year":"1997","ko":"","zh":""}],"artists":[{"name":"团名或艺名","kind":"女团/男团/Solo","size":5,"debut":2012,"style":"一句话风格","fandom":"粉丝名","recent":"最近在做什么","members":["成员中文名"],"songs":[{"title":"","year":2012,"note":"出道曲 / 一位 这种"}]}],"notices":[{"tag":"오디션 或 공지","ko":"","zh":"","date":"MM.DD"}]}
-about 写四段：我们是谁、我们怎样培养练习生、我们的音乐、在${year}年想做什么。history 五到七条，最后一条在${year}年。notices 三条，日期在${year}年最近一个月内，一条是开试镜。`,
+        content: `你在给一出韩国娱乐圈的戏写「${c.name}」${year}年官网的「公司介绍」和「年表」。照这家公司在${year}年当时的样子写：当时叫什么名字、总部在哪、规模多大（如果那年公司叫别的名字，nameNote 写一句说明）。内容全部虚构，不写真实艺人。韩文要地道，中文是它的翻译。只输出 JSON：
+{"motto_ko":"社训或口号","motto_zh":"","founded":"成立年份","hq_ko":"本社地址（到洞）","hq_zh":"","nameNote":"","about":[{"h_ko":"小标题","h_zh":"","ko":"一句话","zh":""}],"history":[{"year":"1997","ko":"一句话","zh":""}]}
+about 写四段：我们是谁、我们怎样培养练习生、我们的音乐、在${year}年想做什么，每段只写一句话。history 只写四条，最后一条在${year}年。整体要短：输出有长度上限，写太长会让 JSON 断掉。`,
       },
-      { role: "user", content: `公司资料：\n规模：${c.scale}\n风格：${c.style}\n练习生：${c.trainee}\n招人：${c.recruit}\n名声：${c.fame}\n\n这家已经有的团（必须照抄）：\n${mine.map(a => `- ${groupLine(a)}`).join("\n") || "还没有"}\n\n${others}\n\n日历里出现过的圈内事：${knownCircle() || "还没有"}\n\n${ctx()}` },
-    ], { temperature: 0.8, label: `${c.name} 官网`, max_tokens: 3500 });
-    const j = pickJson<Partial<Site> & { artists?: Artist[] }>(res.content);
-    if (!j.about?.length) throw new Error(res.error || "AI 没写出来");
-    upsertGroups((j.artists ?? []).map(a => ({ ...a, companyId, debut: a.debut && a.debut > year ? year : a.debut })), "site", companyId);
-    const s = load();
+      { role: "user", content: brief },
+    ], { temperature: 0.8, label: `${c.name} 官网·简介` });
+    const j = pickJson<Partial<Site>>(head.content);
+    if (!j.about?.length) throw new Error(head.error || "AI 没写出来");
     const site: Site = {
       year, at: Date.now(),
       motto_ko: j.motto_ko, motto_zh: j.motto_zh, founded: j.founded, hq_ko: j.hq_ko, hq_zh: j.hq_zh, nameNote: j.nameNote,
       about: (j.about ?? []).filter(p => p && (p.ko || p.zh)),
       history: (j.history ?? []).filter(h => h && h.year),
-      notices: (j.notices ?? []).filter(n => n && (n.ko || n.zh)),
+      notices: [],
     };
-    save({ ...s, sites: { ...s.sites, [companyId]: site } });
+    // 简介先落地：第二段没写出来，官网至少能打开看
+    const s0 = load();
+    save({ ...s0, sites: { ...s0.sites, [companyId]: site } });
+
+    // 第二次：旗下团 + 公告
+    try {
+      const roster = await simpleLLMCall(config(), [
+        {
+          role: "system",
+          content: `你在给一出韩国娱乐圈的戏写「${c.name}」${year}年官网的「旗下艺人」和「公告」。旗下艺人和团全部虚构，不写真实艺人。这家已经有的团必须全部写进 artists，团名、男团女团、出道年份、成员、粉丝名照抄不能改，只能补没写到的和更新「最近」；可以再加新团，一共三个，不能跟别家已有的团重名。出道年份照这个比例（算上已有的）：至少两个是${year - 4}～${year - 1}年出道的新团，一个${year - 8}～${year - 5}年出道，最多一个更早的老前辈；${year}年当年出道的只能写还没出道或刚出道。韩文要地道，中文是它的翻译。只输出 JSON：
+{"artists":[{"name":"团名或艺名","kind":"女团/男团/Solo","size":5,"debut":2012,"style":"一句话风格","fandom":"粉丝名","recent":"一句话","members":["成员中文名"],"songs":[{"title":"","year":2012,"note":"出道曲 / 一位"}]}],"notices":[{"tag":"오디션 或 공지","ko":"一句话","zh":"","date":"MM.DD"}]}
+每个团只写一首歌、成员名字不超过四个，style 和 recent 各一句。notices 只写两条，日期在${year}年最近一个月内，一条是开试镜。整体要短：输出有长度上限，写太长会让 JSON 断掉。`,
+        },
+        { role: "user", content: `公司资料：\n规模：${c.scale}\n风格：${c.style}\n练习生：${c.trainee}\n名声：${c.fame}\n\n这家已经有的团（必须照抄）：\n${mine.map(a => `- ${groupLine(a)}`).join("\n") || "还没有"}\n\n${others}` },
+      ], { temperature: 0.8, label: `${c.name} 官网·艺人` });
+      const j2 = pickJson<{ artists?: Artist[]; notices?: Site["notices"] }>(roster.content);
+      if (j2.artists?.length) upsertGroups(j2.artists.map(a => ({ ...a, companyId, debut: a.debut && a.debut > year ? year : a.debut })), "site", companyId);
+      const notices = (j2.notices ?? []).filter(n => n && (n.ko || n.zh));
+      if (notices.length) {
+        const s = load();
+        save({ ...s, sites: { ...s.sites, [companyId]: { ...(s.sites[companyId] ?? site), notices } } });
+      }
+    } catch { /* 团和公告没写出来不影响官网打开，下次进来还能补 */ }
   } finally {
     siteBusy.delete(companyId);
   }

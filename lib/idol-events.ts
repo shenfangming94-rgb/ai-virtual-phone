@@ -319,7 +319,8 @@ function runEvent(e: PlannedEvent, notify: (m: string) => void) {
     if (receipt) receipts.push({ who: l.who, notice: receipt });
   }
   const firstPrivate = e.lines.find(l => l.where === "private");
-  if (firstPrivate && charByName(firstPrivate.who)) notify(`💬 ${firstPrivate.who}：${firstPrivate.text}`);
+  // 消息真的送到 KKT 了才弹通知：没加过好友的人 sayPrivate 会直接跳过，不能只弹一个空通知
+  if (firstPrivate && receipts.some(r => r.who === firstPrivate.who)) notify(`💬 ${firstPrivate.who}：${firstPrivate.text}`);
   if (e.invite) {
     const delivered = receipts.find(r => r.who === e.invite!.from);
     if (!delivered) return; // 通知没有送达就不发布一个无来源的邀请。

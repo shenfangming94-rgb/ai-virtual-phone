@@ -291,11 +291,8 @@ function SitePage({ id, tab, onBack, onTab, onArtist, onApply, onNotice }: { id:
     main = (
       <>
         <div className="is-hero">
-          <span className="is-badge">대기업 · {c.scale.slice(0, 6)}</span>
           <div className="is-big">{c.name}<br />Entertainment</div>
-          <div className="is-cnn">{c.name} 娱乐{site.nameNote ? `（${site.nameNote}）` : ""}</div>
-          {site.motto_ko || site.motto_zh ? <div className="is-mot">{site.motto_ko}{site.motto_zh ? `　${site.motto_zh}` : ""}</div> : null}
-          <div className="is-meta">설립<b>{site.founded}년</b>　　본사<b>{site.hq_ko}</b>{site.hq_zh ? <small>{site.hq_zh}</small> : null}<br />웹<b>www.{l.domain}</b></div>
+          <div className="is-meta">본사<b>{site.hq_ko}</b>{site.hq_zh ? <small>{site.hq_zh}</small> : null}<br />웹<b>www.{l.domain}</b></div>
         </div>
         <div className="is-jsec">
           <div className="is-jt">About · 회사 소개<small>ABOUT US</small></div>

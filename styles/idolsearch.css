@@ -106,7 +106,7 @@
 .is-big { font-size: 36px; font-weight: 900; line-height: 1.04; margin-top: 12px; letter-spacing: -1px; }
 .is-cnn { font-size: 15px; opacity: 0.85; margin-top: 6px; }
 .is-mot { font-size: 14px; font-style: italic; opacity: 0.9; margin-top: 12px; }
-.is-meta { font-size: 12.5px; margin-top: 14px; line-height: 1.9; opacity: 0.92; }
+.is-meta { font-size: 12.5px; margin-top: 34px; line-height: 1.9; opacity: 0.92; }
 .is-meta b { color: var(--y); font-weight: 600; margin-left: 4px; }
 .is-meta small { display: block; font-size: 11px; opacity: 0.7; margin: -4px 0 0 34px; }
 .is-jsec { background: #fff; padding: 18px 20px 14px; }

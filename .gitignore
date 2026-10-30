@@ -28,3 +28,6 @@ tools/weixin-local-assistant/config.txt
 *.ts.net.crt
 *.ts.net.key
 /public/models/world-builder/
+
+# 项目预览图（截图），不进仓库
+previews/

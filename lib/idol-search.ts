@@ -160,6 +160,7 @@ export async function buildSite(companyId: string, force = false): Promise<void>
   siteBusy.add(companyId);
   try {
     const year = worldYear();
+    const today = new Date();
     const mine = groupsOf(companyId);
     const others = rosterPrompt();
     const brief = `公司资料：\n规模：${c.scale}\n风格：${c.style}\n练习生：${c.trainee}\n招人：${c.recruit}\n名声：${c.fame}\n\n日历里出现过的圈内事：${knownCircle() || "还没有"}\n\n${ctx()}`;
@@ -194,7 +195,7 @@ about 写四段：我们是谁、我们怎样培养练习生、我们的音乐�
           role: "system",
           content: `你在给一出韩国娱乐圈的戏写「${c.name}」${year}年官网的「旗下艺人」和「公告」。旗下艺人和团全部虚构，不写真实艺人。这家已经有的团必须全部写进 artists，团名、男团女团、出道年份、成员、粉丝名照抄不能改，只能补没写到的和更新「最近」；可以再加新团，一共三个，不能跟别家已有的团重名。出道年份照这个比例（算上已有的）：至少两个是${year - 4}～${year - 1}年出道的新团，一个${year - 8}～${year - 5}年出道，最多一个更早的老前辈；${year}年当年出道的只能写还没出道或刚出道。韩文要地道，中文是它的翻译。只输出 JSON：
 {"artists":[{"name":"团名或艺名","kind":"女团/男团/Solo","size":5,"debut":2012,"style":"一句话风格","fandom":"粉丝名","recent":"一句话","members":["成员中文名"],"songs":[{"title":"","year":2012,"note":"出道曲 / 一位"}]}],"notices":[{"tag":"오디션 或 공지","ko":"一句话","zh":"","date":"MM.DD"}]}
-每个团只写一首歌、成员名字不超过四个，style 和 recent 各一句。notices 只写两条，日期在${year}年最近一个月内，一条是开试镜。整体要短：输出有长度上限，写太长会让 JSON 断掉。`,
+每个团只写一首歌、成员名字不超过四个。style 写成真实公司官网那种一句话介绍，只写音乐风格和舞台给人的感觉，不写科幻设定和世界观口号，不出现 AI、元宇宙、多维时空这类词；recent 写这个团最近在做什么。notices 只写两条，日期就在${year}年${today.getMonth() + 1}月（今天是${today.getMonth() + 1}月${today.getDate()}日，只写最近一个月内），一条是开试镜。整体要短：输出有长度上限，写太长会让 JSON 断掉。`,
         },
         { role: "user", content: `公司资料：\n规模：${c.scale}\n风格：${c.style}\n练习生：${c.trainee}\n名声：${c.fame}\n\n这家已经有的团（必须照抄）：\n${mine.map(a => `- ${groupLine(a)}`).join("\n") || "还没有"}\n\n${others}` },
       ], { temperature: 0.8, label: `${c.name} 官网·艺人` });

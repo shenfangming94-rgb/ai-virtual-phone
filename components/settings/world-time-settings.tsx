@@ -5,6 +5,8 @@ import { useEffect, useState } from "react";
 import { Toggle } from "@/components/ui/form";
 import { jumpWorld, switchWorldClockMode } from "@/lib/idol-reminders";
 import { loadWorldClock, subscribeWorldClock } from "@/lib/world-clock";
+import { Clock, ChevronRight } from "lucide-react";
+import { SettingsPageIntro } from "./settings-page-intro";
 
 const pad = (n: number) => String(n).padStart(2, "0");
 const WEEK = ["日", "一", "二", "三", "四", "五", "六"];
@@ -46,53 +48,41 @@ export function WorldTimeSettings({ onNotice }: { onNotice?: (message: string) =
     };
 
     return (
-        <div className="flex flex-col gap-3">
-            <div className="app-card" style={{ padding: "22px 20px", textAlign: "center" }}>
-                <div className="menu-desc">{clock.real ? "跟现实时间一致" : "世界时间"}</div>
-                <div style={{ fontSize: 15, marginTop: 6 }}>
-                    {now.getFullYear()} 年 {now.getMonth() + 1} 月 {now.getDate()} 日 星期{WEEK[now.getDay()]}
+        <div className="settings-apple-worldtime">
+            <SettingsPageIntro icon={Clock} title="世界时间" description="在这里，按你的节奏生活。" color="#007aff" />
+            <section className="settings-apple-group">
+                <div className="settings-apple-row settings-apple-toggle-row">
+                    <span className="settings-apple-row-copy"><span className="settings-apple-row-title">与现实时间一致</span></span>
+                    <Toggle checked={clock.real} onChange={next => { const stopped = switchWorldClockMode(next); setClock(loadWorldClock()); onNotice?.(stopped || (next ? "已经跟现实时间一致" : "回到世界时间")); }} className="settings-apple-switch" />
                 </div>
-                <div style={{ fontSize: 44, fontWeight: 300, letterSpacing: 1, fontVariantNumeric: "tabular-nums" }}>
-                    {pad(now.getHours())}:{pad(now.getMinutes())}
-                </div>
-            </div>
-
-            <div className="app-card card-featured settings-toggle-card">
-                <div className="card-featured-body">
-                    <div className="card-featured-label">跟现实时间一致</div>
-                    <div className="card-featured-desc">关着的时候小手机用世界时间；打开就回到现实时间，再关掉会回到原来的世界时间</div>
-                </div>
-                <Toggle checked={clock.real} onChange={next => { const stopped = switchWorldClockMode(next); setClock(loadWorldClock()); onNotice?.(stopped || (next ? "已经跟现实时间一致" : "回到世界时间")); }} className="settings-toggle-control" />
-            </div>
+            </section>
+            <p className="settings-apple-footnote">关闭时使用世界时间。离开小手机后，世界会暂停，回来再继续。</p>
 
             {!clock.real ? (
                 <>
-                    <div className="app-card" style={{ padding: 16 }}>
-                        <div className="card-featured-label">现在是</div>
-                        <div className="card-featured-desc" style={{ marginBottom: 10 }}>定好之后世界时间会跟着现实一起走</div>
-                        <div className="flex gap-2">
-                            <input className="ui-input" type="date" value={date} onChange={e => setDate(e.target.value)} style={{ flex: 3 }} />
-                            <input className="ui-input" type="time" value={time} onChange={e => setTime(e.target.value)} style={{ flex: 2 }} />
-                        </div>
-                        <button type="button" className="ui-btn" style={{ width: "100%", marginTop: 10 }} onClick={apply}>就是这个时间</button>
-                    </div>
+                    <p className="settings-apple-caption">当前世界</p>
+                    <section className="settings-apple-group settings-apple-time-fields">
+                        <label><span>日期</span><input aria-label="世界日期" type="date" value={date} onChange={e => setDate(e.target.value)} /></label>
+                        <label><span>时间</span><input aria-label="世界时间" type="time" value={time} onChange={e => setTime(e.target.value)} /></label>
+                    </section>
+                    <button type="button" className="settings-apple-action-row" onClick={apply}>使用这个日期和时间<ChevronRight size={17} /></button>
 
-                    <div className="app-card" style={{ padding: 16 }}>
-                        <div className="card-featured-label">往后拨</div>
-                        <div className="flex flex-wrap gap-2" style={{ marginTop: 10 }}>
-                            <button type="button" className="ui-btn" onClick={() => shift(HOUR, "过了 1 小时")}>1 小时</button>
-                            <button type="button" className="ui-btn" onClick={() => shift(6 * HOUR, "过了 6 小时")}>6 小时</button>
-                            <button type="button" className="ui-btn" onClick={() => shift(DAY, "过了 1 天")}>1 天</button>
-                            <button type="button" className="ui-btn" onClick={() => shift(7 * DAY, "过了 1 周")}>1 周</button>
-                            <button type="button" className="ui-btn" onClick={nextMorning}>第二天早上</button>
-                        </div>
-                    </div>
+                    <p className="settings-apple-caption">往后拨</p>
+                    <section className="settings-apple-group settings-apple-jump-list">
+                        <button type="button" onClick={() => shift(HOUR, "过了 1 小时")}>1 小时<ChevronRight size={17} /></button>
+                        <button type="button" onClick={() => shift(6 * HOUR, "过了 6 小时")}>6 小时<ChevronRight size={17} /></button>
+                        <button type="button" onClick={() => shift(DAY, "过了 1 天")}>1 天<ChevronRight size={17} /></button>
+                        <button type="button" onClick={() => shift(7 * DAY, "过了 1 周")}>1 周<ChevronRight size={17} /></button>
+                        <button type="button" onClick={nextMorning}>第二天早上<ChevronRight size={17} /></button>
+                    </section>
                 </>
-            ) : null}
-
-            <p className="menu-desc" style={{ padding: "0 6px" }}>
-                之前的聊天记录停在当时的时间，不会跟着跳。正开着的自定义 app（微博、bubble 这些）要关掉重开才跟上新时间。
-            </p>
+            ) : (
+                <section className="settings-apple-group settings-apple-clock-summary">
+                    <span>现在</span>
+                    <strong>{now.getFullYear()}/{pad(now.getMonth() + 1)}/{pad(now.getDate())}　{pad(now.getHours())}:{pad(now.getMinutes())}　星期{WEEK[now.getDay()]}</strong>
+                </section>
+            )}
+            <p className="settings-apple-footnote settings-apple-time-ending">之前的聊天记录保留发生时的时间。</p>
         </div>
     );
 }

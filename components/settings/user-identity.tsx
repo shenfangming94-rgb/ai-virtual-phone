@@ -133,10 +133,6 @@ export function UserIdentitySettings() {
 
     return (
         <div className="flex flex-col gap-6">
-            <div className="flex items-center">
-                <h2 className="m-0 mx-2 ts-28 font-bold italic leading-none text-black">User Identity</h2>
-            </div>
-
             {IDOL_SINGLE ? (
                 <p className="menu-desc mx-2 -mt-3">这里就是你练习生档案里的你。想换一个人玩，去通讯录「我的名片」开新档。</p>
             ) : null}

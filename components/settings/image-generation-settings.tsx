@@ -490,10 +490,6 @@ export function ImageGenerationSettings() {
 
     return (
         <div className="flex flex-col gap-6 pb-8">
-            <div className="flex items-center">
-                <h2 className="m-0 mx-2 ts-28 font-bold italic leading-none text-black">Image Generation</h2>
-            </div>
-
             <div className="menu-group">
                 <div className="menu-item">
                     <span className="card-icon" style={imageGenerationIconStyle}>

@@ -1,0 +1,538 @@
+/* Settings app: iOS-style grouped preferences, scoped to its own shell. */
+.phone-settings-shell {
+  --c-page-body-bg: #f2f2f7;
+  --c-header-bg: #f2f2f7;
+  --c-card: #fff;
+  --c-panel: #fff;
+  --c-text-title: #1c1c1e;
+  --c-text: #6d6d72;
+  --c-input: #f2f2f7;
+  --c-input-border: #e5e5ea;
+  --c-success: #34c759;
+  --ui-radius: 12px;
+  --ui-radius-card: 18px;
+  background: #f2f2f7;
+  color: #1c1c1e;
+}
+
+.phone-settings-shell > .page-header {
+  background: #f2f2f7;
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  backdrop-filter: blur(20px) saturate(180%);
+}
+
+.phone-settings-shell > .page-header .page-title {
+  color: #1c1c1e;
+  font-size: 17px;
+  font-weight: 600;
+  letter-spacing: 0;
+}
+
+.phone-settings-shell > .page-header .page-back-btn {
+  color: #007aff;
+}
+
+.phone-settings-shell > .page-body {
+  background: #f2f2f7;
+  color: #1c1c1e;
+}
+
+.phone-settings-shell.settings-home-mode > .page-header {
+  pointer-events: none;
+  background: transparent;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+.phone-settings-shell.settings-home-mode > .page-body {
+  padding-top: var(--page-header-safe-top, 48px);
+}
+
+.phone-settings-shell .settings-apple-home {
+  display: block;
+  flex: 0 0 auto;
+  padding: 8px 20px calc(var(--safe-area-bottom, 0px) + 32px);
+}
+
+.settings-apple-home-content {
+  display: flex;
+  width: 100%;
+  max-width: 560px;
+  margin: 0 auto;
+  flex-direction: column;
+  gap: 23px;
+}
+
+.settings-apple-heading {
+  display: flex;
+  min-height: 42px;
+  align-items: center;
+  justify-content: space-between;
+  margin: 0 2px -2px;
+}
+
+.settings-apple-heading h1 {
+  margin: 0;
+  color: #1c1c1e;
+  font-size: 34px;
+  font-weight: 700;
+  letter-spacing: -1.1px;
+  line-height: 1.1;
+}
+
+.settings-apple-close {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  place-items: center;
+  border: 0;
+  border-radius: 50%;
+  background: #e5e5ea;
+  color: #636366;
+  cursor: pointer;
+}
+
+.settings-apple-search {
+  display: flex;
+  min-height: 38px;
+  align-items: center;
+  gap: 8px;
+  padding: 0 11px;
+  border: 0;
+  border-radius: 11px;
+  background: #e3e3e8;
+  color: #8e8e93;
+}
+
+.settings-apple-search input {
+  min-width: 0;
+  flex: 1;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: #1c1c1e;
+  font: inherit;
+  font-size: 16px;
+}
+
+.settings-apple-search input::placeholder { color: #8e8e93; }
+.settings-apple-search input::-webkit-search-cancel-button { display: none; }
+
+.settings-apple-search > button {
+  display: grid;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  place-items: center;
+  border: 0;
+  border-radius: 50%;
+  background: #a7a7ad;
+  color: #fff;
+}
+
+.settings-apple-search-results {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.settings-apple-empty {
+  margin: 0;
+  padding: 24px 12px;
+  color: #8e8e93;
+  font-size: 14px;
+  text-align: center;
+}
+
+.settings-apple-profile {
+  display: flex;
+  width: 100%;
+  min-height: 78px;
+  align-items: center;
+  gap: 13px;
+  padding: 10px 14px;
+  border: 0;
+  border-radius: 18px;
+  background: #fff;
+  color: #1c1c1e;
+  text-align: left;
+  cursor: pointer;
+  box-shadow: 0 1px 2px rgb(0 0 0 / 3%);
+}
+
+.settings-apple-profile-avatar {
+  display: grid;
+  width: 56px;
+  height: 56px;
+  flex: 0 0 56px;
+  overflow: hidden;
+  place-items: center;
+  border-radius: 50%;
+  background: #e5e5ea;
+  color: #8e8e93;
+  font-size: 23px;
+  font-weight: 600;
+}
+
+.settings-apple-profile-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.settings-apple-profile-copy,
+.settings-apple-row-copy {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  flex-direction: column;
+}
+
+.settings-apple-profile-copy { gap: 4px; }
+.settings-apple-profile-copy strong { overflow: hidden; font-size: 17px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
+.settings-apple-profile-copy small { color: #8e8e93; font-size: 13px; }
+
+.settings-apple-chevron {
+  flex: 0 0 auto;
+  color: #c7c7cc;
+}
+
+.phone-settings-shell .settings-apple-group {
+  overflow: hidden;
+  border-radius: 18px;
+  background: #fff;
+  box-shadow: 0 1px 2px rgb(0 0 0 / 3%);
+}
+
+.phone-settings-shell .settings-apple-row {
+  position: relative;
+  display: flex;
+  width: 100%;
+  min-height: 56px;
+  align-items: center;
+  gap: 12px;
+  padding: 9px 13px;
+  border: 0;
+  background: transparent;
+  color: #1c1c1e;
+  text-align: left;
+  cursor: pointer;
+}
+
+.phone-settings-shell .settings-apple-row:active,
+.settings-apple-profile:active,
+.settings-apple-action-row:active,
+.settings-apple-jump-list button:active,
+.settings-apple-worldbook-actions button:active {
+  background: #f2f2f7;
+}
+
+.phone-settings-shell .settings-apple-group > .settings-apple-row + .settings-apple-row::before {
+  position: absolute;
+  top: 0;
+  right: 0;
+  left: 55px;
+  height: 0.5px;
+  background: #e5e5ea;
+  content: "";
+}
+
+.settings-apple-icon {
+  display: grid;
+  width: 30px;
+  height: 30px;
+  flex: 0 0 30px;
+  place-items: center;
+  border-radius: 7px;
+  background: var(--settings-row-icon, #8e8e93);
+  color: #fff;
+}
+
+.settings-apple-row-copy { gap: 3px; }
+.settings-apple-row-title { overflow: hidden; color: #1c1c1e; font-size: 15.5px; font-weight: 500; text-overflow: ellipsis; white-space: nowrap; }
+.settings-apple-row-desc { overflow: hidden; color: #8e8e93; font-size: 12px; line-height: 1.35; text-overflow: ellipsis; white-space: nowrap; }
+.settings-apple-row-summary { flex: 0 0 auto; color: #8e8e93; font-size: 13px; white-space: nowrap; }
+
+.phone-settings-shell .settings-apple-toggle-row { cursor: default; }
+
+.phone-settings-shell .ui-toggle {
+  width: 51px;
+  height: 31px;
+  border-radius: 999px;
+  background: #e5e5ea;
+}
+
+.phone-settings-shell .ui-toggle[data-checked] { background: #34c759; }
+
+.phone-settings-shell .ui-toggle .ui-toggle-knob {
+  top: 2px;
+  left: 2px;
+  width: 27px;
+  height: 27px;
+  box-shadow: 0 1px 3px rgb(0 0 0 / 20%);
+}
+
+.phone-settings-shell .ui-toggle[data-checked] .ui-toggle-knob { transform: translateX(20px); }
+
+.phone-settings-shell .settings-apple-nav-action {
+  display: grid;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  place-items: center;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: #007aff;
+  cursor: pointer;
+}
+
+.phone-settings-shell .settings-apple-nav-action:active { background: rgb(0 122 255 / 9%); }
+
+.phone-settings-shell .settings-subpage-content {
+  display: flex;
+  width: 100%;
+  max-width: 620px;
+  min-height: 100%;
+  flex: 0 0 auto;
+  flex-direction: column;
+  gap: 15px;
+  box-sizing: border-box;
+  margin: 0 auto;
+  padding: 12px 20px calc(32px + env(safe-area-inset-bottom, 0px));
+}
+
+.settings-page-intro {
+  display: flex;
+  align-items: center;
+  flex-direction: column;
+  margin: 4px 0 5px;
+  text-align: center;
+}
+
+.settings-page-intro-icon {
+  display: grid;
+  width: 64px;
+  height: 64px;
+  place-items: center;
+  margin-bottom: 13px;
+  border-radius: 16px;
+  background: var(--settings-intro-color, #007aff);
+  color: white;
+  box-shadow: 0 5px 12px color-mix(in srgb, var(--settings-intro-color, #007aff) 20%, transparent);
+}
+
+.settings-page-intro h1 {
+  margin: 0;
+  color: #1c1c1e;
+  font-size: 24px;
+  font-weight: 650;
+  letter-spacing: -0.35px;
+  line-height: 1.25;
+}
+
+.settings-page-intro p {
+  margin: 5px 0 0;
+  color: #8e8e93;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.phone-settings-shell .settings-apple-caption {
+  margin: 2px 4px -9px;
+  color: #6d6d72;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.phone-settings-shell .settings-apple-footnote {
+  margin: -8px 5px 0;
+  color: #8e8e93;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.phone-settings-shell .settings-apple-empty-row {
+  padding: 16px 14px;
+  color: #8e8e93;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.phone-settings-shell .settings-apple-chevron-forward { transform: rotate(180deg); }
+.phone-settings-shell .settings-apple-worldbook-row { min-height: 66px; }
+.phone-settings-shell .settings-apple-worldtime { display: flex; flex-direction: column; gap: 14px; }
+
+.phone-settings-shell .settings-apple-worldbook-actions button,
+.phone-settings-shell .settings-apple-action-row {
+  position: relative;
+  display: flex;
+  width: 100%;
+  min-height: 50px;
+  align-items: center;
+  gap: 9px;
+  padding: 0 14px;
+  border: 0;
+  background: #fff;
+  color: #007aff;
+  font: inherit;
+  font-size: 15px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.phone-settings-shell .settings-apple-worldbook-actions button + button::before {
+  position: absolute;
+  top: 0;
+  right: 0;
+  left: 14px;
+  height: 1px;
+  background: #e5e5ea;
+  content: "";
+}
+
+.phone-settings-shell .settings-apple-action-row {
+  justify-content: space-between;
+  overflow: hidden;
+  border-radius: 14px;
+  box-shadow: 0 1px 2px rgb(0 0 0 / 3%);
+}
+
+.phone-settings-shell .settings-apple-action-row svg { color: #c7c7cc; }
+
+.phone-settings-shell .settings-apple-time-fields { padding: 3px 14px; }
+
+.phone-settings-shell .settings-apple-time-fields label {
+  display: flex;
+  min-height: 48px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  color: #1c1c1e;
+  font-size: 15px;
+}
+
+.phone-settings-shell .settings-apple-time-fields label + label { border-top: 0.5px solid #e5e5ea; }
+.phone-settings-shell .settings-apple-time-fields input { width: auto; border: 0; outline: 0; background: transparent; color: #007aff; font: inherit; text-align: right; }
+
+.phone-settings-shell .settings-apple-jump-list button {
+  display: flex;
+  width: 100%;
+  min-height: 48px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 14px;
+  border: 0;
+  background: transparent;
+  color: #007aff;
+  font: inherit;
+  font-size: 15px;
+  text-align: left;
+}
+
+.phone-settings-shell .settings-apple-jump-list button + button { border-top: 0.5px solid #e5e5ea; }
+.phone-settings-shell .settings-apple-jump-list svg { color: #c7c7cc; }
+
+.phone-settings-shell .settings-apple-clock-summary {
+  display: flex;
+  min-height: 54px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 0 14px;
+  font-size: 14px;
+}
+
+.phone-settings-shell .settings-apple-clock-summary span { color: #6d6d72; }
+.phone-settings-shell .settings-apple-clock-summary strong { color: #1c1c1e; font-size: 13px; font-weight: 500; text-align: right; }
+.phone-settings-shell .settings-apple-time-ending { margin-top: 0; }
+
+/* Bring existing settings forms and cards into the same visual language. */
+.phone-settings-shell .settings-subpage-content h2 {
+  margin: 4px 4px 0;
+  color: #1c1c1e;
+  font-size: 18px;
+  font-style: normal;
+  font-weight: 600;
+  letter-spacing: -0.15px;
+  line-height: 1.3;
+}
+
+.phone-settings-shell .settings-subpage-content .app-card,
+.phone-settings-shell .settings-subpage-content .g-card,
+.phone-settings-shell .settings-subpage-content .ui-config-card,
+.phone-settings-shell .settings-subpage-content .ui-group-card,
+.phone-settings-shell .settings-subpage-content .ui-entry-card,
+.phone-settings-shell .settings-subpage-content .menu-group {
+  border: 0;
+  border-radius: 16px;
+  background: #fff;
+  box-shadow: 0 1px 2px rgb(0 0 0 / 3%);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+.phone-settings-shell .settings-subpage-content .menu-group { overflow: hidden; }
+
+.phone-settings-shell .settings-subpage-content .menu-item {
+  min-height: 56px;
+  color: #1c1c1e;
+}
+
+.phone-settings-shell .settings-subpage-content .menu-label { color: #1c1c1e; }
+.phone-settings-shell .settings-subpage-content .menu-desc { color: #8e8e93; }
+
+.phone-settings-shell .settings-subpage-content .ui-config-card,
+.phone-settings-shell .settings-subpage-content .ui-entry-card {
+  border: 1px solid #e5e5ea;
+  box-shadow: none;
+}
+
+.phone-settings-shell .settings-subpage-content .ui-input,
+.phone-settings-shell .settings-subpage-content .ui-textarea,
+.phone-settings-shell .settings-subpage-content .ui-select {
+  border-color: #e5e5ea;
+  border-radius: 11px;
+  background: #f7f7fa;
+  color: #1c1c1e;
+  box-shadow: none;
+}
+
+.phone-settings-shell .settings-subpage-content .ui-input:focus,
+.phone-settings-shell .settings-subpage-content .ui-textarea:focus,
+.phone-settings-shell .settings-subpage-content .ui-select:focus { border-color: #007aff; }
+
+.phone-settings-shell .settings-subpage-content .ui-btn {
+  min-height: 40px;
+  border: 0;
+  border-radius: 11px;
+  background: #fff;
+  color: #007aff;
+  font-size: 14px;
+  font-weight: 500;
+  box-shadow: none;
+}
+
+.phone-settings-shell .settings-subpage-content .ui-btn-primary,
+.phone-settings-shell .settings-subpage-content .ui-btn-action {
+  background: #007aff;
+  color: #fff;
+}
+
+.phone-settings-shell .settings-subpage-content .ui-btn-danger { background: #fff0f0; color: #ff3b30; }
+.phone-settings-shell .settings-subpage-content .ui-btn-success { background: #34c759; color: #fff; }
+
+.phone-settings-shell .settings-subpage-content .ui-empty {
+  min-height: 180px;
+  justify-content: center;
+  padding: 24px;
+  border-radius: 16px;
+  background: #fff;
+}
+
+@media (max-width: 360px) {
+  .phone-settings-shell .settings-apple-home { padding-right: 15px; padding-left: 15px; }
+  .phone-settings-shell .settings-subpage-content { padding-right: 15px; padding-left: 15px; }
+  .settings-apple-row-summary { font-size: 12px; }
+}

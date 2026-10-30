@@ -153,6 +153,13 @@ export function ContactsApp({ onClose, onNotice }: { onClose: () => void; onNoti
   const [adding, setAdding] = useState(false);
   const data = usePeople();
 
+  useEffect(() => {
+    if (sessionStorage.getItem("contacts-open-view") !== "me") return;
+    sessionStorage.removeItem("contacts-open-view");
+    setStack([{ name: "list", filter: { kind: "all" } }]);
+    setView({ name: "me" });
+  }, []);
+
   const go = (next: View) => { setStack(s => [...s, view]); setView(next); };
   const back = () => {
     if (!stack.length) { onClose(); return; }

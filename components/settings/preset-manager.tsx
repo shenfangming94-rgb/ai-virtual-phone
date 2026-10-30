@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useContext, useCallback, useMemo } from "react";
-import { Plus, Upload, Download, Trash2, RotateCcw, ChevronLeft, ChevronDown, GripVertical, MessageSquare, AlertCircle, Maximize2, Copy, Replace, CheckSquare, Check, Filter, MoreHorizontal } from "lucide-react";
+import { Plus, Upload, Download, Trash2, RotateCcw, ChevronLeft, ChevronDown, GripVertical, MessageSquare, AlertCircle, Maximize2, Copy, Replace, CheckSquare, Check, Filter, MoreHorizontal, Fingerprint } from "lucide-react";
 import {
     loadPresets,
     savePresets,
@@ -31,6 +31,7 @@ import { BottomSheet, ConfirmDialog, TextExpandModal } from "@/components/ui/mod
 import { SwipeActionRow, useSwipeActions } from "@/components/ui/swipe-actions";
 import { notifyMascotPageContext } from "@/lib/mascot-events";
 import { useTouchSort } from "@/lib/use-touch-sort";
+import { SettingsPageIntro } from "./settings-page-intro";
 
 // ── Tag helpers for backward compat (tags[] > featureTag + followUpOnly) ──
 function getPromptTags(p: Prompt): string[] {
@@ -1076,9 +1077,7 @@ export function PresetManager({ isActive = true }: { isActive?: boolean } = {}) 
             <input type="file" accept=".json" className="hidden" ref={entryFileInputRef} onChange={handleEntryImportFile} />
             {viewMode === "list" ? (
                 <>
-                    <div className="flex items-center">
-                        <h2 className="m-0 mx-2 ts-28 font-bold italic leading-none text-black">Presets</h2>
-                    </div>
+                    <SettingsPageIntro icon={Fingerprint} title="预设" description="调整 AI 的表达方式和回复习惯。" color="#af52de" />
 
                     {presets.length === 0 ? (
                         <div className="ui-empty mt-5">
@@ -1180,7 +1179,7 @@ export function PresetManager({ isActive = true }: { isActive?: boolean } = {}) 
                                         </>
                                     )}
                                 </div>
-                                <h2 className="mx-2 mb-0 mt-2 ts-20 font-bold leading-none text-black">Preset Info</h2>
+                                <h2 className="mx-2 mb-0 mt-2 ts-20 font-bold leading-none text-black">预设信息</h2>
                                 <div className="ui-entry-card" style={{ cursor: "default" }}>
                                         <div className="flex flex-col gap-2">
                                             <div className="flex justify-between items-center">
@@ -1431,7 +1430,7 @@ export function PresetManager({ isActive = true }: { isActive?: boolean } = {}) 
                                 <div className="flex flex-col gap-4 mt-3">
                                     <div className="mx-2 mb-0 mt-2 flex items-center justify-between">
                                         <div className="flex items-center gap-2">
-                                            <h2 className="ts-20 font-bold leading-none text-black">Prompt Entries ({preset.prompts?.length || 0})</h2>
+                                            <h2 className="ts-20 font-bold leading-none text-black">提示词条目（{preset.prompts?.length || 0}）</h2>
                                             <button
                                                 type="button"
                                                 onClick={() => setAppFilterOpen(true)}

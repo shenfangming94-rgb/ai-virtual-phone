@@ -1,7 +1,8 @@
 "use client";
 
 import { useState, useEffect, useLayoutEffect, useCallback, useRef, createContext, type CSSProperties, type ReactNode } from "react";
-import { Activity, Check, ChevronRight, Clock, Database, FileText, Fingerprint, Globe, HardDrive, Image, Info, KeyRound, Laptop, Lock, Layers, Link2, Loader2, LogOut, MessageSquare, Mic, SlidersHorizontal, UserCircle, Wrench, X, CloudUpload } from "lucide-react";
+import { Activity, Check, ChevronRight, Clock, Database, FileText, Fingerprint, Globe, HardDrive, Image, Info, KeyRound, Laptop, Lock, Layers, Link2, Loader2, LogOut, MessageSquare, Mic, Search, SlidersHorizontal, UserCircle, Wrench, X, CloudUpload } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import { ConfirmDialog } from "./ui/modal";
 import { useAccount } from "@/lib/account-context";
 import { isSelfHostedModeEnabled } from "@/lib/self-hosting";
@@ -27,12 +28,13 @@ import { SavesSettings } from "./settings/saves-settings";
 import { loadWorldClock, subscribeWorldClock } from "@/lib/world-clock";
 import { fetchIsAdmin } from "@/lib/moderation-client";
 import { PageShell } from "./ui/page-shell";
-import { CardGrid, FeaturedCard, type CardItem, type FeaturedCardItem } from "./ui/card-grid";
-import { GlassIcon } from "./ui/glass-icon";
 import { Toggle } from "./ui/form";
 import { loadChatAppSettings, saveChatAppSettings } from "@/lib/chat-storage";
 import { loadKeepAlive, saveKeepAlive } from "@/lib/weixin-storage";
 import { BINDING_ACCENTS, CONTENT_APP_ACCENTS } from "@/lib/ui-accent-colors";
+import { resolveUserIdentity, USER_IDENTITIES_UPDATED_EVENT } from "@/lib/settings-storage";
+import { SAVES_EVENT } from "@/lib/idol-saves";
+import { SettingsPageIntro } from "./settings/settings-page-intro";
 
 export const SettingsContext = createContext<{
     setSubpageTitle: (title: string | null) => void;
@@ -64,6 +66,7 @@ type SubPage =
     | "worldTime"
     | "lock"
     | "saves"
+    | "more"
     | "about";
 
 const SETTINGS_MENU = [
@@ -83,22 +86,6 @@ const SETTINGS_MENU = [
     { id: "about", icon: Info, label: "关于与声明", desc: "版本与协议", iconColor: BINDING_ACCENTS.memory , glass: "about" },
 ] as const;
 
-const realtimeIconStyle = {
-    "--icon-color": CONTENT_APP_ACCENTS.calendar,
-} as CSSProperties;
-
-const keepAliveIconStyle = {
-    "--icon-color": CONTENT_APP_ACCENTS.chat,
-} as CSSProperties;
-
-const promptViewerIconStyle = {
-    "--icon-color": BINDING_ACCENTS.preset,
-} as CSSProperties;
-
-const quickActionIconStyle = {
-    "--icon-color": BINDING_ACCENTS.worldBook,
-} as CSSProperties;
-
 const accountIconStyle = {
     "--icon-color": BINDING_ACCENTS.identity,
 } as CSSProperties;
@@ -111,8 +98,75 @@ const logoutIconStyle = {
     "--icon-color": "var(--c-danger)",
 } as CSSProperties;
 
+type SettingsRowItem = {
+    id: SubPage;
+    icon: LucideIcon;
+    label: string;
+    desc?: string;
+    iconColor: string;
+    summary?: string;
+};
+
+function SettingsListRow({ item, onClick }: { item: SettingsRowItem; onClick: () => void }) {
+    const Icon = item.icon;
+    return (
+        <button type="button" className="settings-apple-row" onClick={onClick}>
+            <span className="settings-apple-icon" style={{ "--settings-row-icon": item.iconColor } as CSSProperties}>
+                <Icon size={20} strokeWidth={1.8} />
+            </span>
+            <span className="settings-apple-row-copy">
+                <span className="settings-apple-row-title">{item.label}</span>
+                {item.desc ? <span className="settings-apple-row-desc">{item.desc}</span> : null}
+            </span>
+            {item.summary ? <span className="settings-apple-row-summary">{item.summary}</span> : null}
+            <ChevronRight size={17} className="settings-apple-chevron" aria-hidden="true" />
+        </button>
+    );
+}
+
+function SettingsToggleRow({ icon: Icon, label, desc, color, checked, onChange }: {
+    icon: LucideIcon;
+    label: string;
+    desc?: string;
+    color: string;
+    checked: boolean;
+    onChange: (next: boolean) => void;
+}) {
+    return (
+        <div className="settings-apple-row settings-apple-toggle-row">
+            <span className="settings-apple-icon" style={{ "--settings-row-icon": color } as CSSProperties}>
+                <Icon size={20} strokeWidth={1.8} />
+            </span>
+            <span className="settings-apple-row-copy">
+                <span className="settings-apple-row-title">{label}</span>
+                {desc ? <span className="settings-apple-row-desc">{desc}</span> : null}
+            </span>
+            <Toggle checked={checked} onChange={onChange} className="settings-apple-switch" />
+        </div>
+    );
+}
+
+const SETTINGS_PAGE_INTROS = {
+    api: { icon: HardDrive, title: "API 设置", description: "管理聊天与记忆功能使用的模型接口。", color: BINDING_ACCENTS.api },
+    voice: { icon: Mic, title: "语音 API", description: "配置语音合成与回复播报。", color: BINDING_ACCENTS.voice },
+    imageGeneration: { icon: Image, title: "图像生成", description: "设置图片生成服务、模型和提示词。", color: CONTENT_APP_ACCENTS.moments },
+    data: { icon: Database, title: "数据管理", description: "备份、恢复与清理手机数据。", color: BINDING_ACCENTS.api },
+    binding: { icon: Link2, title: "配置绑定", description: "为不同角色和应用选择要使用的配置。", color: BINDING_ACCENTS.identity },
+    cloud: { icon: CloudUpload, title: "云服务部署", description: "配置备份、微信和推送服务。", color: BINDING_ACCENTS.api },
+    weixin: { icon: MessageSquare, title: "微信接入", description: "连接 iLink Bot 并管理消息接入。", color: CONTENT_APP_ACCENTS.chat },
+    toolbox: { icon: Wrench, title: "聊天工具箱", description: "管理聊天中可使用的外部工具。", color: BINDING_ACCENTS.voice },
+    agentComputer: { icon: Laptop, title: "角色电脑", description: "配置角色使用的云端小电脑。", color: BINDING_ACCENTS.memory },
+    identity: { icon: UserCircle, title: "用户身份", description: "管理个人信息，以及 AI 如何认识你。", color: BINDING_ACCENTS.identity },
+    moderation: { icon: Activity, title: "管理中心", description: "处理举报、应用审核和账号管理。", color: BINDING_ACCENTS.memory },
+    lock: { icon: Lock, title: "锁屏", description: "设置锁屏壁纸、样式、文字和密码。", color: BINDING_ACCENTS.identity },
+    saves: { icon: Layers, title: "存档", description: "管理当前世界，或切换到其他存档。", color: BINDING_ACCENTS.memory },
+    about: { icon: Info, title: "关于与声明", description: "查看版本信息、使用说明与协议。", color: BINDING_ACCENTS.memory },
+} as const;
+
 export function PhoneSettingsApp({ onClose, onNotice }: SettingsPageProps) {
     const [currentPage, setCurrentPage] = useState<SubPage>("main");
+    const [settingsSearch, setSettingsSearch] = useState("");
+    const [userIdentity, setUserIdentity] = useState(() => resolveUserIdentity());
     const [subpageTitle, setSubpageTitle] = useState<string | null>(null);
     const [subpageRightActions, setSubpageRightActions] = useState<Record<string, ReactNode>>({});
     const [overrideBack, setOverrideBack] = useState<(() => void) | null>(null);
@@ -184,7 +238,9 @@ export function PhoneSettingsApp({ onClose, onNotice }: SettingsPageProps) {
     };
 
     const defaultTitle = currentPage === "main"
-        ? "设置"
+        ? ""
+        : currentPage === "more"
+            ? "更多设置"
         : currentPage === "api" || currentPage === "voice" || currentPage === "imageGeneration" || currentPage === "presets" || currentPage === "worldbook" || currentPage === "regex" || currentPage === "identity"
             ? ""
             : currentPage === "moderation"
@@ -221,19 +277,6 @@ export function PhoneSettingsApp({ onClose, onNotice }: SettingsPageProps) {
         }
     };
 
-    const makeCardItem = (item: typeof SETTINGS_MENU[number]): CardItem => ({
-        id: item.id,
-        icon: item.icon,
-        label: item.label,
-        desc: item.desc,
-        iconColor: item.iconColor,
-        glassIcon: item.glass,
-        onClick: () => {
-            // 施工中：角色电脑先弹提示，可选择仍要看看
-            setCurrentPage(item.id as SubPage);
-        },
-    });
-
     const handleTimeAwareChange = useCallback((next: boolean) => {
         setTimeAware(next);
         saveChatAppSettings({ ...loadChatAppSettings(), timeAware: next });
@@ -269,83 +312,69 @@ export function PhoneSettingsApp({ onClose, onNotice }: SettingsPageProps) {
     const [worldLabel, setWorldLabel] = useState("");
     useEffect(() => {
         const update = () => {
-            const d = new Date();
-            const p = (n: number) => String(n).padStart(2, "0");
-            setWorldLabel(loadWorldClock().real ? "跟现实时间一致" : `${d.getFullYear()} 年 ${d.getMonth() + 1} 月 ${d.getDate()} 日 ${p(d.getHours())}:${p(d.getMinutes())}`);
+            setWorldLabel(loadWorldClock().real ? "跟现实时间一致" : "虚拟时间");
         };
         update();
         const tick = window.setInterval(update, 15000);
         const off = subscribeWorldClock(update);
         return () => { window.clearInterval(tick); off(); };
     }, []);
-    const worldTimeFeaturedItem: FeaturedCardItem = {
-        id: "worldTime",
-        icon: Clock,
-        label: "世界时间",
-        desc: worldLabel,
-        iconColor: BINDING_ACCENTS.memory,
-        onClick: () => setCurrentPage("worldTime"),
-    };
-    const lockFeaturedItem: FeaturedCardItem = {
-        id: "lock",
-        icon: Lock,
-        label: "锁屏",
-        desc: "壁纸、样式和密码",
-        iconColor: BINDING_ACCENTS.identity,
-        onClick: () => setCurrentPage("lock"),
+
+    useEffect(() => {
+        const refreshIdentity = () => setUserIdentity(resolveUserIdentity());
+        window.addEventListener(USER_IDENTITIES_UPDATED_EVENT, refreshIdentity);
+        window.addEventListener(SAVES_EVENT, refreshIdentity);
+        return () => {
+            window.removeEventListener(USER_IDENTITIES_UPDATED_EVENT, refreshIdentity);
+            window.removeEventListener(SAVES_EVENT, refreshIdentity);
+        };
+    }, []);
+
+    const openMyCard = () => {
+        sessionStorage.setItem("contacts-open-view", "me");
+        window.dispatchEvent(new CustomEvent("open-app", { detail: { appId: "contacts" } }));
     };
 
-    const savesFeaturedItem: FeaturedCardItem = {
-        id: "saves",
-        icon: Layers,
-        label: "存档",
-        desc: "开新档、切换到别的档",
-        iconColor: BINDING_ACCENTS.memory,
-        onClick: () => setCurrentPage("saves"),
+    const openAccountSheet = () => {
+        setCurrentPage("main");
+        setAccountSheetOpen(true);
     };
 
-    const imageGenerationItem = SETTINGS_MENU.find(i => i.id === "imageGeneration")!;
-    const imageGenerationFeaturedItem: FeaturedCardItem = {
-        id: imageGenerationItem.id,
-        icon: imageGenerationItem.icon,
-        label: imageGenerationItem.label,
-        desc: imageGenerationItem.desc,
-        iconColor: imageGenerationItem.iconColor,
-        glassIcon: imageGenerationItem.glass,
-        onClick: () => setCurrentPage("imageGeneration"),
+    const openFloatingDockSettings = () => {
+        setCurrentPage("main");
+        setFloatingDockSheetOpen(true);
     };
 
-    const cloudItem = SETTINGS_MENU.find(i => i.id === "cloud")!;
-    const cloudFeaturedItem: FeaturedCardItem = {
-        id: cloudItem.id,
-        icon: cloudItem.icon,
-        label: cloudItem.label,
-        desc: cloudItem.desc,
-        iconColor: cloudItem.iconColor,
-        onClick: () => setCurrentPage("cloud"),
-    };
-
-    const agentComputerItem = SETTINGS_MENU.find(i => i.id === "agentComputer")!;
-    const agentComputerFeaturedItem: FeaturedCardItem = {
-        id: agentComputerItem.id,
-        icon: agentComputerItem.icon,
-        label: agentComputerItem.label,
-        desc: agentComputerItem.desc,
-        iconColor: agentComputerItem.iconColor,
-        glassIcon: agentComputerItem.glass,
-        onClick: () => setCurrentPage("agentComputer"),
-    };
-
-    const bindingItem = SETTINGS_MENU.find(i => i.id === "binding")!;
-    const bindingFeaturedItem: FeaturedCardItem = {
-        id: bindingItem.id,
-        icon: bindingItem.icon,
-        label: bindingItem.label,
-        desc: bindingItem.desc,
-        iconColor: bindingItem.iconColor,
-        glassIcon: bindingItem.glass,
-        onClick: () => setCurrentPage("binding"),
-    };
+    const worldRows: SettingsRowItem[] = [
+        { id: "worldTime", icon: Clock, label: "世界时间", iconColor: "#007aff", summary: worldLabel },
+        { id: "lock", icon: Lock, label: "锁屏", iconColor: "#af52de" },
+        { id: "saves", icon: Layers, label: "存档", iconColor: "#34c759", summary: "当前世界" },
+    ];
+    const apiRows: SettingsRowItem[] = SETTINGS_MENU
+        .filter(item => ["api", "voice", "imageGeneration"].includes(item.id))
+        .map(item => ({ ...item, id: item.id as SubPage }));
+    const setupRows: SettingsRowItem[] = SETTINGS_MENU
+        .filter(item => ["binding", "presets", "worldbook", "regex"].includes(item.id))
+        .map(item => ({ ...item, id: item.id as SubPage }));
+    const finalHomeRows: SettingsRowItem[] = [
+        { ...SETTINGS_MENU.find(item => item.id === "data")!, id: "data" },
+        { id: "more", icon: SlidersHorizontal, label: "更多设置", desc: "连接、工具与其他选项", iconColor: "#8e8e93" },
+    ];
+    const allPageRows: SettingsRowItem[] = [
+        ...worldRows,
+        ...SETTINGS_MENU.map(item => ({ ...item, id: item.id as SubPage })),
+        { id: "more", icon: SlidersHorizontal, label: "更多设置", desc: "连接、工具与其他选项", iconColor: "#8e8e93" },
+    ];
+    const searchToggleRows = [
+        { icon: Clock, label: "真实时间感知", desc: "在历史事件中显示现实时间", color: CONTENT_APP_ACCENTS.calendar, checked: timeAware, onChange: handleTimeAwareChange },
+        { icon: Activity, label: "后台保活", desc: "切到后台时保持网页运行", color: CONTENT_APP_ACCENTS.chat, checked: keepAlive, onChange: handleKeepAliveChange },
+        { icon: FileText, label: "提示词查看器", desc: "开启后显示悬浮按钮", color: BINDING_ACCENTS.preset, checked: promptViewerEnabled, onChange: handlePromptViewerChange },
+        { icon: SlidersHorizontal, label: "快捷操作", desc: "快速切换 API 与世界书", color: BINDING_ACCENTS.worldBook, checked: quickActionEnabled, onChange: handleQuickActionChange },
+    ];
+    const searchText = settingsSearch.trim().toLocaleLowerCase();
+    const searchPageMatches = searchText ? allPageRows.filter(item => `${item.label} ${item.desc || ""}`.toLocaleLowerCase().includes(searchText)) : [];
+    const searchToggleMatches = searchText ? searchToggleRows.filter(item => `${item.label} ${item.desc || ""}`.toLocaleLowerCase().includes(searchText)) : [];
+    const openSearchRow = (item: SettingsRowItem) => setCurrentPage(item.id);
 
     const renderSubPage = () => {
         switch (currentPage) {
@@ -438,154 +467,67 @@ export function PhoneSettingsApp({ onClose, onNotice }: SettingsPageProps) {
 
     return (
         <SettingsContext.Provider value={{ setSubpageTitle, setOverrideBack, setSubpageRightAction }}>
-            <PageShell title={title} onBack={handleBack} rightAction={currentPage !== "main" ? subpageRightActions[currentPage] : undefined} bodyRef={pageBodyRef}>
+            <PageShell
+                className={`phone-settings-shell ${currentPage === "main" ? "settings-home-mode" : "settings-subpage-mode"}`}
+                title={currentPage === "main" ? "" : title}
+                onBack={currentPage === "main" ? undefined : handleBack}
+                rightAction={currentPage !== "main" ? subpageRightActions[currentPage] : undefined}
+                bodyRef={pageBodyRef}
+            >
                 {currentPage === "main" && (
-                    <div className="page-menu settings-main-menu">
-                        {!selfHostedMode && (
-                            <button type="button" className="settings-account-card" onClick={() => setAccountSheetOpen(true)}>
-                                <span className="settings-account-avatar"><GlassIcon name="account" /></span>
-                                <span className="settings-account-copy">
-                                    <span className="settings-account-name">{account.displayName || account.username}</span>
-                                    <span className="settings-account-sub">账号、密码与登录</span>
-                                </span>
-                                <ChevronRight size={18} className="settings-account-chevron" />
-                            </button>
-                        )}
-                        <div>
-                            <h3 className="settings-menu-section-title">World</h3>
-                            <div className="mt-[10px]">
-                                <FeaturedCard item={worldTimeFeaturedItem} />
+                    <div className="page-menu settings-main-menu settings-apple-home">
+                        <div className="settings-apple-home-content">
+                            <div className="settings-apple-heading">
+                                <h1>设置</h1>
+                                <button type="button" className="settings-apple-close" onClick={onClose} aria-label="关闭设置"><X size={19} /></button>
                             </div>
-                            <div className="mt-[10px]">
-                                <FeaturedCard item={lockFeaturedItem} />
+                            <div className="settings-apple-search">
+                                <Search size={19} strokeWidth={1.8} aria-hidden="true" />
+                                <input type="search" aria-label="搜索设置" placeholder="搜索" value={settingsSearch} onChange={event => setSettingsSearch(event.target.value)} />
+                                {settingsSearch ? <button type="button" onClick={() => setSettingsSearch("")} aria-label="清空搜索"><X size={16} /></button> : null}
                             </div>
-                            <div className="mt-[10px]">
-                                <FeaturedCard item={savesFeaturedItem} />
-                            </div>
-                        </div>
-                        <CardGrid
-                            label="API Config"
-                            labelClassName="settings-menu-section-title"
-                            items={SETTINGS_MENU.filter(item => ["api", "voice"].includes(item.id)).map(makeCardItem)}
-                        />
-                        <div className="settings-data-rules-section">
-                            <h3 className="settings-menu-section-title">Data & Rules</h3>
-                            <div className="mt-[10px] flex flex-col gap-3">
-                                <CardGrid
-                                    items={SETTINGS_MENU.filter(item => ["presets", "worldbook", "regex", "data"].includes(item.id)).map(makeCardItem)}
-                                />
-                                <FeaturedCard item={bindingFeaturedItem} />
-                            </div>
-                        </div>
-                        <div className="settings-image-generation-section">
-                            <h3 className="settings-menu-section-title">Image Generation</h3>
-                            <div className="mt-[10px]">
-                                <FeaturedCard item={imageGenerationFeaturedItem} />
-                            </div>
-                        </div>
-                        <div>
-                            <h3 className="settings-menu-section-title">Connections</h3>
-                            <div className="mt-[10px]">
-                                <FeaturedCard item={cloudFeaturedItem} />
-                            </div>
-                            <div className="mt-[10px]">
-                                <CardGrid
-                                    items={SETTINGS_MENU.filter(item => ["weixin", "toolbox"].includes(item.id)).map(makeCardItem)}
-                                />
-                            </div>
-                            <div className="mt-[10px]">
-                                <FeaturedCard item={agentComputerFeaturedItem} />
-                            </div>
-                        </div>
-                        <div className="settings-realtime-section">
-                            <h3 className="settings-menu-section-title">Runtime</h3>
-                            <div className="app-card card-featured settings-toggle-card">
-                                <span className="card-icon card-icon-glass">
-                                    <GlassIcon name="time-aware" />
-                                </span>
-                                <div className="card-featured-body">
-                                    <div className="card-featured-label">真实时间感知</div>
-                                    <div className="card-featured-desc">控制全局历史事件流中是否注入时间戳</div>
+
+                            {searchText ? (
+                                <div className="settings-apple-search-results">
+                                    {searchPageMatches.length ? (
+                                        <section className="settings-apple-group">
+                                            {searchPageMatches.map(item => <SettingsListRow key={item.id} item={item} onClick={() => openSearchRow(item)} />)}
+                                        </section>
+                                    ) : null}
+                                    {searchToggleMatches.length ? (
+                                        <section className="settings-apple-group">
+                                            {searchToggleMatches.map(item => <SettingsToggleRow key={item.label} {...item} />)}
+                                        </section>
+                                    ) : null}
+                                    {!searchPageMatches.length && !searchToggleMatches.length ? <p className="settings-apple-empty">没有找到相关设置</p> : null}
                                 </div>
-                                <Toggle checked={timeAware} onChange={handleTimeAwareChange} className="settings-toggle-control" />
-                            </div>
-                            <div className="app-card card-featured settings-toggle-card">
-                                <span className="card-icon card-icon-glass">
-                                    <GlassIcon name="keep-alive" />
-                                </span>
-                                <div className="card-featured-body">
-                                    <div className="card-featured-label">后台保活</div>
-                                    <div className="card-featured-desc">切到后台时尽量保持网页运行，主动消息与轮询不中断</div>
-                                </div>
-                                <Toggle checked={keepAlive} onChange={handleKeepAliveChange} className="settings-toggle-control" />
-                            </div>
-                        </div>
-                        {isAdmin ? (
-                            <div className="settings-moderation-section">
-                                <h3 className="settings-menu-section-title">Moderation</h3>
-                                <div className="app-card card-featured settings-toggle-card" role="button" tabIndex={0} style={{ cursor: "pointer" }} onClick={() => setCurrentPage("moderation")}>
-                                    <span className="card-icon card-icon-glass">
-                                        <GlassIcon name="moderation" />
-                                    </span>
-                                    <div className="card-featured-body">
-                                        <div className="card-featured-label">管理中心</div>
-                                        <div className="card-featured-desc">举报队列、应用审核与用户封禁</div>
-                                    </div>
-                                    <ChevronRight size={18} className="settings-account-chevron" />
-                                </div>
-                            </div>
-                        ) : null}
-                        <div className="settings-tools-section">
-                            <div className="settings-tools-header">
-                                <div className="settings-tools-title-wrap">
-                                    <h3 className="settings-menu-section-title">Tools</h3>
-                                    <button
-                                        type="button"
-                                        className="settings-tools-info-btn"
-                                        onClick={() => setFloatingDockSheetOpen(true)}
-                                        aria-label="悬浮球偏好设置"
-                                        title="悬浮球偏好设置"
-                                    >
-                                        <span className="settings-tools-info-circle">
-                                            <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-                                                <path d="M15.32 18.27L15.10 19.19Q14.09 19.58 13.49 19.79Q12.89 20 12.10 20Q10.88 20 10.21 19.41Q9.53 18.81 9.53 17.90Q9.53 17.54 9.58 17.17Q9.63 16.80 9.74 16.33L10.58 13.37Q10.69 12.94 10.77 12.56Q10.84 12.18 10.84 11.86Q10.84 11.29 10.61 11.07Q10.37 10.85 9.71 10.85Q9.39 10.85 9.05 10.95Q8.71 11.05 8.46 11.14L8.69 10.23Q9.51 9.89 10.26 9.65Q11.01 9.41 11.69 9.41Q12.89 9.41 13.55 10Q14.20 10.58 14.20 11.52Q14.20 11.71 14.16 12.20Q14.11 12.69 13.99 13.09L13.16 16.05Q13.06 16.40 12.98 16.86Q12.89 17.32 12.89 17.55Q12.89 18.14 13.16 18.35Q13.42 18.57 14.07 18.57Q14.38 18.57 14.76 18.46Q15.15 18.35 15.32 18.27M15.54 5.87Q15.54 6.64 14.95 7.18Q14.37 7.73 13.54 7.73Q12.72 7.73 12.13 7.18Q11.54 6.64 11.54 5.87Q11.54 5.10 12.13 4.55Q12.72 4 13.54 4Q14.37 4 14.95 4.55Q15.54 5.10 15.54 5.87" />
-                                            </svg>
+                            ) : (
+                                <>
+                                    <button type="button" className="settings-apple-profile" onClick={openMyCard}>
+                                        <span className="settings-apple-profile-avatar">
+                                            {userIdentity?.avatarUrl ? <img src={userIdentity.avatarUrl} alt="" /> : <span>{userIdentity?.name?.trim().slice(0, 1) || "我"}</span>}
                                         </span>
+                                        <span className="settings-apple-profile-copy">
+                                            <strong>{userIdentity?.name?.trim() || "我的名片"}</strong>
+                                            <small>我的名片与练习生档案</small>
+                                        </span>
+                                        <ChevronRight size={19} className="settings-apple-chevron" aria-hidden="true" />
                                     </button>
-                                </div>
-                            </div>
-                            <div className="menu-group settings-tools-menu">
-                                <div className="menu-item settings-tools-menu-item">
-                                    <span className="card-icon card-icon-glass">
-                                        <GlassIcon name="prompt-viewer" />
-                                    </span>
-                                    <span className="settings-tools-menu-copy">
-                                        <span className="menu-label appearance-menu-item-label">提示词查看器</span>
-                                        <span className="menu-desc settings-tools-menu-desc">开启后显示悬浮按钮，可查看当前提示词</span>
-                                    </span>
-                                    <span className="menu-right settings-tools-menu-toggle">
-                                        <Toggle checked={promptViewerEnabled} onChange={handlePromptViewerChange} className="settings-toggle-control" />
-                                    </span>
-                                </div>
-                                <div className="menu-item settings-tools-menu-item">
-                                    <span className="card-icon card-icon-glass">
-                                        <GlassIcon name="quick-action" />
-                                    </span>
-                                    <span className="settings-tools-menu-copy">
-                                        <span className="menu-label appearance-menu-item-label">快捷操作</span>
-                                        <span className="menu-desc settings-tools-menu-desc">快速切换 API 与世界书</span>
-                                    </span>
-                                    <span className="menu-right settings-tools-menu-toggle">
-                                        <Toggle checked={quickActionEnabled} onChange={handleQuickActionChange} className="settings-toggle-control" />
-                                    </span>
-                                </div>
-                            </div>
+                                    <section className="settings-apple-group">
+                                        {worldRows.map(item => <SettingsListRow key={item.id} item={item} onClick={() => setCurrentPage(item.id)} />)}
+                                    </section>
+                                    <section className="settings-apple-group">
+                                        {apiRows.map(item => <SettingsListRow key={item.id} item={item} onClick={() => setCurrentPage(item.id)} />)}
+                                    </section>
+                                    <section className="settings-apple-group">
+                                        {setupRows.map(item => <SettingsListRow key={item.id} item={item} onClick={() => setCurrentPage(item.id)} />)}
+                                    </section>
+                                    <section className="settings-apple-group">
+                                        {finalHomeRows.map(item => <SettingsListRow key={item.id} item={item} onClick={() => setCurrentPage(item.id)} />)}
+                                    </section>
+                                </>
+                            )}
                         </div>
-                        <CardGrid
-                            label="User"
-                            labelClassName="settings-menu-section-title"
-                            items={SETTINGS_MENU.filter(item => ["identity", "about"].includes(item.id)).map(makeCardItem)}
-                        />
                         {floatingDockSheetOpen && (
                             <div className="modal-overlay modal-overlay-bottom" data-ui="modal" onClick={() => setFloatingDockSheetOpen(false)}>
                                 <div className="modal-sheet" data-ui="modal-sheet" onClick={event => event.stopPropagation()}>
@@ -699,11 +641,47 @@ export function PhoneSettingsApp({ onClose, onNotice }: SettingsPageProps) {
                     </div>
                 )}
 
-                {currentPage !== "main" && (
+                {currentPage === "more" && (
+                    <div className="settings-subpage-content settings-more-page">
+                        <SettingsPageIntro icon={SlidersHorizontal} title="更多设置" description="连接、辅助工具和账号选项。" color="#8e8e93" />
+                        <p className="settings-apple-caption">连接与服务</p>
+                        <section className="settings-apple-group">
+                            {SETTINGS_MENU.filter(item => ["cloud", "weixin", "toolbox", "agentComputer"].includes(item.id)).map(item => (
+                                <SettingsListRow key={item.id} item={{ ...item, id: item.id as SubPage }} onClick={() => setCurrentPage(item.id as SubPage)} />
+                            ))}
+                        </section>
+                        <p className="settings-apple-caption">运行与辅助</p>
+                        <section className="settings-apple-group">
+                            <SettingsToggleRow icon={Clock} label="真实时间感知" desc="在历史事件中显示现实时间" color={CONTENT_APP_ACCENTS.calendar} checked={timeAware} onChange={handleTimeAwareChange} />
+                            <SettingsToggleRow icon={Activity} label="后台保活" desc="切到后台时尽量保持网页运行" color={CONTENT_APP_ACCENTS.chat} checked={keepAlive} onChange={handleKeepAliveChange} />
+                            <SettingsToggleRow icon={FileText} label="提示词查看器" desc="显示悬浮按钮，查看当前提示词" color={BINDING_ACCENTS.preset} checked={promptViewerEnabled} onChange={handlePromptViewerChange} />
+                            <SettingsToggleRow icon={SlidersHorizontal} label="快捷操作" desc="快速切换 API 与世界书" color={BINDING_ACCENTS.worldBook} checked={quickActionEnabled} onChange={handleQuickActionChange} />
+                            <SettingsListRow item={{ id: "more", icon: SlidersHorizontal, label: "悬浮球偏好设置", desc: "贴边半透明收拢模式", iconColor: "#8e8e93", summary: floatingDockEnabled ? "已开启" : "已关闭" }} onClick={openFloatingDockSettings} />
+                        </section>
+                        <p className="settings-apple-caption">个人与其他</p>
+                        <section className="settings-apple-group">
+                            {SETTINGS_MENU.filter(item => ["identity", "about"].includes(item.id)).map(item => (
+                                <SettingsListRow key={item.id} item={{ ...item, id: item.id as SubPage }} onClick={() => setCurrentPage(item.id as SubPage)} />
+                            ))}
+                            {!selfHostedMode && account ? (
+                                <SettingsListRow
+                                    item={{ id: "more", icon: UserCircle, label: "账号", desc: "用户名、修改密码与退出登录", iconColor: BINDING_ACCENTS.identity, summary: account.displayName || account.username }}
+                                    onClick={openAccountSheet}
+                                />
+                            ) : null}
+                            {isAdmin ? (
+                                <SettingsListRow item={{ id: "moderation", icon: Activity, label: "管理中心", desc: "举报、审核与账号管理", iconColor: BINDING_ACCENTS.memory }} onClick={() => setCurrentPage("moderation")} />
+                            ) : null}
+                        </section>
+                    </div>
+                )}
+
+                {currentPage !== "main" && currentPage !== "more" && (
                     // shrink-0：page-body 是 flex 容器，包裹层默认可压缩——内容超一屏时会被压到
                     // 恰好一屏高、卡片从中溢出，底部 padding 落不到内容末尾，最后一张卡贴死滚动边界
                     //（iOS 底部工具栏/安全区一盖就"没放下又滚不动"）。尾部留白 = 原 pb-8 + 安全区。
-                    <div className="block min-h-full shrink-0 p-4 box-border" style={{ paddingBottom: "calc(32px + env(safe-area-inset-bottom, 0px))" }}>
+                    <div className="settings-subpage-content block min-h-full shrink-0 p-4 box-border" style={{ paddingBottom: "calc(32px + env(safe-area-inset-bottom, 0px))" }}>
+                        {SETTINGS_PAGE_INTROS[currentPage as keyof typeof SETTINGS_PAGE_INTROS] ? <SettingsPageIntro {...SETTINGS_PAGE_INTROS[currentPage as keyof typeof SETTINGS_PAGE_INTROS]} /> : null}
                         {renderSubPage()}
                     </div>
                 )}

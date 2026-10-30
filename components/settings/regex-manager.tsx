@@ -20,6 +20,7 @@ import { SettingsContext } from "../phone-settings-app";
 import { BottomSheet, ConfirmDialog, TextExpandModal } from "@/components/ui/modal";
 import { SwipeActionRow, useSwipeActions } from "@/components/ui/swipe-actions";
 import { notifyMascotPageContext } from "@/lib/mascot-events";
+import { SettingsPageIntro } from "./settings-page-intro";
 
 function copyTextToClipboard(text: string): void {
     const fallbackCopy = () => {
@@ -535,9 +536,7 @@ export function RegexManager({ isActive = true }: { isActive?: boolean } = {}) {
             <input type="file" accept=".json" className="hidden" ref={ruleFileInputRef} onChange={handleRuleImportFile} />
             {viewMode === "list" ? (
                 <>
-                    <div className="flex items-center">
-                        <h2 className="m-0 mx-2 ts-28 font-bold italic leading-none text-black">Regex</h2>
-                    </div>
+                    <SettingsPageIntro icon={Database} title="正则规则" description="在消息发送或显示前，自动匹配和替换文本。" color="#ff9500" />
 
                     {groups.length === 0 ? (
                         <div className="ui-empty mt-2">
@@ -611,7 +610,7 @@ export function RegexManager({ isActive = true }: { isActive?: boolean } = {}) {
                                 </button>
                             </div>
 
-                            <h2 className="mx-2 mb-0 mt-2 ts-20 font-bold leading-none text-black">Regex Info</h2>
+                            <h2 className="mx-2 mb-0 mt-2 ts-20 font-bold leading-none text-black">规则组信息</h2>
                             <div className="ui-entry-card" style={{ cursor: "default" }}>
                                 <div className="flex flex-col gap-2">
                                     <label className="menu-label ts-13 font-semibold ml-1">正则组名称</label>
@@ -637,7 +636,7 @@ export function RegexManager({ isActive = true }: { isActive?: boolean } = {}) {
                             </div>
 
                             <div className="flex flex-col gap-4 mt-2">
-                            <h2 className="mx-2 mb-0 mt-2 ts-20 font-bold leading-none text-black">Regex Rules ({activeGroup.rules?.length || 0})</h2>
+                            <h2 className="mx-2 mb-0 mt-2 ts-20 font-bold leading-none text-black">替换规则（{activeGroup.rules?.length || 0}）</h2>
 
                             <button
                                 className="ui-btn ui-btn-outline w-full ts-13"

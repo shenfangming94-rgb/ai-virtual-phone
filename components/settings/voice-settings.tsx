@@ -563,10 +563,6 @@ export function VoiceSettings() {
 
     return (
         <div className="flex flex-col gap-6">
-            <div className="flex items-center">
-                <h2 className="m-0 mx-2 ts-28 font-bold italic leading-none text-black">Voice API</h2>
-            </div>
-
             {configs.length === 0 ? (
                 <div className="ui-empty">
                     <div className="ui-icon-circle">

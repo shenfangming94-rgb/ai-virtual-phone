@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useContext, useCallback } from "react";
-import { Plus, BookOpen, Trash2, Upload, Download, ChevronLeft, AlertCircle, Maximize2, Replace } from "lucide-react";
+import { Plus, BookOpen, Trash2, Upload, Download, ChevronLeft, AlertCircle, Maximize2, Replace, Globe } from "lucide-react";
 import {
     loadWorldBooks,
     saveWorldBooks,
@@ -16,6 +16,8 @@ import { SettingsContext } from "../phone-settings-app";
 import { BottomSheet, ConfirmDialog, TextExpandModal } from "@/components/ui/modal";
 import { SwipeActionRow, useSwipeActions } from "@/components/ui/swipe-actions";
 import { notifyMascotPageContext } from "@/lib/mascot-events";
+import { IDOL_WORLD_BOOK_ID } from "@/lib/idol-worldbook";
+import { SettingsPageIntro } from "./settings-page-intro";
 
 export function WorldBookManager({ isActive = true }: { isActive?: boolean } = {}) {
     const [books, setBooks] = useState<WorldBookConfig[]>([]);
@@ -249,24 +251,15 @@ export function WorldBookManager({ isActive = true }: { isActive?: boolean } = {
             return;
         }
         setSubpageRightAction("worldbook",
-            <div className="flex items-center gap-2">
-                <button
+            <button
                     type="button"
-                    onClick={() => fileInputRef.current?.click()}
-                    className="inline-flex h-10 items-center justify-center gap-1.5 whitespace-nowrap rounded-[20px] border border-black/10 bg-white px-4 text-xs font-bold text-gray-800 shadow-sm transition-all hover:bg-gray-50 hover:shadow-md active:scale-95 focus:outline-none"
-                >
-                    <Upload size={15} strokeWidth={1.8} />
-                    <span>导入世界书</span>
-                </button>
-                <button
-                    type="button"
+                    aria-label="新建世界书"
+                    title="新建世界书"
                     onClick={addBook}
-                    className="inline-flex h-10 items-center justify-center gap-1.5 whitespace-nowrap rounded-[20px] bg-black px-4 text-xs font-bold text-white shadow-sm transition-all hover:bg-gray-800 hover:shadow-md active:scale-95 focus:outline-none"
+                    className="settings-apple-nav-action"
                 >
-                    <Plus size={15} strokeWidth={1.8} />
-                    <span>新建世界书</span>
+                    <Plus size={25} strokeWidth={1.7} />
                 </button>
-            </div>
         );
         return () => setSubpageRightAction("worldbook", null);
     }, [addBook, setSubpageRightAction, viewMode]);
@@ -321,6 +314,8 @@ export function WorldBookManager({ isActive = true }: { isActive?: boolean } = {
 
     // --- Entry Level Operations ---
     const activeBook = books.find(b => b.id === activeBookId);
+    const autoBook = books.find(book => book.id === IDOL_WORLD_BOOK_ID);
+    const personalBooks = books.filter(book => book.id !== IDOL_WORLD_BOOK_ID);
 
     const visibleEntries = activeBook?.entries || [];
 
@@ -476,58 +471,43 @@ export function WorldBookManager({ isActive = true }: { isActive?: boolean } = {
             <input type="file" accept=".json" className="hidden" ref={entryFileInputRef} onChange={handleEntryImportFile} />
             {viewMode === "list" ? (
                 <>
-                    <div className="flex items-center">
-                        <h2 className="m-0 mx-2 ts-28 font-bold italic leading-none text-black">Worldbooks</h2>
-                    </div>
-
-                    {books.length === 0 ? (
-                        <div className="ui-empty mt-2">
-                            <div className="ui-icon-circle">
-                                <BookOpen size={24} />
-                            </div>
-                            <span className="menu-label font-semibold">没有世界书</span>
-                            <span className="menu-desc text-center max-w-[240px] !mt-0">
-                                世界书用于为 AI 提供长期记忆和背景知识，当触发特定词汇时自动插入设定。
-                            </span>
-                            <button onClick={addBook} className="ui-btn ui-btn-primary mt-2">
-                                <Plus size={16} /> 新建世界书
+                    <SettingsPageIntro icon={BookOpen} title="世界书" description="故事的背景，都收在这里。" color="#34c759" />
+                    <p className="settings-apple-caption">随世界更新</p>
+                    <section className="settings-apple-group">
+                        {autoBook ? (
+                            <button type="button" className="settings-apple-row settings-apple-worldbook-row" onClick={() => { setActiveBookId(autoBook.id); setViewMode("detail"); }}>
+                                <span className="settings-apple-icon" style={{ "--settings-row-icon": "#34c759" } as React.CSSProperties}><Globe size={20} strokeWidth={1.8} /></span>
+                                <span className="settings-apple-row-copy">
+                                    <span className="settings-apple-row-title">{(autoBook.name || "").includes("自动") ? autoBook.name : `${autoBook.name || "爱豆世界"}（自动）`}</span>
+                                    <span className="settings-apple-row-desc">{autoBook.description || "由小手机随世界进展维护"}</span>
+                                </span>
+                                <span className="settings-apple-row-summary">{autoBook.entries?.length || 0} 个条目</span>
+                                <ChevronLeft size={17} className="settings-apple-chevron settings-apple-chevron-forward" aria-hidden="true" />
                             </button>
-                        </div>
-                    ) : (
-                        <div className="grid grid-cols-2 gap-3">
-                            {books.map(book => (
-                                <div
-                                    key={book.id}
-                                    className="ui-config-card min-w-0 cursor-pointer"
-                                    style={{ aspectRatio: "3 / 2", padding: "12px", justifyContent: "space-between" }}
-                                    role="button"
-                                    tabIndex={0}
-                                    aria-label={`编辑 ${book.name || "世界书"}`}
-                                    onClick={() => { setActiveBookId(book.id); setViewMode("detail"); }}
-                                    onKeyDown={(event) => {
-                                        if (event.target !== event.currentTarget) return;
-                                        if (event.key === "Enter" || event.key === " ") {
-                                            event.preventDefault();
-                                            setActiveBookId(book.id);
-                                            setViewMode("detail");
-                                        }
-                                    }}
-                                >
-                                    <div className="min-w-0 flex flex-col gap-1.5">
-                                        <div className="min-w-0 flex items-center gap-[6px]">
-                                            <BookOpen size={16} className="shrink-0" />
-                                            <span className="truncate text-[calc(14.4px*var(--app-text-scale,1))] font-bold leading-tight text-[var(--c-text-title)]">{book.name}</span>
-                                        </div>
-                                        <span className="menu-desc truncate">{book.description || `${book.entries?.length || 0} 个条目`}</span>
-                                    </div>
-                                    <div className="flex items-center justify-between gap-2">
-                                        <span className="menu-desc ts-12">条目 {book.entries?.length || 0}</span>
-                                        <ChevronLeft size={16} className="opacity-40" style={{ transform: "rotate(180deg)" }} />
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
-                    )}
+                        ) : <div className="settings-apple-empty-row">开局后会在这里显示自动维护的爱豆世界。</div>}
+                    </section>
+                    <p className="settings-apple-footnote">由世界自动维护，供各个 App 读取。</p>
+
+                    <p className="settings-apple-caption">我的世界书</p>
+                    <section className="settings-apple-group">
+                        {personalBooks.map(book => (
+                            <button key={book.id} type="button" className="settings-apple-row settings-apple-worldbook-row" aria-label={`编辑 ${book.name || "世界书"}`} onClick={() => { setActiveBookId(book.id); setViewMode("detail"); }}>
+                                <span className="settings-apple-icon" style={{ "--settings-row-icon": "#007aff" } as React.CSSProperties}><BookOpen size={20} strokeWidth={1.8} /></span>
+                                <span className="settings-apple-row-copy">
+                                    <span className="settings-apple-row-title">{book.name}</span>
+                                    <span className="settings-apple-row-desc">{book.description || "我的世界设定"}</span>
+                                </span>
+                                <span className="settings-apple-row-summary">{book.entries?.length || 0} 个条目</span>
+                                <ChevronLeft size={17} className="settings-apple-chevron settings-apple-chevron-forward" aria-hidden="true" />
+                            </button>
+                        ))}
+                        {!personalBooks.length ? <div className="settings-apple-empty-row">还没有自己的世界书，可以在下面新建或导入。</div> : null}
+                    </section>
+                    <section className="settings-apple-group settings-apple-worldbook-actions">
+                        <button type="button" onClick={addBook}><Plus size={18} />新建世界书</button>
+                        <button type="button" onClick={() => fileInputRef.current?.click()}><Upload size={17} />导入世界书</button>
+                    </section>
+                    <p className="settings-apple-footnote">可以导入 JSON 文件。世界书的使用范围在「配置绑定」中设置。</p>
                 </>
             ) : (
                 <>
@@ -553,7 +533,7 @@ export function WorldBookManager({ isActive = true }: { isActive?: boolean } = {
                                 </button>
                             </div>
 
-                            <h2 className="mx-2 mb-0 mt-2 ts-20 font-bold leading-none text-black">Worldbook Info</h2>
+                            <h2 className="mx-2 mb-0 mt-2 ts-20 font-bold leading-none text-black">世界书信息</h2>
                             <div className="ui-entry-card" style={{ cursor: "default" }}>
                                 <div className="flex flex-col gap-2">
                                     <label className="menu-label ts-13 font-semibold ml-1">世界书名称</label>
@@ -580,7 +560,7 @@ export function WorldBookManager({ isActive = true }: { isActive?: boolean } = {
 
                             {/* Entries Section */}
                             <div className="flex flex-col gap-4 mt-2">
-                            <h2 className="mx-2 mb-0 mt-2 ts-20 font-bold leading-none text-black">Worldbook Entries ({activeBook.entries?.length || 0})</h2>
+                            <h2 className="mx-2 mb-0 mt-2 ts-20 font-bold leading-none text-black">条目（{activeBook.entries?.length || 0}）</h2>
 
                             {/* Entry Cards */}
                             <div className="flex flex-col gap-2">

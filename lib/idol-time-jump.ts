@@ -16,6 +16,8 @@ export function findTimeJumpStop(now: number, target: number, nodes: CareerNode[
   const add = (at: number, title: string) => { if (Number.isFinite(at)) stops.push({ at: Math.max(now, at), title }); };
   for (const n of nodes) {
     if (n.id === options.activeNodeId) continue; // 正在演的这件事允许自然耗时，仍检查其他日程。
+    // 试镜演完了在等公司回信：跳到回信到的那一刻就停，让她正好看到那封信。
+    if (n.kind === "audition" && n.status === "done" && n.resultAt && !n.resultSent && n.resultAt > now) add(n.resultAt, "公司回信");
     if (n.status === "pending") {
       // 自选日程/练习本来就不结算缺席；过时后不让旧条目永久锁住时钟。
       if ((n.kind === "custom" || n.kind === "practice") && n.dueAt < now) continue;

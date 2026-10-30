@@ -12,7 +12,7 @@
 import { kvGet, kvSet } from "./kv-db";
 import { simpleLLMCall } from "./api-helpers";
 import { loadApiConfigs, loadBindingConfig, resolveBinding } from "./settings-storage";
-import { COMPANIES, addToCalendar, companyOf, loadCareer, saveCareer, type CareerNode, type Company } from "./idol-career";
+import { COMPANIES, addToCalendar, companyOf, loadCareer, saveCareer, signCompany, type CareerNode, type Company } from "./idol-career";
 import { loadTraineeCard, describeTrainee } from "./trainee-card";
 import { idolWorldPrompt } from "./idol-worldbook";
 import { fameNow } from "./idol-events";
@@ -59,7 +59,7 @@ export type NewsItem = { title: string; src: string; ago: string };
 export type Trend = { day: string; at: number; items: { q: string; move: string }[]; news: NewsItem[] };
 export type QueryResult = { at: number; day: string; results: NewsItem[]; snippet?: string };
 
-export type AppStatus = "review" | "invited" | "rejected" | "silent";
+export type AppStatus = "review" | "invited" | "rejected" | "silent" | "signed";
 export type Application = {
   id: string; companyId: string; at: number;
   name: string; birthday: string; height: string; email: string;
@@ -67,6 +67,8 @@ export type Application = {
   status: AppStatus; decideAt: number; decidedAt?: number;
   /** 拒信里的原因（中文一句），列表上直接显示 */
   reason?: string; mailId?: string; forced?: boolean;
+  /** 她接受了哪家公司的录取（签约后其他投递都记在这里） */
+  signedBy?: string;
 };
 
 type State = {
@@ -303,7 +305,7 @@ export function submitApplication(companyId: string, data: Omit<Application, "id
 }
 
 /** 列表上显示的状态：不回的那种审核三周后才变成「没有回音」，之前一直是审核中 */
-export function shownStatus(a: Application): "review" | "invited" | "rejected" | "silent" {
+export function shownStatus(a: Application): "review" | "invited" | "rejected" | "silent" | "signed" {
   if (a.status === "silent") return Date.now() - a.at > 21 * DAY ? "silent" : "review";
   return a.status;
 }
@@ -412,7 +414,7 @@ export function declineInviteMail(mailId: string): void {
 export function applicationsLine(): string {
   const apps = loadApps();
   if (!apps.length) return "";
-  const label: Record<string, string> = { review: "审核中", invited: "邀请她试镜", rejected: "没通过", silent: "没有回音" };
+  const label: Record<string, string> = { review: "审核中", invited: "邀请她试镜", rejected: "没通过", silent: "没有回音", signed: "她已接受别家的录取" };
   return `【她投递过的公司】${apps.map(a => `${companyOf(a.companyId)?.name}（${label[shownStatus(a)]}）`).join("、")}`;
 }
 
@@ -453,12 +455,25 @@ export function mailAppTick(notify: (msg: string) => void): void {
     byId.set(m.id, row);
     changed = true;
   }
-  // 她在邮箱里回了邀请
+  // 她在邮箱里回了邀请 / 录取通知
   for (const r of rows) {
     const act = (r.idol as { action?: InviteAction } | undefined)?.action;
-    if (!act || act.nodeId) continue;
+    if (!act) continue;
     const host = loadMails().find(m => m.id === r.id)?.action;
     if (!host || host.status !== "new") continue;
+    // 录取通知：接受才签约，其他公司由 signCompany 一并收尾
+    if ((act.kind ?? "invite") === "offer") {
+      if (act.status === "accepted") {
+        updateMail(String(r.id), { action: { ...act, status: "accepted" } });
+        void signCompany(act.companyId).then(() => notify(`🎉 你接受了 ${companyOf(act.companyId)?.name ?? "公司"} 的录取，日程排好了`)).catch(() => undefined);
+      } else if (act.status === "declined") {
+        updateMail(String(r.id), { action: { ...act, status: "declined" } });
+        notify(`你把 ${companyOf(act.companyId)?.name ?? "公司"} 的录取拒了`);
+      }
+      changed = true;
+      continue;
+    }
+    if (act.nodeId) continue;
     if (act.status === "accepted") {
       const node = acceptInviteMail(String(r.id), act.at);
       (r.idol as { action: InviteAction }).action = node ? { ...act, nodeId: node.id } : { ...act, status: "declined" };

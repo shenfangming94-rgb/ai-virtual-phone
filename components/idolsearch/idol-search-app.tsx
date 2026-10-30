@@ -40,7 +40,7 @@ function useSearchTick(): number {
 const pad = (n: number) => String(n).padStart(2, "0");
 const md = (ms: number) => `${pad(new Date(ms).getMonth() + 1)}.${pad(new Date(ms).getDate())}`;
 const STATUS: Record<string, { t: string; c: string }> = {
-  review: { t: "审核中", c: "wait" }, invited: { t: "邀请试镜", c: "ok" }, rejected: { t: "未通过", c: "no" }, silent: { t: "没有回音", c: "mute" },
+  review: { t: "审核中", c: "wait" }, invited: { t: "邀请试镜", c: "ok" }, rejected: { t: "未通过", c: "no" }, silent: { t: "没有回音", c: "mute" }, signed: { t: "已接受别家录取", c: "mute" },
 };
 
 function Logo({ id, size = 46, round = false }: { id: string; size?: number; round?: boolean }) {
@@ -476,6 +476,7 @@ function AppDetail({ id, onBack, onOpenMail }: { id: string; onBack: () => void;
   if (shown === "invited") steps.push({ t: "邀请试镜", s: `${md(a.decidedAt ?? a.at)} · 已发到你的邮箱`, on: true });
   if (shown === "rejected") steps.push({ t: "未通过", s: `${md(a.decidedAt ?? a.at)} · ${a.reason ?? ""}`, on: true });
   if (shown === "silent") steps.push({ t: "没有回音", s: "三周都没有消息", on: false });
+  if (shown === "signed") steps.push({ t: "已结束", s: `你接受了 ${companyOf(a.signedBy ?? "")?.name ?? "别家"} 的录取`, on: true });
   return (
     <div className="is-page">
       <div className="is-rs"><button type="button" className="is-x" onClick={onBack} aria-label="返回"><ChevronLeft size={22} /></button></div>

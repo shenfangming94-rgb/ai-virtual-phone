@@ -9,8 +9,10 @@ import { kvGet, kvSet } from "./kv-db";
 export type MailPara = { ko?: string; zh: string };
 
 export type InviteAction = {
-  kind: "invite";
-  appId: string;
+  /** invite = 试镜邀请；offer = 试镜录取结果（旧数据没有 kind，按 invite 算） */
+  kind?: "invite" | "offer";
+  /** @deprecated 旧字段，留着兼容 */
+  appId?: string;
   companyId: string;
   at: number;
   place: string;

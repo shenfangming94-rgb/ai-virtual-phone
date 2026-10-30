@@ -3,5 +3,10 @@
     "id": "nox.weibo",
     "version": "0.9.31",
     "url": "/apps/weibo.zip"
+  },
+  {
+    "id": "nox.mail",
+    "version": "0.2.1",
+    "url": "/apps/mail.zip"
   }
 ]

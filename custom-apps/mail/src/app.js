@@ -610,11 +610,16 @@ ${ask ? "邮箱：你的邮箱地址（按你的人设、年代和习惯起一�
     const paras = (m.idol.paras || []).map(p => `${p.ko ? `<p class="ko">${esc(p.ko)}</p>` : ""}<p class="${p.ko ? "zh" : "zh solo"}">${esc(p.zh || "")}</p>`).join("");
     const a = m.idol.action;
     let inv = "";
-    if (a && a.kind === "invite") {
+    if (a && (a.kind || "invite") === "invite") {
       const btns = a.status === "new"
         ? `<div class="iv-acts"><button class="iv-a" data-act="idol-accept" data-id="${m.id}">接受 · 进提醒事项</button><button class="iv-b" data-act="idol-resched" data-id="${m.id}">改时间</button></div><button class="iv-no" data-act="idol-decline" data-id="${m.id}">不去了</button>`
         : a.status === "accepted" ? `<div class="iv-done">✓ 已接受${a.nodeId ? "，在提醒事项里" : "，正在放进提醒事项……"}</div>` : `<div class="iv-done no">已经回绝了</div>`;
       inv = `<div class="inv"><div><span>时间</span>${esc(whenCn(a.at))}</div><div><span>地点</span>${esc(a.place)}</div><div><span>准备</span>${esc(a.prep)}</div></div>${btns}`;
+    } else if (a && a.kind === "offer") {
+      const btns = a.status === "new"
+        ? `<div class="iv-acts"><button class="iv-a" data-act="idol-accept" data-id="${m.id}">接受录取</button></div><button class="iv-no" data-act="idol-decline" data-id="${m.id}">拒绝</button>`
+        : a.status === "accepted" ? `<div class="iv-done">✓ 已接受录取，日程排好了</div>` : `<div class="iv-done no">已经拒绝了</div>`;
+      inv = `<div class="inv"><div><span>入社日</span>${esc(whenCn(a.at))}</div><div><span>地点</span>${esc(a.place)}</div></div>${btns}`;
     }
     return `<div class="body idol">${m.idol.subjectZh ? `<p class="zh solo sub">${esc(m.idol.subjectZh)}</p>` : ""}${paras}${inv}</div>`;
   }
@@ -809,7 +814,8 @@ ${ask ? "邮箱：你的邮箱地址（按你的人设、年代和习惯起一�
         }
         a.status = act === "idol-decline" ? "declined" : "accepted";
         mail.read = true; await saveMail(mail); renderTop();
-        toast(act === "idol-decline" ? "回绝了" : "接受了，去提醒事项看看");
+        const isOffer = a.kind === "offer";
+        toast(act === "idol-decline" ? (isOffer ? "拒绝了" : "回绝了") : (isOffer ? "太好了，去提醒事项看日程" : "接受了，去提醒事项看看"));
         // 宿主几秒内就会排好日程，回头拉一下好把「正在放进」换成「在提醒事项里」
         if (act !== "idol-decline") for (const ms of [6000, 12000]) setTimeout(() => { pullIdolMail().catch(() => {}); }, ms);
         return;

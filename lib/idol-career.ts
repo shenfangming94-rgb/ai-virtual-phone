@@ -17,7 +17,7 @@ import { upsertCalendarScheduleItem } from "./calendar-storage";
 import { getWeekStartIso } from "./calendar-utils";
 import { deleteCalendarScheduleItem } from "./calendar-storage";
 import { announceSchedule, type ScheduleNotice } from "./idol-schedule-notices";
-import { addMail, recordMailReply } from "./idol-mail";
+import { addMail, recordMailReply, type Mail } from "./idol-mail";
 import { debutPromptBlock, onSelection, revealName, type Debut } from "./idol-debut";
 import { starPromptBlock } from "./idol-starroad";
 
@@ -68,6 +68,14 @@ export type CareerNode = {
   step?: string;
   /** 作业、加练是哪门课（星路） */
   subject?: string;
+  /** 这场演得怎么样：AI 记账判的 good / ok / bad（试镜用它决定录不录） */
+  perf?: string;
+  /** 试镜演完排的公司回信时间（1~3 天后的白天） */
+  resultAt?: number;
+  /** 回信是录取还是没录取 */
+  resultPass?: boolean;
+  /** 回信已经发过了（发过就不再发） */
+  resultSent?: boolean;
 };
 
 /** 节点归哪个列表 */
@@ -276,6 +284,12 @@ export async function signCompany(companyId: string): Promise<void> {
   career.companyId = c.id;
   career.signedAt = now;
   career.offers = career.offers.map(o => o.status === "new" ? { ...o, status: "declined" } : o);
+  // 签了这家，别家全部收尾：还没到点的试镜结果不再发，其他公司的邀请作废
+  career.nodes = career.nodes.map(n => {
+    if (n.kind === "audition" && n.companyId !== c.id && n.resultAt && !n.resultSent) return { ...n, resultSent: true };
+    if (n.status === "invite" && n.companyId !== c.id) return { ...n, status: "declined" as const, result: `已经进了${c.name}` };
+    return n;
+  });
   const first = new Date(now + DAY);
   first.setHours(9, 0, 0, 0);
   const firstDay: CareerNode = {
@@ -284,6 +298,7 @@ export async function signCompany(companyId: string): Promise<void> {
   };
   career.nodes = [...career.nodes.filter(n => n.status !== "pending" || n.kind === "audition"), firstDay];
   saveCareer(career);
+  closeOtherApplications(c);
   addToCalendar(firstDay);
   extendSchedule();
   const card = loadTraineeCard();
@@ -292,6 +307,23 @@ export async function signCompany(companyId: string): Promise<void> {
     const insider = await expandInsider(c);
     saveCareer({ ...loadCareer(), insider });
   } catch { /* 档案之后在提醒事项里点「重新生成」补 */ }
+}
+
+/** 签约后：投过、还在审核、还等她回复的其他公司，一律变成「已接受 xx 的录取」 */
+function closeOtherApplications(signed: Company): void {
+  try {
+    const raw = JSON.parse(kvGet("idol_search_v1") || "null") as { apps?: { companyId: string; status: string; signedBy?: string }[] } | null;
+    if (!raw?.apps) return;
+    let changed = false;
+    raw.apps = raw.apps.map(a => {
+      if (a.companyId === signed.id || !["review", "invited", "silent"].includes(a.status)) return a;
+      changed = true;
+      return { ...a, status: "signed", signedBy: signed.id };
+    });
+    if (!changed) return;
+    kvSet("idol_search_v1", JSON.stringify(raw));
+    if (typeof window !== "undefined") window.dispatchEvent(new Event("idol-search-changed"));
+  } catch { /* 投递数据坏了不影响签约 */ }
 }
 
 /** 往后排够一个月的周评和月考 */
@@ -332,19 +364,78 @@ export function nodeById(id: string): CareerNode | undefined {
   return loadCareer().nodes.find(n => n.id === id);
 }
 
-/** 节点那场戏演完了 */
-export async function completeNode(nodeId: string): Promise<string | null> {
+/** 节点那场戏演完了。perf 是这场演得怎么样（good/ok/bad），试镜用它决定录不录 */
+export async function completeNode(nodeId: string, perf?: string): Promise<string | null> {
   const career = loadCareer();
   const node = career.nodes.find(n => n.id === nodeId);
   if (!node) return null;
-  saveCareer({ ...career, nodes: career.nodes.map(n => n.id === nodeId ? { ...n, status: "done" } : n) });
-  if (node.kind === "audition" && node.companyId && loadCareer().stage === "pre") {
-    await signCompany(node.companyId);
-    return `签约了：${companyOf(node.companyId)?.name}`;
+  const doneNode: CareerNode = { ...node, status: "done", ...(perf ? { perf } : {}) };
+  saveCareer({ ...career, nodes: career.nodes.map(n => n.id === nodeId ? doneNode : n) });
+  if (doneNode.kind === "audition" && doneNode.companyId && loadCareer().stage === "pre") {
+    // 演完不当场出结果：公司过 1~3 天才回信，跳时间会停在那一刻
+    return scheduleAuditionResult(doneNode);
   }
-  if (node.kind === "selection") return onSelection({ ...node, status: "done" }, "done");
-  if (node.kind === "debut" && node.step === "name") { await revealName(); return "队名公布了"; }
+  if (doneNode.kind === "selection") return onSelection({ ...doneNode, status: "done" }, "done");
+  if (doneNode.kind === "debut" && doneNode.step === "name") { await revealName(); return "队名公布了"; }
   return null;
+}
+
+/** 试镜演完：排公司回信（1~3 天后的白天）。只有演得明显不行（bad）才可能不录取 */
+function scheduleAuditionResult(node: CareerNode): string {
+  const c = companyOf(node.companyId);
+  const days = 1 + Math.floor(Math.random() * 3);
+  const at = new Date(Date.now() + days * DAY);
+  at.setHours(9 + Math.floor(Math.random() * 8), Math.floor(Math.random() * 60), 0, 0);
+  const pass = node.perf !== "bad";
+  const career = loadCareer();
+  saveCareer({ ...career, nodes: career.nodes.map(n => n.id === node.id ? { ...n, resultAt: at.getTime(), resultPass: pass, resultSent: false } : n) });
+  return `${c?.name ?? "公司"} 的试镜结束了，等回信`;
+}
+
+/** 公司回信：到点了就发录取信 / 拒信（桌面每 5 秒跑一次，一次只发一封） */
+export function deliverAuditionResults(notify: (msg: string) => void): void {
+  const career = loadCareer();
+  const now = Date.now();
+  const due = career.nodes
+    .filter(n => n.kind === "audition" && n.companyId && n.resultAt && !n.resultSent && n.status === "done" && n.resultAt <= now)
+    .sort((a, b) => (a.resultAt ?? 0) - (b.resultAt ?? 0))[0];
+  if (!due) return;
+  const c = companyOf(due.companyId!);
+  if (!c) return;
+  const pass = due.resultPass !== false;
+  addMail(auditionResultMail(c, due, pass));
+  saveCareer({ ...career, nodes: career.nodes.map(n => n.id === due.id ? { ...n, resultSent: true } : n) });
+  notify(pass ? `📩 ${c.name} 发来了录取通知` : `📩 ${c.name} 发来了试镜结果`);
+}
+
+function auditionResultMail(c: Company, node: CareerNode, pass: boolean): Omit<Mail, "id"> {
+  const at = node.resultAt ?? Date.now();
+  const base = { from: `${c.name} 选角组`, addr: `${c.id}@audition.local`, logo: c.name.slice(0, 1), at };
+  if (!pass) {
+    return {
+      ...base, color: "#9a9a9a", subject: "[오디션 결과] 안내", subjectZh: "试镜结果通知",
+      body: [
+        { ko: "안녕하세요, 오디션팀입니다.", zh: `你好，这里是 ${c.name} 选角组。` },
+        { ko: "이번 오디션에 함께해 주셔서 진심으로 감사합니다.", zh: "谢谢你参加这次试镜，真的非常感谢。" },
+        { ko: "아쉽지만 이번에는 함께하지 못하게 되었습니다.", zh: "很遗憾，这次没能和你一起走下去。" },
+        { ko: "앞으로의 활동을 응원하겠습니다.", zh: "以后也会为你加油的。" },
+      ],
+    };
+  }
+  const start = new Date(at + DAY);
+  start.setHours(9, 0, 0, 0);
+  const sd = start.getMonth() + 1, sday = start.getDate();
+  return {
+    ...base, color: "#a99ce8", subject: "[최종 합격] 안내드립니다", subjectZh: "最终录取通知",
+    body: [
+      { ko: "안녕하세요, 오디션팀입니다.", zh: `你好，这里是 ${c.name} 选角组。` },
+      { ko: "지난 오디션에서 보여주신 가능성과 태도를 높이 평가했습니다.", zh: "在上一轮试镜里，我们高度认可你展现出来的可能性和态度。" },
+      { ko: "아래 일정대로 입사를 진행해 주시기 바랍니다.", zh: "请按下面的时间办理入社。" },
+      { ko: `입사일: ${sd}월 ${sday}일 오전 9시`, zh: `入社日：${sd}月${sday}日上午 9 点` },
+      { ko: "기다리고 있겠습니다. 감사합니다.", zh: "等你的答复，谢谢。" },
+    ],
+    action: { kind: "offer", companyId: c.id, at: start.getTime(), place: `${c.name} 公司大楼`, prep: "", status: "new" },
+  };
 }
 
 /** 去演某个节点：存一个「待开的戏」，剧情 app 打开时接着开 */
@@ -396,7 +487,7 @@ function applicationsBrief(): string {
   try {
     const apps = (JSON.parse(kvGet("idol_search_v1") || "null") as { apps?: { companyId: string; status: string; at: number }[] } | null)?.apps ?? [];
     if (!apps.length) return "【她的投递】还没投过任何公司（要自己在网上搜公司投递）。";
-    const label: Record<string, string> = { review: "审核中", invited: "邀请她去试镜", rejected: "没通过", silent: "还没回音" };
+    const label: Record<string, string> = { review: "审核中", invited: "邀请她去试镜", rejected: "没通过", silent: "还没回音", signed: "她已经接受了别家的录取" };
     return `【她的投递】${apps.map(a => `${companyOf(a.companyId)?.name}（${label[a.status] ?? a.status}）`).join("、")}`;
   } catch { return ""; }
 }

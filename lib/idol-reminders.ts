@@ -90,8 +90,9 @@ export async function checkNode(id: string, result: string): Promise<void> {
   if (node.kind === "chance") addFame(5, node.title);
   recordNodeDone(node, text);
   const sc = scoreResultText(text);
-  onNodeDone(node, sc >= 3 ? "good" : sc < 0 ? "bad" : "ok");
-  await completeNode(id);
+  const perf = sc >= 3 ? "good" : sc < 0 ? "bad" : "ok";
+  onNodeDone(node, perf);
+  await completeNode(id, perf);
   await afterNodeScene(loadCareer().nodes.find(n => n.id === id), [], node.place).catch(() => undefined);
 }
 

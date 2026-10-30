@@ -17,6 +17,7 @@ import {
 import { loadBgmMuted, saveBgmMuted, setStageBgmVolume, useStageBgm } from "./stage-bgm";
 import { WORLD_CHAR_ID } from "@/lib/idol-world";
 import { companyOf, loadCareer, nodeById } from "@/lib/idol-career";
+import { ABSENT_AFTER, jumpWorld, reminderTick } from "@/lib/idol-reminders";
 import { loadProfiles, relationOf } from "@/lib/idol-people";
 import { loadAllCharacters } from "@/lib/character-storage";
 import { getThemeAssetMap, saveThemeAssetFromBlob } from "@/lib/theme-storage";
@@ -89,6 +90,18 @@ export function StageHome({ onClose, onPlay, onReplay }: Props) {
       const pending = takePendingStage();
       const node = pending ? nodeById(pending.nodeId) : undefined;
       if (!node) return;
+      const now = Date.now();
+      if (node.status !== "pending") return;
+      if (now > node.dueAt + ABSENT_AFTER) {
+        reminderTick(() => {});
+        return;
+      }
+      if (now < node.dueAt) {
+        jumpWorld(node.dueAt, { activeNodeId: node.id });
+        // If another scheduled event or notice stopped the clock first, let the
+        // user handle it before opening this scene.
+        if (Date.now() < node.dueAt) return;
+      }
       const r = startNodeStage(node);
       if (r) onPlay(r.chapterIndex);
     };

@@ -45,7 +45,10 @@ function pickImage(): Promise<File | null> {
     const input = document.createElement("input");
     input.type = "file";
     input.accept = "image/*";
-    input.onchange = () => resolve(input.files?.[0] ?? null);
+    // iOS Safari：不挂进页面的 file input 有时选完图不触发 change
+    input.style.display = "none";
+    document.body.appendChild(input);
+    input.onchange = () => { resolve(input.files?.[0] ?? null); input.remove(); };
     input.click();
   });
 }
@@ -297,6 +300,8 @@ function MapImage({ url, places, look, editing, onTap, onPlace, marked }: {
   const centered = useRef(false);
   // 竖的图（公司大楼这种）比屏幕还窄：按宽铺满、上下拖
   const [tall, setTall] = useState(false);
+  // 钉子按图的百分比摆，图没下载完时容器没尺寸、钉子全挤一团：等图到了再放钉子
+  const [loadedUrl, setLoadedUrl] = useState("");
   return (
     <div className="stg-map" ref={scroller} data-tall={tall ? "1" : undefined}>
       <div className="stg-map-inner" onClick={e => {
@@ -307,10 +312,11 @@ function MapImage({ url, places, look, editing, onTap, onPlace, marked }: {
         <img src={url} alt="" draggable={false} onLoad={e => {
           const el = scroller.current;
           const img = e.currentTarget;
+          setLoadedUrl(url);
           if (el && img.naturalWidth / img.naturalHeight < el.clientWidth / el.clientHeight) { setTall(true); return; }
           if (el && !centered.current) { el.scrollLeft = (el.scrollWidth - el.clientWidth) / 2; centered.current = true; }
         }} />
-        {places.map(pl => {
+        {loadedUrl === url && places.map(pl => {
           const pos = look.pins[pl.key];
           if (!pos) return null;
           const lock = placeLocked(pl);

@@ -1382,15 +1382,24 @@ export function VnPlayer({ characterId, chapterIndex, onClose, onChapterEnd, vnT
                       onClick={async () => { pickBackground(currentScene, t.id); setAssetMap(prev => ({ ...prev, ...{ [currentScene]: t.url } })); setBgThumbs(b => b.map(x => ({ ...x, on: x.id === t.id }))); }} />
                   ))}
                   <button className="vn-bg-thumb vn-bg-add" onClick={() => {
+                    // iOS Safari：不挂进页面的 file input 有时选完图不触发 change
                     const input = document.createElement("input");
                     input.type = "file"; input.accept = "image/*";
+                    input.style.display = "none";
+                    document.body.appendChild(input);
+                    const scene = currentScene;
                     input.onchange = async () => {
                       const f = input.files?.[0];
+                      input.remove();
                       if (!f) return;
-                      await addBackground(currentScene, f);
-                      const m = await resolveStageBgMap([currentScene]);
-                      setAssetMap(prev => ({ ...prev, ...m }));
-                      void loadBgThumbs(currentScene);
+                      try {
+                        await addBackground(scene, f);
+                        const m = await resolveStageBgMap([scene]);
+                        setAssetMap(prev => ({ ...prev, ...m }));
+                        void loadBgThumbs(scene);
+                      } catch (e) {
+                        window.alert(`背景没传上：${e instanceof Error ? e.message : String(e)}`);
+                      }
                     };
                     input.click();
                   }}>＋</button>

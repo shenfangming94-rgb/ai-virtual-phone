@@ -602,6 +602,24 @@ export async function reviseCard(p: IdolProfile, name: string, direction: string
   };
 }
 
+/** 编辑页选「有心动线（AI 判断）」：读完这个人的戏文原文，让 AI 判断他现在对她的心动到哪一档。判断不出来按没感觉算 */
+export async function judgeHeartStart(p: IdolProfile, name: string): Promise<Heart> {
+  const { personSceneText } = await import("./idol-stage");
+  const sceneText = personSceneText(p.charId, name);
+  const known = [
+    sceneText ? `${name}在戏里的原文（他的台词、写他的旁白，连着她前一句）：\n${sceneText}` : "",
+    p.metAt ? `${fmtDay(p.metAt.at)}在「${p.metAt.place}」见过她` : "",
+    p.events.length ? `和她之间的事：${p.events.map(e => e.text).join("；")}` : "",
+    p.withYou ? `他对她的印象：${p.withYou}` : "",
+  ].filter(Boolean).join("\n");
+  const res = await simpleLLMCall(chatConfig(), [
+    { role: "system", content: "你是感情戏的记录员。根据戏里已经发生的内容，判断这个男生对「她」的心动到了哪一档，只输出一个词：没感觉、有好感、有点在意、喜欢、很喜欢。只以戏里明确写出的言行和心理为依据，不推断没发生的事，不往高估。" },
+    { role: "user", content: `${rosterLine(p.charId)}\n${herLine()}\n名字：${name}\n${known || "还没有一起的戏，按没感觉算"}` },
+  ], { temperature: 0.3, label: "心动程度判断" });
+  const hit = [...HEARTS].reverse().find(h => res.content?.includes(h));
+  return hit ?? "没感觉";
+}
+
 /** 她搜 ID 搜到一个只有名字的人：照模板把卡补全（名字、身份、你们见过的事不改） */
 export async function completeCard(p: IdolProfile, name: string, secretKind: SecretKind = p.secret?.kind ?? rollSecretKind(), sceneText = ""): Promise<CardDraft & { secretKind: SecretKind }> {
   const known = [

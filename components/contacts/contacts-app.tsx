@@ -618,12 +618,31 @@ function EditView({ data, id, onDone, onDeleted, onNotice }: { data: Data; id: s
   const [avatar, setAvatar] = useState<string | null>(char?.avatar ?? null);
   const [wid, setWid] = useState(char?.wechatID ?? "");
   const [confirmDel, setConfirmDel] = useState(false);
+  const [heartAuto, setHeartAuto] = useState(false);
+  const [saving, setSaving] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
   if (!char) return null;
   const set = <K extends keyof IdolProfile>(k: K, v: IdolProfile[K]) => setP(prev => ({ ...prev, [k]: v }));
   const lines = (s: string) => s.split("\n").map(x => x.trim()).filter(Boolean);
-  const save = () => {
-    saveProfile(p, { name: name.trim() || char.name, avatar, wechatID: wid.trim() || char.wechatID });
+  const save = async () => {
+    if (saving) return;
+    let next = p;
+    if (heartAuto) {
+      setSaving(true);
+      try {
+        const { judgeHeartStart } = await import("../../lib/idol-people");
+        const heart = await judgeHeartStart(p, name.trim() || char.name);
+        next = { ...p, canCrush: true, heart, rolled: true };
+        setP(next);
+      } catch {
+        onNotice?.("AI 没判出来，先按没感觉存，之后可手动改");
+        next = { ...p, canCrush: true, heart: "没感觉" as Heart, rolled: true };
+        setP(next);
+      } finally {
+        setSaving(false);
+      }
+    }
+    saveProfile(next, { name: name.trim() || char.name, avatar, wechatID: wid.trim() || char.wechatID });
     onNotice?.("存好了");
     onDone();
   };
@@ -634,7 +653,7 @@ function EditView({ data, id, onDone, onDeleted, onNotice }: { data: Data; id: s
       <div className="ct-top">
         <button type="button" className="ct-glass ct-pill" onClick={onDone}>取消</button>
         <b className="ct-title">编辑</b>
-        <button type="button" className="ct-glass ct-pill is-strong" onClick={save}>完成</button>
+        <button type="button" className="ct-glass ct-pill is-strong" disabled={saving} onClick={save}>{saving ? "AI 判断中…" : "完成"}</button>
       </div>
       <div className="ct-edit-avatar">
         <Avatar name={name || "?"} src={avatar} size={110} />
@@ -730,10 +749,16 @@ function EditView({ data, id, onDone, onDeleted, onNotice }: { data: Data; id: s
           </select>
         </Field>
         <Field label="心动">
-          <select className="ct-select" aria-label="心动程度" disabled={kinshipOf(p) !== "none" && !p.allowFamilyRomance} value={p.canCrush && p.heart ? p.heart : ""} onChange={e => { const v = e.target.value as Heart | ""; setP(prev => ({ ...prev, canCrush: Boolean(v), heart: v || undefined, rolled: true })); }}>
+          <select className="ct-select" aria-label="心动程度" disabled={kinshipOf(p) !== "none" && !p.allowFamilyRomance} value={heartAuto ? "auto" : (p.canCrush && p.heart ? p.heart : "")} onChange={e => {
+            const v = e.target.value;
+            if (v === "auto") { setHeartAuto(true); setP(prev => ({ ...prev, canCrush: true, rolled: true })); }
+            else { setHeartAuto(false); const hv = v as Heart | ""; setP(prev => ({ ...prev, canCrush: Boolean(hv), heart: hv || undefined, rolled: true })); }
+          }}>
             <option value="">没有心动线</option>
+            <option value="auto">有心动线（AI 判断）</option>
             {HEARTS.map(h => <option key={h} value={h}>{h}</option>)}
           </select>
+          {heartAuto ? <div className="ct-v is-dim" style={{ fontSize: 12, marginTop: 8 }}>保存时 AI 读完你们已有的戏再定起点，之后随戏自然变化。</div> : null}
         </Field>
         <Field label="秘密（她不知道的）">
           <textarea rows={2} value={p.secret?.text ?? ""} onChange={e => set("secret", { kind: e.target.value.trim() ? (p.secret?.kind === "heavy" ? "heavy" : "light") : "none", text: e.target.value, ...(p.secret?.revealed ? { revealed: p.secret.revealed } : {}) })} placeholder="没有就空着" />

@@ -18,7 +18,7 @@ import { loadChatContacts } from "./chat-storage";
 import { HIDDEN_WORLD_CHAR_ID, loadAllCharacters as loadCharacters, saveCharacters } from "./character-storage";
 import type { Character } from "./character-types";
 import { resolveUserIdentity } from "./settings-storage";
-import { composePersona, createPerson, emptyProfile, fmtDay, getProfile, loadProfiles, relationOf, saveProfile, stepRelation } from "./idol-people";
+import { composePersona, createPerson, emptyProfile, fmtDay, getProfile, herAge, loadProfiles, relationOf, saveProfile, stepRelation } from "./idol-people";
 import { describeTrainee, loadTraineeCard } from "./trainee-card";
 import { jumpWorld, sceneTimeBoundaryHint } from "./idol-reminders";
 import { fmtWorld, parseReply, type SceneNewFace } from "./idol-scenes";
@@ -35,6 +35,13 @@ export const WORLD_CHAR_ID = HIDDEN_WORLD_CHAR_ID;
 const META_KEY = "idol_scene_meta_v1";
 
 export type SceneMeta = { place: string; premise: string; startAt: number; newFaces: string[]; ended?: boolean; summary?: string; nodeId?: string; /** 谁在交给世界 */ open?: boolean; /** 不想碰见的人（名字） */ avoid?: string[] };
+
+/** 她未成年：新出场、跟她有来往的男生大多跟她差不多大，年龄写进新人资料 */
+function peerAgeHint(): string {
+  const a = herAge();
+  if (a == null || a >= 18) return "";
+  return `【她身边的男生】她现在 ${a} 岁。新出场、跟她有来往的男生大多是 ${Math.max(a - 3, 12)}～${a + 3} 岁（同期练习生、同龄的新人爱豆、同学），新人记号的资料里写上 age。`;
+}
 
 const WORLD_PERSONA = "「世界」不是一个人，是这个故事的旁白和所有配角。它负责写她身边发生的事、在场的人说的话和做的事，从不替她说话、不替她做决定。";
 
@@ -156,6 +163,7 @@ export function worldPromptFor(meta: SceneMeta | null, fallbackPlace: string, pa
     careerPromptBlock(),
     eventsPromptBlock(),
     romanceSceneHint(),
+    peerAgeHint(),
     worldWeatherHint(),
     sceneTimeBoundaryHint(meta?.nodeId),
     `【时间和地点】\n现在：${fmtWorld(Date.now())}\n地点：${meta?.place || fallbackPlace || "某个地方"}${meta?.premise ? `\n开头：${meta.premise}` : ""}`,

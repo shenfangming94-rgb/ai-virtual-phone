@@ -83,7 +83,7 @@ const validId = (id: string) => /^[a-z0-9._-]{3,24}$/i.test(id.trim());
 
 // ── 戏里的记号 ──
 
-export type KakaoTags = { gives: { name: string; id: string }[]; adds: { name: string; message: string }[] };
+export type KakaoTags = { gives: { name: string; id: string }[]; adds: { name: string; message: string; now?: boolean }[] };
 
 /** 摘掉 [给号] [加你]，返回干净文字 */
 export function extractKakaoTags(raw: string): { text: string; tags: KakaoTags } {
@@ -91,7 +91,7 @@ export function extractKakaoTags(raw: string): { text: string; tags: KakaoTags }
   const adds: KakaoTags["adds"] = [];
   const text = raw
     .replace(/\[给号[:：]\s*([^|｜\]]+)[|｜]?([^\]]*)\]/g, (_, n: string, id: string) => { gives.push({ name: n.trim(), id: id.trim() }); return ""; })
-    .replace(/\[加你[:：]\s*([^|｜\]]+)[|｜]?([^\]]*)\]/g, (_, n: string, m: string) => { adds.push({ name: n.trim(), message: m.trim() }); return ""; })
+    .replace(/\[加你[:：]\s*([^|｜\]]+)[|｜]?([^|｜\]]*)(?:[|｜]([^\]]*))?\]/g, (_, n: string, m: string, when?: string) => { adds.push({ name: n.trim(), message: m.trim(), now: (when ?? "").includes("当场") }); return ""; })
     .replace(/\n{3,}/g, "\n\n")
     .trim();
   return { text, tags: { gives, adds } };
@@ -119,6 +119,19 @@ export function applyKakaoTags(tags: KakaoTags, place: string): string[] {
     for (const a of tags.adds) {
       const c = findOrMeet(a.name, place);
       if (!c || isKakaoFriend(c.id) || s.incoming.some(i => i.charId === c.id)) continue;
+      if (a.now) {
+        // 戏里当着她的面就互加上了：直接是好友
+        addChatContact(c.id);
+        clearRequestsForCharacter(c.id);
+        promote(c.id);
+        const p = getProfile(c.id);
+        if (!p.met) saveProfile({ ...p, met: true, metAt: { at: Date.now(), place } });
+        const session = createOrGetSession(c.id);
+        const userName = resolveUserIdentity(c.id, "chat")?.name || "她";
+        pushChatMessage({ sessionId: session.id, role: "system", content: `${userName}和${c.name}在「${place}」加了 KakaoTalk 好友`, status: "sent" });
+        dispatchFriendRequestUpdated();
+        continue;
+      }
       const delay = (15 + Math.random() * 100) * MIN;
       s.incoming.push({ id: uid("in"), charId: c.id, message: a.message.slice(0, 60), place, at: Date.now() + delay });
     }
@@ -128,7 +141,8 @@ export function applyKakaoTags(tags: KakaoTags, place: string): string[] {
 }
 
 export const KAKAO_TAG_RULES = `- 有人把自己的 KakaoTalk ID 给了她（报给她、写给她、给她看二维码都算）：[给号:名字|他的ID]（ID 用英文和数字，正文里写出来的要跟这里一样）
-- 有人拿到了她的 KakaoTalk ID、之后会来加她：[加你:名字|加好友时附带的一句话]`;
+- 有人拿到了她的 KakaoTalk ID、之后会来加她：[加你:名字|加好友时附带的一句话]
+- 戏里当场就互加上了 KakaoTalk 好友：[加你:名字|一句话|当场]`;
 
 export function kakaoPromptLine(): string {
   return `她的 KakaoTalk ID：${myKakaoId()}（她自己愿意给才给）。加 KakaoTalk 只能靠交换 ID，戏里不能直接替她加上。`;

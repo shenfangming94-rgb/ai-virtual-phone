@@ -409,11 +409,12 @@ export function deliverAuditionResults(notify: (msg: string) => void): void {
 }
 
 function auditionResultMail(c: Company, node: CareerNode, pass: boolean): Omit<Mail, "id"> {
-  return companyIntentMail(c, pass, node.resultAt ?? Date.now());
+  return companyIntentMail(c, pass, node.resultAt ?? Date.now(), node.perf);
 }
 
-/** 公司正式表态信：pass=录取（挂「接受录取」动作），fail=拒信。私人路线（戏里公司方表态）也发这封 */
-export function companyIntentMail(c: Company, pass: boolean, at: number): Omit<Mail, "id"> {
+/** 公司正式表态信：pass=录取（挂「接受录取」动作），fail=拒信。私人路线（戏里公司方表态）也发这封。
+ *  perf 是戏里记账判的表现：录取信的正文按它写；没演过戏（打勾）就没有 */
+export function companyIntentMail(c: Company, pass: boolean, at: number, perf?: string): Omit<Mail, "id"> {
   const base = { from: `${c.name} 选角组`, addr: `${c.id}@audition.local`, logo: c.name.slice(0, 1), at };
   if (!pass) {
     return {
@@ -429,11 +430,18 @@ export function companyIntentMail(c: Company, pass: boolean, at: number): Omit<M
   const start = new Date(at + DAY);
   start.setHours(9, 0, 0, 0);
   const sd = start.getMonth() + 1, sday = start.getDate();
+  // 评价段按她演得怎么样写：认真演了（good）夸现场，演了（ok）认可潜力，没演就不提现场
+  const praise = perf === "good"
+    ? { ko: "오디션 현장에서 보여준 실력과 당당한 태도에 깊은 인상을 받았습니다.", zh: "你在试镜现场展现的实力和大方的态度，给我们留下了很深的印象。" }
+    : perf === "ok"
+      ? { ko: "현장에서 보여준 가능성과 성실한 태도를 높이 평가했습니다.", zh: "你在现场展现出来的潜力和认真的态度，我们非常认可。" }
+      : null;
   return {
     ...base, color: "#a99ce8", subject: "[최종 합격] 안내드립니다", subjectZh: "最终录取通知",
     body: [
       { ko: "안녕하세요, 오디션팀입니다.", zh: `你好，这里是 ${c.name} 选角组。` },
       { ko: "지난 오디션에서 보여주신 가능성과 태도를 높이 평가했습니다.", zh: "在上一轮试镜里，我们高度认可你展现出来的可能性和态度。" },
+      ...(praise ? [praise] : []),
       { ko: "아래 일정대로 입사를 진행해 주시기 바랍니다.", zh: "请按下面的时间办理入社。" },
       { ko: `입사일: ${sd}월 ${sday}일 오전 9시`, zh: `入社日：${sd}月${sday}日上午 9 点` },
       { ko: "기다리고 있겠습니다. 감사합니다.", zh: "等你的答复，谢谢。" },

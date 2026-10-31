@@ -1104,7 +1104,7 @@ export function ChatRoom({ session, onBack, onDeleted }: ChatRoomProps) {
         const wrapper = el?.closest(".chat-room-wrapper") as HTMLElement | null;
         if (!el || !wrapper) return;
         wrapper.style.setProperty("--chat-status-height", `${el.offsetHeight}px`);
-        return () => wrapper.style.removeProperty("--chat-status-height");
+        return () => { wrapper.style.removeProperty("--chat-status-height"); };
     }, [contactStatus, statusTranslation]);
     const translateStatus = async () => {
         if (statusBusy) return;

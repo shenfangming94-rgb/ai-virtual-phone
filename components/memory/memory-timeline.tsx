@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { BookOpen, Camera, MessageCircle, Trash2, type LucideIcon } from "lucide-react";
 import type { NativeTimelineEntry } from "@/lib/short-term-assembler";
 import { buildTwoLevelMomentThreads } from "@/lib/moments-comment-threading";
 import { findStickerByName } from "@/lib/sticker-data";
@@ -631,6 +632,7 @@ type Props = {
     onClusterDelete?: (ids: string[]) => void;
     /** 换了它才回到首屏；不给就是 events 一变就回 */
     resetKey?: string;
+    presentation?: "report" | "notes";
 };
 
 const EMPTY_ACTIVE_TAGS: ReadonlySet<string> = new Set<string>();
@@ -638,7 +640,7 @@ const EMPTY_ACTIVE_TAGS: ReadonlySet<string> = new Set<string>();
 // 每批渲染的簇数：全部一次性渲染会在重数据账号上把 DOM 撑爆
 const CLUSTER_PAGE_SIZE = 30;
 
-export function MemoryTimeline({ events, userName, activeTags = EMPTY_ACTIVE_TAGS, onEntryTap, onClusterDelete, resetKey }: Props) {
+export function MemoryTimeline({ events, userName, activeTags = EMPTY_ACTIVE_TAGS, onEntryTap, onClusterDelete, resetKey, presentation = "report" }: Props) {
     const [expandedClusterId, setExpandedClusterId] = useState<string | null>(null);
     const [visibleCount, setVisibleCount] = useState(CLUSTER_PAGE_SIZE);
 
@@ -664,6 +666,21 @@ export function MemoryTimeline({ events, userName, activeTags = EMPTY_ACTIVE_TAG
         setVisibleCount(CLUSTER_PAGE_SIZE);
         setExpandedClusterId(null);
     }, [activeTags]);
+
+    if (presentation === "notes") {
+        return (
+            <NotesTimelinePresentation
+                clusters={clusters}
+                visibleCount={visibleCount}
+                totalCount={clusters.length}
+                editedIds={editedIds}
+                onEntryTap={onEntryTap}
+                onClusterDelete={onClusterDelete}
+                onLoadMore={() => setVisibleCount(count => count + CLUSTER_PAGE_SIZE)}
+                emptyText={events.length === 0 ? "暂无数据。聊天或朋友圈互动后会自动显示。" : "当前筛选条件下暂无事件，换个标签试试。"}
+            />
+        );
+    }
 
     if (events.length === 0) {
         return (
@@ -740,5 +757,176 @@ export function MemoryTimeline({ events, userName, activeTags = EMPTY_ACTIVE_TAG
                 </button>
             ) : null}
         </>
+    );
+}
+
+function NotesTimelinePresentation({
+    clusters,
+    visibleCount,
+    totalCount,
+    editedIds,
+    onEntryTap,
+    onClusterDelete,
+    onLoadMore,
+    emptyText,
+}: {
+    clusters: TimelineCluster[];
+    visibleCount: number;
+    totalCount: number;
+    editedIds: ReadonlySet<string>;
+    onEntryTap?: (id: string) => void;
+    onClusterDelete?: (ids: string[]) => void;
+    onLoadMore: () => void;
+    emptyText: string;
+}) {
+    const visibleClusters = clusters.slice(0, visibleCount);
+    const days = new Map<string, { timestamp: string; clusters: TimelineCluster[] }>();
+    for (const cluster of visibleClusters) {
+        const date = new Date(cluster.startTime);
+        const dayKey = `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
+        const day = days.get(dayKey) ?? { timestamp: cluster.startTime, clusters: [] };
+        day.clusters.push(cluster);
+        days.set(dayKey, day);
+    }
+
+    if (visibleClusters.length === 0) {
+        return <p className="memo-detail-empty">{emptyText}</p>;
+    }
+
+    return (
+        <div className="memo-timeline-days">
+            {Array.from(days.entries()).map(([dayKey, day]) => {
+                const date = new Date(day.timestamp);
+                const monthDay = `${date.getMonth() + 1}月${date.getDate()}日`;
+                const dateLabel = fmtDate(day.timestamp);
+                const weekday = date.toLocaleDateString("zh-CN", { weekday: "long" });
+                return (
+                    <section className="memo-timeline-day-group" key={dayKey}>
+                        <div className="memo-timeline-day">
+                            <span>{dateLabel === "今天" || dateLabel === "昨天" ? `${monthDay} · ${dateLabel}` : monthDay}</span>
+                            <span>{weekday}</span>
+                        </div>
+                        {day.clusters.map(cluster => (
+                            <div className="memo-timeline-cluster" key={cluster.id}>
+                                {[...cluster.entries].reverse().map(entry => (
+                                    <MemoTimelineEntry
+                                        key={entry.id}
+                                        entry={entry}
+                                        edited={editedIds.has(entry.id)}
+                                        onTap={onEntryTap}
+                                    />
+                                ))}
+                                {cluster.entries.length > 1 && onClusterDelete ? (
+                                    <button
+                                        type="button"
+                                        className="memo-cluster-delete"
+                                        onClick={() => onClusterDelete(cluster.entries.map(entry => entry.id))}
+                                    >
+                                        <Trash2 size={13} />
+                                        删除这一段（{cluster.entryCount} 条）
+                                    </button>
+                                ) : null}
+                            </div>
+                        ))}
+                    </section>
+                );
+            })}
+            {totalCount > visibleCount ? (
+                <button type="button" className="mem-tl-load-more" onClick={onLoadMore}>
+                    加载更早的记录（还有 {totalCount - visibleCount} 段）
+                </button>
+            ) : null}
+        </div>
+    );
+}
+
+function splitMemoProjectionMessage(message: string): { title?: string; body: string } {
+    const text = message.trim();
+    const quotedTitle = text.match(/《([^》]{1,36})》\s*[：:]?\s*([\s\S]*)/);
+    if (quotedTitle && quotedTitle[2].trim()) {
+        return { title: quotedTitle[1], body: quotedTitle[2].trim() };
+    }
+    const heading = text.match(/^([^：:\n]{1,28})[：:]\s*([\s\S]+)$/);
+    if (heading) return { title: heading[1].trim(), body: heading[2].trim() };
+    const sentenceEnd = text.search(/[。！？!?]/);
+    if (sentenceEnd >= 7 && sentenceEnd <= 28 && sentenceEnd < text.length - 1) {
+        return { title: text.slice(0, sentenceEnd + 1), body: text.slice(sentenceEnd + 1).trim() };
+    }
+    return { body: text };
+}
+
+function MemoTimelineEntry({ entry, edited, onTap }: { entry: ParsedEntry; edited: boolean; onTap?: (id: string) => void }) {
+    const Icon: LucideIcon = entry.type === "moments" ? Camera
+        : entry.type === "projection" ? BookOpen
+            : MessageCircle;
+    const label = entry.type === "projection" ? entry.label
+        : entry.type === "moments" ? "朋友圈"
+            : entry.type === "group" ? (entry.groupName || "群聊")
+                : "KakaoTalk";
+    const speaker = entry.type === "chat" || entry.type === "group"
+        ? (entry.isUser ? "你" : entry.sender)
+        : null;
+    const projection = entry.type === "projection" ? splitMemoProjectionMessage(entry.message) : null;
+    const text = entry.type === "chat" || entry.type === "group"
+        ? entry.message
+        : entry.type === "system"
+            ? entry.message
+            : entry.type === "projection"
+                ? projection?.body ?? entry.message
+                : entry.content;
+
+    return (
+        <article className="memo-note-entry">
+            <div className="memo-note-meta">
+                <Icon size={15} strokeWidth={1.8} aria-hidden="true" />
+                <span>{label}</span>
+                {speaker ? <span className="memo-note-speaker">{speaker}</span> : null}
+                {edited ? <span className="mem-tl-edited">已改</span> : null}
+                <time>{fmtTime(entry.timestamp)}</time>
+            </div>
+            <div
+                className="memo-note-card"
+                onClick={() => onTap?.(entry.id)}
+                onKeyDown={event => {
+                    if (event.key === "Enter" || event.key === " ") {
+                        event.preventDefault();
+                        onTap?.(entry.id);
+                    }
+                }}
+                role={onTap ? "button" : undefined}
+                tabIndex={onTap ? 0 : undefined}
+                {...(onTap ? { "data-tappable": "" } : {})}
+            >
+                {projection?.title ? <h3 className="memo-note-title">{projection.title}</h3> : null}
+                {entry.type === "chat" && entry.innerMonologue ? (
+                    <>
+                        <p className="memo-note-copy">{renderWithStickers(entry.message)}</p>
+                        <p className="memo-note-inner">（内心：{entry.innerMonologue}）</p>
+                    </>
+                ) : (
+                    <p className="memo-note-copy">{entry.type === "chat" || entry.type === "group" ? renderWithStickers(text) : text}</p>
+                )}
+                {entry.type === "moments" ? (
+                    <>
+                        {entry.location ? <div className="memo-note-location">{entry.location}</div> : null}
+                        <MomentMemoryPhoto photoUrl={entry.photoUrl} photoDescription={entry.photoDescription} />
+                        {entry.comments.length > 0 ? (
+                            <div className="memo-note-comments">
+                                {buildTwoLevelMomentThreads(entry.comments).map(({ root, replies }) => (
+                                    <div className="memo-note-comment-group" key={root.id}>
+                                        <p><strong>{root.author}</strong>{root.replyToAuthorName ? ` 回复 ${root.replyToAuthorName}` : " 评论"}：{root.content}</p>
+                                        {replies.map(reply => (
+                                            <p className="memo-note-reply" key={reply.id}>
+                                                <strong>{reply.author}</strong>{reply.replyToAuthorName ? ` 回复 ${reply.replyToAuthorName}` : " 评论"}：{reply.content}
+                                            </p>
+                                        ))}
+                                    </div>
+                                ))}
+                            </div>
+                        ) : null}
+                    </>
+                ) : null}
+            </div>
+        </article>
     );
 }

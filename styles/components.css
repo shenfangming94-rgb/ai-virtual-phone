@@ -1383,18 +1383,12 @@
 .mem-detail .page-body { padding-bottom: 0; }
 
 .memory-detail-scroll {
-  --memory-detail-tabbar-height: var(--chat-tabbar-height, calc(68px + env(safe-area-inset-bottom, 0px)));
-  --memory-detail-bottom-reserve: calc(var(--memory-detail-tabbar-height) + 56px);
-  padding-bottom: 18px;
-  scroll-padding-bottom: calc(var(--memory-detail-bottom-reserve) + 18px);
+  padding-bottom: 10px;
+  scroll-padding-bottom: 14px;
 }
 
 .memory-detail-scroll::after {
-  content: "";
-  flex: 0 0 var(--memory-detail-bottom-reserve);
-  width: 1px;
-  min-height: 0;
-  pointer-events: none;
+  content: none;
 }
 
 /* ── Utility: secondary text color ── */
@@ -5542,6 +5536,306 @@
   text-align: center;
 }
 
+.memo-detail-layout {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+  background: var(--c-page-body-bg);
+}
+
+.memo-person-hero {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 24px 23px 20px;
+}
+
+.memo-detail-avatar {
+  display: grid;
+  place-items: center;
+  width: 45px;
+  height: 45px;
+  flex: 0 0 45px;
+  overflow: hidden;
+  border-radius: 50%;
+  color: #a88c25;
+  font-size: calc(21px * var(--app-text-scale, 1));
+}
+
+.memo-detail-avatar.is-fallback {
+  background: #fff3b5;
+}
+
+.memo-detail-avatar img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.memo-person-hero h1 {
+  margin: 0;
+  color: var(--c-text-title);
+  font-size: calc(24px * var(--app-text-scale, 1));
+  font-weight: 700;
+  letter-spacing: -0.5px;
+  line-height: 1.25;
+}
+
+.memo-person-hero p {
+  margin: 3px 0 0;
+  color: var(--c-text);
+  font-size: calc(11px * var(--app-text-scale, 1));
+}
+
+.memo-segmented-tabs {
+  display: flex;
+  gap: 0;
+  margin: 0 20px 23px;
+  padding: 3px;
+  border-radius: 11px;
+  background: color-mix(in srgb, var(--c-text-title) 7%, var(--c-page-body-bg));
+}
+
+.memo-segmented-tab {
+  display: grid;
+  place-items: center;
+  width: 25%;
+  min-width: 0;
+  min-height: 35px;
+  padding: 7px 2px;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--c-text);
+  font-size: calc(12px * var(--app-text-scale, 1));
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.memo-segmented-tab.is-active {
+  background: var(--c-panel, #fff);
+  color: var(--c-text-title);
+  font-weight: 600;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
+}
+
+.memo-detail-content {
+  padding: 0 18px;
+}
+
+.memo-detail-content .mem-entry-toolbar {
+  justify-content: flex-start;
+  padding: 0 0 12px;
+}
+
+.memo-detail-content .mem-entry-add-btn,
+.memo-detail-content .mem-empty-add-btn {
+  background: #b99100;
+  color: #fff;
+}
+
+.memo-detail-content .memory-report-card {
+  padding: 17px;
+  border: 0;
+  border-radius: 13px;
+  background: var(--c-panel, #fff);
+  box-shadow: none;
+}
+
+.memo-memory-entry-date {
+  color: var(--c-text);
+  font-size: calc(11px * var(--app-text-scale, 1));
+}
+
+.memo-memory-entry-copy {
+  color: var(--c-text);
+  font-size: calc(13px * var(--app-text-scale, 1));
+  line-height: 1.85;
+  overflow-wrap: anywhere;
+}
+
+.memo-detail-content .mem-empty-card {
+  min-height: 150px;
+  border: 0;
+  border-radius: 13px;
+  background: var(--c-panel, #fff);
+}
+
+.memo-detail-empty {
+  padding: 22px 10px;
+  margin: 0;
+  color: var(--c-text);
+  font-size: calc(13px * var(--app-text-scale, 1));
+  line-height: 1.7;
+  text-align: center;
+}
+
+.memo-detail-footnote {
+  padding: 16px 24px 22px;
+  margin: 0;
+  color: var(--c-text);
+  font-size: calc(11px * var(--app-text-scale, 1));
+  text-align: center;
+}
+
+.memo-timeline-days {
+  display: flex;
+  flex-direction: column;
+  gap: 25px;
+  padding: 0 0 6px;
+}
+
+.memo-timeline-day-group {
+  min-width: 0;
+}
+
+.memo-timeline-day {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 0 3px 13px;
+  color: var(--c-text);
+  font-size: calc(13px * var(--app-text-scale, 1));
+}
+
+.memo-timeline-day > span:last-child {
+  color: var(--c-text);
+  opacity: 0.8;
+  font-size: calc(11px * var(--app-text-scale, 1));
+}
+
+.memo-timeline-cluster + .memo-timeline-cluster {
+  margin-top: 12px;
+}
+
+.memo-note-entry + .memo-note-entry {
+  margin-top: 12px;
+}
+
+.memo-note-meta {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 20px;
+  padding: 0 7px;
+  margin-bottom: 6px;
+  color: var(--c-text);
+  font-size: calc(12px * var(--app-text-scale, 1));
+}
+
+.memo-note-meta > svg {
+  flex: 0 0 auto;
+  color: #b99100;
+}
+
+.memo-note-speaker {
+  color: var(--c-text);
+  font-size: calc(10px * var(--app-text-scale, 1));
+  opacity: 0.78;
+}
+
+.memo-note-meta time {
+  margin-left: auto;
+  color: var(--c-text);
+  font-variant-numeric: tabular-nums;
+}
+
+.memo-note-card {
+  padding: 17px 17px 18px;
+  border: 0;
+  border-radius: 13px;
+  background: var(--c-panel, #fff);
+  color: var(--c-text-title);
+  cursor: pointer;
+  transition: opacity 0.12s ease;
+}
+
+.memo-note-card:active {
+  opacity: 0.68;
+}
+
+.memo-note-card:focus-visible {
+  outline: 2px solid color-mix(in srgb, #b99100 55%, transparent);
+  outline-offset: 2px;
+}
+
+.memo-note-title {
+  margin: 0 0 7px;
+  color: var(--c-text-title);
+  font-size: calc(15px * var(--app-text-scale, 1));
+  font-weight: 600;
+  line-height: 1.5;
+}
+
+.memo-note-copy {
+  margin: 0;
+  color: var(--c-text);
+  font-size: calc(13px * var(--app-text-scale, 1));
+  line-height: 1.85;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.memo-note-inner {
+  margin: 6px 0 0;
+  color: var(--c-text);
+  font-size: calc(11px * var(--app-text-scale, 1));
+  font-style: italic;
+  opacity: 0.72;
+  white-space: pre-wrap;
+}
+
+.memo-note-location {
+  margin-top: 6px;
+  color: var(--c-text);
+  font-size: calc(11px * var(--app-text-scale, 1));
+}
+
+.memo-note-comments {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding-top: 9px;
+  margin-top: 9px;
+  border-top: 1px solid color-mix(in srgb, var(--c-text-title) 9%, transparent);
+  color: var(--c-text);
+  font-size: calc(11px * var(--app-text-scale, 1));
+  line-height: 1.6;
+}
+
+.memo-note-comment-group p {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.memo-note-comment-group strong {
+  color: var(--c-text-title);
+  font-weight: 600;
+}
+
+.memo-note-reply {
+  padding-left: 12px;
+  opacity: 0.82;
+}
+
+.memo-cluster-delete {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
+  padding: 6px 7px 0;
+  border: 0;
+  background: transparent;
+  color: var(--c-text);
+  font-size: calc(10px * var(--app-text-scale, 1));
+  opacity: 0.72;
+  cursor: pointer;
+}
+
 .memo-bottom-bar {
   position: sticky;
   bottom: 0;
@@ -5551,9 +5845,18 @@
   justify-content: space-between;
   gap: 8px;
   min-height: 58px;
+  flex-shrink: 0;
   margin-top: auto;
   padding: 12px 4px calc(14px + env(safe-area-inset-bottom, 0px));
   background: var(--c-page-body-bg);
+}
+
+.memo-bottom-bar-detail {
+  position: relative;
+  bottom: auto;
+  margin-top: 0;
+  padding-right: 23px;
+  padding-left: 23px;
 }
 
 .memo-bottom-action {

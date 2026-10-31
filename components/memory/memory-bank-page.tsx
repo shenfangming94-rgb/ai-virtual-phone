@@ -1,7 +1,7 @@
 "use client";
 
 import { Component, useState, useEffect, useCallback, useMemo, useRef, type CSSProperties, type ReactNode } from "react";
-import { Trash2, Zap, Clock, Users, Archive, AlertCircle, Search, Brain, FileText, MoreHorizontal, Plus, Edit3, X, Check, ChevronRight, Filter, Download, Upload, type LucideIcon } from "lucide-react";
+import { Trash2, Zap, Clock, Users, Archive, AlertCircle, Search, Brain, FileText, MoreHorizontal, Plus, FolderPlus, SquarePen, Edit3, X, Check, ChevronRight, Filter, Download, Upload, type LucideIcon } from "lucide-react";
 import { ConfirmDialog } from "@/components/ui/modal";
 import { getMemoryEventSourceTag, MEMORY_SOURCE_TAG_ORDER, MemoryTimeline } from "./memory-timeline";
 import { Toggle } from "@/components/ui/form";
@@ -774,7 +774,7 @@ export function MemoryBankPage({
                     entries.map(entry => (
                         <div
                             key={entry.id}
-                            className={`g-card memory-report-card${entryMenuId === entry.id ? " is-menu-open" : ""}`}
+                            className={`g-card memory-report-card memo-memory-entry-card${entryMenuId === entry.id ? " is-menu-open" : ""}`}
                             onClick={() => {
                                 if (entryMenuId) {
                                     setEntryMenuId(null);
@@ -784,7 +784,7 @@ export function MemoryBankPage({
                             }}
                         >
                             <div className="mem-report-head">
-                                <span className="ts-11 text-secondary" style={{ letterSpacing: "1px" }}>[ DATE: {relativeTime(entry.createdAt)} ]</span>
+                                <span className="memo-memory-entry-date">{relativeTime(entry.createdAt)}</span>
                                 <div className="mem-report-actions">
                                     <span className={`mem-origin-badge ${isManualMemoryEntry(entry) ? "is-manual" : ""}`}>
                                         {isManualMemoryEntry(entry) ? "MANUAL" : "AUTO"}
@@ -821,7 +821,7 @@ export function MemoryBankPage({
                                     </div>
                                 </div>
                             </div>
-                            <div className="ts-12 leading-[1.7]">
+                            <div className="memo-memory-entry-copy">
                                 {expandedId === entry.id
                                     ? entry.content
                                     : entry.content.length > 100
@@ -840,12 +840,50 @@ export function MemoryBankPage({
     // ── Detail View ──
     if (view === "detail" && selectedChar) {
         return (
-            <div className="flex flex-col absolute inset-0 overflow-hidden" style={{ padding: "0 16px" }}>
-                {/* Content */}
-                <div className="memory-detail-scroll flex-1 overflow-y-auto flex flex-col gap-2 min-h-0">
+            <div className="memo-detail-layout absolute inset-0">
+                <div className="memory-detail-scroll flex-1 overflow-y-auto min-h-0">
+                    <section className="memo-person-hero">
+                        <span className={`memo-detail-avatar${selectedChar.avatar ? "" : " is-fallback"}`}>
+                            {selectedChar.avatar ? (
+                                // eslint-disable-next-line @next/next/no-img-element
+                                <img src={selectedChar.avatar} alt="" draggable={false} />
+                            ) : (
+                                <span>{Array.from(selectedChar.name.trim())[0] || "?"}</span>
+                            )}
+                        </span>
+                        <div>
+                            <h1>{selectedChar.name}</h1>
+                            <p>人物记忆夹</p>
+                        </div>
+                    </section>
+
+                    <div className="memo-segmented-tabs" role="tablist" aria-label="记忆分类">
+                        {([
+                            { key: "short" as const, label: "短期" },
+                            { key: "shared" as const, label: "共享事件" },
+                            { key: "long" as const, label: "长期" },
+                            { key: "core" as const, label: "核心" },
+                        ]).map(tab => (
+                            <button
+                                key={tab.key}
+                                type="button"
+                                role="tab"
+                                aria-selected={activeTab === tab.key}
+                                className={`memo-segmented-tab${activeTab === tab.key ? " is-active" : ""}`}
+                                onClick={() => {
+                                    setActiveTab(tab.key);
+                                    setEntryMenuId(null);
+                                }}
+                            >
+                                {tab.label}
+                            </button>
+                        ))}
+                    </div>
+
+                    <div className="memo-detail-content">
                     <MemoryDetailBoundary>
                     {loading ? (
-                        <p className="text-center ts-14 mt-10 text-secondary">
+                        <p className="memo-detail-empty">
                             加载中...
                         </p>
                     ) : activeTab === "short" ? (
@@ -858,12 +896,13 @@ export function MemoryBankPage({
                                 onEntryTap={setStActionId}
                                 onClusterDelete={setStConfirmDeleteIds}
                                 resetKey={`${selectedCharId}:short`}
+                                presentation="notes"
                             />
                         </>
                     ) : activeTab === "shared" ? (
                         /* ── Shared events: card view ── */
                         sharedEvents.length === 0 ? (
-                            <p className="text-center ts-14 mt-10 text-secondary">
+                            <p className="memo-detail-empty">
                                 暂无共享事件。用户发朋友圈或参与群聊后会自动显示。
                             </p>
                         ) : (
@@ -874,6 +913,7 @@ export function MemoryBankPage({
                                 onEntryTap={setStActionId}
                                 onClusterDelete={setStConfirmDeleteIds}
                                 resetKey={`${selectedCharId}:shared`}
+                                presentation="notes"
                             />
                         )
                     ) : activeTab === "core" ? (
@@ -883,28 +923,28 @@ export function MemoryBankPage({
                         renderMemoryEntries("long_term", longTermEntries, "暂无长期记忆。点击设置页的手动总结，或直接新增一条记忆。")
                     )}
                     </MemoryDetailBoundary>
+                    </div>
+
+                    <p className="memo-detail-footnote">点一条记忆，可编辑或让她忘掉。</p>
                 </div>
 
-                {/* Bottom tab bar — floating above bottom */}
-                <div className="chat-tab-bar" style={{ position: "absolute", bottom: 40, left: 40, right: 40, zIndex: 10, borderRadius: 28, borderTop: "none", padding: "10px 0" }}>
-                    {([
-                        { key: "short" as const, icon: Clock, label: "短期" },
-                        { key: "shared" as const, icon: Users, label: "共享事件" },
-                        { key: "long" as const, icon: Archive, label: "长期" },
-                        { key: "core" as const, icon: Archive, label: "核心" },
-                    ]).map(tab => (
-                        <button
-                            key={tab.key}
-                            className={`chat-tab${activeTab === tab.key ? " chat-tab-active" : ""}`}
-                            onClick={() => {
-                                setActiveTab(tab.key);
-                                setEntryMenuId(null);
-                            }}
-                        >
-                            <tab.icon size={18} />
-                            <span>{tab.label}</span>
-                        </button>
-                    ))}
+                <div className="memo-bottom-bar memo-bottom-bar-detail">
+                    <button type="button" className="memo-bottom-action" onClick={onOpenSettings}>
+                        <FolderPlus size={18} strokeWidth={1.7} />
+                        <span>记忆选项</span>
+                    </button>
+                    <span className="memo-world-label">当前世界</span>
+                    <button
+                        type="button"
+                        className="memo-bottom-action"
+                        onClick={() => {
+                            setActiveTab("long");
+                            openCreateMemoryEditor("long_term");
+                        }}
+                    >
+                        <SquarePen size={18} strokeWidth={1.8} />
+                        <span>新建备忘录</span>
+                    </button>
                 </div>
 
                 {filterOpen && timelineFilterVisible ? (
@@ -1624,12 +1664,12 @@ export function MemoryBankPage({
 
             <div className="memo-bottom-bar">
                 <button type="button" className="memo-bottom-action" onClick={onOpenSettings}>
-                    <Archive size={17} strokeWidth={1.7} />
+                    <FolderPlus size={18} strokeWidth={1.7} />
                     <span>记忆选项</span>
                 </button>
                 <span className="memo-world-label">当前世界</span>
                 <button type="button" className="memo-bottom-action" onClick={() => setCreateTargetOpen(true)}>
-                    <Plus size={18} strokeWidth={1.8} />
+                    <SquarePen size={18} strokeWidth={1.8} />
                     <span>新建备忘录</span>
                 </button>
             </div>

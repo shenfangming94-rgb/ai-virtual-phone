@@ -73,6 +73,32 @@
   display: none;
 }
 
+/* 对方的 KakaoTalk 状态：贴在插件条下方，韩语的给个「译」按钮（点一下才调 AI） */
+.chat-app .chat-room-wrapper .chat-contact-status {
+  position: absolute;
+  top: calc(var(--safe-area-top, 48px) + var(--page-header-content-height, 42px) + 36px + var(--chat-plugin-header-height, 0px));
+  left: 0;
+  right: 0;
+  z-index: 8;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 2px 16px 4px;
+  font-size: 12px;
+  color: var(--c-dim, #888);
+  pointer-events: auto;
+}
+.chat-contact-status button {
+  border: none;
+  border-radius: 999px;
+  background: rgba(128, 128, 128, 0.14);
+  color: inherit;
+  font-size: 11px;
+  padding: 2px 8px;
+  cursor: pointer;
+}
+
 /* 插件自绘设置区（settings.section 坑位）在插件管理卡片内的内边距 */
 .chat-plugin-settings-section {
   padding: 12px 16px 4px;
@@ -93,7 +119,7 @@
   flex: none;
   min-height: 0;
   overflow-y: auto;
-  padding-top: calc(var(--safe-area-top, 48px) + var(--page-header-content-height, 42px) + 36px + var(--chat-plugin-header-height, 0px));
+  padding-top: calc(var(--safe-area-top, 48px) + var(--page-header-content-height, 42px) + 36px + var(--chat-plugin-header-height, 0px) + var(--chat-status-height, 0px));
   padding-left: 16px;
   padding-right: 16px;
   padding-bottom: 18px;

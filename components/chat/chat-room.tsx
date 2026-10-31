@@ -2,6 +2,9 @@
 
 import { crowdCount, isCrowdId, promoteCrowd, resolveSenderId } from "@/lib/idol-crowd";
 import { fleshOut, onKakaoAccepted } from "@/lib/idol-kakao";
+import { simpleLLMCall } from "@/lib/api-helpers";
+import { loadApiConfigs } from "@/lib/settings-storage";
+import { getProfile } from "@/lib/idol-people";
 import { forwardRef, Fragment, memo, useCallback, useEffect, useImperativeHandle, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { ChatSession, ChatMessage, CHAT_APP_SETTINGS_UPDATED_EVENT, CHAT_INITIAL_VISIBLE_MESSAGE_COUNT, CHAT_LOAD_MORE_MESSAGE_COUNT, CHAT_REQUEST_REPLY_EVENT, loadChatAppSettings, loadChatMessages, loadChatContacts, loadChatSessions, saveChatSessions, pushChatMessage, updateChatMessage, deleteChatMessage, deleteChatMessagesFrom, deleteChatMessagesByIds, retractChatMessage, editChatMessage, updateMessageMediaData, replaceResponseBatchWithParts, replaceGroupResponseRound, isReadingDiscussMessage, isSystemInstructionMessage, getSystemInstructionDisplayContent, createResponseBatchId, createResponseRoundId, getLatestStateValues, getLatestCharacterStateValues, compareChatMessages, isSessionStreamingEnabled, resolveChatBackgroundImage, resolveChatUserAvatar } from "@/lib/chat-storage";
 import { cleanStreamText, splitStreamPreviewSegments, stripLiteralTexts, stripXmlTagBlocks } from "@/lib/stream-preview";
@@ -1089,6 +1092,39 @@ const OfflineTextInputBar = memo(forwardRef<OfflineTextInputHandle, {
 
 export function ChatRoom({ session, onBack, onDeleted }: ChatRoomProps) {
     const [liveCSS, setLiveCSS] = useState(session.customCSS || "");
+    // 对方的状态（KakaoTalk 签名）：显示在聊天顶部，韩语的给个「译」按钮，点一下才调 AI 翻译
+    const contactStatus = !session.isGroup ? (getProfile(session.contactId).status?.kakao?.trim() || "") : "";
+    const isKoreanStatus = /[가-힣]/.test(contactStatus);
+    const [statusTranslation, setStatusTranslation] = useState<string | null>(null);
+    const [statusBusy, setStatusBusy] = useState(false);
+    const statusBarRef = useRef<HTMLDivElement>(null);
+    useEffect(() => { setStatusTranslation(null); }, [session.contactId]);
+    useEffect(() => {
+        const el = statusBarRef.current;
+        const wrapper = el?.closest(".chat-room-wrapper") as HTMLElement | null;
+        if (!el || !wrapper) return;
+        wrapper.style.setProperty("--chat-status-height", `${el.offsetHeight}px`);
+        return () => wrapper.style.removeProperty("--chat-status-height");
+    }, [contactStatus, statusTranslation]);
+    const translateStatus = async () => {
+        if (statusBusy) return;
+        setStatusBusy(true);
+        try {
+            const slot = resolveBinding(loadBindingConfig(), undefined, "chat");
+            const config = loadApiConfigs().find(c => c.id === slot.apiConfigId) ?? loadApiConfigs()[0];
+            if (!config) throw new Error("还没配置 API");
+            const res = await simpleLLMCall(config, [
+                { role: "system", content: "把这段韩语状态翻译成中文，只输出译文。" },
+                { role: "user", content: contactStatus },
+            ], { temperature: 0.3, label: "状态翻译" });
+            if (res.content?.trim()) setStatusTranslation(res.content.trim());
+            else throw new Error(res.error || "没翻出来");
+        } catch {
+            showChatToast("翻译失败，稍后再试");
+        } finally {
+            setStatusBusy(false);
+        }
+    };
     const [messages, setMessages] = useState<ChatMessage[]>([]);
     const [transientMessages, setTransientMessages] = useState<ChatMessage[]>([]);
     const [stickerReady, setStickerReady] = useState(false);
@@ -5685,6 +5721,14 @@ export function ChatRoom({ session, onBack, onDeleted }: ChatRoomProps) {
                 slotProps={{ sessionId: session.id, isGroup: !!session.isGroup }}
                 className="chat-plugin-header chat-room-main-pane"
             />
+            {contactStatus ? (
+                <div ref={statusBarRef} className="chat-contact-status chat-room-main-pane">
+                    <span>{statusTranslation ?? contactStatus}</span>
+                    {isKoreanStatus && !statusTranslation ? (
+                        <button type="button" onClick={() => { void translateStatus(); }} disabled={statusBusy}>{statusBusy ? "翻译中…" : "译"}</button>
+                    ) : null}
+                </div>
+            ) : null}
 
             {/* Message List */}
             <div

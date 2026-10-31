@@ -232,9 +232,10 @@ export function StageHome({ onClose, onPlay, onReplay }: Props) {
       ) : null}
 
       {sheet ? (
-        <PlaceSheet place={sheet} onClose={() => { setSheet(null); bump(n => n + 1); setBgmVer(v => v + 1); setPhotoVer(v => v + 1); }} onGo={(meet, avoid) => {
+        <PlaceSheet place={sheet} onClose={() => { setSheet(null); bump(n => n + 1); setBgmVer(v => v + 1); setPhotoVer(v => v + 1); }} onGo={(meet, avoid, extraPremise) => {
           const fate = takeDestinyMark(sheet.key);
-          const r = startStageScene({ placeKey: sheet.key, meetIds: meet, avoid, ...(fate ? { premise: fate } : {}) });
+          const premise = [fate, extraPremise].filter(Boolean).join("；") || undefined;
+          const r = startStageScene({ placeKey: sheet.key, meetIds: meet, avoid, ...(premise ? { premise } : {}) });
           setSheet(null);
           if (r) onPlay(r.chapterIndex);
         }} />
@@ -340,10 +341,12 @@ function MapImage({ url, places, look, editing, onTap, onPlace, marked }: {
 
 type Mark = "meet" | "avoid";
 
-function PlaceSheet({ place, onClose, onGo }: { place: StagePlace; onClose: () => void; onGo: (meet: string[], avoid: string[]) => void }) {
+function PlaceSheet({ place, onClose, onGo }: { place: StagePlace; onClose: () => void; onGo: (meet: string[], avoid: string[], extraPremise: string) => void }) {
   const lock = placeLocked(place);
   const [marks, setMarks] = useState<Record<string, Mark>>({});
   const [bgUrl, setBgUrl] = useState("");
+  // 随机：chips 随便点、都不选交给世界；认识的人：只能点想碰见的；新的人：写一个新面孔
+  const [mode, setMode] = useState<"random" | "known" | "new">("random");
 
   const people = useMemo(() => {
     const profiles = loadProfiles();
@@ -366,6 +369,11 @@ function PlaceSheet({ place, onClose, onGo }: { place: StagePlace; onClose: () =
 
   const cycle = (id: string) => setMarks(m => {
     const next = { ...m };
+    if (mode === "known") {
+      // 认识的人：点一下选上，再点取消；不能标不想碰见
+      if (next[id]) delete next[id]; else next[id] = "meet";
+      return next;
+    }
     if (!m[id]) next[id] = "meet";
     else if (m[id] === "meet") next[id] = "avoid";
     else delete next[id];
@@ -385,23 +393,35 @@ function PlaceSheet({ place, onClose, onGo }: { place: StagePlace; onClose: () =
         {lock ? <p className="stg-sheet-lock"><Lock size={13} /> {lock}</p> : (
           <>
             <div className="stg-sec">
-              <div className="stg-sec-head">碰见谁<small>点一下想碰见，再点一下不想碰见，都不选就交给世界</small></div>
-              {people.length ? (
-                <div className="stg-chips">
-                  {people.map(({ c, p }) => (
-                    <button key={c.id} type="button" className="stg-chip" data-mark={marks[c.id]} onClick={() => cycle(c.id)}>
-                      {marks[c.id] === "avoid" ? "✕ " : marks[c.id] === "meet" ? "✓ " : ""}{c.name}
-                      <small>{relationOf(p)}</small>
-                    </button>
-                  ))}
-                </div>
-              ) : <p className="stg-empty">还谁都不认识，进去看看会碰上谁</p>}
+              <div className="stg-sec-head">碰见谁</div>
+              <div className="stg-seg stg-seg-mode">
+                <button type="button" data-on={mode === "random" ? "1" : undefined} onClick={() => setMode("random")}>随机</button>
+                <button type="button" data-on={mode === "known" ? "1" : undefined} onClick={() => setMode("known")}>认识的人</button>
+                <button type="button" data-on={mode === "new" ? "1" : undefined} onClick={() => setMode("new")}>新的人</button>
+              </div>
+              {mode === "new" ? (
+                <p className="stg-empty">这次会写一个还不认识的新面孔，通讯录里的人不会出现</p>
+              ) : (
+                <>
+                  <div className="stg-sec-head" style={{ marginTop: 6 }}><small>{mode === "known" ? "点一下想碰见谁，再点取消；至少选一个才能进去" : "点一下想碰见，再点一下不想碰见，都不选就交给世界"}</small></div>
+                  {people.length ? (
+                    <div className="stg-chips">
+                      {people.map(({ c, p }) => (
+                        <button key={c.id} type="button" className="stg-chip" data-mark={marks[c.id]} onClick={() => cycle(c.id)}>
+                          {marks[c.id] === "avoid" ? "✕ " : marks[c.id] === "meet" ? "✓ " : ""}{c.name}
+                          <small>{relationOf(p)}</small>
+                        </button>
+                      ))}
+                    </div>
+                  ) : <p className="stg-empty">还谁都不认识，进去看看会碰上谁</p>}
+                </>
+              )}
             </div>
             {!(place.key === "公司" || place.key.startsWith("公司·")) && classAt(Date.now()) ? <p className="stg-clash">现在是{classAt(Date.now())}，去这里算旷课</p> : null}
-            <button type="button" className="stg-go" onClick={() => {
+            <button type="button" className="stg-go" disabled={mode === "known" && !Object.keys(marks).some(id => marks[id] === "meet")} onClick={() => {
               const meet = Object.keys(marks).filter(id => marks[id] === "meet");
-              const avoid = people.filter(({ c }) => marks[c.id] === "avoid").map(({ c }) => c.name);
-              onGo(meet, avoid);
+              const avoid = mode === "new" ? people.map(({ c }) => c.name) : people.filter(({ c }) => marks[c.id] === "avoid").map(({ c }) => c.name);
+              onGo(meet, avoid, mode === "new" ? "这次她遇到的是一个还没见过的新面孔（通讯录之外的人），别写认识的人" : "");
             }}>进去</button>
           </>
         )}

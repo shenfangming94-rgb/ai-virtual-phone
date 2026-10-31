@@ -400,7 +400,11 @@ function CharListView({
   const idolProfiles = loadProfiles();
   const worldCharacters = characters.filter(c => memberSet.has(c.id) && idolProfiles[c.id]?.layer !== "background");
   const worldBgItems = (bgItems || []).filter(item => (item.worldId ?? DEFAULT_CHARACTER_WORLD_ID) === currentWorldId);
-  const memberCounts = new Map(worldGroups.map(g => [g.id, g.memberIds.length]));
+  // 爱豆小手机：背景人物只待在通讯录，档案库只摆主要人物；世界标签的人数也只数档案库里的
+  const memberCounts = new Map(worldGroups.map(g => [g.id, g.memberIds.filter(id => {
+    const c = characters.find(x => x.id === id);
+    return c && idolProfiles[c.id]?.layer !== "background";
+  }).length]));
   const nameById = new Map(characters.map(c => [c.id, c.name || "未命名"]));
   // 连线与世界观关系同步：同一对角色的多条关系合并为一条线
   const relationLines: CanvasRelationLine[] = (() => {

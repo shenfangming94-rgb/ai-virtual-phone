@@ -140,7 +140,7 @@ function Row({ item, swiped, onSwipe, onCheck, onInfo, onLeave, onDelete, onNoti
   const red = item.status === "pending" && dayStart(item.dueAt) <= dayStart(now);
   const st = statusText(item);
   const canLeave = item.status === "pending" && item.kind !== "custom" && item.kind !== "practice";
-  const canDelete = item.kind === "custom" || item.kind === "practice";
+  const canDelete = item.kind === "custom" || item.kind === "practice" || item.status === "absent";
   const acts = (canLeave ? 1 : 0) + (canDelete ? 1 : 0) + 1;
   return (
     <div className="rm-swipe">

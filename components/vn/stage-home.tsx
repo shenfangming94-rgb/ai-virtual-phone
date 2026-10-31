@@ -98,7 +98,9 @@ export function StageHome({ onClose, onPlay, onReplay }: Props) {
       if (!node) return;
       const now = Date.now();
       if (node.status !== "pending") return;
-      if (now > node.dueAt + ABSENT_AFTER) {
+      // 这场戏已经开着（比如中途退出过）：不算缺席，接着进
+      const alreadyOpen = openStageScenes().some(s => s.scene.nodeId === node.id);
+      if (now > node.dueAt + ABSENT_AFTER && !alreadyOpen) {
         reminderTick(() => {});
         return;
       }

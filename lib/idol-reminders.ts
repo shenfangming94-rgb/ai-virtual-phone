@@ -301,6 +301,14 @@ function onAbsent(node: CareerNode) {
 
 let busy = false;
 
+/** 有没有一场没结束的戏是这个节点开的（中途退出也算在演，不算缺席） */
+function hasOpenSceneFor(nodeId: string): boolean {
+  try {
+    const scenes = JSON.parse(kvGet("idol_stage_scenes_v1") || "{}") as Record<string, { nodeId?: string; ended?: boolean }>;
+    return Object.values(scenes).some(s => s.nodeId === nodeId && !s.ended);
+  } catch { return false; }
+}
+
 /** 每 5 秒在桌面跑：到时间的缺席、过期的待回复、排队的消息 */
 export function reminderTick(notify: (msg: string) => void): void {
   if (busy) return;
@@ -310,7 +318,7 @@ export function reminderTick(notify: (msg: string) => void): void {
   let changed = false;
   const activeId = activeTimeNodeId();
   const nodes = career.nodes.map(n => {
-    if (n.id === activeId) return n; // 正在演该日程，不把自然耗时误判为缺席。
+    if (n.id === activeId || hasOpenSceneFor(n.id)) return n; // 正在演该日程（界面开着、或戏还没结束只是中途退出），不把自然耗时误判为缺席。
     if ((n.status === "pending" && now > n.dueAt + ABSENT_AFTER && n.kind !== "custom" && n.kind !== "practice") || n.status === "passed") {
       changed = true;
       if (n.status === "pending") absent.push(n);

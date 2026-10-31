@@ -192,7 +192,7 @@ export const DEFAULT_MAPS: Record<string, { image: string; night?: string; pins:
   },
   "company@jyp": {
     image: "/idol/maps/company-jyp.jpg",
-    pins: { "公司·天台": { x: 39, y: 8 }, "公司·办公室": { x: 26, y: 25 }, "公司·会议室": { x: 45, y: 35 }, "公司·录音室": { x: 21, y: 45 }, "公司·练习室": { x: 44, y: 55 }, "公司·食堂": { x: 23, y: 66 }, "公司·大厅": { x: 57, y: 85 } },
+    pins: { "公司·天台": { x: 39, y: 14 }, "公司·办公室": { x: 26, y: 25 }, "公司·会议室": { x: 45, y: 35 }, "公司·录音室": { x: 21, y: 45 }, "公司·练习室": { x: 44, y: 55 }, "公司·食堂": { x: 23, y: 66 }, "公司·大厅": { x: 57, y: 85 } },
   },
   "gangnam": {
     image: "/idol/maps/gangnam.jpg",

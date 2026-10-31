@@ -2,6 +2,7 @@
 // 一起听里的对话只显示在这里；结束或收起时悄悄写进他的私聊（只给他看的事件），他之后聊天也记得。
 import { bgSetInterval } from "./bg-timer";
 import { loadCharacters } from "./character-storage";
+import { getProfile } from "./idol-people";
 import {
     type ChatMessage,
     type ChatSession,
@@ -423,6 +424,8 @@ async function maybeInvite() {
     const ids = new Set(loadCharacters().map(c => c.id));
     for (const s of loadChatSessions()) {
         if (s.isGroup || !ids.has(s.contactId) || s.isBlacklisted) continue;
+        // 她关掉了这个人的一起听邀请：不主动来
+        if (getProfile(s.contactId).listenInvites === false) continue;
         const c = ltChar(store, s.contactId);
         if (c.rolledOn === today) continue;
         updateLT(st => { mutChar(st, s.contactId).rolledOn = today; });

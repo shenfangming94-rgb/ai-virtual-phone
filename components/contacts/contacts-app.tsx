@@ -767,6 +767,10 @@ function EditView({ data, id, onDone, onDeleted, onNotice }: { data: Data; id: s
           </select>
           {heartAuto ? <div className="ct-v is-dim" style={{ fontSize: 12, marginTop: 8 }}>保存时 AI 读完你们已有的戏再定起点，之后随戏自然变化。</div> : null}
         </Field>
+        <Field label="一起听邀请">
+          <button type="button" className="ct-wide-dark" role="switch" aria-label="一起听邀请" aria-checked={p.listenInvites !== false} onClick={() => setP(prev => ({ ...prev, listenInvites: prev.listenInvites === false ? undefined : false }))}>{p.listenInvites === false ? "已关掉 · 点击打开" : "会主动邀请 · 点击关掉"}</button>
+          <div className="ct-v is-dim" style={{ fontSize: 12, marginTop: 8 }}>关掉后他不会主动邀请你一起听歌；你主动邀请他照常。</div>
+        </Field>
         <Field label="秘密（她不知道的）">
           <textarea rows={2} value={p.secret?.text ?? ""} onChange={e => set("secret", { kind: e.target.value.trim() ? (p.secret?.kind === "heavy" ? "heavy" : "light") : "none", text: e.target.value, ...(p.secret?.revealed ? { revealed: p.secret.revealed } : {}) })} placeholder="没有就空着" />
           {p.secret?.text ? (

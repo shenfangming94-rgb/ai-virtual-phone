@@ -6,6 +6,7 @@ import { ConfirmDialog } from "@/components/ui/modal";
 import { getMemoryEventSourceTag, MEMORY_SOURCE_TAG_ORDER, MemoryTimeline } from "./memory-timeline";
 import { Toggle } from "@/components/ui/form";
 import { loadCharacters } from "@/lib/character-storage";
+import { getProfile } from "@/lib/idol-people";
 import type { Character } from "@/lib/character-types";
 import type { MemoryEntry, MemoryConfig } from "@/lib/memory-types";
 import { DEFAULT_CORE_MEMORY_PROMPT, DEFAULT_SUMMARIZATION_PROMPT } from "@/lib/memory-types";
@@ -925,7 +926,7 @@ export function MemoryBankPage({
                     </MemoryDetailBoundary>
                     </div>
 
-                    <p className="memo-detail-footnote">点一条记忆，可编辑或让她忘掉。</p>
+                    <p className="memo-detail-footnote">点一条记忆，可编辑或让{getProfile(selectedCharId ?? "").gender === "男" ? "他" : "她"}忘掉。</p>
                 </div>
 
                 <div className="memo-bottom-bar memo-bottom-bar-detail">

@@ -752,7 +752,14 @@ function EditView({ data, id, onDone, onDeleted, onNotice }: { data: Data; id: s
           <select className="ct-select" aria-label="心动程度" disabled={kinshipOf(p) !== "none" && !p.allowFamilyRomance} value={heartAuto ? "auto" : (p.canCrush && p.heart ? p.heart : "")} onChange={e => {
             const v = e.target.value;
             if (v === "auto") { setHeartAuto(true); setP(prev => ({ ...prev, canCrush: true, rolled: true })); }
-            else { setHeartAuto(false); const hv = v as Heart | ""; setP(prev => ({ ...prev, canCrush: Boolean(hv), heart: hv || undefined, rolled: true })); }
+            else { setHeartAuto(false); const hv = v as Heart | ""; setP(prev => {
+              const closed = !hv;
+              return {
+                ...prev, canCrush: Boolean(hv), heart: hv || undefined, rolled: true,
+                // 关掉心动线：感情方式清掉；关系停在暧昧/恋人会跟没心动线矛盾，退回认识/陌生（相处记录保留）
+                ...(closed ? { romanceStyle: "", relation: prev.relation === "暧昧" || prev.relation === "恋人" ? (prev.met ? "认识" : "陌生") : prev.relation } : {}),
+              };
+            }); }
           }}>
             <option value="">没有心动线</option>
             <option value="auto">有心动线（AI 判断）</option>

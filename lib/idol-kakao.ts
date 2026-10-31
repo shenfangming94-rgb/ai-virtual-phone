@@ -130,6 +130,8 @@ export function applyKakaoTags(tags: KakaoTags, place: string): string[] {
         const userName = resolveUserIdentity(c.id, "chat")?.name || "她";
         pushChatMessage({ sessionId: session.id, role: "system", content: `${userName}和${c.name}在「${place}」加了 KakaoTalk 好友`, status: "sent" });
         dispatchFriendRequestUpdated();
+        // 戏里新出现的人卡还是空的：和搜 ID 加人一样补全（戏文原文提炼）
+        if (needsFleshOut(c.id)) void fleshOut(c.id).catch(() => undefined);
         continue;
       }
       const delay = (15 + Math.random() * 100) * MIN;

@@ -384,6 +384,8 @@ export function deletePerson(charId: string): void {
   saveProfiles(all);
   saveCharacters(loadCharacters().filter(c => c.id !== charId));
   saveLists(loadLists().map(l => ({ ...l, memberIds: l.memberIds.filter(id => id !== charId) })));
+  // 聊天那边也别留：单聊整个删掉，群聊成员移除（群和历史保留）
+  void import("./character-chat-cleanup").then(m => m.removeCharacterChatReferences(charId)).catch(() => undefined);
 }
 
 // ── 列表（她自己建的分组；身份分组用 profile.group） ──

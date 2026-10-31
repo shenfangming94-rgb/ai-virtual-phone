@@ -57,8 +57,8 @@ function keepKv(): { keys: string[]; prefixes: string[] } {
   };
 }
 
-/** 跟档走的数据库 */
-const WORLD_DBS = ["AiPhoneChatDB", "AiPhoneMediaCacheDB", "ai_phone_memory_db_v1", "AiPhoneMomentsDB", "AiPhoneStoryDB", "AiPhoneCheckPhoneDB", "AiPhoneDwellingDB"];
+/** 跟档走的数据库（VN 戏文也在内：换档/导出都不能丢） */
+const WORLD_DBS = ["AiPhoneChatDB", "AiPhoneVnDB", "AiPhoneMediaCacheDB", "ai_phone_memory_db_v1", "AiPhoneMomentsDB", "AiPhoneStoryDB", "AiPhoneCheckPhoneDB", "AiPhoneDwellingDB"];
 
 function worldSources(): DataSource[] {
   const keep = keepKv();

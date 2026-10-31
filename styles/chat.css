@@ -76,7 +76,7 @@
 /* 对方的 KakaoTalk 状态：贴在插件条下方，韩语的给个「译」按钮（点一下才调 AI） */
 .chat-app .chat-room-wrapper .chat-contact-status {
   position: absolute;
-  top: calc(var(--safe-area-top, 48px) + var(--page-header-content-height, 42px) + 36px + var(--chat-plugin-header-height, 0px));
+  top: calc(var(--safe-area-top, 48px) + var(--page-header-content-height, 42px) + var(--chat-plugin-header-height, 0px));
   left: 0;
   right: 0;
   z-index: 8;

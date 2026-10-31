@@ -11,6 +11,10 @@
   --chat-tabbar-height: calc(var(--chat-tabbar-content-height) + var(--chat-tabbar-safe-bottom));
 }
 
+.chat-app .chat-room-wrapper[data-has-contact-status] {
+  --page-header-content-height: 80px;
+}
+
 .chat-app[data-room-active] {
   background: transparent;
 }
@@ -59,8 +63,7 @@
   z-index: 10;
 }
 
-/* 聊天插件 chat.header 坑位：头部与消息区都是 absolute 浮层，坑位必须自己定位，
-   贴在固定头部正下方。消息区 padding-top 额外加了插件条高度变量，避免遮住首条消息。 */
+/* 聊天插件 chat.header 坑位：浮在标题栏正下方，消息区避开实测的插件高度。 */
 .chat-app .chat-room-wrapper .chat-plugin-header {
   position: absolute;
   top: calc(var(--safe-area-top, 48px) + var(--page-header-content-height, 42px));
@@ -73,21 +76,44 @@
   display: none;
 }
 
-/* 对方的 KakaoTalk 状态：贴在插件条下方，韩语的给个「译」按钮（点一下才调 AI） */
+/* 对方的 KakaoTalk 状态：和联系人名字一起排在标题栏，韩语的给个「译」按钮（点一下才调 AI） */
 .chat-app .chat-room-wrapper .chat-contact-status {
-  position: absolute;
-  top: calc(var(--safe-area-top, 48px) + var(--page-header-content-height, 42px) + var(--chat-plugin-header-height, 0px));
-  left: 0;
-  right: 0;
-  z-index: 8;
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 8px;
-  padding: 2px 16px 4px;
+  width: 100%;
+  min-width: 0;
+  padding: 0 4px;
   font-size: 12px;
+  font-weight: 400;
+  line-height: 16px;
   color: var(--c-dim, #888);
   pointer-events: auto;
+}
+.chat-app .chat-room-wrapper .chat-contact-status > span:first-child {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.chat-app .chat-room-wrapper .chat-room-title {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
+  line-height: 1.2;
+  white-space: normal;
+}
+.chat-app .chat-room-wrapper .chat-room-title-name {
+  position: relative;
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .chat-contact-status button {
   border: none;
@@ -119,11 +145,15 @@
   flex: none;
   min-height: 0;
   overflow-y: auto;
-  padding-top: calc(var(--safe-area-top, 48px) + var(--page-header-content-height, 42px) + 36px + var(--chat-plugin-header-height, 0px) + var(--chat-status-height, 0px));
+  padding-top: calc(var(--safe-area-top, 48px) + var(--page-header-content-height, 42px) + 36px + var(--chat-plugin-header-height, 0px));
   padding-left: 16px;
   padding-right: 16px;
   padding-bottom: 18px;
   scroll-padding-bottom: calc(var(--chat-bottom-reserve, 120px) + 18px);
+}
+
+.chat-app .chat-room-wrapper:not(.mascot-chat-session) > .page-body {
+  padding-top: calc(var(--safe-area-top, 48px) + var(--page-header-content-height, 54px) + var(--chat-plugin-header-height, 0px));
 }
 
 .chat-app .chat-room-wrapper > .page-body::after {

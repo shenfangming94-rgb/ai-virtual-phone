@@ -1097,15 +1097,7 @@ export function ChatRoom({ session, onBack, onDeleted }: ChatRoomProps) {
     const isKoreanStatus = /[가-힣]/.test(contactStatus);
     const [statusTranslation, setStatusTranslation] = useState<string | null>(null);
     const [statusBusy, setStatusBusy] = useState(false);
-    const statusBarRef = useRef<HTMLDivElement>(null);
     useEffect(() => { setStatusTranslation(null); }, [session.contactId]);
-    useEffect(() => {
-        const el = statusBarRef.current;
-        const wrapper = el?.closest(".chat-room-wrapper") as HTMLElement | null;
-        if (!el || !wrapper) return;
-        wrapper.style.setProperty("--chat-status-height", `${el.offsetHeight}px`);
-        return () => { wrapper.style.removeProperty("--chat-status-height"); };
-    }, [contactStatus, statusTranslation]);
     const translateStatus = async () => {
         if (statusBusy) return;
         setStatusBusy(true);
@@ -5680,7 +5672,7 @@ export function ChatRoom({ session, onBack, onDeleted }: ChatRoomProps) {
     } : undefined;
 
     return (
-        <div ref={wrapperRef} className={`session-${session.id} chat-room-wrapper page-shell inset-0 flex flex-col z-20`} style={chatRoomBackgroundStyle} {...(bgLoading ? { "data-loading": "" } : {})} {...(bgImageResolved ? { "data-has-bg-image": "" } : {})} {...(showSettings ? { "data-settings-open": "" } : {})}>
+        <div ref={wrapperRef} className={`session-${session.id} chat-room-wrapper page-shell inset-0 flex flex-col z-20`} style={chatRoomBackgroundStyle} {...(bgLoading ? { "data-loading": "" } : {})} {...(bgImageResolved ? { "data-has-bg-image": "" } : {})} {...(contactStatus ? { "data-has-contact-status": "" } : {})} {...(showSettings ? { "data-settings-open": "" } : {})}>
             {/* CSS priority: session > global chat info > homepage appearance CSS. */}
             {globalChatCSS && (
                 <SessionCustomCSS css={globalChatCSS} scope={`.session-${session.id}`} />
@@ -5698,17 +5690,27 @@ export function ChatRoom({ session, onBack, onDeleted }: ChatRoomProps) {
                     <button className="page-back-btn" type="button" onClick={onBack} aria-label="返回">
                         <ChevronLeft size={24} strokeWidth={1.5} />
                     </button>
-                    <span className="page-title" style={{ position: 'relative' }}>
-                        {offlineMode ? "线下 · " : ""}
-                        {session.isGroup
-                            ? `${session.groupName || "群聊"}(${(session.participantIds?.length || 0) + crowdCount(session.id) + (session.isSpectator ? 0 : 1)})`
-                            : (session.alias || character?.name || `User_${session.contactId.slice(-4)}`)}
-                        {(isGenerating || isOfflineGenerating) && (
-                            <span className="chat-typing-indicator">
-                                {offlineMode ? "线下生成中" : "对方正在输入"}<span className="chat-typing-dots"><i/><i/><i/></span>
+                    <div className="page-title chat-room-title">
+                        <span className="chat-room-title-name">
+                            {offlineMode ? "线下 · " : ""}
+                            {session.isGroup
+                                ? `${session.groupName || "群聊"}(${(session.participantIds?.length || 0) + crowdCount(session.id) + (session.isSpectator ? 0 : 1)})`
+                                : (session.alias || character?.name || `User_${session.contactId.slice(-4)}`)}
+                            {(isGenerating || isOfflineGenerating) && (
+                                <span className="chat-typing-indicator">
+                                    {offlineMode ? "线下生成中" : "对方正在输入"}<span className="chat-typing-dots"><i/><i/><i/></span>
+                                </span>
+                            )}
+                        </span>
+                        {contactStatus ? (
+                            <span className="chat-contact-status chat-room-main-pane">
+                                <span>{statusTranslation ?? contactStatus}</span>
+                                {isKoreanStatus && !statusTranslation ? (
+                                    <button type="button" onClick={() => { void translateStatus(); }} disabled={statusBusy}>{statusBusy ? "翻译中…" : "译"}</button>
+                                ) : null}
                             </span>
-                        )}
-                    </span>
+                        ) : null}
+                    </div>
                     <span className="page-header-right">
                         <button className="page-back-btn" type="button" onClick={() => setShowSettings(true)} aria-label="更多">
                             <MoreHorizontal size={22} strokeWidth={1.5} />
@@ -5721,15 +5723,6 @@ export function ChatRoom({ session, onBack, onDeleted }: ChatRoomProps) {
                 slotProps={{ sessionId: session.id, isGroup: !!session.isGroup }}
                 className="chat-plugin-header chat-room-main-pane"
             />
-            {contactStatus ? (
-                <div ref={statusBarRef} className="chat-contact-status chat-room-main-pane">
-                    <span>{statusTranslation ?? contactStatus}</span>
-                    {isKoreanStatus && !statusTranslation ? (
-                        <button type="button" onClick={() => { void translateStatus(); }} disabled={statusBusy}>{statusBusy ? "翻译中…" : "译"}</button>
-                    ) : null}
-                </div>
-            ) : null}
-
             {/* Message List */}
             <div
                 ref={scrollRef}

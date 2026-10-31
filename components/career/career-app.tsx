@@ -12,6 +12,7 @@ import {
   listOf,
   loadCareer,
   saveCareer,
+  sendCompanyIntentMail,
   type Career,
   type CareerNode,
 } from "@/lib/idol-career";
@@ -189,6 +190,8 @@ export function CareerApp({ onClose, onNotice }: { onClose: () => void; onNotice
   const [checkId, setCheckId] = useState<string | null>(null);
   const [leaveId, setLeaveId] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
+  const [fixOpen, setFixOpen] = useState(false);
+  const [fixPass, setFixPass] = useState(true);
   const [swipeId, setSwipeId] = useState<string | null>(null);
   const dark = isNightNow();
   const company = companyOf(career.companyId);
@@ -279,6 +282,11 @@ export function CareerApp({ onClose, onNotice }: { onClose: () => void; onNotice
             <span className="rm-lt">课表<small>每周的课，默认都去；请假找室长</small></span>
             <span className="rm-lc"><ChevronRight size={18} /></span>
           </button> : null}
+          {!company ? <button type="button" className="rm-lrow" onClick={() => setFixOpen(true)}>
+            <span className="rm-dot" style={{ background: "#a99ce8" }}><Mail size={19} /></span>
+            <span className="rm-lt">补收公司的正式回信<small>剧情里公司已经表态、但邮箱没收到信时用</small></span>
+            <span className="rm-lc"><ChevronRight size={18} /></span>
+          </button> : null}
           <button type="button" className="rm-lrow" onClick={() => setPage({ p: "rank" })}>
             <span className="rm-dot" style={{ background: "#ff375f" }}><BarChart3 size={19} /></span>
             <span className="rm-lt">月末排名<small>{rankSummary()}</small></span>
@@ -296,6 +304,25 @@ export function CareerApp({ onClose, onNotice }: { onClose: () => void; onNotice
       {pendingNoticeFailures().length ? <div className="rm-group" style={{margin:"12px 20px"}}>{pendingNoticeFailures().map(item=><button type="button" className="rm-lrow" key={item.id} onClick={()=>{retryNotice(item.id);onNotice?.("会重新尝试送达这条消息");}}><span className="rm-lt">{item.title}<small>尚未送达 · 点此重试</small></span></button>)}</div> : null}
       {!detail && (page.p === "home" || page.p === "list") ? <button type="button" className="rm-fab" onClick={() => setAdding(true)} aria-label="新提醒"><Plus size={26} strokeWidth={2.6} /></button> : null}
       {checking ? <CheckSheet item={checking} onClose={() => setCheckId(null)} onDone={async text => { setCheckId(null); await checkNode(checking.id, text); onNotice?.(`${checking.title}：完成`); }} /> : null}
+      {fixOpen ? (
+        <div className="rm-mask" onClick={e => { if (e.target === e.currentTarget) setFixOpen(false); }}>
+          <div className="rm-sheet">
+            <div className="rm-sh-h">补收公司的正式回信</div>
+            <div className="rm-sh-s">剧情里哪家公司给你表过态，就补那家的正式回信。录取信要在邮箱里点「接受录取」才签约，别家会一起收尾。</div>
+            <div className="rm-sh-seg">
+              <button type="button" data-on={fixPass ? "1" : undefined} onClick={() => setFixPass(true)}>录取</button>
+              <button type="button" data-on={!fixPass ? "1" : undefined} onClick={() => setFixPass(false)}>拒绝</button>
+            </div>
+            {COMPANIES.map(c => (
+              <button key={c.id} type="button" className="rm-sh-company" onClick={() => {
+                const sent = sendCompanyIntentMail(c.id, fixPass);
+                setFixOpen(false);
+                onNotice?.(sent ? `📩 ${sent} 的正式回信发到邮箱了` : "发信失败，稍后再试");
+              }}>{c.name}<small>{c.scale}</small></button>
+            ))}
+          </div>
+        </div>
+      ) : null}
       {leaving ? <LeaveSheet item={leaving} onClose={() => setLeaveId(null)} onDone={reason => { setLeaveId(null); leaveNode(leaving.id, reason); onNotice?.(`${leaving.title}：请好假了`); }} /> : null}
       {adding ? <AddSheet onClose={() => setAdding(false)} onDone={(t, at, note) => { setAdding(false); addMine(t, at, note); onNotice?.("记好了"); }} /> : null}
     </div>

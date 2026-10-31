@@ -409,7 +409,11 @@ export function deliverAuditionResults(notify: (msg: string) => void): void {
 }
 
 function auditionResultMail(c: Company, node: CareerNode, pass: boolean): Omit<Mail, "id"> {
-  const at = node.resultAt ?? Date.now();
+  return companyIntentMail(c, pass, node.resultAt ?? Date.now());
+}
+
+/** 公司正式表态信：pass=录取（挂「接受录取」动作），fail=拒信。私人路线（戏里公司方表态）也发这封 */
+export function companyIntentMail(c: Company, pass: boolean, at: number): Omit<Mail, "id"> {
   const base = { from: `${c.name} 选角组`, addr: `${c.id}@audition.local`, logo: c.name.slice(0, 1), at };
   if (!pass) {
     return {
@@ -436,6 +440,22 @@ function auditionResultMail(c: Company, node: CareerNode, pass: boolean): Omit<M
     ],
     action: { kind: "offer", companyId: c.id, at: start.getTime(), place: `${c.name} 公司大楼`, prep: "", status: "new" },
   };
+}
+
+/** 公司名 → 公司（试镜以外的地方用名字找公司） */
+export function companyByName(name: string): Company | undefined {
+  const n = String(name ?? "").trim();
+  if (!n) return undefined;
+  return COMPANIES.find(c => c.name === n) ?? COMPANIES.find(c => n.includes(c.name) || c.name.includes(n));
+}
+
+/** 戏里公司方明确表态（私人路线）：发正式录取信/拒信。她已经签了公司就不发。返回公司名或 null */
+export function sendCompanyIntentMail(companyId: string, pass: boolean, at = Date.now()): string | null {
+  if (loadCareer().companyId) return null;
+  const c = companyOf(companyId);
+  if (!c) return null;
+  addMail(companyIntentMail(c, pass, at));
+  return c.name;
 }
 
 /** 去演某个节点：存一个「待开的戏」，剧情 app 打开时接着开 */

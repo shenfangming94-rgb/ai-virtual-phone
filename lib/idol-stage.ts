@@ -392,6 +392,27 @@ function frameText(raw: string, role: string): string {
   }).join("\n");
 }
 
+/** 导出这一场戏的全文（剧本风，方便分享） */
+export function exportSceneText(chapterIndex: number): string {
+  const session = worldVnSession();
+  const ch = session.chapters.find(c => c.index === chapterIndex);
+  if (!ch) return "";
+  const scene = getStageScene(ch.id);
+  const her = herName();
+  const lines: string[] = [];
+  lines.push(`【${ch.title}】`);
+  if (scene) lines.push(`${fmtWorld(scene.startAt)} · ${scene.place}`);
+  lines.push("");
+  for (const m of loadVnMessagesForChapter(session.id, chapterIndex)) {
+    if (m.role !== "user" && m.role !== "assistant") continue;
+    const text = frameText(m.rawContent, m.role)
+      .replace(/^她：「/, `${her}：「`).replace(/^她：/, `${her}：`);
+    if (!text.trim()) continue;
+    lines.push(text, "");
+  }
+  return lines.join("\n").trim();
+}
+
 export function stageHost(chapterId: string): SceneHost | null {
   const session = worldVnSession();
   const ch = session.chapters.find(c => c.id === chapterId);

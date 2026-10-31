@@ -82,7 +82,7 @@ import { DwellingApp } from "@/components/dwelling/dwelling-app";
 import { MascotFloat } from "@/components/mascot/mascot-float";
 import { MascotPreviewHost } from "@/components/mascot/mascot-preview-host";
 import { useMusicControlsOptional } from "@/lib/music-context";
-import { PhoneResourcesApp, type ResourceSubPage } from "@/components/phone-resources-app";
+import { PhoneResourcesApp } from "@/components/phone-resources-app";
 import { CheckPhoneApp } from "@/components/checkphone/checkphone-app";
 import { ShoppingApp } from "@/components/shopping/shopping-app";
 import { GameHubApp } from "@/components/game/game-hub-app";
@@ -1200,7 +1200,6 @@ export function DesktopShell({ initialThemeProfile, initialThemeAssets }: Deskto
   const [customAppBackgroundToolRuns, setCustomAppBackgroundToolRuns] = useState<CustomAppBackgroundToolRun[]>([]);
   const backgroundRunSeqRef = useRef(0);
   const pendingCustomAppBackgroundToolsRef = useRef<Map<string, PendingCustomAppBackgroundTool>>(new Map());
-  const [resourcesInitialPage, setResourcesInitialPage] = useState<ResourceSubPage>("main");
   const [dwellingMounted, setDwellingMounted] = useState(false);
   const [xiaohongshuMounted, setXiaohongshuMounted] = useState(false);
   const [xiaohongshuBusy, setXiaohongshuBusy] = useState(false);
@@ -2508,7 +2507,6 @@ html,body{margin:0;padding:0;width:100%;height:100%;background:#121110;color:rgb
       openWorldBuilder(meta.path);
       return;
     }
-    if (builtinIconId === "resources") setResourcesInitialPage("main");
     if (builtinIconId === "chat") setChatInitSessionId(null);
     setActiveApp(builtinIconId);
   }
@@ -2630,9 +2628,6 @@ html,body{margin:0;padding:0;width:100%;height:100%;background:#121110;color:rgb
           }
           : null);
         setAppMarketLaunchContext(nextAppId === "appmarket" ? launchContextRecord : null);
-        if (detail.appId === "resources") {
-          setResourcesInitialPage(detail.resourcePage === "vn_assets" || detail.resourcePage === "memory" ? detail.resourcePage : "main");
-        }
         setActiveApp(nextAppId as DesktopIconId);
         if (detail.sessionId) setChatInitSessionId(detail.sessionId);
         else setChatInitSessionId(null);
@@ -4270,7 +4265,6 @@ html,body{margin:0;padding:0;width:100%;height:100%;background:#121110;color:rgb
         <PhoneResourcesApp
           onClose={() => setActiveApp(null)}
           onNotice={setNotice}
-          initialPage={resourcesInitialPage}
         />
       );
     }

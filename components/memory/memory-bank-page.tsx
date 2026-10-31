@@ -182,6 +182,7 @@ type Props = {
     view: MemoryView;
     selectedCharId?: string;
     onSelectChar: (charId: string) => void;
+    onOpenSettings?: () => void;
     onNotice?: (msg: string) => void;
     filterOpen?: boolean;
     onFilterOpenChange?: (open: boolean) => void;
@@ -192,6 +193,7 @@ export function MemoryBankPage({
     view,
     selectedCharId,
     onSelectChar,
+    onOpenSettings,
     onNotice,
     filterOpen = false,
     onFilterOpenChange,
@@ -212,7 +214,8 @@ export function MemoryBankPage({
     const [editingCorePrompt, setEditingCorePrompt] = useState<string | null>(null);
     const [confirmDeleteEntryId, setConfirmDeleteEntryId] = useState<string | null>(null);
     const [confirmClearAll, setConfirmClearAll] = useState(false);
-    const [pickedCharId, setPickedCharId] = useState<string | null>(null);
+    const [listSearch, setListSearch] = useState("");
+    const [createTargetOpen, setCreateTargetOpen] = useState(false);
     const [entryMenuId, setEntryMenuId] = useState<string | null>(null);
     const [memoryEditor, setMemoryEditor] = useState<MemoryEditorState | null>(null);
     const [savingMemory, setSavingMemory] = useState(false);
@@ -228,6 +231,7 @@ export function MemoryBankPage({
     const [backupBusy, setBackupBusy] = useState(false);
     const [importPlan, setImportPlan] = useState<{ pack: CharacterMemoryPack; target: string }[] | null>(null);
     const memoryFileRef = useRef<HTMLInputElement>(null);
+    const pendingLongTermEditorRef = useRef(false);
 
     const disabledSourceCount = MEMORY_SOURCE_OPTIONS
         .filter(source => (config.shortTermAllowedSources ?? {})[source.key] === false).length;
@@ -345,8 +349,11 @@ export function MemoryBankPage({
     // Reload detail data when view changes to detail
     useEffect(() => {
         if (view === "detail" && selectedCharId) {
-            setActiveTab("short");
+            const openNewNote = pendingLongTermEditorRef.current;
+            pendingLongTermEditorRef.current = false;
+            setActiveTab(openNewNote ? "long" : "short");
             setExpandedId(null);
+            setMemoryEditor(openNewNote ? { type: "long_term", content: "" } : null);
             loadDetailData(selectedCharId);
         }
     }, [view, selectedCharId, loadDetailData]);
@@ -360,6 +367,13 @@ export function MemoryBankPage({
     }, [view]);
 
     const handleSelectChar = (char: Character) => {
+        setCreateTargetOpen(false);
+        onSelectChar(char.id);
+    };
+
+    const handleCreateNoteForChar = (char: Character) => {
+        pendingLongTermEditorRef.current = true;
+        setCreateTargetOpen(false);
         onSelectChar(char.id);
     };
 
@@ -1549,74 +1563,123 @@ export function MemoryBankPage({
         );
     }
 
-    // ── Character List View ──
+    // ── Memo List View ──
+    const searchTerm = listSearch.trim().toLocaleLowerCase();
+    const visibleCharacters = searchTerm
+        ? characters.filter(({ character }) => character.name.toLocaleLowerCase().includes(searchTerm))
+        : characters;
+
     return (
-        <div className="mem-picker">
-            <div className="mem-picker-card">
-                <p className="mem-picker-cover-title">Every moment we shared becomes a timeless memory</p>
-                <div className="mem-picker-divider"><span>✦</span></div>
-                <div className="mem-picker-cover-wrap">
-                    {"MEMORY".split("").map((ch, i) => (
-                        <span key={i} className={`mem-picker-cover-letter mem-picker-letter-${i}`}>{ch}</span>
-                    ))}
-                    <div className="mem-picker-cover-clip">
-                        {(() => {
-                            const coverSrc = pickedCharId
-                                ? (characters.find(c => c.character.id === pickedCharId)?.character.avatar || "")
-                                : (resolveUserIdentity()?.avatarUrl || "");
-                            return coverSrc ? (
-                                // eslint-disable-next-line @next/next/no-img-element
-                                <img
-                                    src={coverSrc}
-                                    alt=""
-                                    className="mem-picker-cover"
-                                    draggable={false}
-                                />
-                            ) : null;
-                        })()}
-                    </div>
-                </div>
+        <div className="memo-page">
+            <header className="memo-page-heading">
+                <h1>备忘录</h1>
+            </header>
 
-                <div className="mem-picker-body">
-                    <p className="mem-picker-prompt">
-                        你想查看谁的记忆呢？<br />
-                        <span className="mem-picker-hint">点击TA的卡片查看吧</span>
-                    </p>
+            <label className="memo-search">
+                <Search size={18} strokeWidth={1.8} aria-hidden="true" />
+                <input
+                    type="search"
+                    value={listSearch}
+                    onChange={event => setListSearch(event.target.value)}
+                    placeholder="搜索"
+                    aria-label="搜索人物备忘录"
+                />
+            </label>
 
-                    <div className="mem-picker-chips">
-                        {characters.map(({ character }) => (
+            <div className="memo-section-heading">人物记忆夹</div>
+            {visibleCharacters.length > 0 ? (
+                <div className="memo-people-card">
+                    {visibleCharacters.map(({ character, shortTermCount, coreCount, longTermCount }, index) => {
+                        const memoryCount = shortTermCount + coreCount + longTermCount;
+                        const initials = Array.from(character.name.trim())[0] || "?";
+                        return (
                             <button
+                                className="memo-person-row"
                                 key={character.id}
-                                className="ui-chip"
-                                {...(pickedCharId === character.id ? { "data-selected": "" } : {})}
-                                onClick={() => setPickedCharId(pickedCharId === character.id ? null : character.id)}
+                                type="button"
+                                onClick={() => handleSelectChar(character)}
                             >
-                                {character.name}
+                                <span className={`memo-avatar memo-avatar-${index % 5}`}>
+                                    {character.avatar ? (
+                                        // eslint-disable-next-line @next/next/no-img-element
+                                        <img src={character.avatar} alt="" draggable={false} />
+                                    ) : (
+                                        <span>{initials}</span>
+                                    )}
+                                </span>
+                                <span className="memo-person-name">{character.name}</span>
+                                <span className="memo-person-count">{memoryCount}</span>
+                                <ChevronRight size={17} strokeWidth={1.7} className="memo-person-chevron" aria-hidden="true" />
                             </button>
-                        ))}
-                    </div>
+                        );
+                    })}
+                </div>
+            ) : (
+                <div className="memo-empty-state">
+                    {searchTerm ? "没有找到匹配的人物" : "当前世界还没有可查看的人物记忆"}
+                </div>
+            )}
 
-                    <div className="mem-picker-tear">
-                        <div className="mem-picker-tear-line"><span>✦</span></div>
-                    </div>
+            <p className="memo-list-note">每个记忆夹，收着一个人记得的事。</p>
 
-                    <div className="mem-picker-action">
-                        <button
-                            className="ui-chip ui-chip-lg"
-                            {...(pickedCharId ? { "data-selected": "" } : {})}
-                            onClick={() => pickedCharId && handleSelectChar(loadCharacters().find(c => c.id === pickedCharId)!)}
-                        >
-                            查看TA的记忆
-                        </button>
-                    </div>
+            <div className="memo-bottom-bar">
+                <button type="button" className="memo-bottom-action" onClick={onOpenSettings}>
+                    <Archive size={17} strokeWidth={1.7} />
+                    <span>记忆选项</span>
+                </button>
+                <span className="memo-world-label">当前世界</span>
+                <button type="button" className="memo-bottom-action" onClick={() => setCreateTargetOpen(true)}>
+                    <Plus size={18} strokeWidth={1.8} />
+                    <span>新建备忘录</span>
+                </button>
+            </div>
 
-                    <div className="mem-picker-footer">
-                        <span>OBSERVER · 记忆观察员</span>
-                        <span>{characters.length} PROFILES · {characters.reduce((s, c) => s + c.shortTermCount + c.coreCount + c.longTermCount, 0)} RECORDS</span>
-                        <span>{new Date().toLocaleDateString("zh-CN", { year: "numeric", month: "2-digit", day: "2-digit" })}</span>
+            {createTargetOpen ? (
+                <div className="modal-overlay modal-overlay-bottom" data-ui="modal" onClick={() => setCreateTargetOpen(false)}>
+                    <div className="modal-sheet memo-target-sheet" data-ui="modal-sheet" onClick={event => event.stopPropagation()}>
+                        <div className="modal-header" data-ui="modal-header">
+                            <button
+                                className="modal-header-btn modal-header-btn-muted"
+                                type="button"
+                                onClick={() => setCreateTargetOpen(false)}
+                                aria-label="关闭"
+                            >
+                                <X size={18} />
+                            </button>
+                            <h3 className="modal-title">新建备忘录</h3>
+                            <span style={{ width: 28 }} />
+                        </div>
+                        <div className="modal-body modal-body-tight" data-ui="modal-body">
+                            <p className="memo-target-hint">选择要记录的人物</p>
+                            {characters.length > 0 ? (
+                                <div className="memo-target-list">
+                                    {characters.map(({ character }, index) => (
+                                        <button
+                                            key={character.id}
+                                            type="button"
+                                            className="memo-target-row"
+                                            onClick={() => handleCreateNoteForChar(character)}
+                                        >
+                                            <span className={`memo-avatar memo-avatar-small memo-avatar-${index % 5}`}>
+                                                {character.avatar ? (
+                                                    // eslint-disable-next-line @next/next/no-img-element
+                                                    <img src={character.avatar} alt="" draggable={false} />
+                                                ) : (
+                                                    <span>{Array.from(character.name.trim())[0] || "?"}</span>
+                                                )}
+                                            </span>
+                                            <span>{character.name}</span>
+                                            <ChevronRight size={17} strokeWidth={1.7} aria-hidden="true" />
+                                        </button>
+                                    ))}
+                                </div>
+                            ) : (
+                                <p className="memo-target-empty">当前世界还没有人物，暂时无法新建备忘录。</p>
+                            )}
+                        </div>
                     </div>
                 </div>
-            </div>
+            ) : null}
         </div>
     );
 }

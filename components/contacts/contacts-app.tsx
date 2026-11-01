@@ -4,7 +4,7 @@ import { compareFamilyContacts } from "@/lib/idol-family-data";
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { ChevronLeft, ChevronRight, Mail, MessageCircle, Phone, Plus, Search, Sparkles, Trash2, Video, X } from "lucide-react";
+import { ChevronLeft, ChevronRight, Mail, MessageCircle, Pencil, Phone, Plus, Search, Sparkles, Trash2, Video, X } from "lucide-react";
 import { fleshOut, myKakaoId, setMyKakaoId } from "@/lib/idol-kakao";
 
 import { loadCharacters, CHARACTERS_UPDATED_EVENT } from "@/lib/character-storage";
@@ -296,10 +296,11 @@ function ListsView({ data, onBack, onPick, onNotice }: { data: Data; onBack: () 
   const count = (fn: (p: IdolProfile) => boolean) => profiles.filter(fn).length;
   const Row = ({ label, n, onClick, onRename, onDelete }: { label: string; n: number; onClick: () => void; onRename?: () => void; onDelete?: () => void }) => (
     <div className="ct-cell">
-      <button type="button" className="ct-cell-main" onClick={editing && onRename ? onRename : onClick}>
+      <button type="button" className="ct-cell-main" onClick={onClick}>
         <span>{label}</span>
-        <small>{n}{editing && onRename ? " · 改名" : ""} <ChevronRight size={16} /></small>
+        <small>{n} <ChevronRight size={16} /></small>
       </button>
+      {editing && onRename ? <button type="button" className="ct-cell-del" onClick={onRename} aria-label="改名" style={{ background: "rgba(0,122,255,0.08)", color: "#007aff" }}><Pencil size={17} /></button> : null}
       {editing && onDelete ? <button type="button" className="ct-cell-del" onClick={onDelete} aria-label="删除"><Trash2 size={18} /></button> : null}
     </div>
   );
@@ -407,7 +408,7 @@ function ListsView({ data, onBack, onPick, onNotice }: { data: Data; onBack: () 
         ))}
         <button type="button" className="ct-cell-main ct-add-list" onClick={() => setNaming({ kind: "newList" })}><Plus size={18} /> 新建列表</button>
       </div>
-      {editing ? <p className="ct-hint">编辑时：点名字改名，点自己的列表能往里放人</p> : null}
+      {editing ? <p className="ct-hint">编辑时：点一下主体进成员管理；铅笔改名，垃圾桶删除</p> : null}
       <div className="ct-section-title">其他</div>
       <div className="ct-group">
         <Row label="还没见过的人" n={count(p => !p.met)} onClick={() => onPick({ kind: "unmet" })} />

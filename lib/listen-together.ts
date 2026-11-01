@@ -424,8 +424,8 @@ async function maybeInvite() {
     const ids = new Set(loadCharacters().map(c => c.id));
     for (const s of loadChatSessions()) {
         if (s.isGroup || !ids.has(s.contactId) || s.isBlacklisted) continue;
-        // 她关掉了这个人的一起听邀请：不主动来
-        if (getProfile(s.contactId).listenInvites === false) continue;
+        // 默认不主动邀请：只有她打开开关（listenInvites === true）的人才会来
+        if (getProfile(s.contactId).listenInvites !== true) continue;
         const c = ltChar(store, s.contactId);
         if (c.rolledOn === today) continue;
         updateLT(st => { mutChar(st, s.contactId).rolledOn = today; });

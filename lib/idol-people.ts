@@ -95,7 +95,7 @@ export type IdolProfile = {
   metAt?: { at: number; place: string };
   /** 他把 KakaoTalk ID 给过她（没给过，名片上不显示 ID） */
   gaveId?: boolean;
-  /** false = 他不会主动邀请她一起听（音乐 app）；不设 = 会 */
+  /** true = 他会主动邀请她一起听（音乐 app）；不设 = 不会（默认不主动） */
   listenInvites?: boolean;
   events: PersonEvent[];
   /** 只有她看得到 */

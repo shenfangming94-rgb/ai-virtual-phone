@@ -290,6 +290,7 @@ function ListsView({ data, onBack, onPick, onNotice }: { data: Data; onBack: () 
   const [editing, setEditing] = useState(false);
   const [naming, setNaming] = useState<null | { kind: "newList" } | { kind: "list"; id: string; name: string } | { kind: "group"; from: string; name: string }>(null);
   const [managing, setManaging] = useState<string | null>(null);
+  const [managingGroup, setManagingGroup] = useState<string | null>(null);
   const profiles = Object.values(data.profiles).filter(p => data.chars.some(c => c.id === p.charId));
   const groups = [...new Set(profiles.map(p => p.group).filter(Boolean))].sort(comparePinyin);
   const count = (fn: (p: IdolProfile) => boolean) => profiles.filter(fn).length;
@@ -340,6 +341,29 @@ function ListsView({ data, onBack, onPick, onNotice }: { data: Data; onBack: () 
     );
   }
 
+  if (managingGroup !== null) {
+    const toggle = (id: string) => { const p = getProfile(id); saveProfile({ ...p, group: p.group === managingGroup ? "" : managingGroup }); };
+    return (
+      <div className="ct-page">
+        <div className="ct-top">
+          <button type="button" className="ct-glass ct-circle" onClick={() => setManagingGroup(null)} aria-label="返回"><ChevronLeft size={22} /></button>
+          <b className="ct-title">{managingGroup}</b>
+          <span style={{ width: 44 }} />
+        </div>
+        <p className="ct-hint">点一下把人放进「{managingGroup}」，再点一下移出去（一个人只能在一个身份组）</p>
+        <div className="ct-group">
+          {[...data.chars].sort((a, b) => comparePinyin(a.name, b.name)).map(c => (
+            <button key={c.id} type="button" className="ct-row" onClick={() => toggle(c.id)}>
+              <Avatar name={c.name} src={c.avatar} size={36} />
+              <span className="ct-row-name">{c.name}</span>
+              <span className={`ct-check ${getProfile(c.id).group === managingGroup ? "on" : ""}`} />
+            </button>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="ct-page">
       <div className="ct-top">
@@ -361,7 +385,7 @@ function ListsView({ data, onBack, onPick, onNotice }: { data: Data; onBack: () 
                 key={g}
                 label={g}
                 n={count(p => p.group === g)}
-                onClick={() => onPick({ kind: "group", group: g })}
+                onClick={() => (editing ? setManagingGroup(g) : onPick({ kind: "group", group: g }))}
                 onRename={() => setNaming({ kind: "group", from: g, name: g })}
                 onDelete={() => { clearGroup(g); onNotice?.(`「${g}」这个分组删掉了，人还在`); }}
               />
@@ -768,8 +792,8 @@ function EditView({ data, id, onDone, onDeleted, onNotice }: { data: Data; id: s
           {heartAuto ? <div className="ct-v is-dim" style={{ fontSize: 12, marginTop: 8 }}>保存时 AI 读完你们已有的戏再定起点，之后随戏自然变化。</div> : null}
         </Field>
         <Field label="一起听邀请">
-          <button type="button" className="ct-wide-dark" role="switch" aria-label="一起听邀请" aria-checked={p.listenInvites !== false} onClick={() => setP(prev => ({ ...prev, listenInvites: prev.listenInvites === false ? undefined : false }))}>{p.listenInvites === false ? "已关掉 · 点击打开" : "会主动邀请 · 点击关掉"}</button>
-          <div className="ct-v is-dim" style={{ fontSize: 12, marginTop: 8 }}>关掉后他不会主动邀请你一起听歌；你主动邀请他照常。</div>
+          <button type="button" className="ct-wide-dark" role="switch" aria-label="一起听邀请" aria-checked={p.listenInvites === true} onClick={() => setP(prev => ({ ...prev, listenInvites: prev.listenInvites === true ? undefined : true }))}>{p.listenInvites === true ? "已打开 · 点击关掉" : "不会主动邀请 · 点击打开"}</button>
+          <div className="ct-v is-dim" style={{ fontSize: 12, marginTop: 8 }}>默认关着。打开后他才会主动邀请你一起听歌；你主动邀请他照常。</div>
         </Field>
         <Field label="秘密（她不知道的）">
           <textarea rows={2} value={p.secret?.text ?? ""} onChange={e => set("secret", { kind: e.target.value.trim() ? (p.secret?.kind === "heavy" ? "heavy" : "light") : "none", text: e.target.value, ...(p.secret?.revealed ? { revealed: p.secret.revealed } : {}) })} placeholder="没有就空着" />

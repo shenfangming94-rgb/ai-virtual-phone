@@ -13,6 +13,7 @@ import { worldWeatherHint } from "./idol-weather";
 import { allScenePlaces, placeLocked } from "./idol-stage";
 import { nudgeLeave } from "./idol-leave";
 import { fameEvent, fameTotal, fameWordNow } from "./idol-fame";
+import { pushPendingFace } from "./idol-pending-faces";
 import { kvGet, kvSet } from "./kv-db";
 import { loadCharacters } from "./character-storage";
 import type { Character } from "./character-types";
@@ -20,10 +21,9 @@ import { addChatContact, createOrGetSession, loadChatContacts, loadChatSessions,
 import { simpleLLMCall } from "./api-helpers";
 import { loadApiConfigs, loadBindingConfig, resolveBinding } from "./settings-storage";
 import { addToCalendar, careerPromptBlock, loadCareer, saveCareer, type CareerNode } from "./idol-career";
-import { createPerson, emptyProfile, getProfile, loadProfiles, relationOf, saveProfile } from "./idol-people";
+import { getProfile, loadProfiles, relationOf, saveProfile } from "./idol-people";
 import { describeTrainee, loadTraineeCard } from "./trainee-card";
 import { crowdIdByName, crowdOf } from "./idol-crowd";
-import { genKakaoId } from "./idol-kakao";
 import { addMomentPost, updateMomentPost } from "./moments-storage";
 
 const KEY = "idol_events_v1";
@@ -174,7 +174,7 @@ const PLAN_RULES = `你在给一出韩国娱乐圈练习生的戏排接下来几
 - 可以发生的事：${ENGINE_EVENTS}
 - 恋爱禁令是公司规矩。${ROMANCE_PRIVACY_RULE} 已知情后的首次反应由专门流程处理，不另排重复约谈；不得随机生成她已被发现、被偷拍或向外泄露的既成事实。
 - 家人可偶尔参与与她或家庭有关的事，不需要持续更新所有家人的近况；不因玩家长期未回复或未回家制造惩罚、催促或强制任务。涉及见面须遵循家人的居住地。已设置家庭中的缺席成员不另造人物填补。
-- 人物只用下面名单里的名字、群里的路人名字；要新出场有名字的人就写进 newPeople。
+- 人物只用下面名单里的名字、群里的路人名字。剧情里需要出现新认识的人就写进 newPeople（名字、身份、性别、年龄）；newPeople 里的人都还没和她见过面，lines 里不能让他们说话，也不能让他们直接对她有敌意，他们的戏等她真的见面以后再安排。
 - 消息要像真人发的 KakaoTalk：口语、短，一个人一次一到三条。where 写 group（练习生群）或 private（私聊她）。
 - 消息里说到时间只用具体日期（X月X日、周X、几点），不要用「今天」「明天」这种相对说法。
 - 每句话都要合情合理、前因后果对得上：只有影响到群里大家的事才在群里通知，个人的事走私聊或者当八卦传。她的恋情不走这条八卦传播路径：仅按知情账让知情者本人私聊，不写进群聊，不新增知情人或场外传播。
@@ -231,11 +231,11 @@ async function plan(from: number, to: number): Promise<void> {
     status?: { name?: string; status?: string; kakao?: string }[];
     posts?: { who?: string; text?: string; at?: string }[];
   };
-  // 新面孔
+  // 新面孔：先排队等戏里出场，不直接进通讯录（Flora 定的规矩）
   for (const np of j.newPeople ?? []) {
     const name = String(np.name ?? "").trim();
     if (!name || name.length > 12 || loadCharacters().some(c => c.name === name)) continue;
-    createPerson(name, { ...emptyProfile(""), layer: "background", role: String(np.role ?? ""), gender: np.gender === "女" ? "女" : np.gender === "男" ? "男" : "", age: String(np.age ?? "") }, null, genKakaoId());
+    pushPendingFace({ name, role: String(np.role ?? ""), gender: np.gender === "女" ? "女" : np.gender === "男" ? "男" : "", age: String(np.age ?? ""), about: "" });
   }
   // 近况
   applyStatus(j.status ?? []);

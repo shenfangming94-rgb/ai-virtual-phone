@@ -18,7 +18,7 @@ import { loadChatContacts } from "./chat-storage";
 import { HIDDEN_WORLD_CHAR_ID, loadAllCharacters as loadCharacters, saveCharacters } from "./character-storage";
 import type { Character } from "./character-types";
 import { resolveUserIdentity } from "./settings-storage";
-import { composePersona, createPerson, emptyProfile, fmtDay, getProfile, herAge, loadProfiles, relationOf, saveProfile, stepRelation } from "./idol-people";
+import { composePersona, createPerson, emptyProfile, fmtDay, getProfile, herAge, loadProfiles, relationOf, saveProfile, stepRelation, type ScenePersonFacts } from "./idol-people";
 import { describeTrainee, loadTraineeCard } from "./trainee-card";
 import { jumpWorld, sceneTimeBoundaryHint } from "./idol-reminders";
 import { fmtWorld, parseReply, type SceneNewFace } from "./idol-scenes";
@@ -29,6 +29,7 @@ import { addFame, eventsPromptBlock } from "./idol-events";
 import { recordPerformance } from "./idol-ledger";
 import { onNodeDone, onScenePractice } from "./idol-starroad";
 import { KAKAO_TAG_RULES, afterNodeScene, applyKakaoTags, extractKakaoTags, genKakaoId, kakaoPromptLine, type KakaoTags } from "./idol-kakao";
+import { takePendingFace } from "./idol-pending-faces";
 import { loadApiConfigs, loadBindingConfig, resolveBinding } from "./settings-storage";
 
 export const WORLD_CHAR_ID = HIDDEN_WORLD_CHAR_ID;
@@ -270,7 +271,14 @@ function addFaces(host: SceneHost, faces: SceneTags["newFaces"], introduction: s
       if (!ids.includes(exist.id)) ids.push(exist.id);
       continue;
     }
-    const char = createPerson(f.name, { ...emptyProfile(""), layer: "background", role: f.role, ...f.facts, sceneFacts: f.facts, introducedIn: introduction.slice(0, 12000), met: true, metAt: { at: Date.now(), place: meta.place } }, null, genKakaoId());
+    // 排过队的待出场人物：戏里真见了，拿预设资料合并，从队列里移除
+    const pending = takePendingFace(f.name);
+    const facts: ScenePersonFacts = {
+      ...f.facts,
+      ...(pending?.gender && !f.facts?.gender ? { gender: pending.gender } : {}),
+      ...(pending?.age && !f.facts?.age ? { age: pending.age } : {}),
+    };
+    const char = createPerson(f.name, { ...emptyProfile(""), layer: "background", role: f.role || pending?.role || "", ...facts, sceneFacts: facts, introducedIn: introduction.slice(0, 12000), met: true, metAt: { at: Date.now(), place: meta.place } }, null, genKakaoId());
     ids.push(char.id);
     meta.newFaces.push(char.id);
     added.push(char.name);

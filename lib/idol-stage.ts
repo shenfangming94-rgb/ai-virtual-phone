@@ -8,6 +8,7 @@
  */
 
 import { kvGet, kvSet } from "./kv-db";
+import { listPendingFaces } from "./idol-pending-faces";
 import { WORLD_CHAR_ID, closeSceneWith, ensureWorldCharacter, worldPromptFor, type SceneCloseResult, type SceneHost, type SceneMeta } from "./idol-world";
 import { createOrGetVnSession, loadVnMessagesForChapter, startNewChapter, archiveChapter, updateVnMessageSummary, deleteVnMessage, type VnSession } from "./vn-storage";
 import { simpleLLMCall } from "./api-helpers";
@@ -489,6 +490,11 @@ const LANG_RULE: Record<StageLang, string> = {
 
 function stageWritingRules(scene: StageScene, places: string[]): string {
   const st = loadStageSettings();
+  // 排队等出场的人：这场戏可以自然安排他们出场，不合适就这场不出场
+  const pending = listPendingFaces();
+  const pendingLine = pending.length
+    ? `- 这些人在等出场：${pending.map(x => `${x.name}${x.role ? `（${x.role}）` : ""}`).join("、")}。这一场可以自然安排其中合适的人出场（自我介绍、搭个话、一起练习），时间地点不合适就这场不出场。\n`
+    : "";
   return `【这一场的写法】（以这里为准，跟上面的漫卷格式冲突时听这里的）
 - 整场戏都用「你」称呼${herName()}（第二人称）：旁白写到她时用「你」，不要用「她」称呼她；其他人物用名字或他/她（第三人称）。别人当面跟她说话时照常称呼她。
 - 这是一帧一帧往下走的场景，像文字冒险游戏。每次回复大约 ${st.words} 字，帧数不限。
@@ -497,7 +503,7 @@ function stageWritingRules(scene: StageScene, places: string[]): string {
 - 说话的人写他自己的名字，绝不写「世界」；没名字的路人写身份（店员、经纪人、粉丝）。
 - **绝不替你说话、不写你的动作和心理**。写到需要你回应的地方就停，最后一帧落在别人的话或一个需要你反应的情况上。
 - 剧情要自己往前走：别人有自己的目的和情绪，会主动开口、提要求、出状况，不要只是等你。
-${LANG_RULE[st.lang]}${st.style.trim() ? `\n- 文风：${st.style.trim()}` : ""}
+${pendingLine}${LANG_RULE[st.lang]}${st.style.trim() ? `\n- 文风：${st.style.trim()}` : ""}
 - 这一场不用立绘：<scene> 里不写 sprite。
 - 有人离开这里了，回复最后另起一行写 [离场:名字]。
 - 她发「（场外指令：…）」时那是她在场外跟你说话，照着安排剧情，不要让剧情里的人听到或回应这句话。

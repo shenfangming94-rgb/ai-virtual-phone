@@ -170,6 +170,27 @@
 .stg-bg button { position: absolute; top: 4px; right: 4px; width: 20px; height: 20px; border-radius: 50%; display: grid; place-items: center; background: rgba(0,0,0,0.45) !important; color: #fff !important; }
 .stg-write { padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 24px); }
 .stg-write-in { display: block; width: calc(100% - 32px); margin: 12px 16px 0; padding: 12px 14px; border: 0; border-radius: 12px; background: #fff; font: inherit; font-size: 16px; box-sizing: border-box; }
+.stg-extra-sheet { min-height: 48%; }
+.stg-extra-note { margin: 14px 16px 8px; color: var(--stg-dim); font-size: 13px; line-height: 1.55; }
+.stg-extra-new { display: flex; align-items: center; justify-content: center; gap: 8px; width: calc(100% - 32px); margin: 8px 16px 12px; padding: 12px !important; border-radius: 12px; background: var(--stg-ink) !important; color: #fff !important; font-size: 15px; font-weight: 600; }
+.stg-extra-row { display: flex; align-items: center; gap: 12px; width: 100%; padding: 14px 18px !important; text-align: left; border-top: 1px solid var(--stg-line) !important; background: #f2f2f7 !important; }
+.stg-extra-row > span { flex: 1; min-width: 0; }
+.stg-extra-row b, .stg-extra-row small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.stg-extra-row b { font-size: 14px; font-weight: 600; }
+.stg-extra-row small, .stg-extra-subhead small { margin-top: 4px; color: var(--stg-dim); font-size: 12px; }
+.stg-extra-chevron { transform: rotate(180deg); color: var(--stg-dim); }
+.stg-extra-subhead { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 11px 16px 0; }
+.stg-extra-subhead button, .stg-extra-back { color: #007aff !important; font-size: 14px; }
+.stg-extra-story { margin: 14px 16px; padding: 18px; border-radius: 14px; background: #fff; }
+.stg-extra-story h2 { margin: 0 0 14px; font-size: 20px; }
+.stg-extra-story p { margin: 0; white-space: pre-wrap; font-size: 15px; line-height: 1.85; }
+.stg-extra-label { display: block; margin: 10px 0; font-size: 13px; font-weight: 600; }
+.stg-extra-select { display: block; width: 100%; height: 44px; margin-top: 6px; padding: 0 12px; border: 1px solid var(--stg-line); border-radius: 10px; background: #f8f8fa; color: var(--stg-ink); font: inherit; font-size: 15px; }
+.stg-extra-input { width: 100%; min-height: 96px; margin: 6px 0 0; border: 1px solid var(--stg-line); resize: vertical; font-size: 14px; }
+.stg-extra-error { margin: 10px 0 0; color: #d33; font-size: 13px; }
+.stg-extra-sheet .stg-go { display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; margin: 14px 0 0; }
+.stg-extra-sheet .stg-go:disabled { opacity: .55; }
+.stg-extra-back { display: block; margin: 12px auto 0; padding: 8px !important; }
 .stg-done:disabled { opacity: 0.4; }
 .stg-clash { margin: 0 0 10px; text-align: center; font-size: 12px; color: #ff6b6b; }
 /* 命运：地点上冒「!」 */

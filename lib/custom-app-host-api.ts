@@ -1928,10 +1928,29 @@ export async function generateCustomAppText(app: InstalledCustomApp, record: Rec
   messages: Record<string, unknown>[];
 }> {
   const characterId = cleanText(record.characterId, 160);
-  if (!characterId) throw new Error("ai.generate 缺少 characterId。");
+  const neutral = record.neutral === true;
+  if (!characterId && !neutral) throw new Error("ai.generate 缺少 characterId。");
   const enableTools = record.tools === true || record.enableTools === true;
   if (enableTools && !hasPermission(app, "chat.tools")) {
     throw new Error("应用未声明权限：chat.tools");
+  }
+  if (neutral) {
+    if (enableTools) throw new Error("中立生成模式暂不支持工具调用。");
+    const binding = resolveBinding(loadBindingConfig(), undefined, "chat");
+    const config = loadApiConfigs().find(item => item.id === binding.apiConfigId) ?? loadApiConfigs()[0];
+    if (!config) throw new Error("没有可用于中立生成的 API 配置。");
+    const instruction = [
+      cleanUnboundedText(record.instruction ?? record.context) || "请根据当前 APP 任务生成内容。",
+      record.input && typeof record.input === "object" ? `\n\n输入：${JSON.stringify(record.input, null, 2)}` : "",
+    ].join("").trim();
+    const tags = cleanStringArray(record.appTags, 80, 30);
+    const result = await simpleLLMCall(config, [
+      { role: "system", content: `你是「${app.name}」的中立内容生成器。你不扮演任何具体角色，不代表用户发言；严格遵守用户任务里指定的出场人物范围。${tags.length ? `\n任务标签：${tags.join("、")}` : ""}` },
+      { role: "user", content: instruction },
+    ], { temperature: 0.8, label: `${app.name}（中立生成）` });
+    const text = cleanUnboundedText(result.content);
+    if (!text) throw new Error(result.error || "AI 没有生成内容。");
+    return { text, appendMessages: [], messages: [] };
   }
   const toolsAllowed = hasPermission(app, "chat.tools");
   const session = ensureCharacterSession(characterId);

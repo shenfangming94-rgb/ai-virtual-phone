@@ -20,10 +20,12 @@ import { simpleLLMCall } from "./api-helpers";
 import { loadTraineeCard } from "./trainee-card";
 import { seedCrowd } from "./idol-crowd";
 import { debutNoticeTarget } from "./idol-debut";
+import { idolLanguageHint } from "./idol-language";
 
 const KEY = "idol_kakao_v1";
 const MIN = 60e3;
 const HOUR = 60 * MIN;
+const KAKAO_BILINGUAL_RULE = "每句先用角色应说的语言写原文（韩国日常对话默认韩语），再写 ` | ` 和对应的简体中文翻译；不能只写中文，也不要把两种语言混在原文里。";
 
 type Incoming = { id: string; charId: string; message: string; place: string; at: number };
 type KakaoState = {
@@ -278,14 +280,16 @@ async function teacherAddsHer(teacher: Character, company: string, groupName: st
   const userName = resolveUserIdentity(teacher.id, "chat")?.name || "她";
   pushChatMessage({ sessionId: session.id, role: "system", content: `${teacher.name}加了${userName}为 KakaoTalk 好友`, status: "sent" });
   const roomLine = unmet.length ? `你宿舍的室友是${unmet.join("、")}。` : "";
-  const fallback = `我是${company}带新人练习生的室长${teacher.name}。${roomLine}等下拉你进「${groupName}」，日程都在群里发，记得看。`;
+  const roomLineKo = unmet.length ? `기숙사 룸메이트는 ${unmet.join("、")}예요. ` : "";
+  const fallback = `저는 ${company}에서 신인 연습생을 맡고 있는 ${teacher.name}입니다. ${roomLineKo}잠시 후 「${groupName}」에 초대할게요. | 我是${company}负责新人练习生的室长${teacher.name}。${roomLine}等下会拉你进「${groupName}」群，记得看群里的日程。`;
   let text = fallback;
   try {
     const res = await simpleLLMCall(chatConfig(), [
-      { role: "system", content: `你是${teacher.name}。${teacher.persona}\n\n新练习生${userName}今天刚进公司，你第一次在 KakaoTalk 私聊她。只输出要发的那一条消息，两三句，用你自己的说话方式：说你是谁${unmet.length ? `，告诉她宿舍室友是${unmet.join("、")}` : ""}，说马上拉她进「${groupName}」群，日程在群里通知。` },
+      { role: "system", content: `你是${teacher.name}。${teacher.persona}${idolLanguageHint([{ id: teacher.id, name: teacher.name }])}\n\n新练习生${userName}今天刚进公司，你第一次在 KakaoTalk 私聊她。只输出要发的那一条消息，两三句，用你自己的说话方式：说你是谁${unmet.length ? `，告诉她宿舍室友是${unmet.join("、")}` : ""}，说马上拉她进「${groupName}」群，日程在群里通知。${KAKAO_BILINGUAL_RULE}` },
       { role: "user", content: "发消息。" },
     ], { temperature: 0.8, label: "室长加好友" });
-    text = res.content?.trim().replace(/^["「]|["」]$/g, "") || fallback;
+    const generated = res.content?.trim().replace(/^["「]|["」]$/g, "");
+    text = generated?.includes("|") ? generated : fallback;
   } catch { /* 用兜底 */ }
   pushChatMessage({ sessionId: session.id, role: "assistant", content: text, senderCharacterId: teacher.id, senderName: teacher.name, status: "sent" });
 }
@@ -337,13 +341,14 @@ export async function ensureTraineeGroup(present: Character[], notify?: (msg: st
 async function teacherNotice(teacher: Character, node: CareerNode): Promise<string> {
   const d = new Date(node.dueAt);
   const when = `${d.getMonth() + 1}月${d.getDate()}日 ${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
-  const fallback = `明天 ${when.split(" ")[1]} ${node.title}，在${node.place}，别迟到。`;
+  const fallback = `${when} ${node.title}가 있어요. 장소는 ${node.place}예요. 늦지 마세요. | ${when} ${node.title}，地点在${node.place}，别迟到。`;
   try {
     const res = await simpleLLMCall(chatConfig(), [
-      { role: "system", content: `你是${teacher.name}。${teacher.persona}\n\n你在练习生 KakaoTalk 群里发日程通知。只输出要发的那一条消息，一两句，用你自己的说话方式，写清楚时间地点。` },
-      { role: "user", content: `明天（${when}）：${node.title}，地点：${node.place}。${node.premise}` },
+      { role: "system", content: `你是${teacher.name}。${teacher.persona}${idolLanguageHint([{ id: teacher.id, name: teacher.name }])}\n\n你在练习生 KakaoTalk 群里发日程通知。只输出要发的那一条消息，一两句，用你自己的说话方式，写清楚时间地点。日期必须照抄「${when}」；不要说今天、明天、后天。${KAKAO_BILINGUAL_RULE}` },
+      { role: "user", content: `日程日期和时间：${when}。${node.title}，地点：${node.place}。${node.premise}` },
     ], { temperature: 0.8, label: "老师群通知" });
-    return res.content?.trim().replace(/^["「]|["」]$/g, "") || fallback;
+    const text = res.content?.trim().replace(/^["「]|["」]$/g, "") || fallback;
+    return /今天|明天|后天|오늘|내일|모레/.test(text) || !text.includes("|") || !text.includes(when) ? fallback : text;
   } catch {
     return fallback;
   }
@@ -356,13 +361,14 @@ async function mateAddsAfter(present: Character[], place: string): Promise<void>
     && !loadFriendRequests().some(r => r.characterId === x.id && r.status === "pending"));
   const mate = pool[Math.floor(Math.random() * pool.length)];
   if (!mate || Math.random() < 0.3) return;
-  let message = "";
+  let message = "수고했어. 카톡 친구 추가해도 돼? | 一起考试辛苦了，可以加你 KakaoTalk 好友吗？";
   try {
     const res = await simpleLLMCall(chatConfig(), [
-      { role: "system", content: `你是${mate.name}。${mate.persona}\n\n你刚和她一起考完月考，现在想加她 KakaoTalk。只输出加好友时附带的那一句话。` },
+      { role: "system", content: `你是${mate.name}。${mate.persona}${idolLanguageHint([{ id: mate.id, name: mate.name }])}\n\n你刚和她一起考完月考，现在想加她 KakaoTalk。只输出加好友时附带的那一句话。${KAKAO_BILINGUAL_RULE}` },
       { role: "user", content: `地点：${place}` },
     ], { temperature: 0.9, label: "同期加好友" });
-    message = res.content?.trim().slice(0, 60) || "";
+    const generated = res.content?.trim();
+    if (generated?.includes("|")) message = generated.slice(0, 500);
   } catch { /* 没话也能加 */ }
   save({ ...load(), incoming: [...load().incoming, { id: uid("in"), charId: mate.id, message, place, at: Date.now() + (30 + Math.random() * 150) * MIN }] });
 }

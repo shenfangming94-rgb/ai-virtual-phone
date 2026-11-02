@@ -151,6 +151,53 @@ function PostCard({ post, onOpen, onNotice, mine }: { post: Post; onOpen: (id: s
   const [cm, setCm] = useState(false);
   const [menu, setMenu] = useState(false);
   const [draft, setDraft] = useState("");
+  const commentsDisabled = Boolean(mine && post.noComments);
+  const shownCommentCount = a?.kind === "char" && a.verified && !a.alt && !mine
+    ? Math.max(post.comments.length, Math.round(post.likes * 0.03))
+    : post.comments.length;
+  const appRoot = typeof document !== "undefined" ? document.querySelector(".ig-app") : null;
+  const publishComment = () => {
+    const text = draft.trim();
+    if (!text || commentsDisabled) return;
+    myComment(post.id, text);
+    setDraft("");
+  };
+  const commentSheet = cm ? (
+    <div className="cp-instagram-sheet-backdrop" onClick={() => setCm(false)}>
+      <section className="cp-instagram-comments-sheet" onClick={e => e.stopPropagation()}>
+        <div className="cp-instagram-sheet-handle" />
+        <div className="cp-instagram-sheet-head"><span /><strong>评论</strong><span /></div>
+        <div className="cp-instagram-comment-list">
+          {post.comments.map((c, i) => {
+            const ca = Object.values(s.accs).find(x => x.handle === c.by);
+            return (
+              <div key={i} className="cp-instagram-comment">
+                <Avatar acc={ca ?? { id: c.by, handle: c.by, name: c.by, private: false, followers: 0, bio: "", hue: (c.by.length * 47) % 360 }} size={32} />
+                <div className="cp-instagram-comment-main">
+                  <div className="cp-instagram-comment-heading"><strong>{c.by}</strong><span className="cp-instagram-comment-time">{ago(c.at)}</span></div>
+                  <p>{c.text}</p>
+                  {c.zh ? <div className="ig-tr">{c.zh}</div> : null}
+                </div>
+              </div>
+            );
+          })}
+          {!post.comments.length ? <div className="ig-empty">{commentsDisabled ? "评论已关闭" : "还没有评论"}</div> : null}
+          {!commentsDisabled ? (
+            <div className="ig-cm-acts">
+              <button type="button" disabled={commentsBusy(post.id)} onClick={() => void moreComments(post.id, "more").catch(e => onNotice?.(e instanceof Error ? e.message : "没加载出来"))}>{commentsBusy(post.id) ? "加载中…" : "加载更多评论"}</button>
+            </div>
+          ) : null}
+        </div>
+        {!commentsDisabled ? (
+          <form className="cp-instagram-comment-input" onSubmit={e => { e.preventDefault(); publishComment(); }}>
+            <Avatar acc={accOf(ME)} size={30} />
+            <input aria-label={`给 ${a?.handle ?? "对方"} 留言`} value={draft} onChange={e => setDraft(e.target.value)} placeholder="添加评论…" />
+            <button type="submit" className="ig-link" disabled={!draft.trim()}>发布</button>
+          </form>
+        ) : null}
+      </section>
+    </div>
+  ) : null;
   return (
     <article className="cp-instagram-feed-post">
       <div className="cp-instagram-post-head">
@@ -161,56 +208,21 @@ function PostCard({ post, onOpen, onNotice, mine }: { post: Post; onOpen: (id: s
       <Carousel post={post} onNotice={onNotice} />
       <div className="cp-instagram-post-actions">
         <button type="button" onClick={() => toggleLike(post.id)}><Heart size={23} strokeWidth={2.1} fill={post.liked ? "#ff3040" : "none"} color={post.liked ? "#ff3040" : "currentColor"} />{!post.hideLikes && post.likes > 0 ? <span>{count(post.likes)}</span> : null}</button>
-        <button type="button" onClick={() => setCm(true)}><MessageCircle size={23} strokeWidth={2.1} />{post.comments.length ? <span>{count(post.comments.length)}</span> : null}</button>
+        <button type="button" onClick={() => setCm(true)}><MessageCircle size={23} strokeWidth={2.1} />{shownCommentCount ? <span>{count(shownCommentCount)}</span> : null}</button>
         <button type="button"><Send size={22} strokeWidth={2.1} /></button>
         <button type="button"><Bookmark size={23} strokeWidth={2.1} /></button>
       </div>
       <div className="cp-instagram-post-copy">
         {post.cap ? <p><b>{a?.handle}</b> {post.cap}</p> : null}
         {post.capZh ? <div className="ig-tr">{post.capZh}</div> : null}
-        {post.comments.length ? <button type="button" onClick={() => setCm(true)}>查看全部 {post.comments.length} 条评论</button> : null}
+        {shownCommentCount ? <button type="button" onClick={() => setCm(true)}>查看全部 {count(shownCommentCount)} 条评论</button> : null}
         <time>{ago(post.at)}</time>
         {mine && s.me.riskHint && post.risk && post.risk.level !== "none" ? (
           <div className="ig-risk">{post.risk.leaked ? "已经被扒了：" : post.risk.level === "high" ? "很冒险：" : post.risk.level === "mid" ? "有点冒险：" : "有一点点风险："}{post.risk.why}</div>
         ) : null}
         {post.archived ? <div className="ig-risk">已归档，只有你看得到</div> : null}
       </div>
-      {cm ? (
-        <div className="cp-instagram-sheet-backdrop" onClick={() => setCm(false)}>
-          <section className="cp-instagram-comments-sheet" onClick={e => e.stopPropagation()}>
-            <div className="cp-instagram-sheet-handle" />
-            <div className="cp-instagram-sheet-head"><span /><strong>评论</strong><span /></div>
-            <div className="cp-instagram-comment-list">
-              {post.comments.map((c, i) => {
-                const ca = Object.values(s.accs).find(x => x.handle === c.by);
-                return (
-                  <div key={i} className="cp-instagram-comment">
-                    <Avatar acc={ca ?? { id: c.by, handle: c.by, name: c.by, private: false, followers: 0, bio: "", hue: (c.by.length * 47) % 360 }} size={32} />
-                    <div className="cp-instagram-comment-main">
-                      <div className="cp-instagram-comment-heading"><strong>{c.by}</strong><span className="cp-instagram-comment-time">{ago(c.at)}</span></div>
-                      <p>{c.text}</p>
-                      {c.zh ? <div className="ig-tr">{c.zh}</div> : null}
-                    </div>
-                  </div>
-                );
-              })}
-              {!post.comments.length ? <div className="ig-empty">{post.noComments ? "评论已关闭" : "还没有评论"}</div> : null}
-              {!post.noComments ? (
-                <div className="ig-cm-acts">
-                  <button type="button" disabled={commentsBusy(post.id)} onClick={() => void moreComments(post.id, "more").catch(e => onNotice?.(e instanceof Error ? e.message : "没加载出来"))}>{commentsBusy(post.id) ? "加载中…" : "加载更多评论"}</button>
-                </div>
-              ) : null}
-            </div>
-            {!post.noComments ? (
-              <div className="cp-instagram-comment-input">
-                <Avatar acc={accOf(ME)} size={30} />
-                <input value={draft} onChange={e => setDraft(e.target.value)} onKeyDown={e => { if (e.key === "Enter" && draft.trim()) { myComment(post.id, draft.trim()); setDraft(""); } }} placeholder={`给 ${a?.handle} 留言…`} />
-                <button type="button" className="ig-link" disabled={!draft.trim()} onClick={() => { myComment(post.id, draft.trim()); setDraft(""); }}>发布</button>
-              </div>
-            ) : null}
-          </section>
-        </div>
-      ) : null}
+      {commentSheet ? (appRoot ? createPortal(commentSheet, appRoot) : commentSheet) : null}
       {menu ? (
         <div className="ig-sheet-bk" onClick={() => setMenu(false)}>
           <div className="ig-sheet" onClick={e => e.stopPropagation()}>
@@ -772,7 +784,7 @@ function Chat({ id, onBack, onNotice }: { id: string; onBack: () => void; onNoti
     <div className="ig-page">
       <div className="ig-chtop"><button type="button" onClick={onBack}><ChevronLeft size={26} /></button><Avatar acc={a} size={32} /><div><b>{a?.handle}</b><small>{a ? (a.alt ? "" : ownerName(a)) : ""}</small></div></div>
       {d.status === "request" ? <div className="ig-reqbar">{a?.handle} 想给你发消息。接受后他才知道你看过。<div><button type="button" onClick={() => setDmFlags(id, { status: "open" })}>接受</button><button type="button" onClick={() => { setDmFlags(id, { status: "open" }); onBack(); }}>删除</button></div></div> : null}
-      <div className="ig-scroll ig-msgs" onClick={() => setPanel(false)}>
+      <div className={`ig-scroll ig-msgs${panel ? " panel-open" : ""}`} onClick={() => setPanel(false)}>
         {d.msgs.map((x, i) => {
           const showT = i === 0 || x.at - d.msgs[i - 1].at > 30 * 60e3;
           return (
@@ -786,7 +798,7 @@ function Chat({ id, onBack, onNotice }: { id: string; onBack: () => void; onNoti
         {dmReplying(id) ? <div className="ig-m l typing">···</div> : null}
         <div ref={end} />
       </div>
-      <div className="ig-inp"><button type="button" className="ig-plus" onClick={() => setPanel(!panel)}><Plus size={16} strokeWidth={2.8} /></button><input value={text} onChange={e => setText(e.target.value)} onKeyDown={e => { if (e.key === "Enter") send(); }} placeholder="发消息…" /><button type="button" className="ig-link" onClick={send} disabled={!text.trim()}>发送</button></div>
+      <div className={`ig-inp${panel ? " with-panel" : ""}`}><button type="button" className="ig-plus" onClick={() => setPanel(!panel)}><Plus size={16} strokeWidth={2.8} /></button><input value={text} onChange={e => setText(e.target.value)} onKeyDown={e => { if (e.key === "Enter") send(); }} placeholder="发消息…" /><button type="button" className="ig-link" onClick={send} disabled={!text.trim()}>发送</button></div>
       {panel ? (
         <div className="ig-panel">
           <button type="button" onClick={() => { setPanel(false); reply(); }}><i><MessageCircle size={22} /></i>让他回</button>

@@ -15,6 +15,7 @@ import { loadTraineeCard } from "./trainee-card";
 import { queueMessage, teacherOf } from "./idol-reminders";
 import { fameNow, sayInGroup } from "./idol-events";
 import { findLunar, nthWeekday } from "./idol-calendar";
+import { idolLanguageHint } from "./idol-language";
 
 const KEY = "idol_yearly_v1";
 const MIN = 60e3;
@@ -49,10 +50,11 @@ async function teacherSays(instruction: string, fallback: string): Promise<void>
   let text = fallback;
   try {
     const res = await simpleLLMCall(chatConfig(), [
-      { role: "system", content: `你是${t.name}。${t.persona}\n\n你在练习生 KakaoTalk 群里发通知。只输出要发的那一条消息，一到三句，用你自己的说话方式。` },
+      { role: "system", content: `你是${t.name}。${t.persona}${idolLanguageHint([{ id: t.id, name: t.name }])}\n\n你在练习生 KakaoTalk 群里发通知。只输出要发的那一条消息，一到三句，用你自己的说话方式。每句先用角色应说的语言写原文（韩国日常对话默认韩语），再写「 | 」和对应的简体中文翻译；不能只写中文，也不要把两种语言混在原文里。` },
       { role: "user", content: instruction },
     ], { temperature: 0.8, label: "老师群通知" });
-    text = res.content?.trim().replace(/^["「]|["」]$/g, "") || fallback;
+    const generated = res.content?.trim().replace(/^["「]|["」]$/g, "");
+    text = generated?.includes("|") ? generated : fallback;
   } catch { /* 用平平的说法 */ }
   sayInGroup(t.name, text, Date.now());
 }
@@ -149,7 +151,7 @@ export function yearlyTick(notify: (m: string) => void): void {
     }
     if (loadDone().length > before) {
       const fresh = loadCareer().nodes.filter(n => n.status === "invite" && n.replyBy && n.replyBy > now && !career.nodes.some(o => o.id === n.id));
-      for (const n of fresh) notify(`📩 待回复：${n.title}`);
+      for (const n of fresh) notify(`📅 待回复：${n.title}`);
     }
   } finally {
     busy = false;

@@ -25,6 +25,7 @@ import { getProfile, loadProfiles, relationOf, saveProfile } from "./idol-people
 import { describeTrainee, loadTraineeCard } from "./trainee-card";
 import { crowdIdByName, crowdOf } from "./idol-crowd";
 import { addMomentPost, updateMomentPost } from "./moments-storage";
+import { IDOL_LANGUAGE_RULE } from "./idol-language";
 
 const KEY = "idol_events_v1";
 const MIN = 60e3;
@@ -32,7 +33,7 @@ const HOUR = 60 * MIN;
 const DAY = 24 * HOUR;
 const WINDOW = 3 * DAY;
 
-type Line = { where: "group" | "private"; who: string; text: string };
+type Line = { where: "group" | "private"; who: string; text: string; zh?: string };
 export type PlannedEvent = {
   id: string;
   at: number;
@@ -47,7 +48,7 @@ export type PlannedEvent = {
   moods?: { name: string; d: "leave" | "stay"; why: string }[];
   done?: boolean;
 };
-type Post = { who: string; text: string; at: number; done?: boolean };
+type Post = { who: string; text: string; zh?: string; imageDescription?: string; at: number; done?: boolean };
 type State = {
   plannedUntil: number;
   events: PlannedEvent[];
@@ -176,18 +177,19 @@ const PLAN_RULES = `你在给一出韩国娱乐圈练习生的戏排接下来几
 - 家人可偶尔参与与她或家庭有关的事，不需要持续更新所有家人的近况；不因玩家长期未回复或未回家制造惩罚、催促或强制任务。涉及见面须遵循家人的居住地。已设置家庭中的缺席成员不另造人物填补。
 - 人物只用下面名单里的名字、群里的路人名字。剧情里需要出现新认识的人就写进 newPeople（名字、身份、性别、年龄）；newPeople 里的人都还没和她见过面，lines 里不能让他们说话，也不能让他们直接对她有敌意，他们的戏等她真的见面以后再安排。
 - 消息要像真人发的 KakaoTalk：口语、短，一个人一次一到三条。where 写 group（练习生群）或 private（私聊她）。
+- ${IDOL_LANGUAGE_RULE} KakaoTalk lines 的 text 写角色原文（默认韩语），zh 写逐句对应的简体中文翻译；不要只用中文。
 - 消息里说到时间只用具体日期（X月X日、周X、几点），不要用「今天」「明天」这种相对说法。
 - 每句话都要合情合理、前因后果对得上：只有影响到群里大家的事才在群里通知，个人的事走私聊或者当八卦传。她的恋情不走这条八卦传播路径：仅按知情账让知情者本人私聊，不写进群聊，不新增知情人或场外传播。
 - 每个invite必须有同一发起人在lines里实际发出的邀请消息，写清同一时间地点；通知与邀请同时送达，不替她接受。
 - 机会和约要她回复的写 invite（title、at 开始时间、place、replyBy 回复截止、from 谁通知或谁约的），kind 写 chance 或 date；同时写一条通知她的消息。
 - invite 的 place：先从「地点名单」里挑最合适的，照名单原样写（比如吃烤肉写「江南·烤肉店」、公司里的事写「公司·会议室」）；名单里实在没有合适的才自己写一个具体地点。
 - 有人「【近况要更新】」的，在 status 里给他写新的近况：status 世界视角一句他最近在忙什么，kakao 他自己会写在 KakaoTalk 状态消息里的短句。有事发生在谁身上，也更新他的近况。
-- posts：偶尔有一两个人发 KakaoTalk 动态（练习生手机管得严，一周一两条），写他自己口吻的一两句。
+- posts：偶尔有一两个人发 KakaoTalk 动态（练习生手机管得严，一周一两条），写他自己口吻的一两句；text 用角色原文（默认韩语），zh 给简体中文翻译；只要本轮有动态，至少一条带图片描述 imageDescription，约一半的动态带图，内容适合晒练习室、自拍、食物或风景时才配图。
 - fame：这件事让外界更多人知道她了才写，按动静写 small（路透、小帖子）/ medium（公开视频上传、给前辈伴舞、上杂志）/ big（上热搜、出了大事，好事坏事都算）；跟外界无关、别人身上的事不写。
 - moods：这件事让名单里哪个同公司练习生更想离开公司或更想留下，写 {"name":"","d":"leave/stay","why":"一句"}；没影响就空着。名单里标「心事」的人在犹豫要不要走，可以有相应的事（跟老师谈话、家里来电话、别家公司的人找他），也可以有让他想留下的事。
 - 时间都写成 YYYY-MM-DD HH:mm，必须在给定的时间段里。
 JSON 格式：
-{"events":[{"at":"","kind":"small/big/setback/sick/chance/date","about":"世界视角一句话：发生了什么","people":["相关的人"],"lines":[{"where":"group/private","who":"","text":""}],"invite":null,"fame":null,"moods":[]}],"newPeople":[{"name":"","role":"","gender":"男/女","age":""}],"status":[{"name":"","status":"","kakao":""}],"posts":[{"who":"","text":"","at":""}]}`;
+{"events":[{"at":"","kind":"small/big/setback/sick/chance/date","about":"世界视角一句话：发生了什么","people":["相关的人"],"lines":[{"where":"group/private","who":"","text":"角色原文","zh":"简体中文翻译"}],"invite":null,"fame":null,"moods":[]}],"newPeople":[{"name":"","role":"","gender":"男/女","age":""}],"status":[{"name":"","status":"","kakao":""}],"posts":[{"who":"","text":"角色原文","zh":"简体中文翻译","imageDescription":"图片画面描述；不配图时留空","at":""}]}`;
 
 async function plan(from: number, to: number): Promise<void> {
   const s = load();
@@ -229,7 +231,7 @@ async function plan(from: number, to: number): Promise<void> {
     events?: { at?: string; kind?: string; about?: string; people?: string[]; lines?: Line[]; invite?: { title?: string; at?: string; place?: string; replyBy?: string; from?: string } | null; moods?: { name?: string; d?: string; why?: string }[] }[];
     newPeople?: { name?: string; role?: string; gender?: string; age?: string }[];
     status?: { name?: string; status?: string; kakao?: string }[];
-    posts?: { who?: string; text?: string; at?: string }[];
+    posts?: { who?: string; text?: string; zh?: string; imageDescription?: string; at?: string }[];
   };
   // 新面孔：先排队等戏里出场，不直接进通讯录（Flora 定的规矩）
   for (const np of j.newPeople ?? []) {
@@ -247,14 +249,14 @@ async function plan(from: number, to: number): Promise<void> {
     const invAt = parseAt(e.invite?.at);
     const ev: PlannedEvent = {
       id: uid("evt"), at: Math.max(from, Math.min(to, at)), kind, about: String(e.about ?? ""), people: (e.people ?? []).map(String),
-      lines: (e.lines ?? []).filter(l => l && l.who && l.text).map(l => ({ where: l.where === "group" ? "group" : "private", who: String(l.who), text: String(l.text) })),
+      lines: (e.lines ?? []).filter(l => l && l.who && l.text).map(l => ({ where: l.where === "group" ? "group" : "private", who: String(l.who), text: String(l.text), ...(l.zh ? { zh: String(l.zh) } : {}) })),
       ...(["small", "medium", "big"].includes(String((e as { fame?: string }).fame)) ? { fame: (e as { fame?: string }).fame as PlannedEvent["fame"] } : {}),
       ...(e.invite && invAt ? { invite: { title: String(e.invite.title ?? "邀请"), at: invAt, place: String(e.invite.place ?? ""), replyBy: parseAt(e.invite.replyBy) ?? undefined, from: String(e.invite.from ?? "") } } : {}),
       ...((e.moods ?? []).length ? { moods: (e.moods ?? []).filter(m => m?.name && (m.d === "leave" || m.d === "stay")).map(m => ({ name: String(m.name), d: m.d as "leave" | "stay", why: String(m.why ?? e.about ?? "") })) } : {}),
     };
     return ev;
   }).filter((e): e is PlannedEvent => Boolean(e));
-  const posts: Post[] = (j.posts ?? []).map(p => ({ who: String(p.who ?? ""), text: String(p.text ?? ""), at: Math.max(from, Math.min(to, parseAt(p.at) ?? from + Math.random() * (to - from))) })).filter(p => p.who && p.text);
+  const posts: Post[] = (j.posts ?? []).map(p => ({ who: String(p.who ?? ""), text: String(p.text ?? ""), ...(p.zh ? { zh: String(p.zh) } : {}), ...(p.imageDescription ? { imageDescription: String(p.imageDescription) } : {}), at: Math.max(from, Math.min(to, parseAt(p.at) ?? from + Math.random() * (to - from))) })).filter(p => p.who && p.text);
   const fresh = load();
   const setbacks = events.some(e => e.kind === "setback") && setbackKind ? [...fresh.setbacks, { at: now, kind: setbackKind }] : fresh.setbacks;
   save({
@@ -309,6 +311,12 @@ function sayPrivate(who: string, text: string, at: number) {
   return message.status !== "rejected" && message.status !== "failed" ? chatNotice(session.id, message.id, c.id) : undefined;
 }
 
+function bilingualKakaoText(text: string, zh?: string): string {
+  const original = text.trim();
+  if (original.includes("|") || !zh?.trim()) return original;
+  return `${original} | ${zh.trim()}`;
+}
+
 function runEvent(e: PlannedEvent, notify: (m: string) => void) {
   const now = Date.now();
   if (e.fame) fameEvent(e.fame, e.about, e.at);
@@ -316,12 +324,13 @@ function runEvent(e: PlannedEvent, notify: (m: string) => void) {
   // 要她回的（私聊）落地时才发，时间是现在；不用回的（群、八卦）按原来的时间
   const receipts: { who: string; notice: ScheduleNotice }[] = [];
   for (const l of e.lines) {
-    const receipt = l.where === "group" ? sayInGroup(l.who, l.text, e.at) : sayPrivate(l.who, l.text, late ? now : e.at);
+    const text = bilingualKakaoText(l.text, l.zh);
+    const receipt = l.where === "group" ? sayInGroup(l.who, text, e.at) : sayPrivate(l.who, text, late ? now : e.at);
     if (receipt) receipts.push({ who: l.who, notice: receipt });
   }
   const firstPrivate = e.lines.find(l => l.where === "private");
   // 消息真的送到 KKT 了才弹通知：没加过好友的人 sayPrivate 会直接跳过，不能只弹一个空通知
-  if (firstPrivate && receipts.some(r => r.who === firstPrivate.who)) notify(`💬 ${firstPrivate.who}：${firstPrivate.text}`);
+  if (firstPrivate && receipts.some(r => r.who === firstPrivate.who)) notify(`💬 ${firstPrivate.who}：${bilingualKakaoText(firstPrivate.text, firstPrivate.zh)}`);
   if (e.invite) {
     const delivered = receipts.find(r => r.who === e.invite!.from);
     if (!delivered) return; // 通知没有送达就不发布一个无来源的邀请。
@@ -335,7 +344,7 @@ function runEvent(e: PlannedEvent, notify: (m: string) => void) {
     if (node.dueAt > now) {
       const career = loadCareer();
       saveCareer({ ...career, nodes: [...career.nodes, node].sort((a, b) => a.dueAt - b.dueAt) });
-      notify(`📩 待回复：${node.title}`);
+      notify(`📅 待回复：${node.title}`);
     }
   }
   for (const m of e.moods ?? []) { const c = charByName(m.name); if (c) nudgeLeave(c.id, m.d === "leave" ? 1 : -1, m.why || e.about, e.at); }
@@ -359,8 +368,18 @@ function runPost(p: Post) {
   const c = charByName(p.who);
   if (!c || !loadChatContacts().some(x => x.characterId === c.id)) return;
   const friends = loadChatContacts().map(x => x.characterId);
-  const post = addMomentPost({ authorType: "character", authorId: c.id, content: p.text, visibility: friends });
-  if (post) updateMomentPost(post.id, { createdAt: new Date(p.at).toISOString() });
+  const imageDescription = p.imageDescription?.trim();
+  const post = addMomentPost({
+    authorType: "character", authorId: c.id, content: bilingualKakaoText(p.text, p.zh), visibility: friends,
+    ...(imageDescription ? { photoDescription: imageDescription, photoGenerationStatus: "pending" as const, photoUseReferenceImage: false } : {}),
+  });
+  if (!post) return;
+  updateMomentPost(post.id, { createdAt: new Date(p.at).toISOString() });
+  if (imageDescription) {
+    void import("./moments-engine").then(({ attachMomentPhotoInBackground }) => {
+      attachMomentPhotoInBackground(post.id, imageDescription, c.id, false);
+    }).catch(() => updateMomentPost(post.id, { photoGenerationStatus: "failed", photoGenerationError: "图片生成服务未加载" }));
+  }
 }
 
 let busy = false;

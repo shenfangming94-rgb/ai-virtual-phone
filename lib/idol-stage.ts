@@ -311,6 +311,45 @@ export function saveStageSettings(s: StageSettings): void {
   kvSet(SETTINGS_KEY, JSON.stringify(s));
 }
 
+export type StageExtraStory = { id: string; title: string; characterId: string; characterName: string; createdAt: number; content: string };
+const EXTRAS_KEY = "idol_stage_extras_v1";
+
+export function loadStageExtras(): StageExtraStory[] {
+  try {
+    const rows = JSON.parse(kvGet(EXTRAS_KEY) || "[]") as StageExtraStory[];
+    return Array.isArray(rows) ? rows.filter(row => row && typeof row.content === "string") : [];
+  } catch { return []; }
+}
+
+/** 番外故事单独保存，不写入世界时间、关系、日程或正式场景记忆。 */
+export async function createStageExtraStory(characterId: string, topic = ""): Promise<StageExtraStory> {
+  const character = loadAllCharacters().find(c => c.id === characterId && c.id !== WORLD_CHAR_ID);
+  if (!character) throw new Error("找不到这个角色");
+  const { apiConfig } = resolveVnConfigs(WORLD_CHAR_ID);
+  const identity = [character.briefPersona, character.personality, character.persona].filter(Boolean).join("\n").slice(0, 7000);
+  const now = Date.now();
+  const when = fmtWorld(now);
+  const result = await simpleLLMCall(apiConfig, [
+    { role: "system", content: `你为「此刻」写一篇独立番外。它不属于正在进行的主线，也不改变任何关系、日程、设定或存档记忆。主角是${character.name}，从他/她自己的日常和感受写起。故事发生在玩家不在场时；玩家本人、玩家姓名和玩家身份不得出现或被提及，不写角色与玩家的关系，也不以第二人称「你」称呼玩家。「她」只可指故事角色，不可指玩家。不要把沉默解释成玩家缺席，不写给玩家看的信或消息。只输出两行标题和正文：标题：……\n正文：……。正文用自然中文，写成有具体场景和起伏的短篇。` },
+    { role: "user", content: `角色设定：\n${identity || `${character.name}，一个有自己生活的人。`}\n\n故事时间：${when}。\n番外方向：${topic.trim() || "自由写一段符合角色设定的日常，展现玩家不在场时他/她自己的生活。"}` },
+  ], { temperature: 0.85, max_tokens: 2200, label: "此刻番外" });
+  const raw = result.content?.trim();
+  if (!raw) throw new Error(result.error || "番外没有生成出来");
+  const titleMatch = raw.match(/^标题\s*[：:]\s*(.+)$/m);
+  const bodyMatch = raw.match(/^正文\s*[：:]\s*([\s\S]*)$/m);
+  const content = (bodyMatch?.[1] || raw.replace(/^标题\s*[：:].*\n?/, "")).trim();
+  const story: StageExtraStory = {
+    id: `extra_${now.toString(36)}_${Math.random().toString(36).slice(2, 7)}`,
+    title: (titleMatch?.[1] || `${character.name}的番外`).trim().slice(0, 60),
+    characterId: character.id,
+    characterName: character.name,
+    createdAt: now,
+    content,
+  };
+  kvSet(EXTRAS_KEY, JSON.stringify([...loadStageExtras(), story].slice(-100)));
+  return story;
+}
+
 /** 她在这个世界里叫什么（总结里用这个名字） */
 export function herName(): string {
   return resolveUserIdentity(WORLD_CHAR_ID, "vn")?.name?.trim() || "她";

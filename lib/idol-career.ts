@@ -569,7 +569,7 @@ export function careerTick(notify: (msg: string) => void): void {
   const nodes = career.nodes.map(n => {
     if (n.status !== "pending") return n;
     if (!n.remindedDue && now >= n.dueAt) { notify(n.kind === "custom" ? `⏰ 到点了：${n.title}` : `🎬[${n.id}] ${n.title}：${String(new Date(n.dueAt).getHours()).padStart(2, "0")}:${String(new Date(n.dueAt).getMinutes()).padStart(2, "0")} · ${n.place}。点这里进去`); changed = true; return { ...n, remindedDue: true, remindedEve: true }; }
-    if (!n.remindedEve && now >= n.dueAt - DAY && n.kind !== "custom") { notify(`📅 明天：${n.title}`); changed = true; return { ...n, remindedEve: true }; }
+    if (!n.remindedEve && now >= n.dueAt - DAY && n.kind !== "custom") { const d = new Date(n.dueAt); notify(`📅 ${d.getMonth() + 1}月${d.getDate()}日：${n.title}`); changed = true; return { ...n, remindedEve: true }; }
     return n;
   });
   if (changed) saveCareer({ ...career, offers, nodes });

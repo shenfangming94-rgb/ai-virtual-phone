@@ -9,9 +9,9 @@ import { classAt } from "@/lib/idol-starroad";
 import { destinyMarks, takeDestinyMark } from "@/lib/idol-destiny";
 import "@/styles/stage-replay.css";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ChevronLeft, MoreHorizontal, X, Lock, Music2, VolumeX, Image as ImageIcon, Check, Search, Play } from "lucide-react";
+import { ChevronLeft, MoreHorizontal, X, Lock, Music2, VolumeX, Image as ImageIcon, Check, Search, Play, BookOpen, Sparkles } from "lucide-react";
 import {
-  DEFAULT_MAPS, mapLookKey, addBackground, addCustomPlace, loadCustomPlaces, pickBackground, placeBackgrounds, removeBackground, removeCustomPlace, thumbsOf, STAGE_APP_NAME, STAGE_OPEN_EVENT, loadBgmMap, loadBgmModes, loadMapLooks, loadStageSettings, mapById, mapBgmKey, mapOfPlace, openStageScenes, pastStageScenes, deleteStageScene, placeLocked, exportSceneText,
+  DEFAULT_MAPS, mapLookKey, addBackground, addCustomPlace, loadCustomPlaces, pickBackground, placeBackgrounds, removeBackground, removeCustomPlace, thumbsOf, STAGE_APP_NAME, STAGE_OPEN_EVENT, loadBgmMap, loadBgmModes, loadMapLooks, loadStageSettings, loadStageExtras, createStageExtraStory, mapById, mapBgmKey, mapOfPlace, openStageScenes, pastStageScenes, deleteStageScene, placeLocked, exportSceneText,
   saveBgmFor, saveBgmMode, saveMapLook, saveStageSettings, startNodeStage, startStageScene, takePendingStage, type BgmMode, type BgmSong, type MapLook, type StagePlace, type StageSettings,
 } from "@/lib/idol-stage";
 import { loadBgmMuted, saveBgmMuted, setStageBgmVolume, useStageBgm } from "./stage-bgm";
@@ -62,6 +62,7 @@ export function StageHome({ onClose, onPlay, onReplay }: Props) {
   const [menu, setMenu] = useState(false);
   const [pinEdit, setPinEdit] = useState<string | null>(null);
   const [pastOpen, setPastOpen] = useState(false);
+  const [extrasOpen, setExtrasOpen] = useState(false);
   const [, bump] = useState(0);
   const map = mapById(mapId);
   const lookKey = mapLookKey(mapId);
@@ -227,6 +228,7 @@ export function StageHome({ onClose, onPlay, onReplay }: Props) {
             <button type="button" onClick={() => { setMenu(false); setWriting(""); }}>自己写一个地点</button>
             {loadCustomPlaces().length ? <button type="button" onClick={() => { setMenu(false); setMineOpen(true); }}>我的地点</button> : null}
             <button type="button" onClick={() => { setMenu(false); setPastOpen(true); }}>以前的场景</button>
+            <button type="button" onClick={() => { setMenu(false); setExtrasOpen(true); }}>番外故事</button>
             <button type="button" onClick={() => { setMenu(false); const v = !hideClock; setHideClock(v); saveStageSettings({ ...loadStageSettings(), hideClock: v }); }}>{hideClock ? "显示时间" : "隐藏时间"}</button>
             <button type="button" className="stg-cancel" onClick={() => setMenu(false)}>取消</button>
           </div>
@@ -290,6 +292,7 @@ export function StageHome({ onClose, onPlay, onReplay }: Props) {
       ) : null}
 
       {pastOpen ? <PastSheet onReplay={i => { setPastOpen(false); onReplay(i); }} onClose={() => setPastOpen(false)} onPlay={i => { setPastOpen(false); onPlay(i); }} /> : null}
+      {extrasOpen ? <ExtraStoriesSheet onClose={() => setExtrasOpen(false)} /> : null}
     </div>
   );
 }
@@ -676,5 +679,57 @@ function PastSheet({ onClose, onPlay, onReplay }: { onClose: () => void; onPlay:
       onTouchEnd={e => { const dx = e.changedTouches[0].clientX - touchX.current; if (dx < -40) setSwiped(s.chapterIndex); else if (dx > 30 && swiped === s.chapterIndex) setSwiped(null); }}><b>{s.title}</b><small>{new Date(s.scene.startAt).toLocaleString("zh-CN", { year: "numeric", month: "long", day: "numeric", hour: "2-digit", minute: "2-digit" })} · {s.scene.place} · {s.ended ? "已结束" : "进行中"}</small>{s.scene.summary ? <p>{s.scene.summary}</p> : null}<div className="stg-history-actions">{!s.ended ? <button onClick={() => onPlay(s.chapterIndex)}>继续这一场</button> : null}<button onClick={() => onReplay(s.chapterIndex)}>重播这一场</button><button onClick={() => onPlay(s.chapterIndex)}>回顾</button><button onClick={() => { void exportText(s.chapterIndex); }}>{copied === s.chapterIndex ? "已复制 ✓" : "导出文字"}</button></div></div></div>)}
     {matching.length > limit ? <button className="stg-history-more" onClick={() => setLimit(n => n + 20)}>加载更多（还有 {matching.length - limit} 场）</button> : null}
     {!matching.length ? <p className="stg-empty">{scenes.length ? "没有找到符合条件的场景" : "还没有过场景"}</p> : null}
+  </div></div>;
+}
+
+function ExtraStoriesSheet({ onClose }: { onClose: () => void }) {
+  const people = useMemo(() => loadAllCharacters().filter(c => c.id !== WORLD_CHAR_ID), []);
+  const [stories, setStories] = useState(() => loadStageExtras());
+  const [characterId, setCharacterId] = useState(people[0]?.id ?? "");
+  const [topic, setTopic] = useState("");
+  const [compose, setCompose] = useState(false);
+  const [selected, setSelected] = useState<ReturnType<typeof loadStageExtras>[number] | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+
+  const generate = async () => {
+    if (!characterId || busy) return;
+    setBusy(true);
+    setError("");
+    try {
+      const story = await createStageExtraStory(characterId, topic);
+      setStories(loadStageExtras());
+      setSelected(story);
+      setCompose(false);
+      setTopic("");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "番外生成失败");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return <div className="stg-mask stg-mask-top" onClick={onClose}><div className="stg-sheet stg-picker stg-extra-sheet" onClick={e => e.stopPropagation()}>
+    <div className="stg-picker-head"><b>此刻 · 番外故事</b><button type="button" className="stg-done" onClick={onClose}>完成</button></div>
+    {selected ? <>
+      <div className="stg-extra-subhead"><button type="button" onClick={() => setSelected(null)}>‹ 返回番外列表</button><small>{selected.characterName} · {new Date(selected.createdAt).toLocaleString("zh-CN", { month: "long", day: "numeric", hour: "2-digit", minute: "2-digit" })}</small></div>
+      <article className="stg-extra-story"><h2>{selected.title}</h2><p>{selected.content}</p></article>
+    </> : compose ? <>
+      <div className="stg-sec">
+        <div className="stg-sec-head">写一篇独立番外<small>角色在自己的生活里，不需要你出场；不会推进主线时间、关系或日程。</small></div>
+        {people.length ? <label className="stg-extra-label">主角<select className="stg-extra-select" value={characterId} onChange={e => setCharacterId(e.target.value)}>{people.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}</select></label> : <p className="stg-empty">当前没有可选角色。</p>}
+        <label className="stg-extra-label">想看的方向（可留空）<textarea className="stg-write-in stg-extra-input" value={topic} onChange={e => setTopic(e.target.value)} placeholder="例如：练习结束后，他一个人去便利店买夜宵" /></label>
+        {error ? <p className="stg-extra-error">{error}</p> : null}
+        <button type="button" className="stg-go" disabled={!characterId || busy} onClick={() => void generate()}>{busy ? "正在写番外…" : <><Sparkles size={16} /> 开始生成</>}</button>
+      </div>
+      <button type="button" className="stg-extra-back" onClick={() => { setCompose(false); setError(""); }}>返回番外列表</button>
+    </> : <>
+      <p className="stg-extra-note">看看角色在你不在场时的生活。番外单独保存，不会改变主线。</p>
+      <button type="button" className="stg-extra-new" onClick={() => setCompose(true)}><Sparkles size={17} /> 写一篇番外</button>
+      {stories.map(story => <button key={story.id} type="button" className="stg-extra-row" onClick={() => setSelected(story)}>
+        <BookOpen size={18} /><span><b>{story.title}</b><small>{story.characterName} · {new Date(story.createdAt).toLocaleDateString("zh-CN")}</small></span><ChevronLeft size={17} className="stg-extra-chevron" />
+      </button>)}
+      {!stories.length ? <p className="stg-empty">还没有番外，想看谁的故事就写一篇。</p> : null}
+    </>}
   </div></div>;
 }

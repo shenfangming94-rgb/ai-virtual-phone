@@ -16,6 +16,7 @@ import { chatNotice, noticeTime, recordScheduleReply } from "./idol-schedule-not
 import { loadMails, updateMail, recordMailReply, MAIL_EVENT } from "./idol-mail";
 import { simpleLLMCall } from "./api-helpers";
 import { loadApiConfigs, loadBindingConfig, resolveBinding, resolveUserIdentity } from "./settings-storage";
+import { idolLanguageHint } from "./idol-language";
 import { getChatPluginHookBus } from "./chat-plugin-hooks";
 import {
   acceptOffer, addToCalendar, companyOf, completeNode, declineOffer, loadCareer, saveCareer,
@@ -253,7 +254,7 @@ async function sendAs(charId: string, instruction: string, strictPersona = false
   if (strictPersona) return null;
   const me = resolveUserIdentity(charId, "chat")?.name || "她";
   const res = await simpleLLMCall(chatConfig(), [
-    { role: "system", content: `你是${char.name}。${char.persona}\n\n你在 KakaoTalk 上给${me}发私聊消息。只输出要发的消息本身，一到三条，每条一行，口语，不要旁白、不要引号。` },
+    { role: "system", content: `你是${char.name}。${char.persona}${idolLanguageHint([{ id: char.id, name: char.name }])}\n\n你在 KakaoTalk 上给${me}发私聊消息。只输出要发的消息本身，一到三条，每条一行，口语，不要旁白、不要引号。每句先用角色应说的语言写原文（韩国日常对话默认韩语），再写「 | 」和对应的简体中文翻译；不能只写中文，也不要把两种语言混在原文里。` },
     { role: "user", content: instruction },
   ], { temperature: 0.85, label: "有人来找你" });
   const lines = (res.content || "").split("\n").map(l => l.trim().replace(/^["「]|["」]$/g, "")).filter(Boolean).slice(0, 3);
@@ -385,7 +386,7 @@ export function buildIdolChatHint(characterId: string, isGroup: boolean): string
   const out: string[] = [romanceActorHint(characterId)];
   const intent = proactive.get(characterId);
   if (intent) {
-    out.push("### 这一条是你主动发的", "她没有给你发消息，是你自己想找她：", intent);
+    out.push("### 这一条是你主动发的", "她没有给你发消息，是你自己想找她：", intent, "主动 KakaoTalk 消息的双语格式：每句先用角色应说的语言写原文（韩国日常对话默认韩语），再写「 | 」和对应的简体中文翻译；不能只写中文，也不要把两种语言混在原文里。");
   }
   const now = Date.now();
   const teacher = teacherOf();

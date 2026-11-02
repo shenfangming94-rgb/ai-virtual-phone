@@ -332,12 +332,17 @@ ${CALM_LINE}
     dbUpsert(COL.meta, { id: "debug_log", entries: S.debug }).catch(() => {});
   }
   async function generate(charIds, scene, instruction, label, opts = {}) {
-    if (!charIds.length) { toast("没有参与的角色：先去微信加个好友，或者在设置里打开"); return null; }
     const job = uid("job"); S.jobs.add(job); refreshAll();
     try {
       const wx = scene === "groupsearch" ? "" : await weatherLine();
-      const payload = { appTags: ["nox_douban", scene], ...(opts.vision ? { appMessages: opts.vision } : {}), instruction: [opts.rule === false ? CALM_LINE : DOUBAN_RULE, WHO_LINE(), wx, instruction, "【输出要求】只输出本轮说明要求的块，字段名照抄，不要解释、不要旁白、不要 markdown。"].join("\n\n") };
-      const r = await api.ai.generate(charIds.length === 1 ? { ...payload, characterId: charIds[0] } : { ...payload, characterIds: charIds });
+      const noParticipants = charIds.length === 0;
+      const payload = { appTags: ["nox_douban", scene], ...(opts.vision ? { appMessages: opts.vision } : {}), instruction: [opts.rule === false ? CALM_LINE : DOUBAN_RULE, WHO_LINE(), wx, noParticipants ? "本轮没有选择任何已知角色参与：只生成普通豆友和路人内容；不能让任何角色本人出现、发言或被提及。" : "", instruction, "【输出要求】只输出本轮说明要求的块，字段名照抄，不要解释、不要旁白、不要 markdown。"].filter(Boolean).join("\n\n") };
+      const request = charIds.length === 1
+        ? { ...payload, characterId: charIds[0] }
+        : charIds.length
+          ? { ...payload, characterIds: charIds }
+          : { ...payload, neutral: true };
+      const r = await api.ai.generate(request);
       const text = (r && r.text) || ""; logAi({ label, ok: true, text }); return text;
     } catch (e) {
       console.error(e); logAi({ label, ok: false, error: String((e && e.message) || e) }); toast(`${label}失败：${(e && e.message) || e}`.slice(0, 60)); return null;

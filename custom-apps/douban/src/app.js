@@ -275,7 +275,8 @@ ${CALM_LINE}
   const userLine = () => USER_LINE.replace("${herName()}", herName());
   /** 爱豆小手机：宿主写进来的 idol_mode（谁是公众人物由世界算；公众人物角色在豆瓣只用匿名小号） */
   const altOnly = id => !!(S.idol && S.idol.altOnly && (S.idol.publicChars || []).includes(id));
-  const publicLine = () => { const list = [...activeChars().filter(c => (S.meta.publicChars || []).includes(c.id)).map(c => S.idol ? `${c.name}（角色，出道爱豆；他在豆瓣只用匿名小号，豆友不知道是他，他自己的楼不会暴露身份、不聊自己是明星）` : `${c.name}（角色，豆瓣昵称「${charNick(c.id)}」）`), ...(S.meta.publicMe ? [`用户本人（${herName()}）`] : [])];
+  // 公众人物看全部角色：关了参与的人自己不来玩，但照样能被豆友当明星聊
+  const publicLine = () => { const list = [...S.chars.filter(c => (S.meta.publicChars || []).includes(c.id)).map(c => S.idol ? `${c.name}（角色，出道爱豆；他在豆瓣只用匿名小号，豆友不知道是他，他自己的楼不会暴露身份、不聊自己是明星）` : `${c.name}（角色，豆瓣昵称「${charNick(c.id)}」）`), ...(S.meta.publicMe ? [`用户本人（${herName()}）`] : [])];
     return list.length ? `这个世界的公众人物（可以被大家当明星名人讨论）：${list.join("、")}。${userLine()}` : "这个世界里没有公众人物：角色和用户都不会被当成明星讨论。"; };
   /** 熟人组：组里的人现实中认识角色和用户（同校、同城、同公司），不是公众人物也会被聊到 */
   const localLine = g => g && g.local ? `这是熟人组：组里的人现实中认识这些人（同校、同城、同事），会聊到他们、八卦他们：${[...activeChars().map(c => c.name), `用户（${herName()}）`].join("、")}。他们本人这次不一定出场。组里的人认识用户（${herName()}，豆瓣昵称「${S.meta.nickname}」），聊到她可以用名字，也可以用大家对她的叫法（按人设和世界书里她的身份来，不要自己编身份）。${userLine()}` : "";
@@ -326,7 +327,7 @@ ${CALM_LINE}
   const WHO_LINE = () => `用户的豆瓣昵称是「${S.meta.nickname}」，真名「${herName()}」${S.meta.ip ? `，IP 属地 ${S.meta.ip}` : ""}：你写的豆友不能用这两个名字。${activeChars().length ? `认识的角色（他们的豆瓣昵称${activeChars().some(c => charIp(c.id)) ? "、IP 属地" : ""}）：${activeChars().map(c => `${c.name}「${charNick(c.id)}」${charIp(c.id) ? ` ${charIp(c.id)}` : ""}`).join("、")}，豆友不能撞这些名字；角色出场时 IP 照这里写。` : ""}`;
 
   /** 借来的角色资料只是世界背景（宿主规定调用必须带一个角色）：没轮到出场的人不许出现，也不许被提起 */
-  const bgLine = (appear, g) => `【这次谁出场】${appear.length ? `只有 ${appear.map(c => c.name).join("、")} 可以出场（按下面说的方式）。` : "这次没有任何角色出场。"}${g && g.local ? "其他角色本人不出现（不发帖不回帖），但这是熟人组，豆友可以聊到、八卦他们（见下面）。" : "你拿到的角色人设、世界书、记忆只是这个世界的背景：其他角色本人不出现，豆友也不认识他们，不要提他们的名字、外号、身份（比如「X姐」「班长」），也不要编和他们有关的人和事。豆友都是普通路人，聊的是自己的事。"}`;
+  const bgLine = (appear, g) => `【这次谁出场】${appear.length ? `只有 ${appear.map(c => c.name).join("、")} 可以出场（按下面说的方式）。` : "这次没有任何角色出场。"}${g && g.local ? "其他角色本人不出现（不发帖不回帖），但这是熟人组，豆友可以聊到、八卦他们（见下面）。" : "你拿到的角色人设、世界书、记忆只是这个世界的背景：其他角色本人不出现，豆友也不认识他们，不要提他们的名字、外号、身份（比如「X姐」「班长」），也不要编和他们有关的人和事（下面列出的公众人物除外，可以被当明星聊）。豆友都是普通路人，聊的是自己的事。"}`;
   function logAi(entry) {
     S.debug = [{ at: nowIso(), ...entry, text: String(entry.text || "").slice(0, 6000) }, ...S.debug].slice(0, 10);
     dbUpsert(COL.meta, { id: "debug_log", entries: S.debug }).catch(() => {});

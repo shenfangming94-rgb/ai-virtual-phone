@@ -325,6 +325,8 @@
           cursor: pointer;
           transition: all 0.2s;
         }
+        .vn-side-btn { margin-left: auto; }
+        .vn-side-btn:disabled { cursor: default; }
         .vn-mode-btn[data-active="true"] {
           background: var(--vn-ui-accent-bg);
           color: var(--vn-ui-input-text);

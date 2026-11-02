@@ -36,7 +36,7 @@ import { loadApiConfigs, loadBindingConfig, resolveBinding } from "./settings-st
 export const WORLD_CHAR_ID = HIDDEN_WORLD_CHAR_ID;
 const META_KEY = "idol_scene_meta_v1";
 
-export type SceneMeta = { place: string; premise: string; startAt: number; newFaces: string[]; ended?: boolean; summary?: string; nodeId?: string; /** 谁在交给世界 */ open?: boolean; /** 不想碰见的人（名字） */ avoid?: string[] };
+export type SceneMeta = { place: string; premise: string; startAt: number; newFaces: string[]; ended?: boolean; summary?: string; nodeId?: string; /** 谁在交给世界 */ open?: boolean; /** 不想碰见的人（名字） */ avoid?: string[]; /** 番外：她不一定在场，看他们自己的视角；不拨世界时间、新人不进她的通讯录 */ side?: boolean };
 
 /** 她未成年：新出场、跟她有来往的男生大多跟她差不多大，年龄写进新人资料 */
 function peerAgeHint(): string {
@@ -239,6 +239,12 @@ export function applySceneTags(groupId: string, sessionId: string, tags: SceneTa
 }
 
 export function applySceneTagsTo(host: SceneHost, tags: SceneTags, introduction = ""): { added: string[]; notes: string[] } {
+  // 番外：不碰世界时间、不交换 KakaoTalk；新面孔是他们认识的人，不是她认识的
+  if (host.meta()?.side) {
+    if (tags.facts.length) addCompanyFacts(tags.facts);
+    addFaces(host, tags.newFaces, introduction, true);
+    return { added: [], notes: [] };
+  }
   const stopped = tags.minutes > 0 ? jumpWorld(Date.now() + tags.minutes * 60e3, { activeNodeId: host.meta()?.nodeId }) : "";
   if (tags.facts.length) addCompanyFacts(tags.facts);
   const added = addFaces(host, tags.newFaces, introduction);
@@ -259,7 +265,7 @@ export function applySceneTagsTo(host: SceneHost, tags: SceneTags, introduction 
   return { added, notes };
 }
 
-function addFaces(host: SceneHost, faces: SceneTags["newFaces"], introduction: string): string[] {
+function addFaces(host: SceneHost, faces: SceneTags["newFaces"], introduction: string, side = false): string[] {
   if (!faces.length) return [];
   const meta = host.meta() ?? { place: host.fallbackPlace, premise: "", startAt: Date.now(), newFaces: [] };
   const ids = [...host.ids()];
@@ -273,13 +279,13 @@ function addFaces(host: SceneHost, faces: SceneTags["newFaces"], introduction: s
       continue;
     }
     // 排过队的待出场人物：戏里真见了，拿预设资料合并，从队列里移除
-    const pending = takePendingFace(f.name);
+    const pending = side ? undefined : takePendingFace(f.name);
     const facts: ScenePersonFacts = {
       ...f.facts,
       ...(pending?.gender && !f.facts?.gender ? { gender: pending.gender } : {}),
       ...(pending?.age && !f.facts?.age ? { age: pending.age } : {}),
     };
-    const char = createPerson(f.name, { ...emptyProfile(""), layer: "background", role: f.role || pending?.role || "", ...facts, sceneFacts: facts, introducedIn: introduction.slice(0, 12000), met: true, metAt: { at: Date.now(), place: meta.place } }, null, genKakaoId());
+    const char = createPerson(f.name, { ...emptyProfile(""), layer: "background", role: f.role || pending?.role || "", ...facts, sceneFacts: facts, introducedIn: introduction.slice(0, 12000), ...(side ? { met: false } : { met: true, metAt: { at: Date.now(), place: meta.place } }) }, null, genKakaoId());
     ids.push(char.id);
     meta.newFaces.push(char.id);
     added.push(char.name);
@@ -305,9 +311,43 @@ export async function closeWorldScene(groupId: string, sessionId: string): Promi
   return closeSceneWith(storyHost(groupId, sessionId));
 }
 
+/** 番外计入主线：只记每个人自己经历了什么（进他的记忆），不动她的关注度、日程、练习，她没跟谁接触就不动关系 */
+async function closeSideScene(host: SceneHost, meta: SceneMeta): Promise<SceneCloseResult> {
+  const chars = loadCharacters();
+  const present = host.ids().filter(id => id !== WORLD_CHAR_ID).map(id => chars.find(c => c.id === id)).filter((c): c is Character => Boolean(c));
+  const transcript = host.transcript().slice(-12000);
+  const her = loadTraineeCard()?.name || "她";
+  const recorded: string[] = [];
+  let summary = "";
+  if (present.length && transcript) {
+    const res = await simpleLLMCall(chatConfig(), [
+      { role: "system", content: `把这场番外记下来。这一场是从他们自己的视角写的，${her}不一定在场：她没出现在现场就是不在，她通过 KakaoTalk 发消息只算手机上的来往。只输出 JSON：{"summary":"这场两三句，用名字","people":[{"name":"","event":"站在这个人的角度，这场他经历了什么，一句话；没什么事写空","relation":"up/down/same：只有这场里他真的跟${her}有来往（她在场或发了消息）才写，否则 same","heart":"同上","status":"这场之后他最近在忙什么，世界视角一句；没变写空","kakao":"他会写在 KakaoTalk 状态消息里的短句；没变写空"}]}` },
+      { role: "user", content: `地点：${meta.place}\n在场：${present.map(c => c.name).join("、")}\n\n${transcript}` },
+    ], { temperature: 0.4, label: "番外记账" });
+    if (!res.content) throw new Error(res.error || "AI 没回");
+    const j = JSON.parse(res.content.match(/\{[\s\S]*\}/)?.[0] ?? "{}") as { summary?: string; people?: { name?: string; event?: string; relation?: string; heart?: string; status?: string; kakao?: string }[] };
+    summary = String(j.summary ?? "");
+    for (const item of j.people ?? []) {
+      const c = present.find(x => x.name === item.name);
+      if (!c) continue;
+      const p = getProfile(c.id);
+      const event = String(item.event ?? "").trim();
+      const dir = (v?: string) => (v === "up" || v === "down" ? v : "same") as "up" | "down" | "same";
+      const stepped = p.met ? stepRelation({ ...p, relation: relationOf(p) }, dir(item.relation), dir(item.heart)) : p;
+      const st = String(item.status ?? "").trim();
+      const next = { ...stepped, ...(st ? { status: { text: st, kakao: String(item.kakao ?? "").trim() || p.status?.kakao || "", at: Date.now() } } : {}) };
+      if (event) { next.events = [...p.events, { id: uid("ev"), at: meta.startAt, place: meta.place, text: event }]; recorded.push(c.name); }
+      saveProfile(next);
+    }
+  }
+  host.saveMeta({ ...meta, ended: true, summary });
+  return { summary, recorded, firstMeet: [] };
+}
+
 export async function closeSceneWith(host: SceneHost): Promise<SceneCloseResult> {
   const meta = host.meta() ?? { place: host.fallbackPlace, premise: "", startAt: Date.now(), newFaces: [] };
   if (meta.ended) return { summary: meta.summary || "", recorded: [], firstMeet: [] };
+  if (meta.side) return closeSideScene(host, meta);
   const chars = loadCharacters();
   const present = host.ids().filter(id => id !== WORLD_CHAR_ID).map(id => chars.find(c => c.id === id)).filter((c): c is Character => Boolean(c));
   const transcript = host.transcript().slice(-12000);

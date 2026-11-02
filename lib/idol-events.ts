@@ -485,3 +485,9 @@ export function takeHappening(place: string, now = Date.now()): string | null {
   save({ ...s, happenings: s.happenings.map(x => x.id === h.id ? { ...x, opened: true } : x) });
   return `${h.seed}（这是世界上正在发生的事，她刚好走到这里：照这个现场写成真的在发生，人物照这里写的，不替她决定做什么，不提前定结果）`;
 }
+
+/** 番外不用掉「!」：切成番外时还回去，切回来再用掉 */
+export function setHappeningOpened(id: string, opened: boolean): void {
+  const s = load();
+  save({ ...s, happenings: s.happenings.map(h => h.id === id ? { ...h, opened } : h) });
+}

@@ -266,13 +266,18 @@ export function StageHome({ onClose, onPlay, onReplay }: Props) {
 
       {sheet ? (
         <PlaceSheet place={sheet} onClose={() => { setSheet(null); bump(n => n + 1); setBgmVer(v => v + 1); setPhotoVer(v => v + 1); }} onGo={(meet, avoid, extraPremise) => {
+          const t = Date.now();
+          const fateId = destinyMarks(t).find(m => m.place === sheet.key)?.id;
           const fate = takeDestinyMark(sheet.key);
           const act = activitiesToday().find(a => a.place === sheet.key);
           // 选了看活动就不碰淡粉「!」，它还挂着
-          const life = fate || goWith.current === "activity" ? null : takeHappening(sheet.key);
+          const lifeId = fate || goWith.current === "activity" ? undefined : happeningMarks(t).find(m => m.place === sheet.key)?.id;
+          const life = lifeId ? takeHappening(sheet.key) : null;
           const show = !fate && !life && act ? `今天这里在办：${act.title}${act.note ? `（${act.note}）` : ""}。照活动现场本身写` : null;
           const premise = [fate, life, show, extraPremise].filter(Boolean).join("；") || undefined;
-          const r = startStageScene({ placeKey: sheet.key, meetIds: meet, avoid, ...(premise ? { premise } : {}) });
+          // 记下用掉的「!」：开场切成番外时还回去
+          const taken = { ...(fate && fateId ? { fate: fateId } : {}), ...(life && lifeId ? { life: lifeId } : {}), ...(extraPremise ? { extra: extraPremise } : {}), ...(premise ? { premise } : {}) };
+          const r = startStageScene({ placeKey: sheet.key, meetIds: meet, avoid, ...(premise ? { premise } : {}), taken });
           setSheet(null);
           if (r) onPlay(r.chapterIndex);
         }} />
@@ -679,6 +684,8 @@ export function SongPicker({ chosen, onClose, onAdd }: { chosen: BgmSong[]; onCl
 function PastSheet({ onClose, onPlay, onReplay }: { onClose: () => void; onPlay: (i: number) => void; onReplay: (i: number) => void }) {
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<"all" | "open" | "ended">("all");
+  // 主线和番外分开放
+  const [tab, setTab] = useState<"main" | "side">("main");
   const [limit, setLimit] = useState(20);
   // 左滑一张卡露出「删除」
   const [swiped, setSwiped] = useState<number | null>(null);
@@ -703,15 +710,16 @@ function PastSheet({ onClose, onPlay, onReplay }: { onClose: () => void; onPlay:
       window.alert("复制失败，可能是浏览器没给剪贴板权限");
     }
   };
-  const matching = scenes.filter(s => (filter === "all" || (filter === "ended") === s.ended) && `${s.title} ${s.subtitle || ""} ${s.scene.place} ${s.scene.summary || ""} ${new Date(s.scene.startAt).toLocaleDateString("zh-CN")}`.toLowerCase().includes(query.trim().toLowerCase()));
+  const matching = scenes.filter(s => (tab === "side") === Boolean(s.scene.side) && (filter === "all" || (filter === "ended") === s.ended) && `${s.title} ${s.subtitle || ""} ${s.scene.place} ${s.scene.summary || ""} ${new Date(s.scene.startAt).toLocaleDateString("zh-CN")}`.toLowerCase().includes(query.trim().toLowerCase()));
   return <div className="stg-mask" onClick={onClose}><div className="stg-sheet stg-picker" onClick={e => e.stopPropagation()}>
     <div className="stg-picker-head"><b>{STAGE_APP_NAME} · 以前的场景</b><button type="button" className="stg-done" onClick={onClose}>完成</button></div>
     <div className="stg-search"><Search size={15} /><input aria-label="搜索场景" value={query} placeholder="搜索地点、事情、日期" onChange={e => { setQuery(e.target.value); setLimit(20); }} /></div>
+    <div className="stg-history-tabs">{([["main", "主线"], ["side", "番外"]] as const).map(([key, name]) => <button key={key} data-on={tab === key || undefined} onClick={() => { setTab(key); setLimit(20); }}>{name}</button>)}</div>
     <div className="stg-history-filters">{([["all", "全部"], ["open", "进行中"], ["ended", "已结束"]] as const).map(([key, name]) => <button key={key} data-on={filter === key || undefined} onClick={() => { setFilter(key); setLimit(20); }}>{name}</button>)}</div>
     {matching.slice(0, limit).map(s => <div className="stg-history-row" key={s.chapterIndex}><button type="button" className="stg-history-del" onClick={() => remove(s.chapterIndex)}>删除</button><div className="stg-history-card" data-swiped={swiped === s.chapterIndex || undefined}
       onTouchStart={e => { touchX.current = e.touches[0].clientX; }}
-      onTouchEnd={e => { const dx = e.changedTouches[0].clientX - touchX.current; if (dx < -40) setSwiped(s.chapterIndex); else if (dx > 30 && swiped === s.chapterIndex) setSwiped(null); }}><b>{s.title}</b><small>{new Date(s.scene.startAt).toLocaleString("zh-CN", { year: "numeric", month: "long", day: "numeric", hour: "2-digit", minute: "2-digit" })} · {s.scene.place} · {s.ended ? "已结束" : "进行中"}</small>{s.scene.summary ? <p>{s.scene.summary}</p> : null}<div className="stg-history-actions">{!s.ended ? <button onClick={() => onPlay(s.chapterIndex)}>继续这一场</button> : null}<button onClick={() => onReplay(s.chapterIndex)}>重播这一场</button><button onClick={() => onPlay(s.chapterIndex)}>回顾</button><button onClick={() => { void exportText(s.chapterIndex); }}>{copied === s.chapterIndex ? "已复制 ✓" : "导出文字"}</button></div></div></div>)}
+      onTouchEnd={e => { const dx = e.changedTouches[0].clientX - touchX.current; if (dx < -40) setSwiped(s.chapterIndex); else if (dx > 30 && swiped === s.chapterIndex) setSwiped(null); }}><b>{s.title}</b><small>{new Date(s.scene.startAt).toLocaleString("zh-CN", { year: "numeric", month: "long", day: "numeric", hour: "2-digit", minute: "2-digit" })} · {s.scene.place} · {s.ended ? (s.scene.side ? (s.scene.sideCounted ? "计入了主线" : "没计入主线") : "已结束") : "进行中"}</small>{s.scene.summary ? <p>{s.scene.summary}</p> : null}<div className="stg-history-actions">{!s.ended ? <button onClick={() => onPlay(s.chapterIndex)}>继续这一场</button> : null}<button onClick={() => onReplay(s.chapterIndex)}>重播这一场</button><button onClick={() => onPlay(s.chapterIndex)}>回顾</button><button onClick={() => { void exportText(s.chapterIndex); }}>{copied === s.chapterIndex ? "已复制 ✓" : "导出文字"}</button></div></div></div>)}
     {matching.length > limit ? <button className="stg-history-more" onClick={() => setLimit(n => n + 20)}>加载更多（还有 {matching.length - limit} 场）</button> : null}
-    {!matching.length ? <p className="stg-empty">{scenes.length ? "没有找到符合条件的场景" : "还没有过场景"}</p> : null}
+    {!matching.length ? <p className="stg-empty">{tab === "side" && !scenes.some(s => s.scene.side) ? "还没有番外：进一场戏，在输入框那里点「番外」" : scenes.length ? "没有找到符合条件的场景" : "还没有过场景"}</p> : null}
   </div></div>;
 }

@@ -26,7 +26,7 @@ import { resolveVnAssetMap, loadVnScenes, getVnSceneLayout, getVnSpriteLayout } 
 import { resolveUserIdentity } from "@/lib/settings-storage";
 import type { VnFrame, VnOptions, VnBeat } from "@/lib/vn-types";
 import { splitBilingualText } from "@/lib/bilingual-text";
-import { loadStageSettings, placeByKey, saveStageSettings, addBackground, addCustomPlace, allMaps, pickBackground, placeBackgrounds, resolveStageBgMap, thumbsOf, chapterIdOf, chapterSummaries, closeStageScene, editSummary, getStageScene, mergeSummaries, placeLocked, setBigSummary, writeSummaryFor } from "@/lib/idol-stage";
+import { loadStageSettings, placeByKey, saveStageSettings, addBackground, addCustomPlace, allMaps, pickBackground, placeBackgrounds, resolveStageBgMap, thumbsOf, chapterIdOf, chapterSummaries, closeStageScene, closeStageSideOnly, setStageSide, editSummary, getStageScene, mergeSummaries, placeLocked, setBigSummary, writeSummaryFor } from "@/lib/idol-stage";
 import { jumpWorld } from "@/lib/idol-reminders";
 import { fmtWorld } from "@/lib/idol-scenes";
 import { subscribeWorldClock } from "@/lib/world-clock";
@@ -104,6 +104,18 @@ async function dataUrlToBlob(dataUrl: string): Promise<Blob> {
 
 export function VnPlayer({ characterId, chapterIndex, onClose, onChapterEnd, vnTheme, stage, onStageReplay }: VnPlayerProps) {
   const stageScene = useMemo(() => (stage ? getStageScene(chapterIdOf(chapterIndex) ?? "") : null), [stage, chapterIndex]);
+  // 番外：开场时在输入框那里选；演完问要不要计入主线
+  const [sideOn, setSideOn] = useState(() => Boolean(stageScene?.side));
+  const [sideOnlyEnd, setSideOnlyEnd] = useState(false);
+  const toggleSide = () => {
+    const v = !sideOn;
+    const taken = setStageSide(chapterIndex, v);
+    if (!taken) return;
+    // 番外不用掉「!」：还回去；切回来再用掉
+    if (taken.fate) void import("@/lib/idol-destiny").then(m => m.setDestinyOpened(taken.fate!, !v));
+    if (taken.life) void import("@/lib/idol-events").then(m => m.setHappeningOpened(taken.life!, !v));
+    setSideOn(v);
+  };
   const [stageOpening, setStageOpening] = useState(false);
   const [stageEnd, setStageEnd] = useState<null | "working" | SceneCloseResult | { error: string }>(null);
   const [stageToast, setStageToast] = useState("");
@@ -1224,6 +1236,17 @@ export function VnPlayer({ characterId, chapterIndex, onClose, onChapterEnd, vnT
                       场外
                     </button>
                   )}
+                  {stage && stageScene && !stageScene.nodeId && (sideOn || !allFrames.length) && (
+                    <button
+                      className="vn-mode-btn vn-side-btn"
+                      data-active={sideOn ? "true" : undefined}
+                      disabled={allFrames.length > 0}
+                      onClick={toggleSide}
+                      title="番外：你不一定在场，看他们自己的故事"
+                    >
+                      番外
+                    </button>
+                  )}
                 </div>
                 <div className="vn-input-row">
                   <textarea
@@ -1516,7 +1539,7 @@ export function VnPlayer({ characterId, chapterIndex, onClose, onChapterEnd, vnT
         <div className="vn-end" onClick={(e) => e.stopPropagation()}>
           <div className="vn-end-line" />
           <div className="vn-end-text">
-            {isArchiving ? "归档中..." : stage ? "结束这一场？在场的人会各记一笔" : "是否决定完结该章节并归档？"}
+            {isArchiving ? "归档中..." : stage && sideOn ? "这场番外演完了，要计入主线吗？" : stage ? "结束这一场？在场的人会各记一笔" : "是否决定完结该章节并归档？"}
           </div>
           <div className="vn-end-line" />
           {!isArchiving && (
@@ -1524,6 +1547,14 @@ export function VnPlayer({ characterId, chapterIndex, onClose, onChapterEnd, vnT
               <button className="vn-end-btn" onClick={() => setShowArchiveConfirm(false)}>
                 返回
               </button>
+              {stage && sideOn ? (
+                <button className="vn-end-btn" onClick={() => {
+                  closeStageSideOnly(chapterIndex);
+                  setShowArchiveConfirm(false);
+                  setSideOnlyEnd(true);
+                  setStageEnd({ summary: "", recorded: [], firstMeet: [] });
+                }}>不计入</button>
+              ) : null}
               <button
                 className="vn-end-btn"
                 style={{ background: "rgba(255,255,255,0.12)", color: "rgba(255,255,255,0.85)" }}
@@ -1544,7 +1575,7 @@ export function VnPlayer({ characterId, chapterIndex, onClose, onChapterEnd, vnT
                   onChapterEnd();
                 }}
               >
-                确认
+                {stage && sideOn ? "计入主线" : "确认"}
               </button>
             </div>
           )}
@@ -1686,16 +1717,16 @@ export function VnPlayer({ characterId, chapterIndex, onClose, onChapterEnd, vnT
             </>
           ) : (
             <>
-              <div className="vn-end-text">这一场结束了</div>
+              <div className="vn-end-text">{sideOnlyEnd ? "番外结束了，没有计入主线" : sideOn ? "番外计入主线了" : "这一场结束了"}</div>
               {stageEnd.summary ? <div className="vn-stage-sum">{stageEnd.summary}</div> : null}
               {stageEnd.recorded.length ? <div className="vn-stage-sub">{stageEnd.recorded.join("、")}{stageEnd.recorded.length > 1 ? "各" : ""}记了一笔{stageEnd.firstMeet.length ? `；${stageEnd.firstMeet.join("、")}是第一次见你` : ""}</div> : null}
               {stageEnd.milestone ? <div className="vn-stage-sub">🎉 {stageEnd.milestone}</div> : null}
-              <button className="vn-end-btn vn-stage-merge" disabled={Boolean(noteBusy)} onClick={async () => {
+              {!sideOnlyEnd ? <button className="vn-end-btn vn-stage-merge" disabled={Boolean(noteBusy)} onClick={async () => {
                 setNoteBusy("合成中…");
                 try { await mergeSummaries(chapterIndex); setNotesVer(v => v + 1); setNotesOpen(true); }
                 catch (err) { showStageToast(err instanceof Error ? err.message : String(err)); }
                 finally { setNoteBusy(""); }
-              }}>{noteBusy || "把小总结合成一段大总结"}</button>
+              }}>{noteBusy || "把小总结合成一段大总结"}</button> : null}
               {onStageReplay ? <button className="vn-end-btn vn-stage-merge" onClick={onStageReplay}>重播这一场</button> : null}
               <div className="vn-stage-jumps">
                 <button className="vn-end-btn" onClick={() => { onChapterEnd(); }}>就这样</button>

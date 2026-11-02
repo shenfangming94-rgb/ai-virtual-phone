@@ -325,6 +325,10 @@ export type StageScene = SceneMeta & {
   ids: string[];
   /** 不想碰见的人（名字） */
   avoid?: string[];
+  /** 番外演完她选了计入主线（没选的不进记忆） */
+  sideCounted?: boolean;
+  /** 进来时用掉的「!」和她自己写的开头：切成番外时把「!」还回去 */
+  taken?: { fate?: string; life?: string; extra?: string; premise?: string };
   /** 结束后她点了「合成大总结」：短期记忆里用这一段代替每段的小总结 */
   bigSummary?: string;
   /** 每个人在第几段出场、第几段离场（段 = AI 的第几次回复，从 0 数）；只记得在场那几段 */
@@ -348,7 +352,7 @@ export function worldVnSession(): VnSession {
 }
 
 /** 开一场：新的一章 + 记下时间地点。不写开场，等她说第一句 */
-export function startStageScene(opts: { placeKey: string; placeName?: string; meetIds?: string[]; avoid?: string[]; nodeId?: string; premise?: string }): { chapterIndex: number; scene: StageScene } | null {
+export function startStageScene(opts: { placeKey: string; placeName?: string; meetIds?: string[]; avoid?: string[]; nodeId?: string; premise?: string; taken?: StageScene["taken"] }): { chapterIndex: number; scene: StageScene } | null {
   ensureWorldCharacter();
   const session = worldVnSession();
   const node = opts.nodeId ? nodeById(opts.nodeId) : undefined;
@@ -361,6 +365,7 @@ export function startStageScene(opts: { placeKey: string; placeName?: string; me
     chapterId: ch.id, bg: opts.placeKey, ids,
     place, premise: (opts.premise ?? node?.premise ?? "").trim(), startAt: Date.now(), newFaces: [],
     ...(opts.nodeId ? { nodeId: opts.nodeId } : {}),
+    ...(opts.taken ? { taken: opts.taken } : {}),
     ...(ids.length === 1 ? { open: true } : {}),
     ...(opts.avoid?.length ? { avoid: opts.avoid } : {}),
   };
@@ -495,21 +500,26 @@ function stageWritingRules(scene: StageScene, places: string[]): string {
   const pendingLine = pending.length
     ? `- 这些人在等出场：${pending.map(x => `${x.name}${x.role ? `（${x.role}）` : ""}`).join("、")}。这一场可以自然安排其中合适的人出场（自我介绍、搭个话、一起练习），时间地点不合适就这场不出场。\n`
     : "";
+  const her = herName();
+  const side = scene.side
+    ? `- 这一场是番外：从在场人物自己的视角写他们的生活，${her}不一定在场。她没出现在这里时旁白不写她，也没人跟她说话。她的输入多半是「（场外指令：…）」，照着推进剧情。她也可能不在现场、通过 KakaoTalk 给某个人发消息：那是那个人手机上收到的消息，写他看到后的反应，她本人不出现在现场。她自己写了在场的对话或旁白，那就是她来了，照常用「你」称呼她。
+- 不用停下来等她：每次把剧情往前写一段，停在一个自然的地方。新出场的人是他们本来认识或刚认识的人，跟${her}不认识。`
+    : `- 整场戏都用「你」称呼${her}（第二人称）：旁白写到她时用「你」，不要用「她」称呼她；其他人物用名字或他/她（第三人称）。别人当面跟她说话时照常称呼她。`;
   return `【这一场的写法】（以这里为准，跟上面的漫卷格式冲突时听这里的）
-- 整场戏都用「你」称呼${herName()}（第二人称）：旁白写到她时用「你」，不要用「她」称呼她；其他人物用名字或他/她（第三人称）。别人当面跟她说话时照常称呼她。
+${side}
 - 这是一帧一帧往下走的场景，像文字冒险游戏。每次回复大约 ${st.words} 字，帧数不限。
 - 一帧最多 55 个字，一两句就翻下一帧；一句话没说完可以下一帧接着写，不用凑满。
 - 旁白写环境、动作、神态；每句台词单独一帧，写成 名字|"台词"。旁白里不许出现带引号的台词；动作写在台词前面的括号里，比如 名字|"（笑着）坐吧。"
 - 说话的人写他自己的名字，绝不写「世界」；没名字的路人写身份（店员、经纪人、粉丝）。
-- **绝不替你说话、不写你的动作和心理**。写到需要你回应的地方就停，最后一帧落在别人的话或一个需要你反应的情况上。
+- **绝不替${her}说话、不写她的动作和心理**。${scene.side ? "" : "写到需要你回应的地方就停，最后一帧落在别人的话或一个需要你反应的情况上。"}
 - 剧情要自己往前走：别人有自己的目的和情绪，会主动开口、提要求、出状况，不要只是等你。
-${pendingLine}${LANG_RULE[st.lang]}${st.style.trim() ? `\n- 文风：${st.style.trim()}` : ""}
+${scene.side ? "" : pendingLine}${LANG_RULE[st.lang]}${st.style.trim() ? `\n- 文风：${st.style.trim()}` : ""}
 - 这一场不用立绘：<scene> 里不写 sprite。
 - 有人离开这里了，回复最后另起一行写 [离场:名字]。
 - 她发「（场外指令：…）」时那是她在场外跟你说话，照着安排剧情，不要让剧情里的人听到或回应这句话。
 - 这一场要写小总结（跟上面说的禁止 <summary> 相反，以这里为准）：</content> 后面另起一行写 <summary>…</summary>。${summaryRule()}
 - bg 写地点：只能从这些里选（写原样）：${places.join("、")}。还在原地就不写 bg；走去别处了，第一帧写新地点的 bg。
-- ${herName()}刚到「${scene.place}」${scene.premise ? `，这一场是：${scene.premise}` : ""}。${scene.open ? "这会儿谁在这里交给你按时间地点判断。" : ""}`;
+- ${scene.side ? `这一场发生在「${scene.place}」` : `${her}刚到「${scene.place}」`}${scene.premise ? `，这一场是：${scene.premise}` : ""}。${scene.open ? "这会儿谁在这里交给你按时间地点判断。" : ""}`;
 }
 
 /** 结束这一场：记账（关系、记忆、想走、视频、主线完成）+ 归档这一章 */
@@ -518,8 +528,29 @@ export async function closeStageScene(chapterIndex: number): Promise<SceneCloseR
   const host = chId ? stageHost(chId) : null;
   if (!host) throw new Error("找不到这一场");
   const res = await closeSceneWith(host);
+  const sc = getStageScene(chId!);
+  if (sc?.side) saveStageScene({ ...sc, sideCounted: true });
   archiveChapter(worldVnSession().id, chapterIndex);
   return res;
+}
+
+/** 开场时切成番外 / 切回来：番外不用掉「!」，开头只留她自己写的；返回要还回去（或重新用掉）的「!」 */
+export function setStageSide(chapterIndex: number, on: boolean): StageScene["taken"] | null {
+  const chId = chapterIdOf(chapterIndex);
+  const scene = chId ? getStageScene(chId) : null;
+  if (!scene || scene.nodeId) return null;
+  const taken = scene.taken ?? { premise: scene.premise };
+  saveStageScene({ ...scene, side: on, taken, premise: on ? (taken.extra ?? "") : (taken.premise ?? scene.premise) });
+  return taken;
+}
+
+/** 番外演完不计入主线：不记账，只是归档 */
+export function closeStageSideOnly(chapterIndex: number): void {
+  const chId = chapterIdOf(chapterIndex);
+  const scene = chId ? getStageScene(chId) : null;
+  if (!scene) return;
+  saveStageScene({ ...scene, ended: true, sideCounted: false });
+  archiveChapter(worldVnSession().id, chapterIndex);
 }
 
 /** 删掉一整场：戏的内容和每段小总结一起删（短期记忆里也就没了）。从提醒事项进来、还没演完的那件事照旧是「还没演」 */
@@ -645,7 +676,7 @@ export function loadStageProjectionEntries(characterId: string, options?: { afte
   const out: { id: string; timestamp: string; content: string }[] = [];
   for (const ch of session.chapters) {
     const sc = all[ch.id];
-    if (!sc || !sc.ids.includes(characterId)) continue;
+    if (!sc || !sc.ids.includes(characterId) || (sc.side && !sc.sideCounted)) continue;
     const msgs = loadVnMessagesForChapter(session.id, ch.index).filter(m => m.role === "assistant");
     const push = (id: string, ts: string, text: string) => {
       if (options?.afterTimestamp && ts <= options.afterTimestamp) return;
@@ -671,7 +702,7 @@ export function personSceneText(characterId: string, name: string, max = 4000): 
   const blocks: string[] = [];
   for (const ch of session.chapters) {
     const sc = all[ch.id];
-    if (!sc || !(sc.ids.includes(characterId) || sc.newFaces?.includes(name))) continue;
+    if (!sc || !(sc.ids.includes(characterId) || sc.newFaces?.includes(name)) || (sc.side && !sc.sideCounted)) continue;
     const msgs = loadVnMessagesForChapter(session.id, ch.index);
     const lines: string[] = [];
     let prev = "";

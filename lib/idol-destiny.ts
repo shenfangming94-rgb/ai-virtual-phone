@@ -111,6 +111,14 @@ export function destinyAlbum(): ({ title: string; en: string; color: string; no:
 export function destinyMarks(now = Date.now()): { place: string; id: string }[] {
   return (load()?.cards ?? []).filter(c => c.via === "stage" && c.firedAt && !c.opened && c.place && (c.markUntil ?? 0) > now).map(c => ({ place: c.place!, id: c.id }));
 }
+/** 番外不用掉「!」：切成番外时还回去，切回来再用掉 */
+export function setDestinyOpened(id: string, opened: boolean): void {
+  const s = load();
+  const c = s?.cards.find(x => x.id === id);
+  if (!s || !c) return;
+  c.opened = opened;
+  save(s);
+}
 /** 点进去：开场用的那一句，记成已经去了 */
 export function takeDestinyMark(place: string): string | null {
   const s = load();

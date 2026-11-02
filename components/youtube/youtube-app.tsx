@@ -12,9 +12,9 @@ import {
 } from "lucide-react";
 
 import {
-  YT_EVENT, channelOf, channelWriting, cmtCountOf, commentsBusy, feedLoading, fillFeed, generateVideoImg, editVideoDesc, loadYt, moreComments, myComment,
+  YT_EVENT, channelOf, channelWriting, cmtCountOf, commentsBusy, feedLoading, fillFeed, generateVideoImg, editVideoDesc, editVideoCast, loadYt, moreComments, myComment,
   needsFeed, openHit, purgeVideo, searchYt, setMyHandle, setChannelAvatar, setMyAvatar, genAvatar, themeOf, toggleLike, toggleSub, viewsOf, visibleVideos, writeChannel,
-  type Channel, type Cmt, type Hit, type Img, type Video,
+  type CastRow, type Channel, type Cmt, type Hit, type Img, type Video,
 } from "@/lib/idol-youtube";
 import { loadMediaObjectUrl, isMediaStoreRef, storeMediaBlob } from "@/lib/media-cache-storage";
 import { loadPhotos } from "@/lib/album-store";
@@ -407,6 +407,7 @@ function Watch({ id, onBack, onChannel, onNotice }: { id: string; onBack: () => 
   const [sheet, setSheet] = useState(false);
   const [menu, setMenu] = useState(false);
   const [more, setMore] = useState(false);
+  const [castEdit, setCastEdit] = useState(false);
   if (!v) return <div className="yt-page"><Bar onBack={onBack} /><div className="yt-empty">视频不见了</div></div>;
   const ch = s.channels[v.ch];
   const subbed = s.subs.includes(v.ch);
@@ -429,7 +430,7 @@ function Watch({ id, onBack, onChannel, onNotice }: { id: string; onBack: () => 
           <div className="yt-sub">观看 {num(viewsOf(v))} 次 · {ago(v.at)} <em>{more ? "收起" : "...更多"}</em></div>
           {more ? <div className="yt-desc">{v.img.desc}</div> : null}
         </div>
-        {v.cast?.length ? <div className="yt-cast"><b>出镜</b>{v.cast.map((c, i) => <span key={i} className={c.me ? "me" : ""}>{c.pos} {c.name}</span>)}</div> : null}
+        {v.cast?.length ? <div className="yt-cast" onClick={() => v.mine && setCastEdit(true)}><b>出镜</b>{v.cast.map((c, i) => <span key={i} className={c.me ? "me" : ""}>{c.pos} {c.name}</span>)}{v.mine ? <PencilLine size={13} className="yt-cast-pen" /> : null}</div> : null}
         <div className="yt-ch">
           <button type="button" onClick={() => onChannel(v.ch)}><ChAvatar ch={ch} size={34} /><b>{ch?.name}</b><span>{num(ch?.subs ?? 0)}</span></button>
           <button type="button" className={`yt-subbtn${subbed ? " on" : ""}`} onClick={() => toggleSub(v.ch)}>{subbed ? "已订阅" : "订阅"}</button>
@@ -450,15 +451,41 @@ function Watch({ id, onBack, onChannel, onNotice }: { id: string; onBack: () => 
       {open ? <ImgViewer img={v.img} onClose={() => setOpen(false)}
         onGen={() => void generateVideoImg(v.id).catch(e => onNotice?.(e instanceof Error ? e.message : "生图失败"))}
         onSave={d => editVideoDesc(v.id, d)} /> : null}
+      {castEdit ? <CastEditor cast={v.cast ?? []} onClose={() => setCastEdit(false)} onSave={rows => { editVideoCast(v.id, rows); setCastEdit(false); onNotice?.("改好了，评论里的名字也换了"); }} /> : null}
       {menu ? (
         <div className="yt-sheet-bk" onClick={() => setMenu(false)}>
           <div className="yt-msheet" onClick={e => e.stopPropagation()}>
             <button type="button" onClick={() => { setMenu(false); setOpen(true); }}>看大图<small>在里面生成图片、编辑文字</small></button>
+            {v.mine ? <button type="button" onClick={() => { setMenu(false); setCastEdit(true); }}>编辑出镜<small>名字改了，评论里的也一起换</small></button> : null}
             <button type="button" className="red" onClick={() => { purgeVideo(v.id); setMenu(false); onNotice?.("彻底删掉了，当它没发生过"); onBack(); }}>彻底删除<small>当它没发生过，记忆里也不留</small></button>
             <button type="button" onClick={() => setMenu(false)}>取消</button>
           </div>
         </div>
       ) : null}
+    </div>
+  );
+}
+
+// ── 编辑出镜：AI 写错名字时她自己改 ──
+
+function CastEditor({ cast, onSave, onClose }: { cast: CastRow[]; onSave: (rows: CastRow[]) => void; onClose: () => void }) {
+  const [rows, setRows] = useState<CastRow[]>(() => cast.map(c => ({ ...c })));
+  const set = (i: number, p: Partial<CastRow>) => setRows(r => r.map((x, j) => j === i ? { ...x, ...p } : x));
+  return (
+    <div className="yt-sheet-bk" onClick={onClose}>
+      <div className="yt-msheet yt-castedit" onClick={e => e.stopPropagation()}>
+        <div className="yt-castedit-head"><button type="button" onClick={onClose}>取消</button><b>编辑出镜</b><button type="button" className="on" onClick={() => onSave(rows)}>保存</button></div>
+        {rows.map((c, i) => (
+          <div key={i} className="yt-castedit-row">
+            <input value={c.pos} onChange={e => set(i, { pos: e.target.value })} placeholder="位置" />
+            {c.me ? <span className="me">你</span> : <input value={c.name} onChange={e => set(i, { name: e.target.value })} placeholder="名字" />}
+            <button type="button" className={c.me ? "on" : ""} onClick={() => set(i, c.me ? { me: false, name: "" } : { me: true, name: "你" })}>是我</button>
+            <button type="button" onClick={() => setRows(r => r.filter((_, j) => j !== i))}><X size={16} /></button>
+          </div>
+        ))}
+        <button type="button" className="yt-castedit-add" onClick={() => setRows(r => [...r, { pos: "", name: "" }])}>加一个人</button>
+        <small>名字改了，标题、画面和评论里的旧名字会一起换掉</small>
+      </div>
     </div>
   );
 }

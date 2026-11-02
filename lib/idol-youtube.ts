@@ -10,8 +10,8 @@
 
 import { kvGet, kvSet } from "./kv-db";
 import { simpleLLMCall } from "./api-helpers";
-import { loadApiConfigs, loadBindingConfig, resolveBinding } from "./settings-storage";
-import { loadCharacters } from "./character-storage";
+import { loadApiConfigs, loadBindingConfig, resolveBinding, resolveUserIdentity } from "./settings-storage";
+import { HIDDEN_WORLD_CHAR_ID as WORLD_CHAR_ID, loadCharacters } from "./character-storage";
 import { loadProfiles } from "./idol-people";
 import { loadTraineeCard } from "./trainee-card";
 import { idolWorldPrompt } from "./idol-worldbook";
@@ -138,13 +138,17 @@ export function recordSceneVideo(v: SceneVideo, sceneAt: number): void {
   const companyId = loadCareer().companyId;
   if (!companyId || !v.title || !v.img) return;
   const me = loadTraineeCard()?.name ?? "";
+  const vn = resolveUserIdentity(WORLD_CHAR_ID, "vn")?.name?.trim() ?? "";
   const chars = loadCharacters();
+  // AI 偶尔把她的姓写错：名一样、又不是别的角色，也认成她
+  const given = (n: string) => n.length >= 3 ? n.slice(1) : n;
+  const isHer = (n: string) => n === "你" || n === "她" || [me, vn].some(x => x && (n === x || (given(n) === given(x) && n.length === x.length && !chars.some(c => c.name === n))));
   patch(s => {
     const ch = companyChannel(s, companyId);
     const target = myVideoViews(`${v.title}${sceneAt}`, ch.subs);
     const cast: CastRow[] = (v.cast ?? []).filter(c => c?.name).map(c => {
       const name = String(c.name).trim();
-      const isMe = name === me || name === "你" || name === "她";
+      const isMe = isHer(name);
       return { pos: String(c.pos ?? "").trim(), name: isMe ? "你" : name, ...(isMe ? { me: true } : {}), ...(!isMe ? { charId: chars.find(x => x.name === name)?.id } : {}) };
     });
     const video: Video = {
@@ -354,6 +358,20 @@ export function toggleLike(videoId: string) { patch(s => ({ ...s, videos: s.vide
 
 /** 彻底删除：当它没发生过 */
 export function purgeVideo(id: string) { patch(s => ({ ...s, videos: s.videos.filter(v => v.id !== id) })); }
+/** 改出镜：名字改了，标题、画面、评论里的旧名字一起换掉 */
+export function editVideoCast(id: string, cast: CastRow[]): void {
+  const old = loadYt().videos.find(v => v.id === id);
+  if (!old) return;
+  const me = loadTraineeCard()?.name || "你";
+  const named = (c: CastRow) => c.me ? me : c.name;
+  const renames = (old.cast ?? []).map((c, i) => [named(c), cast[i] ? named(cast[i]) : ""] as const).filter(([a, b]) => a && b && a !== b && a !== "你");
+  const fix = (t?: string) => t == null ? t : renames.reduce((x, [a, b]) => x.split(a).join(b), t);
+  const fixC = (c: Cmt): Cmt => ({ ...c, text: fix(c.text)!, zh: fix(c.zh), ...(c.replies ? { replies: c.replies.map(fixC) } : {}) });
+  const chars = loadCharacters();
+  const rows = cast.filter(c => c.name.trim() || c.me).map(c => c.me ? { pos: c.pos.trim(), name: "你", me: true } : { pos: c.pos.trim(), name: c.name.trim(), charId: chars.find(x => x.name === c.name.trim())?.id });
+  patch(s => ({ ...s, videos: s.videos.map(v => v.id !== id ? v : { ...v, cast: rows, title: fix(v.title)!, titleZh: fix(v.titleZh), img: { ...v.img, desc: fix(v.img.desc)! }, cmts: v.cmts.map(fixC) }) }));
+}
+
 export function editVideoDesc(id: string, desc: string) { patch(s => ({ ...s, videos: s.videos.map(v => v.id === id ? { ...v, img: { ...v.img, desc } } : v) })); }
 export async function generateVideoImg(id: string): Promise<void> {
   const v = loadYt().videos.find(x => x.id === id);

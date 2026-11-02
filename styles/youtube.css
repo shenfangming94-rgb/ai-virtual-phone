@@ -107,6 +107,21 @@
 .yt-cast b { font-weight: 600; margin-right: 2px; }
 .yt-cast span { background: #f2f2f2; border-radius: 6px; padding: 3px 6px; font-size: 12px; }
 .yt-cast span.me { background: #fdecef; color: #c2185b; font-weight: 600; }
+.yt-cast-pen { color: #909090; margin-left: 2px; }
+.yt-castedit { padding-top: 4px; }
+.yt-castedit-head { display: flex; align-items: center; justify-content: space-between; padding: 8px 16px 12px; }
+.yt-castedit-head b { font-size: 16px; font-weight: 600; }
+.yt-castedit-head button { font-size: 15px; color: #606060 !important; }
+.yt-castedit-head button.on { color: #065fd4 !important; font-weight: 600; }
+.yt-castedit-row { display: flex; align-items: center; gap: 8px; padding: 6px 16px; }
+.yt-castedit-row input { min-width: 0; height: 38px; padding: 0 10px; border: 1px solid #e5e5e5; border-radius: 8px; font: inherit; font-size: 15px; background: #f8f8f8; }
+.yt-castedit-row input:first-child { width: 72px; flex: none; }
+.yt-castedit-row input:nth-child(2), .yt-castedit-row .me { flex: 1; }
+.yt-castedit-row .me { height: 38px; display: flex; align-items: center; padding: 0 10px; border-radius: 8px; background: #fdecef; color: #c2185b; font-weight: 600; font-size: 15px; }
+.yt-castedit-row button { flex: none; height: 32px; padding: 0 10px !important; border-radius: 16px; font-size: 13px; color: #606060 !important; background: #f2f2f2 !important; display: flex; align-items: center; }
+.yt-castedit-row button.on { background: #fdecef !important; color: #c2185b !important; font-weight: 600; }
+.yt-castedit-add { display: block; margin: 8px 16px 0; padding: 10px !important; width: calc(100% - 32px); border-radius: 10px; background: #f2f2f2 !important; font-size: 14px; }
+.yt-castedit > small { display: block; text-align: center; margin-top: 10px; font-size: 12px; color: #909090; }
 .yt-ch { display: flex; align-items: center; gap: 10px; padding: 12px; }
 .yt-ch > button:first-child { display: flex; align-items: center; gap: 10px; min-width: 0; }
 .yt-ch b { font-size: 15px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; } .yt-ch span { font-size: 12px; color: #606060; }

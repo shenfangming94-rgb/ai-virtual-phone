@@ -24,7 +24,7 @@ import { addToCalendar, careerPromptBlock, loadCareer, saveCareer, type CareerNo
 import { getProfile, loadProfiles, relationOf, saveProfile } from "./idol-people";
 import { describeTrainee, loadTraineeCard } from "./trainee-card";
 import { crowdIdByName, crowdOf } from "./idol-crowd";
-import { addMomentPost, updateMomentPost } from "./moments-storage";
+import { addMomentPost, loadMomentPosts, updateMomentPost } from "./moments-storage";
 import { IDOL_LANGUAGE_RULE } from "./idol-language";
 
 const KEY = "idol_events_v1";
@@ -184,7 +184,7 @@ const PLAN_RULES = `你在给一出韩国娱乐圈练习生的戏排接下来几
 - 机会和约要她回复的写 invite（title、at 开始时间、place、replyBy 回复截止、from 谁通知或谁约的），kind 写 chance 或 date；同时写一条通知她的消息。
 - invite 的 place：先从「地点名单」里挑最合适的，照名单原样写（比如吃烤肉写「江南·烤肉店」、公司里的事写「公司·会议室」）；名单里实在没有合适的才自己写一个具体地点。
 - 有人「【近况要更新】」的，在 status 里给他写新的近况：status 世界视角一句他最近在忙什么，kakao 他自己会写在 KakaoTalk 状态消息里的短句。有事发生在谁身上，也更新他的近况。
-- posts：偶尔有一两个人发 KakaoTalk 动态（练习生手机管得严，一周一两条），写他自己口吻的一两句；text 用角色原文（默认韩语），zh 给简体中文翻译；只要本轮有动态，至少一条带图片描述 imageDescription，约一半的动态带图，内容适合晒练习室、自拍、食物或风景时才配图。
+- posts：偶尔有一两个人发 KakaoTalk 动态（练习生手机管得严，一周一两条），写他自己口吻的一两句；text 用角色原文（默认韩语），zh 给简体中文翻译。是否配图按这条动态的具体内容决定：练习室、自拍、食物、风景、活动等确实有可拍画面时，可以写 imageDescription；观点、心情、随手短句等适合纯文字。近期配图情况只供调整节奏参考，不设每批最低数量或固定比例；不要为了配图而硬塞图片，也不要让动态长期全是纯文字或每条都配图。
 - fame：这件事让外界更多人知道她了才写，按动静写 small（路透、小帖子）/ medium（公开视频上传、给前辈伴舞、上杂志）/ big（上热搜、出了大事，好事坏事都算）；跟外界无关、别人身上的事不写。
 - moods：这件事让名单里哪个同公司练习生更想离开公司或更想留下，写 {"name":"","d":"leave/stay","why":"一句"}；没影响就空着。名单里标「心事」的人在犹豫要不要走，可以有相应的事（跟老师谈话、家里来电话、别家公司的人找他），也可以有让他想留下的事。
 - 时间都写成 YYYY-MM-DD HH:mm，必须在给定的时间段里。
@@ -212,6 +212,14 @@ async function plan(from: number, to: number): Promise<void> {
   const bigDue = !s.lastBig || now - s.lastBig > 8 * DAY;
   const group = groupSessionId();
   const crowd = group ? crowdOf(group).filter(m => !m.promotedTo).slice(0, 20).map(m => `${m.name}（${m.role}）`).join("、") : "";
+  const characterContacts = new Set(loadChatContacts().map(c => c.characterId));
+  const recentCharacterPosts = loadMomentPosts()
+    .filter(p => p.authorType === "character" && characterContacts.has(p.authorId))
+    .map(p => ({ post: p, at: Date.parse(p.createdAt) }))
+    .filter(x => Number.isFinite(x.at) && x.at <= now && now - x.at < 14 * DAY)
+    .sort((a, b) => b.at - a.at)
+    .slice(0, 10);
+  const recentCharacterPhotos = recentCharacterPosts.filter(x => x.post.photoGenerationStatus !== "failed" && Boolean(x.post.photoUrl || x.post.photoDescription)).length;
   const user = [
     `时间段：${fmt(from)} 到 ${fmt(to)}${from < now - HOUR ? `（${fmt(from)} 到 ${fmt(now)} 是她跳过的日子，那几天照常过，只写别人身上的事和群里的话）` : ""}`,
     `【她是谁】\n${card ? describeTrainee(card) : "一个想当爱豆的女生"}\n关注度：${fameWord(s.fame)}${s.health && s.health.until > now ? `\n身体：${s.health.what}` : ""}`,
@@ -221,6 +229,9 @@ async function plan(from: number, to: number): Promise<void> {
     `【名单】\n${rosterBlock() || "（还没有）"}`,
     `【地点名单】${allScenePlaces().filter(x => !placeLocked(x)).map(x => x.key).join("、")}`,
     crowd ? `【练习生群里的路人】${crowd}` : "",
+    recentCharacterPosts.length
+      ? `【近期动态配图情况】近两周角色动态 ${recentCharacterPosts.length} 条，其中 ${recentCharacterPhotos} 条有图、${recentCharacterPosts.length - recentCharacterPhotos} 条纯文字。仅作节奏参考，不是配额；每条动态先看内容是否适合配图。`
+      : "【近期动态配图情况】近两周没有可参考的角色动态；根据每条内容自然决定是否配图。",
     `【她最近做过的事】\n${recentHers()}`,
     s.feed.length ? `【前几天已经发生的事】\n${s.feed.slice(-8).map(f => `- ${f.text}`).join("\n")}` : "",
     `【这次】${bigDue ? "可以安排一件大事。" : "不安排大事。"}${setbackKind ? `安排一个她的挫折，类型：${setbackKind}；挫折要有具体的人和原因，不写她做得不好，kind 写 setback。` : "不安排她的挫折。"}${sickOk ? "可以让她生一次小病（感冒、肠胃炎、过敏、扭伤、生理期不舒服选一个），由室友或身边的人发现，kind 写 sick。" : "不让她生病。"}`,

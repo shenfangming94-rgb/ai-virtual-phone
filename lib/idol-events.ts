@@ -11,6 +11,7 @@ import { worldWeatherHint } from "./idol-weather";
  */
 
 import { allScenePlaces, placeLocked } from "./idol-stage";
+import { almanacBetween, activityPlace } from "./idol-calendar";
 import { nudgeLeave } from "./idol-leave";
 import { fameEvent, fameTotal, fameWordNow } from "./idol-fame";
 import { pushPendingFace } from "./idol-pending-faces";
@@ -49,10 +50,13 @@ export type PlannedEvent = {
   done?: boolean;
 };
 type Post = { who: string; text: string; zh?: string; imageDescription?: string; at: number; done?: boolean };
+/** 世界上正在发生、她走到那儿就能撞上的事：此刻地图上挂淡粉「!」 */
+type Happening = { id: string; at: number; until: number; place: string; about: string; seed: string; from?: string; opened?: boolean; fed?: boolean };
 type State = {
   plannedUntil: number;
   events: PlannedEvent[];
   posts: Post[];
+  happenings: Happening[];
   /** 已经发生过的（世界提示里「最近正在发生的事」） */
   feed: { at: number; text: string }[];
   setbacks: { at: number; kind: string }[];
@@ -73,9 +77,9 @@ function familyFame(): number {
 function load(): State {
   try {
     const raw = JSON.parse(kvGet(KEY) || "null") as State | null;
-    if (raw) return { ...raw, events: raw.events ?? [], posts: raw.posts ?? [], feed: raw.feed ?? [], setbacks: raw.setbacks ?? [], fame: raw.fame ?? familyFame() };
+    if (raw) return { ...raw, events: raw.events ?? [], posts: raw.posts ?? [], happenings: raw.happenings ?? [], feed: raw.feed ?? [], setbacks: raw.setbacks ?? [], fame: raw.fame ?? familyFame() };
   } catch { /* 坏数据当新的 */ }
-  return { plannedUntil: 0, events: [], posts: [], feed: [], setbacks: [], fame: familyFame() };
+  return { plannedUntil: 0, events: [], posts: [], happenings: [], feed: [], setbacks: [], fame: familyFame() };
 }
 function save(s: State) { kvSet(KEY, JSON.stringify(s)); }
 
@@ -181,15 +185,17 @@ const PLAN_RULES = `你在给一出韩国娱乐圈练习生的戏排接下来几
 - 消息里说到时间只用具体日期（X月X日、周X、几点），不要用「今天」「明天」这种相对说法。
 - 每句话都要合情合理、前因后果对得上：只有影响到群里大家的事才在群里通知，个人的事走私聊或者当八卦传。她的恋情不走这条八卦传播路径：仅按知情账让知情者本人私聊，不写进群聊，不新增知情人或场外传播。
 - 每个invite必须有同一发起人在lines里实际发出的邀请消息，写清同一时间地点；通知与邀请同时送达，不替她接受。
+- 公司里的日常事务（交资料、交企划、去办公室、开会、填表、打扫）不写成 invite；invite 只给真正的约（谁约她吃饭、出去玩）和外部机会（试镜、拍摄、伴舞、演出）。
 - 机会和约要她回复的写 invite（title、at 开始时间、place、replyBy 回复截止、from 谁通知或谁约的），kind 写 chance 或 date；同时写一条通知她的消息。
 - invite 的 place：先从「地点名单」里挑最合适的，照名单原样写（比如吃烤肉写「江南·烤肉店」、公司里的事写「公司·会议室」）；名单里实在没有合适的才自己写一个具体地点。
 - 有人「【近况要更新】」的，在 status 里给他写新的近况：status 世界视角一句他最近在忙什么，kakao 他自己会写在 KakaoTalk 状态消息里的短句。有事发生在谁身上，也更新他的近况。
 - posts：偶尔有一两个人发 KakaoTalk 动态（练习生手机管得严，一周一两条），写他自己口吻的一两句；text 用角色原文（默认韩语），zh 给简体中文翻译。是否配图按这条动态的具体内容决定：练习室、自拍、食物、风景、活动等确实有可拍画面时，可以写 imageDescription；观点、心情、随手短句等适合纯文字。近期配图情况只供调整节奏参考，不设每批最低数量或固定比例；不要为了配图而硬塞图片，也不要让动态长期全是纯文字或每条都配图。
+- scene：世界上正在发生、她走到那儿就能撞上的一件事。写别人身上的事：圈内的人、别的团、staff、粉丝、路人、认识的人都行，多是公开场合、几个人在场，不要总是她最亲近的人；不以她为中心，不写谁注意到她、谁拍到她。不一定是坏事，好笑、尴尬、甜、鸡毛蒜皮都行。可以从【日历上的圈内活动】长出来（活动前、当天、之后都行，地点不一定在活动现场），也可以跟日历无关，也可以接着【之前的现场】往下走。place 照【地点名单】原样写一个，真实的地方名单里没有就挑它所在的区域，seed 里写真实的地方。about 世界视角一句话；seed 是她走进去时现场已经在发生的样子，两三句，不写她怎么做，不定结局。from 写它从哪件日历活动长出来，没有就空。【这次】说不写就写 null。
 - fame：这件事让外界更多人知道她了才写，按动静写 small（路透、小帖子）/ medium（公开视频上传、给前辈伴舞、上杂志）/ big（上热搜、出了大事，好事坏事都算）；跟外界无关、别人身上的事不写。
 - moods：这件事让名单里哪个同公司练习生更想离开公司或更想留下，写 {"name":"","d":"leave/stay","why":"一句"}；没影响就空着。名单里标「心事」的人在犹豫要不要走，可以有相应的事（跟老师谈话、家里来电话、别家公司的人找他），也可以有让他想留下的事。
 - 时间都写成 YYYY-MM-DD HH:mm，必须在给定的时间段里。
 JSON 格式：
-{"events":[{"at":"","kind":"small/big/setback/sick/chance/date","about":"世界视角一句话：发生了什么","people":["相关的人"],"lines":[{"where":"group/private","who":"","text":"角色原文","zh":"简体中文翻译"}],"invite":null,"fame":null,"moods":[]}],"newPeople":[{"name":"","role":"","gender":"男/女","age":""}],"status":[{"name":"","status":"","kakao":""}],"posts":[{"who":"","text":"角色原文","zh":"简体中文翻译","imageDescription":"图片画面描述；不配图时留空","at":""}]}`;
+{"events":[{"at":"","kind":"small/big/setback/sick/chance/date","about":"世界视角一句话：发生了什么","people":["相关的人"],"lines":[{"where":"group/private","who":"","text":"角色原文","zh":"简体中文翻译"}],"invite":null,"fame":null,"moods":[]}],"newPeople":[{"name":"","role":"","gender":"男/女","age":""}],"status":[{"name":"","status":"","kakao":""}],"posts":[{"who":"","text":"角色原文","zh":"简体中文翻译","imageDescription":"图片画面描述；不配图时留空","at":""}],"scene":{"at":"","place":"","about":"","seed":"","from":""}}`;
 
 async function plan(from: number, to: number): Promise<void> {
   const s = load();
@@ -219,6 +225,14 @@ async function plan(from: number, to: number): Promise<void> {
     .filter(x => Number.isFinite(x.at) && x.at <= now && now - x.at < 14 * DAY)
     .sort((a, b) => b.at - a.at)
     .slice(0, 10);
+  // 现场：一天最多一件，跟日历每月的大事差不多多（隔四天以上才排下一件）
+  const lastScene = s.happenings.length ? Math.max(...s.happenings.map(h => h.at)) : 0;
+  const sceneOk = !lastScene || from - lastScene > 3 * DAY;
+  const isoDay = (ms: number) => fmt(ms).slice(0, 10);
+  const activities = almanacBetween(isoDay(from - 14 * DAY), isoDay(to + 14 * DAY)).filter(i => i.kind === "world")
+    .map(i => { const pl = activityPlace(i); return `- ${i.date} ${i.title}${i.note ? `：${i.note}` : ""}${pl ? `（在${pl}）` : ""}`; });
+  const pastScenes = s.happenings.filter(h => now - h.at < 30 * DAY).slice(-6)
+    .map(h => `- ${fmt(h.at).slice(5, 10)} 在${h.place}：${h.about}${h.at > now ? "（还没到）" : h.opened ? "（她去了）" : "（她没去）"}`);
   const recentCharacterPhotos = recentCharacterPosts.filter(x => x.post.photoGenerationStatus !== "failed" && Boolean(x.post.photoUrl || x.post.photoDescription)).length;
   const user = [
     `时间段：${fmt(from)} 到 ${fmt(to)}${from < now - HOUR ? `（${fmt(from)} 到 ${fmt(now)} 是她跳过的日子，那几天照常过，只写别人身上的事和群里的话）` : ""}`,
@@ -232,9 +246,11 @@ async function plan(from: number, to: number): Promise<void> {
     recentCharacterPosts.length
       ? `【近期动态配图情况】近两周角色动态 ${recentCharacterPosts.length} 条，其中 ${recentCharacterPhotos} 条有图、${recentCharacterPosts.length - recentCharacterPhotos} 条纯文字。仅作节奏参考，不是配额；每条动态先看内容是否适合配图。`
       : "【近期动态配图情况】近两周没有可参考的角色动态；根据每条内容自然决定是否配图。",
+    activities.length ? `【日历上的圈内活动】\n${activities.join("\n")}` : "",
+    pastScenes.length ? `【之前的现场】\n${pastScenes.join("\n")}` : "",
     `【她最近做过的事】\n${recentHers()}`,
     s.feed.length ? `【前几天已经发生的事】\n${s.feed.slice(-8).map(f => `- ${f.text}`).join("\n")}` : "",
-    `【这次】${bigDue ? "可以安排一件大事。" : "不安排大事。"}${setbackKind ? `安排一个她的挫折，类型：${setbackKind}；挫折要有具体的人和原因，不写她做得不好，kind 写 setback。` : "不安排她的挫折。"}${sickOk ? "可以让她生一次小病（感冒、肠胃炎、过敏、扭伤、生理期不舒服选一个），由室友或身边的人发现，kind 写 sick。" : "不让她生病。"}`,
+    `【这次】${bigDue ? "可以安排一件大事。" : "不安排大事。"}${setbackKind ? `安排一个她的挫折，类型：${setbackKind}；挫折要有具体的人和原因，不写她做得不好，kind 写 setback。` : "不安排她的挫折。"}${sickOk ? "可以让她生一次小病（感冒、肠胃炎、过敏、扭伤、生理期不舒服选一个），由室友或身边的人发现，kind 写 sick。" : "不让她生病。"}${sceneOk ? "可以写一件 scene。" : "scene 不写。"}`,
   ].filter(Boolean).join("\n\n");
   const res = await simpleLLMCall(chatConfig(), [{ role: "system", content: PLAN_RULES }, { role: "user", content: user }], { temperature: 0.9, label: "世界排事情" });
   if (!res.content) throw new Error(res.error || "AI 没回");
@@ -243,6 +259,7 @@ async function plan(from: number, to: number): Promise<void> {
     newPeople?: { name?: string; role?: string; gender?: string; age?: string }[];
     status?: { name?: string; status?: string; kakao?: string }[];
     posts?: { who?: string; text?: string; zh?: string; imageDescription?: string; at?: string }[];
+    scene?: { at?: string; place?: string; about?: string; seed?: string; from?: string } | null;
   };
   // 新面孔：先排队等戏里出场，不直接进通讯录（Flora 定的规矩）
   for (const np of j.newPeople ?? []) {
@@ -268,11 +285,21 @@ async function plan(from: number, to: number): Promise<void> {
     return ev;
   }).filter((e): e is PlannedEvent => Boolean(e));
   const posts: Post[] = (j.posts ?? []).map(p => ({ who: String(p.who ?? ""), text: String(p.text ?? ""), ...(p.zh ? { zh: String(p.zh) } : {}), ...(p.imageDescription ? { imageDescription: String(p.imageDescription) } : {}), at: Math.max(from, Math.min(to, parseAt(p.at) ?? from + Math.random() * (to - from))) })).filter(p => p.who && p.text);
+  const happenings: Happening[] = [];
+  const sceneAt = parseAt(j.scene?.at);
+  const scenePlace = String(j.scene?.place ?? "").trim();
+  const placeOk = allScenePlaces().some(x => x.key === scenePlace && !placeLocked(x));
+  if (sceneOk && j.scene && sceneAt != null && placeOk && j.scene.seed) {
+    const at = Math.max(from, Math.min(to, sceneAt));
+    const end = new Date(at); end.setHours(23, 59, 59, 999);
+    happenings.push({ id: uid("hap"), at, until: end.getTime(), place: scenePlace, about: String(j.scene.about ?? j.scene.seed), seed: String(j.scene.seed), ...(j.scene.from ? { from: String(j.scene.from) } : {}) });
+  }
   const fresh = load();
   const setbacks = events.some(e => e.kind === "setback") && setbackKind ? [...fresh.setbacks, { at: now, kind: setbackKind }] : fresh.setbacks;
   save({
     ...fresh, plannedUntil: to, events: [...fresh.events.filter(e => !e.done), ...events].sort((a, b) => a.at - b.at),
     posts: [...fresh.posts.filter(p => !p.done), ...posts], setbacks,
+    happenings: [...fresh.happenings.filter(h => now - h.at < 60 * DAY), ...happenings],
     lastBig: events.some(e => e.kind === "big" || e.kind === "setback") ? now : fresh.lastBig,
     lastSick: events.some(e => e.kind === "sick") ? now : fresh.lastSick, planning: undefined,
   });
@@ -411,6 +438,12 @@ export function eventsTick(notify: (m: string) => void): void {
     s = load();
     save({ ...s, events: s.events.map(e => due.some(d => d.id === e.id) ? { ...e, done: true } : e).filter(e => !e.done || now - e.at < 30 * DAY), posts: s.posts.map(p => duePosts.includes(p) || duePosts.some(d => d.at === p.at && d.who === p.who) ? { ...p, done: true } : p).filter(p => !p.done) });
   }
+  // 现场到点了：记进「最近正在发生的事」（她去没去都发生了）
+  s = load();
+  if (s.happenings.some(h => !h.fed && h.at <= now)) {
+    const fed = s.happenings.filter(h => !h.fed && h.at <= now);
+    save({ ...s, happenings: s.happenings.map(h => fed.includes(h) ? { ...h, fed: true } : h), feed: [...s.feed, ...fed.map(h => ({ at: h.at, text: h.about }))].slice(-40) });
+  }
   // 该排下一段了：已排到的不足一天
   s = load();
   if (s.plannedUntil - now > DAY) return;
@@ -430,3 +463,19 @@ export function plannedStops(): { at: number; title: string }[] {
 
 /** 已经过去的计划时间（跳时间落地时，下一次排会把跳过的日子一起补上） */
 export function eventsPlannedUntil(): number { return load().plannedUntil; }
+
+// ── 此刻地图上的淡粉「!」 ──
+
+/** 现在挂着淡粉「!」的地点：当天提前两小时挂上，到夜里收掉 */
+export function happeningMarks(now = Date.now()): { place: string; id: string }[] {
+  return load().happenings.filter(h => !h.opened && h.at - 2 * HOUR <= now && now <= h.until).map(h => ({ place: h.place, id: h.id }));
+}
+
+/** 点进去：开场用的那件事，记成她去了 */
+export function takeHappening(place: string, now = Date.now()): string | null {
+  const s = load();
+  const h = s.happenings.find(x => !x.opened && x.place === place && x.at - 2 * HOUR <= now && now <= x.until);
+  if (!h) return null;
+  save({ ...s, happenings: s.happenings.map(x => x.id === h.id ? { ...x, opened: true } : x) });
+  return `${h.seed}（这是世界上正在发生的事，她刚好走到这里：照这个现场写成真的在发生，人物照这里写的，不替她决定做什么，不提前定结果）`;
+}

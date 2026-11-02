@@ -20,9 +20,10 @@ import { companyIdByName, rosterPrompt, upsertGroups } from "./idol-groups";
 import { deleteCalendarScheduleItem, loadOwnerCalendarPlans, upsertCalendarScheduleItem } from "./calendar-storage";
 import { getWeekDates, getWeekStartIso, getWeekdayLabel, parseIsoDate } from "./calendar-utils";
 import { parseScheduleLines } from "./calendar-engine";
+import { allScenePlaces } from "./idol-stage";
 
 export type AlmanacKind = "fixed" | "career" | "world" | "mine" | "birthday";
-export type AlmanacItem = { id: string; date: string; title: string; note?: string; kind: AlmanacKind; /** 圈内大事是哪家公司的 */ company?: string };
+export type AlmanacItem = { id: string; date: string; title: string; note?: string; kind: AlmanacKind; /** 圈内大事是哪家公司的 */ company?: string; /** 圈内大事在此刻地图上哪儿办（只是新闻的没有） */ place?: string };
 type State = { mine: AlmanacItem[]; world: Record<string, AlmanacItem[]> };
 
 const KEY = "idol_almanac_v1";
@@ -134,6 +135,29 @@ export function almanacByDate(fromIso: string, toIso: string): Map<string, Alman
   return map;
 }
 
+// ── 此刻地图上的活动 ──
+
+/** 圈内大事能办在哪儿：练习生进不去的后台、舞台不算 */
+function activityPlaces(): string[] {
+  return allScenePlaces().filter(p => p.lock !== "debut").map(p => p.key);
+}
+
+/** 以前没写地点的圈内大事：演唱会这类按标题放进场馆观众席，别的不上地图 */
+export function activityPlace(i: AlmanacItem): string | undefined {
+  if (i.kind !== "world") return undefined;
+  if (i.place) return i.place;
+  return /演唱会|巡演|见面会|颁奖|公演/.test(i.title) ? "场馆·观众席" : undefined;
+}
+
+/** 今天在此刻地图上办着的活动 */
+export function activitiesToday(now = Date.now()): { place: string; title: string; note?: string }[] {
+  const today = isoOf(new Date(now));
+  return almanacBetween(today, today).flatMap(i => {
+    const place = activityPlace(i);
+    return place ? [{ place, title: i.title, ...(i.note ? { note: i.note } : {}) }] : [];
+  });
+}
+
 // ── 她自己记的 ──
 
 export function addMine(date: string, title: string, note = "", company?: string): void {
@@ -178,20 +202,23 @@ export async function generateWorldMonth(ym: string, force = false): Promise<num
     // 以前写过的团接着用，剧情好接
     const seen = [...new Set(Object.values(load().world).flat().map(i => `${i.title.split(/\s/)[0]}（${i.company ?? "?"}）`))].slice(-20);
     const names = COMPANIES.map(c => c.name).join("、");
+    const places = activityPlaces();
     const res = await simpleLLMCall(config(), [
       {
         role: "system",
-        content: `你在给一出韩国娱乐圈的戏写某个月的「圈内大事记」，放进她的日历。只输出 JSON：{"items":[{"day":数字,"company":"公司名或空","group":"这件事是哪个团或艺人的，没有就空","title":"十五字以内，带团名或人名","note":"一句话"}]}
-写四到七件：前辈团回归、演唱会和巡演、粉丝见面会、综艺播出、同公司前辈的活动、新团出道、颁奖礼。团和人全部虚构，不写真实艺人；下面「已经有的团」必须照着用（公司、出道年份、成员都不能改），也可以写新团；新编的团多数是近四年出道的，老团少写；有新团出道的事就写「新团出道」，团名写进 group。跟某个团或艺人有关的才写 company（从这六家里挑：${names}），跟团无关的（颁奖礼、节目本身这类）company 写空。她所在的公司多写一两件。照这个年份当时的样子写。`,
+        content: `你在给一出韩国娱乐圈的戏写某个月的「圈内大事记」，放进她的日历。只输出 JSON：{"items":[{"day":数字,"company":"公司名或空","group":"这件事是哪个团或艺人的，没有就空","title":"十五字以内，带团名或人名","note":"一句话","place":"在哪儿办"}]}
+写四到七件：前辈团回归、演唱会和巡演、粉丝见面会、综艺播出、同公司前辈的活动、新团出道、颁奖礼。团和人全部虚构，不写真实艺人；下面「已经有的团」必须照着用（公司、出道年份、成员都不能改），也可以写新团；新编的团多数是近四年出道的，老团少写；有新团出道的事就写「新团出道」，团名写进 group。跟某个团或艺人有关的才写 company（从这六家里挑：${names}），跟团无关的（颁奖礼、节目本身这类）company 写空。她所在的公司多写一两件。照这个年份当时的样子写。
+place：有现场、人能去的（演唱会、签售、见面会、公开录制、校庆演出、外景拍摄）从这些地点里挑最合适的，照原样写：${places.join("、")}。签售、外景这种名单里没有的，挑它所在的那片区域（比如明洞、弘大）。只是播出、官宣、公开这类没有现场的，place 写空。`,
       },
       { role: "user", content: `${y}年${m}月（共${days}天）\n\n${careerPromptBlock()}\n\n${rosterPrompt() || "还没有写过任何团"}\n\n已有的爱豆：${idols.join("、") || "还没有"}\n以前出现过的团：${seen.join("、") || "还没有"}` },
     ], { temperature: 0.9, label: "圈内大事" });
-    const j = JSON.parse(res.content?.match(/\{[\s\S]*\}/)?.[0] ?? "{}") as { items?: { day?: number; company?: string; group?: string; title?: string; note?: string }[] };
+    const j = JSON.parse(res.content?.match(/\{[\s\S]*\}/)?.[0] ?? "{}") as { items?: { day?: number; company?: string; group?: string; title?: string; note?: string; place?: string }[] };
     // 大事记里第一次出现的团记进名册（公司定下来；成员等官网写的时候补）
     upsertGroups((j.items ?? []).filter(i => i.group && String(i.group).trim()).map(i => ({ name: String(i.group).trim(), companyId: companyIdByName(i.company) })), "almanac");
     const items = (j.items ?? []).filter(i => i.title && i.day && i.day >= 1 && i.day <= days).map(i => ({
       id: uid("world"), date: `${y}-${pad(m)}-${pad(Number(i.day))}`, title: String(i.title), note: i.note ? String(i.note) : undefined, kind: "world" as const,
       company: i.company && i.company.trim() && i.company !== "圈内" ? String(i.company).trim() : undefined,
+      ...(i.place && places.includes(String(i.place).trim()) ? { place: String(i.place).trim() } : {}),
     }));
     if (!items.length) throw new Error(res.error || "AI 没写出来");
     const s = load();

@@ -193,8 +193,21 @@
 .stg-extra-back { display: block; margin: 12px auto 0; padding: 8px !important; }
 .stg-done:disabled { opacity: 0.4; }
 .stg-clash { margin: 0 0 10px; text-align: center; font-size: 12px; color: #ff6b6b; }
-/* 命运：地点上冒「!」 */
-.stg-mpin[data-destiny]::before, .stg-card[data-destiny]::after { content: "!"; position: absolute; display: flex; align-items: center; justify-content: center; width: 18px; height: 18px; border-radius: 50%; background: #e0457b; color: #fff; font: 800 12px/1 -apple-system, sans-serif; box-shadow: 0 0 0 2px #fff, 0 0 12px rgba(224,69,123,.8); animation: stg-fate 1.4s ease-in-out infinite; }
-.stg-mpin[data-destiny]::before { z-index: 2; top: -13px; right: -5px; left: auto; }
+/* 地点上冒「!」：命运红、世界上正在发生的事淡粉；挂在名字黑框右上角往下一点（她定的） */
+.stg-mpin b { position: relative; }
+.stg-mpin[data-destiny] b::after, .stg-card[data-destiny]::after { content: "!"; position: absolute; display: flex; align-items: center; justify-content: center; width: 18px; height: 18px; border-radius: 50%; background: #e23a4a; color: #fff; font: 800 12px/1 -apple-system, sans-serif; text-shadow: none; box-shadow: 0 0 0 2px #fff, 0 0 12px rgba(226,58,74,.8); animation: stg-fate 1.4s ease-in-out infinite; }
+.stg-mpin[data-destiny="life"] b::after, .stg-card[data-destiny="life"]::after { background: #f5a0bc; box-shadow: 0 0 0 2px #fff, 0 0 10px rgba(245,160,188,.9); }
+.stg-mpin[data-destiny] b::after { z-index: 2; top: -8px; right: 12px; }
 .stg-card[data-destiny]::after { top: 8px; right: 8px; }
+/* 今天这里办着的活动：名字黑框底下一条粉字 */
+.stg-mpin u { position: absolute; left: 32px; top: 100%; margin-top: 3px; text-decoration: none; white-space: nowrap; padding: 2px 14px 2px 7px; font: 700 11px/1.4 "PingFang SC", sans-serif; color: #fff; letter-spacing: .3px;
+  background: linear-gradient(90deg, rgba(239,106,134,.9) 0%, rgba(239,106,134,.7) 65%, rgba(239,106,134,0) 100%); text-shadow: 0 1px 2px rgba(0,0,0,.25); }
+.stg-card-act { position: relative; font-size: 12px; font-weight: 600; color: #e0577b; }
+.stg-card[data-photo] .stg-card-act { color: #ffd1de; }
+/* 活动和「!」撞在一起：二选一 */
+.stg-choose { width: 100%; align-self: center; display: flex; flex-direction: column; align-items: center; gap: 12px; padding: 0 36px; }
+.stg-choose p { margin: 0 0 4px; font-family: "Source Han Serif CN VF", "Songti SC", serif; font-size: 15px; font-weight: 700; color: #fff; letter-spacing: 1px; text-shadow: 0 1px 3px rgba(0,0,0,.5); }
+.stg-choose button { width: 100%; padding: 15px 18px !important; border-radius: 12px; font-family: "Source Han Serif CN VF", "Songti SC", serif; font-size: 16px; font-weight: 700; letter-spacing: .5px;
+  background: var(--stg-pill-bg) !important; color: var(--stg-pill-ink) !important; border: 1.5px solid rgba(255,255,255,0.95) !important; box-shadow: 0 2px 8px rgba(60,70,120,0.25), inset 0 -2px 3px rgba(150,160,210,0.25); }
+.stg-choose button:active { transform: scale(0.98); }
 @keyframes stg-fate { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.18); } }

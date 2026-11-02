@@ -7,6 +7,8 @@
 
 import { classAt } from "@/lib/idol-starroad";
 import { destinyMarks, takeDestinyMark } from "@/lib/idol-destiny";
+import { happeningMarks, takeHappening } from "@/lib/idol-events";
+import { activitiesToday } from "@/lib/idol-calendar";
 import "@/styles/stage-replay.css";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ChevronLeft, MoreHorizontal, X, Lock, Music2, VolumeX, Image as ImageIcon, Check, Search, Play, BookOpen, Sparkles } from "lucide-react";
@@ -59,6 +61,9 @@ export function StageHome({ onClose, onPlay, onReplay }: Props) {
   const [looks, setLooks] = useState<Record<string, MapLook>>(() => loadMapLooks());
   const [mapUrl, setMapUrl] = useState("");
   const [sheet, setSheet] = useState<StagePlace | null>(null);
+  // 活动和淡粉「!」撞在同一个地方：先选去哪边
+  const [choose, setChoose] = useState<StagePlace | null>(null);
+  const goWith = useRef<"activity" | "event" | null>(null);
   const [menu, setMenu] = useState(false);
   const [pinEdit, setPinEdit] = useState<string | null>(null);
   const [pastOpen, setPastOpen] = useState(false);
@@ -134,11 +139,20 @@ export function StageHome({ onClose, onPlay, onReplay }: Props) {
   const tapPlace = (pl: StagePlace) => {
     if (pinEdit !== null) { setPinEdit(pl.key); return; }
     if (pl.sub && !placeLocked(pl)) { setMapId(pl.sub); return; }
+    const t = Date.now();
+    const both = !destinyMarks(t).some(m => m.place === pl.key) && happeningMarks(t).some(m => m.place === pl.key) && activitiesToday(t).some(a => a.place === pl.key);
+    goWith.current = null;
+    if (both) { setChoose(pl); return; }
     setSheet(pl);
   };
 
   const marks = destinyMarks(now);
-  const marked = (pl: StagePlace) => marks.some(m => m.place === pl.key || (pl.sub && mapOfPlace(m.place)?.id === pl.sub)) ? "1" : undefined;
+  const lifeMarks = happeningMarks(now);
+  const activities = activitiesToday(now);
+  const at = (pl: StagePlace, place: string) => place === pl.key || Boolean(pl.sub && mapOfPlace(place)?.id === pl.sub);
+  // 命运红「!」，世界上正在发生的事淡粉「!」；两个都有先显示命运
+  const marked = (pl: StagePlace) => marks.some(m => at(pl, m.place)) ? "fate" : lifeMarks.some(m => at(pl, m.place)) ? "life" : undefined;
+  const activityOf = (pl: StagePlace) => activities.find(a => at(pl, a.place))?.title;
   const openScenes = openStageScenes();
   const clock = `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
   const [hideClock, setHideClock] = useState(() => Boolean(loadStageSettings().hideClock));
@@ -163,7 +177,7 @@ export function StageHome({ onClose, onPlay, onReplay }: Props) {
       </div>
 
       {mapUrl ? (
-        <MapImage key={`${lookKey}:${mapUrl}`} url={mapUrl} places={map.places} look={look} editing={pinEdit} onTap={tapPlace} marked={marked}
+        <MapImage key={`${lookKey}:${mapUrl}`} url={mapUrl} places={map.places} look={look} editing={pinEdit} onTap={tapPlace} marked={marked} activityOf={activityOf}
           onPlace={(x, y) => { if (pinEdit) { updateLook({ ...saved, pins: { ...saved.pins, [pinEdit]: { x, y } } }); setPinEdit(""); } }} />
       ) : (
         <div className="stg-grid-wrap" style={{ ["--stg-under" as string]: `url(${DEFAULT_MAPS.seoul.night && isNight ? DEFAULT_MAPS.seoul.night : DEFAULT_MAPS.seoul.image})` }}>
@@ -175,6 +189,7 @@ export function StageHome({ onClose, onPlay, onReplay }: Props) {
                 <button key={pl.key} type="button" className="stg-card" data-lock={lock ? "1" : undefined} data-photo={photo ? "1" : undefined} data-destiny={marked(pl)}
                   style={photo ? { backgroundImage: `url(${photo})` } : undefined} onClick={() => tapPlace(pl)}>
                   <span className="stg-card-name"><i className="stg-pin" />{pl.label}{pl.sub ? " ›" : ""}</span>
+                  {activityOf(pl) ? <span className="stg-card-act">今天 · {activityOf(pl)}</span> : null}
                   {lock ? <span className="stg-card-lock"><Lock size={11} /> {lock}</span> : null}
                 </button>
               );
@@ -235,10 +250,24 @@ export function StageHome({ onClose, onPlay, onReplay }: Props) {
         </div>
       ) : null}
 
+      {choose ? (
+        <div className="stg-mask" onClick={() => setChoose(null)}>
+          <div className="stg-choose" onClick={e => e.stopPropagation()}>
+            <p>{choose.label}</p>
+            <button type="button" onClick={() => { goWith.current = "activity"; setSheet(choose); setChoose(null); }}>去看{activitiesToday().find(a => a.place === choose.key)?.title ?? "活动"}</button>
+            <button type="button" onClick={() => { goWith.current = "event"; setSheet(choose); setChoose(null); }}>那边好像有事</button>
+          </div>
+        </div>
+      ) : null}
+
       {sheet ? (
         <PlaceSheet place={sheet} onClose={() => { setSheet(null); bump(n => n + 1); setBgmVer(v => v + 1); setPhotoVer(v => v + 1); }} onGo={(meet, avoid, extraPremise) => {
           const fate = takeDestinyMark(sheet.key);
-          const premise = [fate, extraPremise].filter(Boolean).join("；") || undefined;
+          const act = activitiesToday().find(a => a.place === sheet.key);
+          // 选了看活动就不碰淡粉「!」，它还挂着
+          const life = fate || goWith.current === "activity" ? null : takeHappening(sheet.key);
+          const show = !fate && !life && act ? `今天这里在办：${act.title}${act.note ? `（${act.note}）` : ""}。照活动现场本身写` : null;
+          const premise = [fate, life, show, extraPremise].filter(Boolean).join("；") || undefined;
           const r = startStageScene({ placeKey: sheet.key, meetIds: meet, avoid, ...(premise ? { premise } : {}) });
           setSheet(null);
           if (r) onPlay(r.chapterIndex);
@@ -299,8 +328,9 @@ export function StageHome({ onClose, onPlay, onReplay }: Props) {
 
 // ── 有图片的地图：竖着铺满、左右拖，钉子按百分比放 ──
 
-function MapImage({ url, places, look, editing, onTap, onPlace, marked }: {
+function MapImage({ url, places, look, editing, onTap, onPlace, marked, activityOf }: {
   marked?: (pl: StagePlace) => string | undefined;
+  activityOf?: (pl: StagePlace) => string | undefined;
   url: string; places: StagePlace[]; look: MapLook; editing: string | null;
   onTap: (pl: StagePlace) => void; onPlace: (x: number, y: number) => void;
 }) {
@@ -334,6 +364,7 @@ function MapImage({ url, places, look, editing, onTap, onPlace, marked }: {
               onClick={e => { e.stopPropagation(); onTap(pl); }}>
               <i />
               <b>{lock ? <Lock size={10} /> : null}{pl.label}{pl.sub ? " ›" : ""}</b>
+              {activityOf?.(pl) ? <u>今天 · {activityOf(pl)}</u> : null}
             </button>
           );
         })}

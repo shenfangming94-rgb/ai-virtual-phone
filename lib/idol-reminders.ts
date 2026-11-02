@@ -88,7 +88,8 @@ export async function checkNode(id: string, result: string): Promise<void> {
   const teacher = teacherOf();
   if (node.kind !== "custom" && node.kind !== "date" && node.kind !== "practice") noteToPerson(teacher?.id, `她${node.title}：${text || "照常完成"}`, node.dueAt, node.place);
   if (node.kind === "date") noteToPerson(node.fromId, `一起去了「${node.title}」${text ? `：${text}` : ""}`, node.dueAt, node.place);
-  if (node.kind === "chance") addFame(5, node.title);
+  // 打勾写一句的外部机会（试镜、拍摄、演出）：只算一点点，公司里的事不算
+  if (node.kind === "chance" && !/公司|办公室|会议室|练习室/.test(node.place)) addFame(1, node.title);
   recordNodeDone(node, text);
   const sc = scoreResultText(text);
   const perf = sc >= 3 ? "good" : sc < 0 ? "bad" : "ok";

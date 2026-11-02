@@ -167,7 +167,7 @@ function recentHers(): string {
 }
 
 /** 发动机平时会排的事（命运要避开这些） */
-export const ENGINE_EVENTS = `老师叫去办公室、留下加课、选小组长、临时换 part、编舞或自作曲征集、外聘老师、新开的课、内部评估、高层视察、公开视频挑人、给前辈伴舞、前辈来练习室、MV 客串、广告网剧综艺试镜、杂志拍摄、校园公演；宿舍卫生检查、搬宿舍、换室友、停电、拼单、快递丢了、新规矩；别人的生日、节日聚餐、团建、交换礼物；粉丝信礼物、公开视频留言、路透、热搜、恶评谣言、CP（按她的关注度来，关注度低就很少）；同期的失误受伤被约谈节食晕倒、吵架冷战和好、谁暗恋谁、被孤立、被偏爱、新人进来、淘汰、自己放弃、被挖走、出道组传闻、偷偷恋爱被发现；少数重的事（霸凌谣言、匿名信、家人病倒、心理崩溃）只发生在别人身上。`;
+export const ENGINE_EVENTS = `留下加课、选小组长、临时换 part、编舞或自作曲征集、外聘老师、新开的课、内部评估、高层视察、公开视频挑人、给前辈伴舞、前辈来练习室、MV 客串、广告网剧综艺试镜、杂志拍摄、校园公演；宿舍卫生检查、搬宿舍、换室友、停电、拼单、快递丢了、新规矩；别人的生日、节日聚餐、团建、交换礼物；粉丝信礼物、公开视频留言、路透、热搜、恶评谣言、CP（按她的关注度来，关注度低就很少）；同期的失误受伤被约谈节食晕倒、吵架冷战和好、谁暗恋谁、被孤立、被偏爱、新人进来、淘汰、自己放弃、被挖走、出道组传闻、偷偷恋爱被发现；少数重的事（霸凌谣言、匿名信、家人病倒、心理崩溃）只发生在别人身上。`;
 
 const PLAN_RULES = `你在给一出韩国娱乐圈练习生的戏排接下来几天世界里会发生的事。主角是「她」。只输出 JSON，不要别的字。
 规矩：
@@ -280,7 +280,7 @@ async function plan(from: number, to: number): Promise<void> {
       id: uid("evt"), at: Math.max(from, Math.min(to, at)), kind, about: String(e.about ?? ""), people: (e.people ?? []).map(String),
       lines: (e.lines ?? []).filter(l => l && l.who && l.text).map(l => ({ where: l.where === "group" ? "group" : "private", who: String(l.who), text: String(l.text), ...(l.zh ? { zh: String(l.zh) } : {}) })),
       ...(["small", "medium", "big"].includes(String((e as { fame?: string }).fame)) ? { fame: (e as { fame?: string }).fame as PlannedEvent["fame"] } : {}),
-      ...(e.invite && invAt ? { invite: { title: String(e.invite.title ?? "邀请"), at: invAt, place: String(e.invite.place ?? ""), replyBy: parseAt(e.invite.replyBy) ?? undefined, from: String(e.invite.from ?? "") } } : {}),
+      ...(e.invite && invAt && !officeChore(e.invite) ? { invite: { title: String(e.invite.title ?? "邀请"), at: invAt, place: String(e.invite.place ?? ""), replyBy: parseAt(e.invite.replyBy) ?? undefined, from: String(e.invite.from ?? "") } } : {}),
       ...((e.moods ?? []).length ? { moods: (e.moods ?? []).filter(m => m?.name && (m.d === "leave" || m.d === "stay")).map(m => ({ name: String(m.name), d: m.d as "leave" | "stay", why: String(m.why ?? e.about ?? "") })) } : {}),
     };
     return ev;
@@ -304,6 +304,11 @@ async function plan(from: number, to: number): Promise<void> {
     lastBig: events.some(e => e.kind === "big" || e.kind === "setback") ? now : fresh.lastBig,
     lastSick: events.some(e => e.kind === "sick") ? now : fresh.lastSick, planning: undefined,
   });
+}
+
+/** 公司里的行政杂事不进提醒事项（交资料、企划、面谈、开会） */
+function officeChore(inv: { title?: string; place?: string }): boolean {
+  return /企划|面谈|资料|开会|会议|报告|提交|填表|办公室/.test(`${inv.title ?? ""}${inv.place ?? ""}`);
 }
 
 function charByName(name: string): Character | undefined {

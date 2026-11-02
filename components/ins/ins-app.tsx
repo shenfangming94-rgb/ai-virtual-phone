@@ -151,6 +151,7 @@ function PostCard({ post, onOpen, onNotice, mine }: { post: Post; onOpen: (id: s
   const [cm, setCm] = useState(false);
   const [menu, setMenu] = useState(false);
   const [draft, setDraft] = useState("");
+  const [replyTo, setReplyTo] = useState<{ at: number; by: string } | null>(null);
   const commentsDisabled = Boolean(mine && post.noComments);
   const shownCommentCount = a?.kind === "char" && a.verified && !a.alt && !mine
     ? Math.max(post.comments.length, Math.round(post.likes * 0.03))
@@ -159,8 +160,9 @@ function PostCard({ post, onOpen, onNotice, mine }: { post: Post; onOpen: (id: s
   const publishComment = () => {
     const text = draft.trim();
     if (!text || commentsDisabled) return;
-    myComment(post.id, text);
+    myComment(post.id, text, replyTo?.at);
     setDraft("");
+    setReplyTo(null);
   };
   const commentSheet = cm ? (
     <div className="cp-instagram-sheet-backdrop" onClick={() => setCm(false)}>
@@ -168,15 +170,17 @@ function PostCard({ post, onOpen, onNotice, mine }: { post: Post; onOpen: (id: s
         <div className="cp-instagram-sheet-handle" />
         <div className="cp-instagram-sheet-head"><span /><strong>评论</strong><span /></div>
         <div className="cp-instagram-comment-list">
-          {post.comments.map((c, i) => {
+          {post.comments.filter(c => !c.re || !post.comments.some(x => x.at === c.re)).flatMap(top => [top, ...post.comments.filter(x => x.re === top.at)]).map((c, i) => {
             const ca = Object.values(s.accs).find(x => x.handle === c.by);
+            const sub = Boolean(c.re && post.comments.some(x => x.at === c.re));
             return (
-              <div key={i} className="cp-instagram-comment">
-                <Avatar acc={ca ?? { id: c.by, handle: c.by, name: c.by, private: false, followers: 0, bio: "", hue: (c.by.length * 47) % 360 }} size={32} />
+              <div key={i} className={`cp-instagram-comment${sub ? " ig-sub" : ""}`}>
+                <Avatar acc={ca ?? { id: c.by, handle: c.by, name: c.by, private: false, followers: 0, bio: "", hue: (c.by.length * 47) % 360 }} size={sub ? 24 : 32} />
                 <div className="cp-instagram-comment-main">
                   <div className="cp-instagram-comment-heading"><strong>{c.by}</strong><span className="cp-instagram-comment-time">{ago(c.at)}</span></div>
                   <p>{c.text}</p>
                   {c.zh ? <div className="ig-tr">{c.zh}</div> : null}
+                  {!commentsDisabled ? <button type="button" className="ig-re" onClick={() => { const floor = c.re ?? c.at; setReplyTo({ at: floor, by: c.by }); setDraft(`@${c.by} `); }}>回复</button> : null}
                 </div>
               </div>
             );
@@ -190,7 +194,7 @@ function PostCard({ post, onOpen, onNotice, mine }: { post: Post; onOpen: (id: s
         </div>
         {!commentsDisabled ? (
           <form className="cp-instagram-comment-input" onSubmit={e => { e.preventDefault(); publishComment(); }}>
-            <Avatar acc={accOf(ME)} size={30} />
+            {replyTo ? <div className="ig-replying">回复 @{replyTo.by}<button type="button" onClick={() => { setReplyTo(null); setDraft(""); }}><X size={14} /></button></div> : null}
             <input aria-label={`给 ${a?.handle ?? "对方"} 留言`} value={draft} onChange={e => setDraft(e.target.value)} placeholder="添加评论…" />
             <button type="submit" className="ig-link" disabled={!draft.trim()}>发布</button>
           </form>

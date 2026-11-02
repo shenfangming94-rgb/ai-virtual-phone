@@ -47,7 +47,7 @@ export type InsAcc = {
   kind?: "char" | "official" | "npc";
 };
 export type Img = { desc: string; src?: string; who?: string[]; busy?: boolean };
-export type Cmt = { by: string; text: string; zh?: string; at: number };
+export type Cmt = { by: string; text: string; zh?: string; at: number; /** 楼中楼：回的是哪一楼（那条的 at） */ re?: number };
 export type Risk = { level: "none" | "low" | "mid" | "high"; why: string; love?: boolean; leakAt?: number; leaked?: boolean; cancelled?: boolean };
 export type Post = {
   id: string; by: string; at: number; imgs: Img[]; cap: string; capZh?: string; place?: string;
@@ -178,7 +178,7 @@ export function follow(id: string): "following" | "requested" {
   if (!a) return "following";
   if (!a.private) { patch(s => ({ ...s, following: [...new Set([...s.following, id])] })); return "following"; }
   // 认识的人一般二十分钟到半天内同意
-  patch(s => ({ ...s, requested: [...s.requested.filter(r => r.id !== id), { id, at: Date.now(), decideAt: Date.now() + rnd(20 * MIN, 8 * HOUR) }] }));
+  patch(s => ({ ...s, requested: [...s.requested.filter(r => r.id !== id), { id, at: Date.now(), decideAt: Date.now() + rnd(10 * MIN, 2 * HOUR) }] }));
   return "requested";
 }
 export function unfollow(id: string) { patch(s => ({ ...s, following: s.following.filter(x => x !== id), requested: s.requested.filter(r => r.id !== id) })); }
@@ -213,14 +213,18 @@ export function insTick(notify: (m: string) => void): void {
     for (const r of decided) {
       const a = s.accs[r.id];
       const p = a?.charId ? profiles[a.charId] : undefined;
-      const ok = !a?.charId ? Math.random() < 0.5 : p?.met !== false ? Math.random() < 0.95 : Math.random() < 0.4;
+      // 认识她的人（大号小号都算）一定通过；不认识的看运气
+      const ok = !a?.charId ? Math.random() < 0.5 : p?.met !== false ? true : Math.random() < 0.4;
       s.requested = s.requested.filter(x => x.id !== r.id);
-      if (ok) { s.following = [...new Set([...s.following, r.id])]; s.notes.push({ id: uid("n"), at: now, kind: "accept", from: r.id }); }
+      if (ok) { s.following = [...new Set([...s.following, r.id])]; s.notes.push({ id: uid("n"), at: now, kind: "accept", from: r.id }); if (a) notify(`📷 Instagram：@${a.handle} 通过了你的关注申请`); }
     }
   }
   // 认识她的人来申请关注她（每人一次，一天最多两个）
   if (!s.filledAt || now - (s.notes.filter(n => n.kind === "request").slice(-1)[0]?.at ?? 0) > 12 * HOUR) {
-    const cand = Object.values(s.accs).filter(a => a.charId && !a.alt && !s.askedMe.includes(a.id) && !s.followers.includes(a.id) && profiles[a.charId]?.met);
+    // 出道爱豆用小号来关注（大号公开关注一个练习生太扎眼）；没有小号的爱豆不来
+    const hasAlt = (charId: string) => Object.values(s.accs).some(x => x.alt && x.charId === charId);
+    const cand = Object.values(s.accs).filter(a => a.charId && !s.askedMe.includes(a.id) && !s.followers.includes(a.id) && profiles[a.charId]?.met
+      && (a.alt ? !s.followers.some(f => s.accs[f]?.charId === a.charId) : !a.verified && !hasAlt(a.charId)));
     if (cand.length && Math.random() < 0.02) {
       const a = cand[Math.floor(Math.random() * cand.length)];
       s.askedMe = [...s.askedMe, a.id];
@@ -379,9 +383,9 @@ function strangersFollow(s: State, hours: number): State {
 
 /** 她点赞 / 评论 */
 export function toggleLike(id: string) { patch(s => ({ ...s, posts: s.posts.map(p => p.id === id ? { ...p, liked: !p.liked, likes: p.likes + (p.liked ? -1 : 1) } : p) })); }
-export function myComment(id: string, text: string) {
+export function myComment(id: string, text: string, re?: number) {
   const me = loadIns().me.handle;
-  patch(s => ({ ...s, posts: s.posts.map(p => p.id === id ? { ...p, comments: [...p.comments, { by: me, text, at: Date.now() }] } : p) }));
+  patch(s => ({ ...s, posts: s.posts.map(p => p.id === id ? { ...p, comments: [...p.comments, { by: me, text, at: Date.now(), ...(re ? { re } : {}) }] } : p) }));
 }
 
 const cmBusy = new Set<string>();
@@ -407,6 +411,12 @@ function relationCommentHint(s: State, owner: InsAcc): string {
   return '\n可出场的已建档评论者（没有列出的主要人物不能评论，不能改名冒充路人）：'+allowed.map(a=>'@'+a.handle+' '+a.name).join('、')+'\n'+formatCharacterRelationsForPrompt(owner.charId)+'\n根据关系程度、性格和帖子内容决定是否互动，不必每条都评论。'+(owner.private?'锁号不生成路人评论。':'公开号允许真正的粉丝路人评论。');
 }
 
+/** 出道爱豆用认证大号在她（或普通人）帖子下出现：别人会注意到 */
+function verifiedHint(s: State, post: Post): string {
+  const big = [...new Set(post.comments.map(c => c.by))].map(h => Object.values(s.accs).find(a => a.handle === h)).filter((a): a is InsAcc => Boolean(a?.verified && !a.alt && a.id !== post.by));
+  return big.length ? `注意：${big.map(a => `@${a.handle}（${a.name}，出道爱豆的认证大号）`).join("、")}在这条帖子下公开评论了。看到的人会注意到这件事（惊讶、起哄、截图、猜关系），按楼主的身份和号公不公开来，不要当没看见。` : "";
+}
+
 export async function moreComments(id: string, mode: "reply" | "more"): Promise<void> {
   if (cmBusy.has(id)) return;
   cmBusy.add(id);
@@ -426,11 +436,13 @@ export async function moreComments(id: string, mode: "reply" | "more"): Promise<
         ? mine
           ? `你在写 ins 评论区。${who}\n这是她（@${s.me.handle}）自己的帖子，她刚在评论区回了别人。被她回的人接着回她，偶尔也有别人加进来，一共一到三条。只输出 JSON：{"comments":[{"handle":"","text":"","zh":""}]}。${LANG}短、口语。`
           : `你在写 ins 评论区。${who}\n她（@${s.me.handle}）在这条帖子下面评论了，楼主 @${owner.handle} 回她一两条，偶尔也可以有别人接一句。只输出 JSON：{"comments":[{"handle":"","text":"","zh":""}]}。${LANG}短、口语。`
-        : `你在写 ins 评论区，再多写一批评论（四到八条），接着已有的评论往下，不重复。${who}\n${post.comments.map(c => c.by).lastIndexOf(s.me.handle) > post.comments.map(c => c.text.startsWith(`@${s.me.handle}`)).lastIndexOf(true) ? `她（@${s.me.handle}）在评论区说过话：这批里要有人回她（${mine ? "被她回的人" : `楼主 @${owner.handle}`}一定回，别人也可以接），回她的那条以「@${s.me.handle} 」开头；其余照常是别人的评论。\n` : ""}只输出 JSON：{"comments":[{"handle":"","text":"","zh":""}]}。${LANG}短、口语，像真的 ins 评论区；陌生人自己起 handle。` },
-      { role: "user", content: `帖子：${post.imgs.map(i => i.desc).join("；")}\n配文：${post.cap || "（没写）"}\n已有评论：\n${post.comments.slice(-15).map(c => `@${c.by}：${c.text}`).join("\n") || "（还没有）"}\n\n${idolWorldPrompt()}` },
+        : `你在写 ins 评论区，再多写一批评论（四到八条），接着已有的评论往下，不重复。回某一楼的写 re 填那一楼的编号（#几），新开一楼就不写 re。${who}\n${post.comments.map(c => c.by).lastIndexOf(s.me.handle) > post.comments.map(c => c.text.startsWith(`@${s.me.handle}`)).lastIndexOf(true) ? `她（@${s.me.handle}）在评论区说过话：这批里要有人回她（${mine ? "被她回的人" : `楼主 @${owner.handle}`}一定回，别人也可以接），回她的那条以「@${s.me.handle} 」开头；其余照常是别人的评论。\n` : ""}只输出 JSON：{"comments":[{"handle":"","text":"","zh":"","re":0}]}。${LANG}短、口语，像真的 ins 评论区；陌生人自己起 handle。${verifiedHint(s, post)}` },
+      { role: "user", content: `帖子：${post.imgs.map(i => i.desc).join("；")}\n配文：${post.cap || "（没写）"}\n已有评论：\n${post.comments.slice(-15).map(c => `#${post.comments.indexOf(c) + 1}${c.re ? `（回 #${post.comments.findIndex(x => x.at === c.re) + 1}）` : ""} @${c.by}：${c.text}`).join("\n") || "（还没有）"}\n\n${idolWorldPrompt()}` },
     ], { temperature: 0.9, label: mode === "reply" ? "ins 评论回复" : "ins 更多评论" });
-    const j = pickJson<{ comments?: { handle?: string; text?: string; zh?: string }[] }>(res.content);
-    const add = (j.comments ?? []).filter(c => c?.text && relationCommentAllowed(loadIns(), owner, c.handle, c.text) && String(c.handle).replace(/^@/, "") !== s.me.handle).slice(0, 8).map((c, i) => ({ by: String(c.handle || owner.handle).replace(/^@/, ""), text: String(c.text), zh: c.zh ? String(c.zh) : undefined, at: Date.now() + i * 1000 }));
+    const j = pickJson<{ comments?: { handle?: string; text?: string; zh?: string; re?: number }[] }>(res.content);
+    // 楼中楼：AI 写的编号换成那一楼；回的是一条回复就挂到它的楼主上
+    const floor = (n?: number) => { const c = n ? post.comments[Number(n) - 1] : undefined; return c ? (c.re ?? c.at) : undefined; };
+    const add = (j.comments ?? []).filter(c => c?.text && relationCommentAllowed(loadIns(), owner, c.handle, c.text) && String(c.handle).replace(/^@/, "") !== s.me.handle).slice(0, 8).map((c, i) => ({ by: String(c.handle || owner.handle).replace(/^@/, ""), text: String(c.text), zh: c.zh ? String(c.zh) : undefined, at: Date.now() + i * 1000, ...(floor(c.re) ? { re: floor(c.re) } : {}) }));
     if (!add.length) throw new Error(res.error || "没人评论");
     patch(x => ({ ...x, posts: x.posts.map(q => q.id === id ? { ...q, comments: [...q.comments, ...add] } : q) }));
   } finally { cmBusy.delete(id); }

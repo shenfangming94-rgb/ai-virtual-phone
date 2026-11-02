@@ -336,7 +336,7 @@ ${CALM_LINE}
     try {
       const wx = scene === "groupsearch" ? "" : await weatherLine();
       const noParticipants = charIds.length === 0;
-      const payload = { appTags: ["nox_douban", scene], ...(opts.vision ? { appMessages: opts.vision } : {}), instruction: [opts.rule === false ? CALM_LINE : DOUBAN_RULE, WHO_LINE(), wx, noParticipants ? "本轮没有选择任何已知角色参与：只生成普通豆友和路人内容；不能让任何角色本人出现、发言或被提及。" : "", instruction, "【输出要求】只输出本轮说明要求的块，字段名照抄，不要解释、不要旁白、不要 markdown。"].filter(Boolean).join("\n\n") };
+      const payload = { appTags: ["nox_douban", scene], ...(opts.vision ? { appMessages: opts.vision } : {}), instruction: [opts.rule === false ? CALM_LINE : DOUBAN_RULE, WHO_LINE(), wx, noParticipants ? "本轮没有角色参与：角色本人不发帖、不回帖、不私信。豆友照常聊天，上面列出的公众人物照样可以被当成明星讨论，熟人组照组里的规矩聊。" : "", instruction, "【输出要求】只输出本轮说明要求的块，字段名照抄，不要解释、不要旁白、不要 markdown。"].filter(Boolean).join("\n\n") };
       const request = charIds.length === 1
         ? { ...payload, characterId: charIds[0] }
         : charIds.length

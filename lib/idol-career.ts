@@ -494,7 +494,7 @@ export function careerPromptBlock(): string {
   if (career.stage === "pre" || !c) return ["【她现在】还没进任何公司。", applicationsBrief()].filter(Boolean).join("\n");
   const days = career.signedAt ? Math.max(1, Math.floor((Date.now() - career.signedAt) / DAY) + 1) : 1;
   const debut = debutPromptBlock();
-  const next = career.nodes.filter(n => n.status === "pending" && n.dueAt > Date.now()).slice(0, 3)
+  const next = career.nodes.filter(n => n.status === "pending" && n.dueAt > Date.now()).sort((a, b) => a.dueAt - b.dueAt).slice(0, 3)
     .map(n => `${new Date(n.dueAt).getMonth() + 1}月${new Date(n.dueAt).getDate()}日 ${n.title}`);
   return [
     career.stage === "idol" && career.debut?.team ? `【她现在】${c.name} 女团 ${career.debut.team.en} 的成员，刚出道（进公司第 ${days} 天）。` : `【她现在】${c.name} 的练习生，进公司第 ${days} 天。`,

@@ -391,7 +391,7 @@ export function buildIdolChatHint(characterId: string, isGroup: boolean): string
   const now = Date.now();
   const teacher = teacherOf();
   if (teacher && teacher.id === characterId) {
-    const upcoming = loadCareer().nodes.filter(n => n.status === "pending" && n.dueAt > now - ABSENT_AFTER && n.kind !== "custom" && n.kind !== "date" && n.kind !== "practice").slice(0, 8);
+    const upcoming = loadCareer().nodes.filter(n => n.status === "pending" && n.dueAt > now - ABSENT_AFTER && n.kind !== "custom" && n.kind !== "date" && n.kind !== "practice").sort((a, b) => a.dueAt - b.dueAt).slice(0, 8);
     const classes = classesForTeacher();
     if (upcoming.length || classes) out.push(
       "### 请假",

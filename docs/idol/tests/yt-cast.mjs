@@ -12,6 +12,8 @@ const b = await puppeteer.launch({ executablePath: "/Applications/Google Chrome.
 const p = await b.newPage(); await p.setViewport({ width: 430, height: 900, deviceScaleFactor: 2 });
 const errs = []; p.on("pageerror", e => errs.push(e.message));
 await p.goto(URL, { waitUntil: "networkidle2", timeout: 300000 }); await sleep(1500);
+// 等页面把数据库建好（新开的服务第一次编译慢）
+await p.waitForFunction(() => window.__worldClock && window.__idolTest, { timeout: 240000, polling: 1000 }); await sleep(2000);
 await p.evaluate(async () => {
   const db = await new Promise((res, rej) => { const r = indexedDB.open("AiPhoneKvDB"); r.onsuccess = () => res(r.result); r.onerror = rej; });
   const tx = db.transaction("entries", "readwrite"); const st = tx.objectStore("entries");

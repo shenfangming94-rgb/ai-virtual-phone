@@ -24,7 +24,7 @@ import { allScenePlaces } from "./idol-stage";
 
 export type AlmanacKind = "fixed" | "career" | "world" | "mine" | "birthday";
 export type AlmanacItem = { id: string; date: string; title: string; note?: string; kind: AlmanacKind; /** 圈内大事是哪家公司的 */ company?: string; /** 圈内大事在此刻地图上哪儿办（只是新闻的没有） */ place?: string };
-type State = { mine: AlmanacItem[]; world: Record<string, AlmanacItem[]> };
+type State = { mine: AlmanacItem[]; world: Record<string, AlmanacItem[]>; /** 哪几个月的旧大事已经补过地点 */ placed?: string[] };
 
 const KEY = "idol_almanac_v1";
 export const ALMANAC_EVENT = "idol-almanac-changed";
@@ -35,7 +35,7 @@ const uid = (p: string) => `${p}_${Date.now().toString(36)}${Math.random().toStr
 function load(): State {
   try {
     const raw = JSON.parse(kvGet(KEY) || "null") as State | null;
-    if (raw) return { mine: raw.mine ?? [], world: raw.world ?? {} };
+    if (raw) return { mine: raw.mine ?? [], world: raw.world ?? {}, placed: raw.placed ?? [] };
   } catch { /* 坏数据当新的 */ }
   return { mine: [], world: {} };
 }
@@ -147,6 +147,38 @@ export function activityPlace(i: AlmanacItem): string | undefined {
   if (i.kind !== "world") return undefined;
   if (i.place) return i.place;
   return /演唱会|巡演|见面会|颁奖|公演/.test(i.title) ? "场馆·观众席" : undefined;
+}
+
+let placeBusy = false;
+/** 加地点之前生成的那批圈内大事：只补地点，标题内容不动，每个月补一次 */
+export async function fillWorldPlaces(ym: string): Promise<boolean> {
+  const s = load();
+  const items = s.world[ym] ?? [];
+  if (placeBusy || (s.placed ?? []).includes(ym) || !items.some(i => !i.place)) return false;
+  placeBusy = true;
+  try {
+    const places = activityPlaces();
+    const res = await simpleLLMCall(config(), [
+      { role: "system", content: `给下面这些韩国娱乐圈大事配地点。只输出 JSON：{"places":{"编号":"地点"}}
+有现场、人能去的（演唱会、签售、见面会、公开录制、校庆演出、外景拍摄、颁奖礼）从这些地点里挑最合适的，照原样写：${places.join("、")}。签售、外景这种名单里没有的，挑它所在的那片区域（比如明洞、弘大）。只是播出、官宣、公开这类没有现场的写空。` },
+      { role: "user", content: items.map((i, n) => `${n + 1}. ${i.date} ${i.title}${i.note ? `：${i.note}` : ""}`).join("\n") },
+    ], { temperature: 0.3, label: "圈内大事补地点" });
+    const j = JSON.parse(res.content?.match(/\{[\s\S]*\}/)?.[0] ?? "{}") as { places?: Record<string, string> };
+    if (!j.places) throw new Error(res.error || "AI 没回");
+    const fresh = load();
+    const world = (fresh.world[ym] ?? []).map(i => {
+      if (i.place) return i;
+      const n = items.findIndex(x => x.id === i.id) + 1;
+      const pl = String(j.places?.[String(n)] ?? "").trim();
+      return places.includes(pl) ? { ...i, place: pl } : i;
+    });
+    save({ ...fresh, world: { ...fresh.world, [ym]: world }, placed: [...(fresh.placed ?? []), ym] });
+    return true;
+  } catch {
+    return false;
+  } finally {
+    placeBusy = false;
+  }
 }
 
 /** 今天在此刻地图上办着的活动 */

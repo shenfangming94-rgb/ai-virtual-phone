@@ -8,7 +8,7 @@
 import { classAt } from "@/lib/idol-starroad";
 import { destinyMarks, takeDestinyMark } from "@/lib/idol-destiny";
 import { happeningMarks, takeHappening } from "@/lib/idol-events";
-import { activitiesToday } from "@/lib/idol-calendar";
+import { activitiesToday, fillWorldPlaces } from "@/lib/idol-calendar";
 import "@/styles/stage-replay.css";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ChevronLeft, MoreHorizontal, X, Lock, Music2, VolumeX, Image as ImageIcon, Check, Search, Play, BookOpen, Sparkles } from "lucide-react";
@@ -146,6 +146,12 @@ export function StageHome({ onClose, onPlay, onReplay }: Props) {
     setSheet(pl);
   };
 
+  // 旧的圈内大事没地点：打开地图时补一次（这个月和下个月）
+  useEffect(() => {
+    const d0 = new Date(Date.now());
+    const ym = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+    void Promise.all([fillWorldPlaces(ym(d0)), fillWorldPlaces(ym(new Date(d0.getFullYear(), d0.getMonth() + 1, 1)))]).then(r => { if (r.some(Boolean)) bump(n => n + 1); });
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const marks = destinyMarks(now);
   const lifeMarks = happeningMarks(now);
   const activities = activitiesToday(now);

@@ -544,6 +544,25 @@ export function setStageSide(chapterIndex: number, on: boolean): StageScene["tak
   return taken;
 }
 
+/** 之前的番外新人误建了档、进了她的通讯录：清掉（她没见过、没加 KakaoTalk 的才清）。每个存档跑一次 */
+export function cleanSideFaces(): number {
+  if (kvGet("idol_side_faces_cleaned_v1")) return 0;
+  let n = 0;
+  void import("./idol-people").then(({ loadProfiles, deletePerson }) => import("./chat-storage").then(({ loadChatContacts }) => {
+    const profiles = loadProfiles();
+    const friends = new Set(loadChatContacts().map(c => c.characterId));
+    const ids = Object.values(loadScenes()).filter(sc => sc.side).flatMap(sc => sc.newFaces ?? []);
+    for (const id of new Set(ids)) {
+      const p = profiles[id];
+      if (!p || p.met || friends.has(id)) continue;
+      deletePerson(id);
+      n++;
+    }
+    kvSet("idol_side_faces_cleaned_v1", "1");
+  })).catch(() => undefined);
+  return n;
+}
+
 /** 番外演完不计入主线：不记账，只是归档 */
 export function closeStageSideOnly(chapterIndex: number): void {
   const chId = chapterIdOf(chapterIndex);

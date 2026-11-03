@@ -21,7 +21,8 @@ p.on("request", r => {
   if (!r.url().includes("mock.test")) { r.continue(); return; }
   const s = r.postData() || "";
   let c = "嗯嗯";
-  if (s.includes("排接下来几天")) { planReq = s; c = JSON.stringify({ events: [], newPeople: [], status: [], posts: [], scene: { at: "2015-03-04 11:00", place: "场馆·观众席", about: "NMIXX 演唱会入场时两个站姐为了前排吵起来", seed: SEED, from: "NMIXX 演唱会" } }); }
+  if (s.includes("这一场的写法")) { globalThis.scenePrompt = s; c = "<content>\n<scene bg=\"场馆·观众席\">\n入场口两个站姐吵了起来。\n</scene>\n</content>\n<summary>站姐吵架。</summary>"; }
+  else if (s.includes("排接下来几天")) { planReq = s; c = JSON.stringify({ events: [], newPeople: [], status: [], posts: [], scene: { at: "2015-03-04 11:00", place: "场馆·观众席", about: "NMIXX 演唱会入场时两个站姐为了前排吵起来", seed: SEED, from: "NMIXX 演唱会" } }); }
   else if (s.includes("命运里的八个彩蛋")) c = JSON.stringify({ cards: [] });
   else if (s.includes("配地点")) { globalThis.fillReq = s; c = JSON.stringify({ places: { "4": "弘大", "3": "" } }); }
   r.respond({ status: 200, headers: CORS, contentType: "application/json", body: JSON.stringify({ choices: [{ message: { role: "assistant", content: c }, finish_reason: "stop" }] }) });
@@ -57,6 +58,7 @@ const kv = k => p.evaluate(k => new Promise(res => { const r = indexedDB.open("A
 console.log("[1] 发动机读日历、长出现场");
 ok(planReq.includes("【日历上的圈内活动】") && planReq.includes("NMIXX 首尔演唱会"), "排事情时带上了日历活动");
 ok(planReq.includes("可以写一件 scene"), "这次允许写现场");
+ok(planReq.includes("真的有在发生、可以产生后果推动剧情的事情") && !planReq.includes("鸡毛蒜皮"), "规矩是她的原话，没有鸡毛蒜皮");
 const sched = planReq.match(/【接下来的日程】\d[^【]*/)?.[0] ?? "";
 ok(sched.startsWith("【接下来的日程】3月6日") && !sched.includes("9月"), "日程按日期排，最近的在前，远的九月不混进来", sched);
 ok(planReq.includes("你不要在群里或私聊发日程通知"), "发动机不发日程通知");
@@ -87,8 +89,11 @@ await p.evaluate(() => [...document.querySelectorAll(".stg-mpin, .stg-card")].fi
 const choice = await p.evaluate(() => [...document.querySelectorAll(".stg-choose button")].map(x => x.textContent));
 ok(choice.length === 2 && choice[0].includes("NMIXX") && choice[1] === "那边好像有事", "撞在一起弹二选一", choice);
 await p.screenshot({ path: OUT + "/hap_choose.png" });
-await p.evaluate(() => [...document.querySelectorAll(".stg-choose button")][1].click()); await sleep(800);
-await p.evaluate(() => document.querySelector(".stg-go")?.click()); await sleep(3000);
+await p.evaluate(() => [...document.querySelectorAll(".stg-choose button")][1].click()); await sleep(2500);
+ok(!(await p.evaluate(() => Boolean(document.querySelector(".stg-go")))), "点了「那边好像有事」直接进，不用选人");
+await p.evaluate(() => document.querySelector(".vn-stage-open")?.click()); await sleep(4000);
+ok(String(globalThis.scenePrompt || "").includes("（场外指令：开场："), "进去后 AI 先开场，不用她先说话");
+await p.screenshot({ path: OUT + "/hap_open.png" });
 const all = await p.evaluate(() => new Promise(res => { const r = indexedDB.open("AiPhoneKvDB"); r.onsuccess = () => { const g = r.result.transaction("entries").objectStore("entries").getAll(); g.onsuccess = () => res(g.result.filter(x => typeof x.value === "string" && x.value.includes("站姐")).map(x => x.key)); }; }));
 ok(all.some(k => k !== "idol_events_v1"), "开场带上了那件事", all);
 const ev2 = JSON.parse(await kv("idol_events_v1"));

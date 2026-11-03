@@ -13,7 +13,7 @@ import "@/styles/stage-replay.css";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ChevronLeft, MoreHorizontal, X, Lock, Music2, VolumeX, Image as ImageIcon, Check, Search, Play } from "lucide-react";
 import {
-  DEFAULT_MAPS, mapLookKey, addBackground, addCustomPlace, loadCustomPlaces, pickBackground, placeBackgrounds, removeBackground, removeCustomPlace, thumbsOf, STAGE_APP_NAME, STAGE_OPEN_EVENT, loadBgmMap, loadBgmModes, loadMapLooks, loadStageSettings, mapById, mapBgmKey, mapOfPlace, openStageScenes, pastStageScenes, deleteStageScene, placeLocked, exportSceneText,
+  DEFAULT_MAPS, mapLookKey, addBackground, addCustomPlace, loadCustomPlaces, pickBackground, placeBackgrounds, removeBackground, removeCustomPlace, thumbsOf, STAGE_APP_NAME, STAGE_OPEN_EVENT, loadBgmMap, loadBgmModes, loadMapLooks, loadStageSettings, mapById, mapBgmKey, mapOfPlace, openStageScenes, pastStageScenes, deleteStageScene, cleanSideFaces, placeLocked, exportSceneText,
   saveBgmFor, saveBgmMode, saveMapLook, saveStageSettings, startNodeStage, startStageScene, takePendingStage, type BgmMode, type BgmSong, type MapLook, type StagePlace, type StageSettings,
 } from "@/lib/idol-stage";
 import { loadBgmMuted, saveBgmMuted, setStageBgmVolume, useStageBgm } from "./stage-bgm";
@@ -135,18 +135,42 @@ export function StageHome({ onClose, onPlay, onReplay }: Props) {
     setLooks(loadMapLooks());
   };
 
+  /** 进一个地点：用掉命运/淡粉「!」或今天的活动当开头 */
+  const goPlace = (place: StagePlace, meet: string[], avoid: string[], extraPremise: string) => {
+    const t = Date.now();
+    const fateId = destinyMarks(t).find(m => m.place === place.key)?.id;
+    const fate = takeDestinyMark(place.key);
+    const act = activitiesToday().find(a => a.place === place.key);
+    // 选了看活动就不碰淡粉「!」，它还挂着
+    const lifeId = fate || goWith.current === "activity" ? undefined : happeningMarks(t).find(m => m.place === place.key)?.id;
+    const life = lifeId ? takeHappening(place.key) : null;
+    const show = !fate && !life && act ? `今天这里在办：${act.title}${act.note ? `（${act.note}）` : ""}。照活动现场本身写` : null;
+    const premise = [fate, life, show, extraPremise].filter(Boolean).join("；") || undefined;
+    // 记下用掉的「!」：开场切成番外时还回去
+    const taken = { ...(fate && fateId ? { fate: fateId } : {}), ...(life && lifeId ? { life: lifeId } : {}), ...(extraPremise ? { extra: extraPremise } : {}), ...(premise ? { premise } : {}) };
+    const r = startStageScene({ placeKey: place.key, meetIds: meet, avoid, ...(premise ? { premise } : {}), taken });
+    if (r) onPlay(r.chapterIndex);
+  };
+  // 「!」的地方：那件事自己定了谁在场，交给世界
+  const goMark = (place: StagePlace) => goPlace(place, [], [], "");
+
   const tapPlace = (pl: StagePlace) => {
     if (pinEdit !== null) { setPinEdit(pl.key); return; }
     if (pl.sub && !placeLocked(pl)) { setMapId(pl.sub); return; }
     const t = Date.now();
-    const both = !destinyMarks(t).some(m => m.place === pl.key) && happeningMarks(t).some(m => m.place === pl.key) && activitiesToday(t).some(a => a.place === pl.key);
+    const fateHere = destinyMarks(t).some(m => m.place === pl.key);
+    const lifeHere = happeningMarks(t).some(m => m.place === pl.key);
+    const both = !fateHere && lifeHere && activitiesToday(t).some(a => a.place === pl.key);
     goWith.current = null;
     if (both) { setChoose(pl); return; }
+    // 有「!」：那件事自己定了谁在场，不用选人，直接进
+    if (fateHere || lifeHere) { goMark(pl); return; }
     setSheet(pl);
   };
 
-  // 旧的圈内大事没地点：打开地图时补一次（这个月和下个月）
+  // 旧的圈内大事没地点：打开地图时补一次（这个月和下个月）；顺手清掉以前番外误建的人
   useEffect(() => {
+    cleanSideFaces();
     const d0 = new Date(Date.now());
     const ym = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
     void Promise.all([fillWorldPlaces(ym(d0)), fillWorldPlaces(ym(new Date(d0.getFullYear(), d0.getMonth() + 1, 1)))]).then(r => { if (r.some(Boolean)) bump(n => n + 1); });
@@ -259,27 +283,15 @@ export function StageHome({ onClose, onPlay, onReplay }: Props) {
           <div className="stg-choose" onClick={e => e.stopPropagation()}>
             <p>{choose.label}</p>
             <button type="button" onClick={() => { goWith.current = "activity"; setSheet(choose); setChoose(null); }}>去看{activitiesToday().find(a => a.place === choose.key)?.title ?? "活动"}</button>
-            <button type="button" onClick={() => { goWith.current = "event"; setSheet(choose); setChoose(null); }}>那边好像有事</button>
+            <button type="button" onClick={() => { const pl = choose; setChoose(null); goMark(pl); }}>那边好像有事</button>
           </div>
         </div>
       ) : null}
 
       {sheet ? (
         <PlaceSheet place={sheet} onClose={() => { setSheet(null); bump(n => n + 1); setBgmVer(v => v + 1); setPhotoVer(v => v + 1); }} onGo={(meet, avoid, extraPremise) => {
-          const t = Date.now();
-          const fateId = destinyMarks(t).find(m => m.place === sheet.key)?.id;
-          const fate = takeDestinyMark(sheet.key);
-          const act = activitiesToday().find(a => a.place === sheet.key);
-          // 选了看活动就不碰淡粉「!」，它还挂着
-          const lifeId = fate || goWith.current === "activity" ? undefined : happeningMarks(t).find(m => m.place === sheet.key)?.id;
-          const life = lifeId ? takeHappening(sheet.key) : null;
-          const show = !fate && !life && act ? `今天这里在办：${act.title}${act.note ? `（${act.note}）` : ""}。照活动现场本身写` : null;
-          const premise = [fate, life, show, extraPremise].filter(Boolean).join("；") || undefined;
-          // 记下用掉的「!」：开场切成番外时还回去
-          const taken = { ...(fate && fateId ? { fate: fateId } : {}), ...(life && lifeId ? { life: lifeId } : {}), ...(extraPremise ? { extra: extraPremise } : {}), ...(premise ? { premise } : {}) };
-          const r = startStageScene({ placeKey: sheet.key, meetIds: meet, avoid, ...(premise ? { premise } : {}), taken });
+          goPlace(sheet, meet, avoid, extraPremise);
           setSheet(null);
-          if (r) onPlay(r.chapterIndex);
         }} />
       ) : null}
 

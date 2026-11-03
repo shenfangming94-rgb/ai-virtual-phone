@@ -68,6 +68,27 @@ export function editShortTermEntry(id: string, prefix: string, body: string) {
     saveAll(all);
 }
 
+// ── 她自己加的短期记忆：按角色存，拼的时候混进去；改/删照样走上面那套（按 id） ──
+
+export type ManualShortTerm = { id: string; at: string; text: string };
+export const SHORT_TERM_MANUAL_KEY = "nox_short_term_manual_v1";
+
+export function loadManualShortTerm(characterId: string): ManualShortTerm[] {
+    try {
+        const all = JSON.parse(kvGet(SHORT_TERM_MANUAL_KEY) || "{}") as Record<string, ManualShortTerm[]>;
+        return Array.isArray(all[characterId]) ? all[characterId] : [];
+    } catch { return []; }
+}
+
+/** at 用世界时间（她在戏里的现在），排进时间线里对的位置 */
+export function addManualShortTerm(characterId: string, text: string, at = new Date(Date.now()).toISOString()): void {
+    let all: Record<string, ManualShortTerm[]> = {};
+    try { all = JSON.parse(kvGet(SHORT_TERM_MANUAL_KEY) || "{}") || {}; } catch { /* 坏了重来 */ }
+    const id = `manual_st_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
+    all[characterId] = [...(all[characterId] ?? []), { id, at, text: text.trim() }];
+    kvSet(SHORT_TERM_MANUAL_KEY, JSON.stringify(all));
+}
+
 export function restoreShortTermEntry(id: string) {
     const all = loadAll();
     delete all[id];

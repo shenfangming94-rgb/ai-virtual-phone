@@ -756,9 +756,11 @@ export function VnPlayer({ characterId, chapterIndex, onClose, onChapterEnd, vnT
   }, []);
 
   // Send all pending actions as one message
-  const handleSendAll = useCallback(async () => {
-    const director = stage && inputMode === "director" ? inputText.trim() : "";
-    const actions = stage && inputText.trim() && inputMode !== "director" ? [...pendingActions, { type: inputMode as "dialogue" | "narration", text: inputText.trim() }] : pendingActions;
+  const handleSendAll = useCallback(async (autoDirector?: string) => {
+    // autoDirector：「!」的现场进来时由 AI 先开场，不用她先说话
+    const auto = typeof autoDirector === "string" ? autoDirector : "";
+    const director = auto || (stage && inputMode === "director" ? inputText.trim() : "");
+    const actions = auto ? [] : stage && inputText.trim() && inputMode !== "director" ? [...pendingActions, { type: inputMode as "dialogue" | "narration", text: inputText.trim() }] : pendingActions;
     if ((actions.length === 0 && !director) || isGenerating) return;
     const packaged = [actions.length ? packageMultiActions(actions, userName) : "", director ? `（场外指令：${director}）` : ""].filter(Boolean).join("\n");
     setPendingActions([]);
@@ -1264,7 +1266,7 @@ export function VnPlayer({ characterId, chapterIndex, onClose, onChapterEnd, vnT
                   <button
                     className="vn-send-btn"
                     disabled={pendingActions.length === 0 && !(stage && inputText.trim())}
-                    onClick={handleSendAll}
+                    onClick={() => void handleSendAll()}
                     title="发送"
                     style={pendingActions.length > 0 || (stage && inputText.trim()) ? { background: "rgba(160,140,240,0.3)", color: "rgba(255,255,255,0.9)" } : undefined}
                   >
@@ -1689,12 +1691,21 @@ export function VnPlayer({ characterId, chapterIndex, onClose, onChapterEnd, vnT
 
       {/* ── 场景 app：开场卡 ── */}
       {stage && stageOpening && stageScene && (
-        <div className="vn-stage-open" onClick={(e) => { e.stopPropagation(); setStageOpening(false); }}>
+        <div className="vn-stage-open" onClick={(e) => {
+          e.stopPropagation();
+          setStageOpening(false);
+          // 带着「!」进来的：别人的事正在发生，AI 先把现场写出来
+          if (!allFrames.length && !sideOn && (stageScene.taken?.fate || stageScene.taken?.life)) void handleSendAll("开场：照这一场正在发生的事，先把现场写出来，写到一个她可以决定要不要参与的地方停");
+        }}>
           <div className="vn-stage-open-time">{fmtWorld(stageScene.startAt).replace(/^\d+年/, "")}</div>
           <div className="vn-stage-open-place">{stageScene.place}</div>
           {worldWeatherLabel(stageScene.startAt) ? <div className="vn-stage-open-weather">{worldWeatherLabel(stageScene.startAt)}</div> : null}
           {stageScene.nodeId ? <div className="vn-stage-open-title">{session.chapters[chapterIndex]?.title}</div> : null}
-          <div className="vn-stage-open-hint">点一下，说你的第一句</div>
+          <div className="vn-stage-open-hint">{!allFrames.length && !sideOn && (stageScene.taken?.fate || stageScene.taken?.life) ? "点一下，看看发生了什么" : "点一下，说你的第一句"}</div>
+          {/* 带「!」进来的会自动开场，番外得在开场前选：开场卡上也放一个 */}
+          {!allFrames.length && !stageScene.nodeId && (stageScene.taken?.fate || stageScene.taken?.life) ? (
+            <button type="button" className="vn-mode-btn vn-stage-open-side" data-active={sideOn ? "true" : undefined} onClick={(e) => { e.stopPropagation(); toggleSide(); }}>番外</button>
+          ) : null}
         </div>
       )}
 

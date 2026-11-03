@@ -278,14 +278,16 @@ function addFaces(host: SceneHost, faces: SceneTags["newFaces"], introduction: s
       if (!ids.includes(exist.id)) ids.push(exist.id);
       continue;
     }
+    // 番外里新冒出来的人是他们认识的人，不建档、不进她的通讯录，只活在这场戏里
+    if (side) continue;
     // 排过队的待出场人物：戏里真见了，拿预设资料合并，从队列里移除
-    const pending = side ? undefined : takePendingFace(f.name);
+    const pending = takePendingFace(f.name);
     const facts: ScenePersonFacts = {
       ...f.facts,
       ...(pending?.gender && !f.facts?.gender ? { gender: pending.gender } : {}),
       ...(pending?.age && !f.facts?.age ? { age: pending.age } : {}),
     };
-    const char = createPerson(f.name, { ...emptyProfile(""), layer: "background", role: f.role || pending?.role || "", ...facts, sceneFacts: facts, introducedIn: introduction.slice(0, 12000), ...(side ? { met: false } : { met: true, metAt: { at: Date.now(), place: meta.place } }) }, null, genKakaoId());
+    const char = createPerson(f.name, { ...emptyProfile(""), layer: "background", role: f.role || pending?.role || "", ...facts, sceneFacts: facts, introducedIn: introduction.slice(0, 12000), met: true, metAt: { at: Date.now(), place: meta.place } }, null, genKakaoId());
     ids.push(char.id);
     meta.newFaces.push(char.id);
     added.push(char.name);

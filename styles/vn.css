@@ -326,6 +326,7 @@
           transition: all 0.2s;
         }
         .vn-side-btn { margin-left: auto; }
+        .vn-stage-open-side { margin-top: 18px; pointer-events: auto; }
         .vn-side-btn:disabled { cursor: default; }
         .vn-mode-btn[data-active="true"] {
           background: var(--vn-ui-accent-bg);

@@ -25,7 +25,7 @@ import {
 import { hydrateChatStorage } from "@/lib/chat-storage";
 import { loadNativeTimeline, type NativeTimelineEntry } from "@/lib/short-term-assembler";
 import { exportMemoryBackup, importMemoryPack, parseMemoryBackup, type CharacterMemoryPack } from "@/lib/memory-backup";
-import { deleteShortTermEntries, deleteShortTermEntry, editShortTermEntry, restoreShortTermEntry, splitShortTermLine } from "@/lib/short-term-edits";
+import { addManualShortTerm, deleteShortTermEntries, deleteShortTermEntry, editShortTermEntry, restoreShortTermEntry, splitShortTermLine } from "@/lib/short-term-edits";
 import { runSummarizationPipeline } from "@/lib/memory-summarizer";
 import { runCoreMemoryPipeline } from "@/lib/core-memory-builder";
 import { resolveAuxiliaryApiConfig, resolveUserIdentity } from "@/lib/settings-storage";
@@ -226,6 +226,8 @@ export function MemoryBankPage({
     // 短期记忆：点一条 → 编辑/删除（只改他记得的版本，聊天记录不动）
     const [stActionId, setStActionId] = useState<string | null>(null);
     const [stEditor, setStEditor] = useState<{ id: string; prefix: string; body: string } | null>(null);
+    // 新增短期记忆：id 为空就是新加的
+    const NEW_ST = "__new__";
     const [stConfirmDeleteId, setStConfirmDeleteId] = useState<string | null>(null);
     const [stConfirmDeleteIds, setStConfirmDeleteIds] = useState<string[] | null>(null);
     // 记忆备份
@@ -478,6 +480,14 @@ export function MemoryBankPage({
         const body = stEditor.body.trim();
         if (!body) {
             showNotice("内容不能为空，不想要可以直接删除");
+            return;
+        }
+        if (stEditor.id === NEW_ST) {
+            if (!selectedCharId) return;
+            addManualShortTerm(selectedCharId, body);
+            setStEditor(null);
+            loadDetailData(selectedCharId);
+            showNotice("加好了，他会记得这件事");
             return;
         }
         const entry = findTimelineEntry(stEditor.id);
@@ -890,6 +900,12 @@ export function MemoryBankPage({
                     ) : activeTab === "short" ? (
                         /* ── Short-term: card view ── */
                         <>
+                            <div className="mem-entry-toolbar">
+                                <button className="mem-entry-add-btn" onClick={() => setStEditor({ id: NEW_ST, prefix: "", body: "" })}>
+                                    <Plus size={15} strokeWidth={1.8} />
+                                    <span>新增短期记忆</span>
+                                </button>
+                            </div>
                             <MemoryTimeline
                                 events={shortTermEvents}
                                 userName={resolveUserIdentity(selectedCharId!)?.name || "用户"}
@@ -1100,7 +1116,7 @@ export function MemoryBankPage({
                                 <button className="modal-header-btn modal-header-btn-muted" onClick={() => setStEditor(null)}>
                                     <X size={18} />
                                 </button>
-                                <h3 className="modal-title">编辑短期记忆</h3>
+                                <h3 className="modal-title">{stEditor.id === NEW_ST ? "新增短期记忆" : "编辑短期记忆"}</h3>
                                 <button
                                     className="modal-header-btn modal-header-btn-action"
                                     onClick={handleSaveShortTermEdit}
@@ -1114,11 +1130,12 @@ export function MemoryBankPage({
                                 <textarea
                                     className="ui-textarea mem-edit-textarea"
                                     value={stEditor.body}
+                                    placeholder={stEditor.id === NEW_ST ? "写一件他该记得的事，比如：昨晚在汉江公园，她说想家了" : undefined}
                                     onChange={event => setStEditor(prev => prev ? { ...prev, body: event.target.value } : prev)}
                                 />
                                 <div className="mem-edit-footer">
                                     <span>SHORT TERM</span>
-                                    <span>聊天记录不会变</span>
+                                    <span>{stEditor.id === NEW_ST ? "记在现在这个时间" : "聊天记录不会变"}</span>
                                 </div>
                                 <button
                                     className="ui-btn ui-btn-primary mem-edit-save-btn"

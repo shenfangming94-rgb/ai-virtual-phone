@@ -32,7 +32,7 @@ import { loadChatOfflineProjectionEntries } from "./chat-offline-storage";
 import { loadCheckPhoneProjectionEntries } from "./checkphone-storage";
 import { formatShoppingPaymentRequestHistory } from "./shopping-payment-request";
 import { loadCustomAppTimelineEntries } from "./custom-app-storage";
-import { applyShortTermEdits, applyShortTermEditsToHistory } from "./short-term-edits";
+import { applyShortTermEdits, applyShortTermEditsToHistory, loadManualShortTerm } from "./short-term-edits";
 import {
     canCharacterSeeMomentPost,
     getVisibleMomentCommentsForCharacter,
@@ -842,6 +842,17 @@ export function loadNativeTimeline(
                 timeAware,
                 timestampOptions,
             }),
+        });
+    }
+
+    // ── 她在记忆库里自己加的 ──
+    for (const m of loadManualShortTerm(characterId)) {
+        if (options?.afterTimestamp && m.at <= options.afterTimestamp) continue;
+        entries.push({
+            id: m.id,
+            sourceApp: "vn",
+            timestamp: m.at,
+            content: formatStoredPromptEventContent(m.text, { label: "事件", timestamp: m.at, timeAware, timestampOptions }),
         });
     }
 

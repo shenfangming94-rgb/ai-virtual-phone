@@ -21,7 +21,10 @@ export type Group = {
   members?: string[];
   /** 名气档位：第一次出现时 AI 说一句，之后定死（数字的规矩在 idol-scale.ts） */
   tier?: "top" | "mid" | "small" | "rookie";
-  songs?: { title: string; year?: number; note?: string }[];
+  songs?: { title: string; year?: number; note?: string;
+    /** 已知发行资料；Melon 只读，不根据搜索改写。 */
+    album?: string; releasedAt?: string; track?: number; real?: boolean;
+  }[];
   /** 第一次是在哪写出来的 */
   from?: "site" | "almanac" | "search";
   at?: number;

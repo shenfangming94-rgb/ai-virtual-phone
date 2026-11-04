@@ -10,6 +10,7 @@ import { ensureIdolWeatherApp } from "@/lib/idol-weather-install";
 import { ClockApp } from "./clock-app";
 import { ContactsApp } from "./contacts/contacts-app";
 import { CareerApp } from "./career/career-app";
+import { MelonApp } from "./melon-app";
 import { IdolSearchApp } from "./idolsearch/idol-search-app";
 import { StarRoadApp } from "./starroad/star-road-app";
 import { starroadTick } from "@/lib/idol-starroad";
@@ -1637,6 +1638,14 @@ export function DesktopShell({ initialThemeProfile, initialThemeAssets }: Deskto
               kvSet(ICON_LAYOUT_STORAGE_KEY, JSON.stringify(normalized));
             }
             kvSet(MEITUAN_ICON_ADDED_KEY, "1");
+          }
+          if (!kvGet("idol_melon_icon_added_v1")) {
+            const present = new Set<string>([...hydratedDock, ...Object.values(hydratedFolders).flatMap(f => f.icons), ...getDesktopIconLayoutItems(normalized).map(i => i.id)]);
+            if (!present.has("melon")) {
+              normalized = appendIconsToFreeSlots(normalized, ["melon"], hydratedWidgets) as typeof normalized;
+              kvSet(ICON_LAYOUT_STORAGE_KEY, JSON.stringify(normalized));
+            }
+            kvSet("idol_melon_icon_added_v1", "1");
           }
           const sane = sanitizeDesktopFolders(hydratedFolders, normalized, hydratedDock, hydratedWidgets);
           setFolders(sane.folders);
@@ -4344,6 +4353,7 @@ html,body{margin:0;padding:0;width:100%;height:100%;background:#121110;color:rgb
     if (activeApp === "starroad") {
       return <StarRoadApp onClose={() => setActiveApp(null)} onNotice={setNotice} />;
     }
+    if (activeApp === "melon") { return <MelonApp onClose={() => setActiveApp(null)} />; }
     if (activeApp === "idolsearch") {
       return <IdolSearchApp onClose={() => setActiveApp(null)} onNotice={setNotice} onOpenMail={() => { const ic = mailAppIcon(); if (ic) openApp(ic as DesktopIconId); else setNotice("先装上邮箱 app"); }} />;
     }

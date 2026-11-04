@@ -9,7 +9,16 @@ const isWslUncPath = projectRoot.startsWith("\\\\wsl$\\");
 function resolveDistDir() {
   // 本地验证构建可用 NEXT_DIST_DIR 指到独立目录,避免覆写正在跑的 dev server 的 .next
   if (process.env.NEXT_DIST_DIR) {
-    return process.env.NEXT_DIST_DIR;
+    const configured = process.env.NEXT_DIST_DIR;
+    // Next resolves distDir relative to the project root. Leaving an absolute
+    // path here makes `path.join(projectRoot, distDir)` land inside the repo
+    // (for example `private/tmp/...`) and the dev watcher then sees its own
+    // generated files, causing repeated rebuilds. Preserve relative overrides;
+    // convert absolute overrides to a project-relative path that resolves back
+    // to the requested location.
+    return path.isAbsolute(configured)
+      ? path.relative(projectRoot, configured) || ".next"
+      : configured;
   }
   if (!isWindows || !isWslUncPath) {
     return ".next";

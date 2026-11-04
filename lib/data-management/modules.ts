@@ -161,6 +161,7 @@ const PRIMARY_DATA_MODULES: DataModuleDefinition[] = [
           "idol_leave_crowd_v1",
           "idol_ledger_v1",
           "idol_search_v1",
+          "idol_melon_v1",
           "idol_starroad_v1",
           "idol_lock_notes_v1",
         ],

@@ -4,6 +4,7 @@ export type IconId =
   | "chat"
   | "diary"
   | "music"
+  | "melon"
   | "reading"
   | "cocreate"
   | "story"
@@ -68,6 +69,7 @@ export type IconMeta = {
 export const PAGE_1_DEFAULT: IconId[] = ["chat", "contacts", "career", "vnmode", "idolsearch", "ins", "youtube", "starroad", "diary", "music", "calendar", "checkphone", "shopping", "reading", "clock"];
 
 export const PAGE_2_DEFAULT: IconId[] = [
+  "melon",
   "appmarket",
   "xiaohongshu",
   "dwelling",
@@ -82,6 +84,7 @@ export const DOCK_DEFAULT: IconId[] = ["settings", "theme", "resources", "charac
 export const ICONS: Record<IconId, IconMeta> = {
   chat: { id: "chat", label: "\u804a\u5929", tone: "var(--c-icon-green)", placeholder: false },
   diary: { id: "diary", label: "手记", tone: "var(--c-icon-violet)", placeholder: false },
+  melon: { id: "melon", label: "Melon", tone: "#00c83c", placeholder: false },
   music: { id: "music", label: "\u97F3\u4E50", tone: "var(--c-icon-coral)", placeholder: false },
   reading: { id: "reading", label: "\u9605\u8BFB", tone: "var(--c-icon-amber)", placeholder: false },
   cocreate: { id: "cocreate", label: "共创", tone: "var(--c-icon-cocreate, #c8b58a)", placeholder: false },

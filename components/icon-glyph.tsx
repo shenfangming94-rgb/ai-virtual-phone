@@ -81,6 +81,7 @@ const MDI_PATHS: Record<IconId, string> = {
   idolsearch: mdiMagnify,
   ins: mdiInstagram,
   youtube: mdiYoutube,
+  melon: mdiMusic,
   starroad: mdiStarFourPointsOutline,
   vnplay: mdiPlayCircle,
   vnchapters: mdiBookmark,

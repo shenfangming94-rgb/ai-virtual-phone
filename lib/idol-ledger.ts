@@ -17,6 +17,8 @@ import { getProfile, loadProfiles, relationOf, RELATIONS } from "./idol-people";
 import { loadTraineeCard } from "./trainee-card";
 import { crowdOf } from "./idol-crowd";
 import { drawRankImage, type RankRow } from "./idol-rank-image";
+import { applyMonthlyRank, examScore } from "./idol-training";
+import { loadRoster, saveRoster } from "./idol-roster-live";
 
 const KEY = "idol_ledger_v1";
 const HOUR = 3600e3;
@@ -82,6 +84,11 @@ export function recordPerformance(node: CareerNode, perf: string, why: string): 
 
 // ── 排名 ──
 
+/** 新存档模式（名册存在）：月考 = 40 人真实数值硬排名（Flora 定：数值做底、档位映射、不保送不限幅） */
+export function newRankMode(): boolean {
+  try { return Boolean(kvGet("idol_roster_v1")); } catch { return false; }
+}
+
 function myGroup(): string {
   const t = loadTraineeCard()?.talents ?? [];
   return t.includes("vocal") ? "vocal 组" : t.includes("rap") ? "rap 组" : "舞蹈组";
@@ -130,8 +137,9 @@ function wishRank(wish: string | undefined, total: number): number | null {
   return null;
 }
 
-/** 算一个月的名次（不发出去） */
+/** 算一个月的名次（不发出去）。新档走 40 人硬排名；旧档走原来的演出式排名 */
 function computeRank(node: CareerNode): MonthRank {
+  if (newRankMode()) return computeRankHard(node);
   const s = load();
   const people = participants();
   const prev = s.months[s.months.length - 1];
@@ -177,6 +185,38 @@ function computeRank(node: CareerNode): MonthRank {
   return { month, nodeId: node.id, rank: myRank, total, prevRank: prev?.rank, comment: "", rows, image: "", at: Date.now() };
 }
 
+/** 40 人硬排名：专业综合分(三项平均×80%+最高单科×20%)+现场 ±2 排序，前 10 A 班…后 10 D 班。
+ *  玩家不保送、不限幅；NPC 用名册里的真实数值（跳时间时 rosterTick 已经补算过成长）。 */
+function computeRankHard(node: CareerNode): MonthRank {
+  const roster = loadRoster();
+  const s = load();
+  const prev = s.months[s.months.length - 1];
+  const prevPos = new Map(prev?.rows.map(r => [r.id, r.rank]) ?? []);
+  const card = loadTraineeCard();
+  const rng = () => Math.random();
+  const list = roster
+    ? [roster.player, ...roster.npcs]
+    : [];
+  const scores = list.map(t => examScore(t, rng));
+  applyMonthlyRank(list, scores);
+  const ranked = list.map((t, i) => ({ t, score: scores[i] })).sort((a, b) => b.score - a.score);
+  const myIdx = ranked.findIndex(x => x.t.id === "player");
+  const myRank = myIdx + 1;
+  const chars = loadCharacters();
+  const rows = ranked.map(({ t }, i) => {
+    const name = t.id === "player" ? (card?.name || "我") : (roster?.npcs.find(n => n.id === t.id)?.charId ? chars.find(c => c.id === roster!.npcs.find(n => n.id === t.id)!.charId)?.name : t.name) || t.name;
+    const group = t.specialty === "vocal" ? "vocal 组" : t.specialty === "rap" ? "rap 组" : "舞蹈组";
+    const before = prevPos.get(t.id);
+    const change = !prev ? "—" : before == null ? "NEW" : before === i + 1 ? "—" : before > i + 1 ? `↑${before - i - 1}` : `↓${i + 1 - before}`;
+    return { id: t.id, name, group, rank: i + 1, change };
+  });
+  // 分班结果写回名册（升降班/被调离剧情靠这个变）
+  if (roster) saveRoster(roster);
+  const d = new Date(node.dueAt);
+  const month = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+  return { month, nodeId: node.id, rank: myRank, total: list.length, prevRank: prev?.rank, comment: "", rows, image: "", at: Date.now() };
+}
+
 function imageFor(r: MonthRank): string {
   const [y, m] = r.month.split("-");
   const company = companyOf(loadCareer().companyId)?.name ?? "";
@@ -195,11 +235,11 @@ function chatConfig() {
 }
 
 /** 老师的话、给她的评语、同期的反应（一次调用；失败就用平平的说法） */
-async function words(r: MonthRank, teacherName: string, mates: string[], friends: string[]): Promise<{ announce: string; comment: string; reactions: { who: string; text: string }[]; dms: { who: string; text: string }[] }> {
+async function words(r: MonthRank, teacherName: string, mates: string[], friends: string[], brief: string): Promise<{ announce: string; comment: string; reactions: { who: string; text: string }[]; dms: { who: string; text: string }[] }> {
   const me = loadTraineeCard()?.name || "她";
   const fallback = { announce: `${+r.month.split("-")[1]}月月末评价结果出来了，名单在下面。`, comment: "继续努力。", reactions: [], dms: [] };
   try {
-    const recent = load().entries.filter(e => e.at >= (load().months.slice(-2)[0]?.at ?? 0)).slice(-6).map(e => e.why).join("；");
+    const recent = newRankMode() ? brief : load().entries.filter(e => e.at >= (load().months.slice(-2)[0]?.at ?? 0)).slice(-6).map(e => e.why).join("；");
     const res = await simpleLLMCall(chatConfig(), [
       { role: "system", content: `你在写韩国练习生公司月末评价出结果那天，KakaoTalk 练习生群里的几句话。只输出 JSON：{"announce":"室长${teacherName}在群里发结果时说的话，一两句","comment":"${teacherName}私下给${me}的一句评语，照她这个月的表现说","reactions":[{"who":"","text":""}],"dms":[{"who":"","text":""}]}。reactions 是群里两三个人看到结果的反应，只说自己的名次或泛泛的话，不在群里点评别人；dms 是跟${me}要好的人私聊她说的话（只用「她的朋友」里的名字，可以没有），提到她的名次要对得上。都要口语、短；第一次排名没有升降可说。` },
       { role: "user", content: `${me}这次第 ${r.rank} 名（共 ${r.total} 人）${r.prevRank ? `，上次第 ${r.prevRank} 名` : "，第一次排名"}。她这个月：${recent || "照常训练"}。前三名：${r.rows.slice(0, 3).map(x => x.name).join("、")}。群里可以说话的人：${mates.join("、") || "群里的路人"}。她的朋友：${friends.join("、") || "没有"}` },
@@ -217,6 +257,28 @@ async function words(r: MonthRank, teacherName: string, mates: string[], friends
 }
 
 let busy = false;
+
+/** 测试/调试用：直接发某个月考节点的结果（绕开「练习生群建好」的前置） */
+export async function publishMonthlyForTest(nodeId: string): Promise<string> {
+  const node = loadCareer().nodes.find(n => n.id === nodeId && n.kind === "monthly");
+  if (!node) return "找不到月考节点";
+  await publish(node, Date.now(), () => undefined);
+  return "已发布";
+}
+
+/** 新档模式的「她这个月」简报：从课表和名册结算来的真实情况（不给 AI 档位数字） */
+function hardMonthBrief(): string {
+  try {
+    const s = JSON.parse(kvGet("idol_starroad_v1") || "null");
+    const now = Date.now();
+    const marks = (s?.marks ?? []).filter((m: { at: number }) => m.at >= now - 31 * 864e5);
+    const attend = marks.filter((m: { status?: string }) => m.status === "attend" || m.status === "official").length;
+    const skip = marks.filter((m: { status?: string }) => m.status === "skip").length;
+    const practiced = (s?.practiceDays ?? []).filter((d: string) => new Date(d).getTime() >= now - 31 * 864e5).length;
+    const parts = [`这个月上了 ${attend} 节课`, skip ? `旷了 ${skip} 节` : "", practiced ? `加练了 ${practiced} 次` : ""].filter(Boolean);
+    return parts.join("、") || "照常训练";
+  } catch { return "照常训练"; }
+}
 
 /** 每 5 秒：月考结束（演了、打勾、请假、缺席都算）的第二天上午十点，发结果 */
 export function rankTick(notify: (m: string) => void): void {
@@ -246,7 +308,7 @@ async function publish(node: CareerNode, at: number, notify: (m: string) => void
   const mates = r.rows.filter(x => x.id !== ME).slice(0, 12).map(x => x.name);
   const contacts = new Set(loadChatContacts().map(c => c.characterId));
   const friendChars = loadCharacters().filter(c => contacts.has(c.id) && c.id !== teacher?.id && ["朋友", "好朋友", "暧昧", "恋人"].includes(relationOf(getProfile(c.id))));
-  const w = await words(r, teacher?.name ?? "室长", mates, friendChars.map(c => c.name));
+  const w = await words(r, teacher?.name ?? "室长", mates, friendChars.map(c => c.name), hardMonthBrief());
   r.comment = w.comment;
   if (gid && teacher) {
     const iso = (ms: number) => new Date(ms).toISOString();

@@ -471,6 +471,8 @@ export function debutCountdown(): { label: string; days: number; date: string; p
 
 let busy = false;
 export function debutTick(notify: (m: string) => void): void {
+  // 新存档模式：出道走年度主线管道（1 月企划→3 月选拔→4 月名单→6 月出道），旧触发式出道停用
+  try { if (kvGet("idol_roster_v1")) return; } catch { return; }
   if (busy) return;
   const career = loadCareer();
   if (career.stage !== "trainee" && career.stage !== "idol") return;

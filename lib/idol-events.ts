@@ -430,6 +430,8 @@ let busy = false;
 
 /** 每 5 秒在桌面跑：该排就排，到点的执行 */
 export function eventsTick(notify: (m: string) => void): void {
+  // 新存档模式（名册存在）：旧发动机整套停用（挫折/现场/机会/约会/动态都换新系统了）
+  try { if (kvGet("idol_roster_v1")) return; } catch { return; }
   if (busy || !loadTraineeCard()) return;
   const career = loadCareer();
   if (career.stage !== "trainee") return;

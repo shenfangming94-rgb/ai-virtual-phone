@@ -111,8 +111,8 @@ function staggerOverduePosts() {
 
 /** Called by pollPendingReactions every 5s — check if any post is due. */
 function pollScheduledPosts() {
-    // 爱豆小手机：动态不按时自动发，由事情发动机跟着近况发（lib/idol-events.ts）；「让他立刻发一条」照常
-    return;
+    // 爱豆小手机：旧存档动态由事情发动机跟着近况发；新存档模式（名册存在，rosterTick 会打 __idolNewMode 标记）下旧发动机停用，这里恢复按时自动发
+    if (typeof window === "undefined" || !(window as unknown as { __idolNewMode?: boolean }).__idolNewMode) return;
     if (isGenerating) return;
     const now = Date.now();
     const contacts = loadChatContacts();

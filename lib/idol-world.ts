@@ -379,7 +379,11 @@ export async function closeSceneWith(host: SceneHost): Promise<SceneCloseResult>
     if (j.video && typeof j.video === "object") recordSceneVideo(j.video, meta.startAt);
     if (examNode && j.performance) { recordPerformance(examNode, String(j.performance), String(j.performanceWhy ?? "")); perf = String(j.performance); }
     if (examNode) onNodeDone(examNode, String(j.performance ?? "ok"));
-    else if (Array.isArray(j.practice)) onScenePractice(j.practice.map(String), meta.startAt);
+    else if (Array.isArray(j.practice)) {
+      onScenePractice(j.practice.map(String), meta.startAt);
+      // 新存档模式：名册里的她也涨（戏里真练了的科目）
+      void import("./idol-roster-live").then(m => { for (const p of (j.practice as string[]).slice(0, 1)) m.settlePlayerClass(p as never); }).catch(() => undefined);
+    }
     for (const item of j.people ?? []) {
       const c = present.find(x => x.name === item.name);
       if (!c) continue;

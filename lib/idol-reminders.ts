@@ -94,6 +94,10 @@ export async function checkNode(id: string, result: string): Promise<void> {
   const sc = scoreResultText(text);
   const perf = sc >= 3 ? "good" : sc < 0 ? "bad" : "ok";
   onNodeDone(node, perf);
+  // 新存档模式：名册里的她也涨（加练/作业打勾也算真练了）
+  if ((node.kind === "practice" || node.kind === "homework") && node.subject) {
+    void import("./idol-roster-live").then(m => { m.settlePlayerClass(node.subject as never); }).catch(() => undefined);
+  }
   await completeNode(id, perf);
   await afterNodeScene(loadCareer().nodes.find(n => n.id === id), [], node.place).catch(() => undefined);
 }

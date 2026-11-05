@@ -132,12 +132,13 @@ export function plotTick(): string[] {
     if (d.max == null) {
       // 每年类（生日/樱花/初雪）：去年触发过的，条件重新成立前先回 watching
       if (rec.state === "done") {
-        if (!d.check(c, rec)) all[d.key] = { ...rec, state: "watching" };
+        try { if (!d.check(c, rec)) all[d.key] = { ...load()[d.key] ?? rec, state: "watching" }; } catch { /* 一条出错不挡别的 */ }
         continue;
       }
       if (rec.state === "watching") {
         try {
-          if (d.check(c, rec)) { all[d.key] = { ...rec, state: "ready" }; became.push(d.key); }
+          if (d.check(c, rec)) { all[d.key] = { ...load()[d.key] ?? rec, state: "ready" }; became.push(d.key); }
+          else all[d.key] = load()[d.key] ?? rec; // check 里可能写了 extra（比如被调离的班级快照）
         } catch { /* 一条出错不挡别的 */ }
       }
       continue;
@@ -146,7 +147,7 @@ export function plotTick(): string[] {
     if (rec.firedCount >= d.max) continue;
     try {
       if (d.check(c, rec)) {
-        all[d.key] = { ...rec, state: "ready" };
+        all[d.key] = { ...load()[d.key] ?? rec, state: "ready" };
         became.push(d.key);
       }
     } catch { /* 一条出错不挡别的 */ }
@@ -397,6 +398,55 @@ export const PLOTS: PlotDef[] = [
       const picked = same.slice(0, 2 + Math.floor(Math.random() * 3));
       return {
         premise: `声乐课/舞蹈课上，老师宣布公司要安排一次练习生小组合作表演（女同期小组，和 8 月主线的男女合作舞台是两回事）。她和${picked.map(r => r.name).join("、")}分到一组。这一场先演公布和分组：成员之间真实的亲疏关系、谁开心谁有意见，都按人设来；后续排练和正式表演由后面的场次接着演。`,
+      };
+    },
+  },
+  // ── 课堂八类剩下的两个（挂在月考换血上：班级真实变动才触发）──
+  {
+    key: "promote_demote", title: "升降班", hook: "class", max: null,
+    check(c, rec) {
+      const last = (rec.extra?.lastKlass as string) ?? "C";
+      return Boolean(c.roster) && c.roster!.player.klass !== last;
+    },
+    fire(c, rec) {
+      const klass = c.roster?.player.klass ?? "C";
+      const last = (rec.extra?.lastKlass as string) ?? "C";
+      const up = klass < last; // A<B<C<D
+      const all = load();
+      all["promote_demote"] = { ...(all["promote_demote"] ?? rec), extra: { ...(rec.extra ?? {}), lastKlass: klass } };
+      save(all);
+      return {
+        premise: `某节课上，老师宣布她${up ? `升到 ${klass} 班` : `降到 ${klass} 班`}（月考后的班级调整结果，代码定的）。宣布方式、在场同期的反应、升班后的新环境或降班后的处境，按真实关系和人设演；老师提她表现时，说她这个月真实的情况（上课、加练、考核），不报分数和档位。`,
+      };
+    },
+  },
+  {
+    key: "moved_out", title: "被调离的同期", hook: "class", max: null,
+    check(c, rec) {
+      if (!c.roster) return false;
+      const cur: Record<string, string> = {};
+      for (const n of c.roster.npcs) if (n.charId) cur[n.charId] = n.klass;
+      const snap = rec.extra?.klasses as Record<string, string> | undefined;
+      if (!snap) {
+        const all = load();
+        all["moved_out"] = { ...(all["moved_out"] ?? rec), extra: { ...(rec.extra ?? {}), klasses: cur } };
+        save(all);
+        return false;
+      }
+      return Object.entries(cur).some(([id, k]) => snap[id] && snap[id] < k); // 降班才算
+    },
+    fire(c, rec) {
+      const cur: Record<string, string> = {};
+      for (const n of c.roster?.npcs ?? []) if (n.charId) cur[n.charId] = n.klass;
+      const snap = (rec.extra?.klasses as Record<string, string>) ?? {};
+      const moved = c.roster?.npcs.find(n => n.charId && snap[n.charId] && snap[n.charId] < n.klass);
+      const name = moved?.charId ? c.characters.find(x => x.id === moved.charId)?.name : undefined;
+      const all = load();
+      all["moved_out"] = { ...(all["moved_out"] ?? rec), extra: { ...(rec.extra ?? {}), klasses: cur } };
+      save(all);
+      if (!name) return { premise: "", done: true };
+      return {
+        premise: `某节课上，老师宣布同期${name}即将离开当前班级（${snap[moved!.charId!]} 班 → ${moved!.klass} 班，月考后的调整，代码定的）。她可能是她的好朋友、竞争对手、关系不好的同期，也可能只是陌生人；她本人怎么反应、其他人怎么评价，按真实人设和关系演。调班不等于退社，她还在公司。`,
       };
     },
   },

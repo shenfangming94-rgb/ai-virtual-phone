@@ -74,6 +74,7 @@ export function ensureRoster(): RosterState | null {
 /** 桌面每 5 秒跑：把没结算的周补上（跳时间跳多久补多久） */
 export function rosterTick(): void {
   const s = ensureRoster();
+  if (typeof window !== "undefined") (window as unknown as { __idolNewMode?: boolean }).__idolNewMode = Boolean(s);
   if (!s) return;
   const today = dayKey(Date.now());
   if (today <= s.settledUntil) return;

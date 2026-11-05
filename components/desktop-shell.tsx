@@ -18,6 +18,7 @@ import { IdolSearchApp } from "./idolsearch/idol-search-app";
 import { StarRoadApp } from "./starroad/star-road-app";
 import { starroadTick } from "@/lib/idol-starroad";
 import { rosterTick } from "@/lib/idol-roster-live";
+import { mainlineTick } from "@/lib/idol-mainline";
 import { destinyTick } from "@/lib/idol-destiny";
 import { InsApp } from "./ins/ins-app";
 import { insTick } from "@/lib/idol-ins";
@@ -1157,6 +1158,7 @@ export function DesktopShell({ initialThemeProfile, initialThemeAssets }: Deskto
       try { rankTick(idolNotify); } catch { /* 同上 */ }
       try { starroadTick(idolNotify); } catch { /* 同上 */ }
       try { rosterTick(); } catch { /* 名册结算出错不挡着用手机 */ }
+      try { mainlineTick(); } catch { /* 主线排期出错不挡着用手机 */ }
       try { destinyTick(idolNotify); } catch { /* 同上 */ }
       try { debutTick(idolNotify); } catch { /* 同上 */ }
       try { yearlyTick(idolNotify); } catch { /* 同上 */ }
@@ -1179,6 +1181,7 @@ export function DesktopShell({ initialThemeProfile, initialThemeAssets }: Deskto
       void Promise.all([import("@/lib/idol-leave"), import("@/lib/chat-storage"), import("@/lib/idol-casual")]).then(([l, cs, ca]) => { (window as unknown as { __idolLeave?: unknown }).__idolLeave = { casual: ca.casualTick, nudge: l.nudgeLeave, afterRank: l.afterMonthlyRank, tick: l.leaveTick, dm: (id: string) => { const s = cs.createOrGetSession(id); cs.pushChatMessage({ sessionId: s.id, role: "assistant", content: "嗨", status: "sent" }); }, group: (name: string, ids: string[]) => cs.createGroupSession(name, ids).id }; });
       void Promise.all([import("@/lib/settings-storage"), import("@/lib/idol-people"), import("@/lib/idol-world"), import("@/lib/story-storage"), import("@/lib/chat-storage"), import("@/lib/follow-up-service"), import("@/lib/idol-career"), import("@/lib/idol-family"), import("@/lib/idol-family-data"), import("@/lib/idol-saves"), import("@/lib/trainee-card"), import("@/lib/idol-relations"), import("@/lib/character-world-storage"), import("@/lib/character-storage"), import("@/lib/idol-ins"), import("@/lib/idol-search"), import("@/lib/custom-app-storage"), import("@/lib/idol-time-jump"), import("@/lib/idol-pending-faces")]).then(([settings, people, world, story, chat, follow, career, family, familyData, saves, trainee, relations, characterWorlds, characters, ins, search, customAppStorage, timeJump, pendingFaces]) => { (window as unknown as { __idolTest?: unknown }).__idolTest = { settings, people, world, story, chat, follow, career, family, familyData, saves, trainee, relations, characterWorlds, characters, ins, search, customAppStorage, timeJump, pendingFaces }; });
       void Promise.all([import("@/lib/idol-groups"), import("@/lib/idol-calendar"), import("@/lib/idol-search")]).then(([g, c, se]) => { (window as unknown as { __idolGroups?: unknown }).__idolGroups = { load: g.loadGroups, month: c.generateWorldMonth, site: se.buildSite }; });
+      void Promise.all([import("@/lib/idol-mainline"), import("@/lib/idol-roster-live"), import("@/lib/idol-ap-live"), import("@/lib/idol-starroad")]).then(([ml, roster, ap, star]) => { (window as unknown as { __idolNew?: unknown }).__idolNew = { mainlineTick: ml.mainlineTick, mainlineState: ml.mainlineState, rosterTick: roster.rosterTick, ensureRoster: roster.ensureRoster, settleClass: roster.settlePlayerClass, formatGain: roster.formatClassGain, apLeft: ap.apLeft, consumeAp: ap.consumeAp, classNow: star.classHappeningNow }; });
     }
     const timer = window.setInterval(run, 5000);
     const onTimeJump = (event: Event) => {

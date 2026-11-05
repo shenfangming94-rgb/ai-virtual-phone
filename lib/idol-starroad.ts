@@ -391,7 +391,43 @@ function judge(s: State, career: ReturnType<typeof loadCareer>, scenes: Stage[],
   if (career.nodes.some(n => OFFICIAL.has(n.kind) && overlap(n.dueAt) && n.status !== "declined" && n.status !== "invite")) return "official";
   if (career.nodes.some(n => n.kind === "date" && n.status === "done" && overlap(n.dueAt))) return "skip";
   if (scenes.some(sc => overlap(sc.startAt) && !inCompany(sc))) return "skip";
+  // 新上课大改（名册存在 = 新存档）：必须她主动进公司上课，到点人没到场就是旷课。
+  // 迟到 30 分钟内的场次在 classHappeningNow 里就接得住，这里只认「下课结算时记下的到场」。
+  if (newClassMode()) return classAttendedAt(c.start) ? "attend" : "skip";
   return "attend";
+}
+
+// ── 上课大改：主动进公司上课（Flora 2026-11-05 定） ──
+
+const ATTEND_KEY = "idol_class_attended_v1";
+
+/** 新上课大改开了没有（名册存在 = 新存档模式） */
+export function newClassMode(): boolean {
+  try { return Boolean(kvGet("idol_roster_v1")); } catch { return false; }
+}
+
+/** 现在正在上的课（提前 30 分钟就算，迟到 30 分钟内也接得住）。没课返回 null */
+export function classHappeningNow(now = Date.now()): { subject: Subject | null; label: string; start: number; end: number } | null {
+  const s = load();
+  const career = loadCareer();
+  if (!s || career.stage !== "trainee" || now < (career.signedAt ?? 0) + DAY) return null;
+  const d = new Date(now); d.setHours(0, 0, 0, 0);
+  const hit = classesOn(s, d.getTime()).find(c => now >= c.start - 30 * MIN && now < c.end);
+  if (!hit) return null;
+  return { subject: hit.slot.subject, label: hit.slot.label, start: hit.start, end: hit.end };
+}
+
+/** 下课结算时记：这节课她到场了（judge 认这个，不认别的） */
+export function markClassAttended(start: number, subject: Subject | null): void {
+  try {
+    const raw = JSON.parse(kvGet(ATTEND_KEY) || "{}") as Record<string, { subject: Subject | null }>;
+    raw[String(start)] = { subject };
+    kvSet(ATTEND_KEY, JSON.stringify(raw));
+  } catch { /* 记不上不影响上课 */ }
+}
+
+function classAttendedAt(start: number): boolean {
+  try { return Boolean((JSON.parse(kvGet(ATTEND_KEY) || "{}") as Record<string, unknown>)[String(start)]); } catch { return false; }
 }
 
 export function starroadTick(notify: (msg: string) => void): void {

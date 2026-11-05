@@ -26,7 +26,7 @@ import { resolveVnAssetMap, loadVnScenes, getVnSceneLayout, getVnSpriteLayout } 
 import { resolveUserIdentity } from "@/lib/settings-storage";
 import type { VnFrame, VnOptions, VnBeat } from "@/lib/vn-types";
 import { splitBilingualText } from "@/lib/bilingual-text";
-import { loadStageSettings, placeByKey, saveStageSettings, addBackground, addCustomPlace, allMaps, pickBackground, placeBackgrounds, resolveStageBgMap, thumbsOf, chapterIdOf, chapterSummaries, closeStageScene, closeStageSideOnly, setStageSide, editSummary, getStageScene, mergeSummaries, placeLocked, setBigSummary, writeSummaryFor } from "@/lib/idol-stage";
+import { loadStageSettings, placeByKey, saveStageSettings, addBackground, addCustomPlace, allMaps, pickBackground, placeBackgrounds, resolveStageBgMap, thumbsOf, chapterIdOf, chapterSummaries, closeStageScene, closeStageSideOnly, setStageSide, editSummary, getStageScene, mergeSummaries, placeLocked, setBigSummary, writeSummaryFor, settleClassScene } from "@/lib/idol-stage";
 import { jumpWorld } from "@/lib/idol-reminders";
 import { fmtWorld } from "@/lib/idol-scenes";
 import { subscribeWorldClock } from "@/lib/world-clock";
@@ -103,7 +103,8 @@ async function dataUrlToBlob(dataUrl: string): Promise<Blob> {
 }
 
 export function VnPlayer({ characterId, chapterIndex, onClose, onChapterEnd, vnTheme, stage, onStageReplay }: VnPlayerProps) {
-  const stageScene = useMemo(() => (stage ? getStageScene(chapterIdOf(chapterIndex) ?? "") : null), [stage, chapterIndex]);
+  const [sceneVer, setSceneVer] = useState(0);
+  const stageScene = useMemo(() => (stage ? getStageScene(chapterIdOf(chapterIndex) ?? "") : null), [stage, chapterIndex, sceneVer]);
   // 番外：开场时在输入框那里选；演完问要不要计入主线
   const [sideOn, setSideOn] = useState(() => Boolean(stageScene?.side));
   const [sideOnlyEnd, setSideOnlyEnd] = useState(false);
@@ -373,7 +374,7 @@ export function VnPlayer({ characterId, chapterIndex, onClose, onChapterEnd, vnT
       setAssetsReady(true);
     });
     return () => { cancelled = true; };
-  }, [session.id, chapterIndex, availableScenes, characterId, stageScene]);
+  }, [session.id, chapterIndex, availableScenes, characterId, stageScene, sceneVer]);
 
   useStageBgm(stage ? currentScene : "", bgmMuted);
 
@@ -846,6 +847,25 @@ export function VnPlayer({ characterId, chapterIndex, onClose, onChapterEnd, vnT
     }
   }, [pendingActions, userName, isGenerating, stage, inputText, inputMode, allFrames, assetMap, characterId, chapterIndex, session.id, startTyping, getTypingSourceText, handleStageResult]);
 
+  // ── 下课（上课场景）：结算数值、扣行动点、时间走到下课；有挂着的剧情 AI 直接接着演 ──
+  const [classBusy, setClassBusy] = useState(false);
+  const handleClassEnd = useCallback(async () => {
+    if (classBusy) return;
+    setClassBusy(true);
+    try {
+      const r = await settleClassScene(chapterIndex);
+      setSceneVer(v => v + 1);
+      if (r.plotPremise) {
+        setWaitingForInput(false);
+        void handleSendAll(`开场：${r.plotPremise}`);
+      }
+    } catch (e) {
+      showStageToast(e instanceof Error ? e.message : "下课没成功");
+    } finally {
+      setClassBusy(false);
+    }
+  }, [chapterIndex, classBusy, handleSendAll, showStageToast]);
+
   // ── History message actions ──
   const rebuildFrames = useCallback(() => {
     const msgs = loadVnMessagesForChapter(session.id, chapterIndex);
@@ -1176,8 +1196,15 @@ export function VnPlayer({ characterId, chapterIndex, onClose, onChapterEnd, vnT
               </>
             )}
 
+            {/* ── 上课场景：看完文本点下课 ── */}
+            {!isReplaying && waitingForInput && !isGenerating && stageScene?.class && !stageScene.class.settled && (
+              <div style={{ display: "flex", justifyContent: "center", gap: 16, margin: "18px 0" }} onClick={e => e.stopPropagation()}>
+                <button className="vn-end-btn" disabled={classBusy} onClick={() => void handleClassEnd()}>{classBusy ? "下课中……" : "下课"}</button>
+              </div>
+            )}
+
             {/* ── Input mode ── */}
-            {!isReplaying && waitingForInput && !isGenerating && (
+            {!isReplaying && waitingForInput && !isGenerating && !(stageScene?.class && !stageScene.class.settled) && (
               <>
                 {!stage && (
                   <div className="vn-name">

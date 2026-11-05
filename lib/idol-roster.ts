@@ -34,11 +34,11 @@ export type RosterState = {
 export function makePlayer(talents: string[]): Trainee {
   const first = talents.find(t => t === "vocal" || t === "dance" || t === "rap");
   const specialty: Specialty = (first as Subject | undefined) ?? "dance";
-  const stats: Stats = { vocal: 45, dance: 45, rap: 45, variety: 45, acting: 45, visual: 50 };
+  const stats: Stats = { vocal: 45, dance: 45, rap: 45, variety: 45, acting: 45, visual: 50, compose: 45, language: 45 };
   stats[specialty] += 10;
   return {
     id: "player", name: "玩家", specialty, stats,
-    progress: { vocal: 0, dance: 0, rap: 0, variety: 0, acting: 0, visual: 0 },
+    progress: { vocal: 0, dance: 0, rap: 0, variety: 0, acting: 0, visual: 0, compose: 0, language: 0 },
     attitude: "extreme", practicePreference: "none", initialClass: "C", klass: "C",
   };
 }

@@ -3,10 +3,13 @@
  * 规则来源：docs/idol/DISCUSSION-2026-11-05-一年养成数值方案.md 与 Flora 的三条拍板。
  * 数字只由这里算；AI 只写文案（家里的老规矩）。
  */
-export type Subject = 'vocal' | 'dance' | 'rap' | 'variety' | 'acting' | 'visual';
+export type Subject = 'vocal' | 'dance' | 'rap' | 'variety' | 'acting' | 'visual' | 'compose' | 'language';
+/** NPC 自动训练只练这三项（Flora 定：硬实力） */
 export const TRAINABLE_SUBJECTS: Subject[] = ['vocal', 'dance', 'rap'];
 /** 月考专业分只用这三项 */
 export const EXAM_SUBJECTS: Subject[] = ['vocal', 'dance', 'rap'];
+/** 非考核科目（课上练、不参与 NPC 自动训练与月评） */
+export const SOFT_SUBJECTS: Subject[] = ['variety', 'acting', 'visual', 'compose', 'language'];
 export type Specialty = Subject | 'none';
 export type Attitude = 'extreme' | 'diligent' | 'normal' | 'lazy';
 export type ClassLetter = 'A' | 'B' | 'C' | 'D';
@@ -52,16 +55,20 @@ export interface Trainee {
   klass: ClassLetter;
 }
 
-/** 一次训练结算：progress 加 points，按分段规则循环升级，扣掉消耗。直接改传入对象。 */
-export function settleProgress(t: Trainee, subject: Subject, points: number): void {
+/** 一次训练结算：progress 加 points，按分段规则循环升级，扣掉消耗。直接改传入对象。
+ *  返回涨了多少进度、升了几级（上课管线要把它打成文字给她看）。 */
+export function settleProgress(t: Trainee, subject: Subject, points: number): { gained: number; levels: { from: number; to: number }[] } {
+  const levels: { from: number; to: number }[] = [];
   let p = (t.progress[subject] || 0) + points;
   while (t.stats[subject] < 100) {
     const need = needFor(t.stats[subject]);
     if (p < need) break;
     p -= need;
+    levels.push({ from: t.stats[subject], to: t.stats[subject] + 1 });
     t.stats[subject] += 1;
   }
   t.progress[subject] = p;
+  return { gained: points, levels };
 }
 
 /** 有效课 ×1（特长 ×1.5） */
@@ -78,13 +85,13 @@ export interface Timetable {
 
 /** 方案里 GPT 假设的课表（测试基准用） */
 export const TIMETABLE_PLAN: Timetable = {
-  weekly: { vocal: 4, dance: 3, rap: 2, variety: 0, acting: 0, visual: 0 },
+  weekly: { vocal: 4, dance: 3, rap: 2, variety: 0, acting: 0, visual: 0, compose: 0, language: 0 },
   daysPerWeek: 5,
 };
 
 /** 现有星路课表（vocal 3/dance 3/rap 2 是默认值；最终上线用它） */
 export const TIMETABLE_CURRENT: Timetable = {
-  weekly: { vocal: 3, dance: 3, rap: 2, variety: 0, acting: 0, visual: 0 },
+  weekly: { vocal: 3, dance: 3, rap: 2, variety: 0, acting: 0, visual: 0, compose: 0, language: 0 },
   daysPerWeek: 5,
 };
 
@@ -176,12 +183,12 @@ export function generateNpc(id: string, rng: () => number, opts: { specialty?: S
   const mk = (s: Subject) => specialty === s
     ? Math.round(center - 2 + rng() * 8 + 10)
     : Math.round(specialty !== 'none' ? center - 4 + rng() * 4 : center - 2 + rng() * 8);
-  const stats: Stats = { vocal: mk('vocal'), dance: mk('dance'), rap: mk('rap'), variety: 45, acting: 45, visual: 50 };
+  const stats: Stats = { vocal: mk('vocal'), dance: mk('dance'), rap: mk('rap'), variety: 45, acting: 45, visual: 50, compose: 45, language: 45 };
   const attitude = opts.attitude ?? (['extreme', 'diligent', 'normal', 'lazy'] as Attitude[])[Math.floor(rng() * 4)];
   return {
     id, name: opts.name ?? `${SURNAMES[Math.floor(rng() * SURNAMES.length)]}${GIVEN[Math.floor(rng() * GIVEN.length)]}`,
     specialty, stats,
-    progress: { vocal: 0, dance: 0, rap: 0, variety: 0, acting: 0, visual: 0 },
+    progress: { vocal: 0, dance: 0, rap: 0, variety: 0, acting: 0, visual: 0, compose: 0, language: 0 },
     attitude,
     practicePreference: opts.practicePreference ?? 'none',
     initialClass: klass,

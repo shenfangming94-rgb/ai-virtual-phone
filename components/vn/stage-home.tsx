@@ -5,7 +5,7 @@
  * 地图图片、钉子位置、每个地点的背景和 BGM 都是她自己配。
  */
 
-import { classAt } from "@/lib/idol-starroad";
+import { classAt, classHappeningNow } from "@/lib/idol-starroad";
 import { destinyMarks, takeDestinyMark } from "@/lib/idol-destiny";
 import { happeningMarks, takeHappening } from "@/lib/idol-events";
 import { activitiesToday, fillWorldPlaces } from "@/lib/idol-calendar";
@@ -14,7 +14,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ChevronLeft, MoreHorizontal, X, Lock, Music2, VolumeX, Image as ImageIcon, Check, Search, Play } from "lucide-react";
 import {
   DEFAULT_MAPS, mapLookKey, addBackground, addCustomPlace, loadCustomPlaces, pickBackground, placeBackgrounds, removeBackground, removeCustomPlace, thumbsOf, STAGE_APP_NAME, STAGE_OPEN_EVENT, loadBgmMap, loadBgmModes, loadMapLooks, loadStageSettings, mapById, mapBgmKey, mapOfPlace, openStageScenes, pastStageScenes, deleteStageScene, cleanSideFaces, placeLocked, exportSceneText,
-  saveBgmFor, saveBgmMode, saveMapLook, saveStageSettings, startNodeStage, startStageScene, takePendingStage, type BgmMode, type BgmSong, type MapLook, type StagePlace, type StageSettings,
+  saveBgmFor, saveBgmMode, saveMapLook, saveStageSettings, startClassScene, startNodeStage, startStageScene, takePendingStage, type BgmMode, type BgmSong, type MapLook, type StagePlace, type StageSettings,
 } from "@/lib/idol-stage";
 import { loadBgmMuted, saveBgmMuted, setStageBgmVolume, useStageBgm } from "./stage-bgm";
 import { WORLD_CHAR_ID } from "@/lib/idol-world";
@@ -156,8 +156,14 @@ export function StageHome({ onClose, onPlay, onReplay }: Props) {
 
   const tapPlace = (pl: StagePlace) => {
     if (pinEdit !== null) { setPinEdit(pl.key); return; }
-    if (pl.sub && !placeLocked(pl)) { setMapId(pl.sub); return; }
     const t = Date.now();
+    // 上课大改：课表时间人在公司 = 上课（「公司」入口本身也算进了公司）。直接进课，不用选人、不用等打字（点错秒退不算，下课才结算）
+    const cls = classHappeningNow(t);
+    if (cls && pl.key.startsWith("公司")) {
+      const r = startClassScene(pl.key);
+      if (r) { onPlay(r.chapterIndex); return; }
+    }
+    if (pl.sub && !placeLocked(pl)) { setMapId(pl.sub); return; }
     const fateHere = destinyMarks(t).some(m => m.place === pl.key);
     const lifeHere = happeningMarks(t).some(m => m.place === pl.key);
     const both = !fateHere && lifeHere && activitiesToday(t).some(a => a.place === pl.key);

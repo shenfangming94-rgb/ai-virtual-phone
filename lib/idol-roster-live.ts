@@ -12,6 +12,7 @@ import { loadTraineeCard } from "./trainee-card";
 import { loadCareer } from "./idol-career";
 import { createPerson, emptyProfile, herAge } from "./idol-people";
 import { genKakaoId } from "./idol-kakao";
+import { coursePoints, settleProgress, type Subject } from "./idol-training";
 import { generateRosterState, settleNpcWeeks, type RosterState } from "./idol-roster";
 
 const KEY = "idol_roster_v1";
@@ -86,3 +87,23 @@ export function rosterTick(): void {
 }
 
 export { load as loadRoster, save as saveRoster };
+
+// ── 上课结算：她上完一节课，名册里的她涨这门课（数字要打成文字给她看） ──
+
+export type ClassGain = { gained: number; levels: { from: number; to: number }[]; stat: number };
+
+/** 结算她的一节课。特色课（subject 不在八门里）别调这个。 */
+export function settlePlayerClass(subject: Subject): ClassGain | null {
+  const s = ensureRoster();
+  if (!s) return null;
+  const r = settleProgress(s.player, subject, coursePoints(s.player, subject));
+  save(s);
+  return { gained: r.gained, levels: r.levels, stat: s.player.stats[subject] };
+}
+
+/** 打给她的那一行：「声乐 +1.5」；升级了再拼「声乐 45→46」 */
+export function formatClassGain(subjectLabel: string, g: ClassGain): string {
+  const parts = [`${subjectLabel} +${g.gained}`];
+  for (const lv of g.levels) parts.push(`${subjectLabel} ${lv.from}→${lv.to}`);
+  return parts.join("，");
+}

@@ -10,7 +10,7 @@
 import { kvGet, kvSet } from "./kv-db";
 import { listPendingFaces } from "./idol-pending-faces";
 import { WORLD_CHAR_ID, closeSceneWith, ensureWorldCharacter, worldPromptFor, type SceneCloseResult, type SceneHost, type SceneMeta } from "./idol-world";
-import { createOrGetVnSession, loadVnMessagesForChapter, startNewChapter, archiveChapter, updateVnMessageSummary, deleteVnMessage, type VnSession } from "./vn-storage";
+import { createOrGetVnSession, loadVnMessagesForChapter, startNewChapter, archiveChapter, updateVnMessageSummary, deleteVnMessage, pushVnMessage, type VnSession } from "./vn-storage";
 import { simpleLLMCall } from "./api-helpers";
 import { resolveVnConfigs } from "./vn-engine";
 import { formatChatTimestamp } from "./llm-prompt-assembler";
@@ -21,6 +21,12 @@ import { resolveUserIdentity } from "./settings-storage";
 import { addVnScene, deleteVnScene, loadVnScenes } from "./vn-asset-storage";
 import { getThemeAssetMap } from "./theme-storage";
 import { loadAllCharacters } from "./character-storage";
+import { classHappeningNow, markClassAttended, type Subject as StarSubject } from "./idol-starroad";
+import { CLASS_TEXT_KEYS, CLASS_TEXTS, pickClassText } from "./idol-class-texts";
+import { formatClassGain, settlePlayerClass } from "./idol-roster-live";
+import { apSlotOf } from "./idol-actionpoints";
+import { consumeAp } from "./idol-ap-live";
+import { setWorldTime } from "./world-clock";
 
 export const STAGE_APP_NAME = "此刻";
 
@@ -333,6 +339,17 @@ export type StageScene = SceneMeta & {
   bigSummary?: string;
   /** 每个人在第几段出场、第几段离场（段 = AI 的第几次回复，从 0 数）；只记得在场那几段 */
   spans?: Record<string, { from: number; to?: number }>;
+  /** 上课场景（上课大改）：这节课的科目、时间、抽到的固定文本、下课状态 */
+  class?: {
+    subjectKey: string;
+    label: string;
+    start: number;
+    end: number;
+    textId: string;
+    text: string;
+    settled?: boolean;
+    attended?: boolean;
+  };
 };
 
 const SCENES_KEY = "idol_stage_scenes_v1";
@@ -385,6 +402,77 @@ export function startNodeStage(node: CareerNode): { chapterIndex: number; scene:
   const key = placeKeyFromText(node.place);
   // 写的就是地图上的地点（「江南·烤肉店」）：用地图的说法；不是的照它原来写的
   return startStageScene({ placeKey: key, placeName: placeByKey(node.place.trim()) ? placeFullName(key) : node.place, nodeId: node.id, premise, ...(node.participantIds || node.inviterIds ? { meetIds: [...new Set([...(node.participantIds || []), ...(node.inviterIds || []), ...(node.fromId ? [node.fromId] : [])])] } : {}) });
+}
+
+// ── 上课场景（上课大改，Flora 2026-11-05 定）：课表时间进公司 = 上课 ──
+
+/** 特色课（体能/人性/礼仪）没有科目，按课名找文本 */
+const SIDE_TEXT_KEYS: Record<string, string> = { 体能课: "fitness", 人性课: "personality", 礼仪课: "etiquette" };
+
+function classTextKey(cls: { subject: StarSubject | null; label: string }): string {
+  if (cls.subject) return cls.subject;
+  return SIDE_TEXT_KEYS[cls.label] ?? "";
+}
+
+/**
+ * 开一节上课场景：先显示固定课堂文本（55 段里抽的，不走 AI），
+ * 下课结算时数字打出来；点错秒退不算（结算只发生在下课）。
+ */
+export function startClassScene(placeKey: string): { chapterIndex: number; scene: StageScene } | null {
+  const cls = classHappeningNow();
+  if (!cls) return null;
+  const session = worldVnSession();
+  const place = placeFullName(placeKey);
+  const ch = startNewChapter(session.id, cls.label, `${fmtWorld(Date.now()).slice(5)} · ${place}`);
+  if (!ch) return null;
+  const key = classTextKey(cls);
+  const picked = pickClassText(key);
+  const scene: StageScene = {
+    chapterId: ch.id, bg: placeKey, ids: [WORLD_CHAR_ID],
+    place, premise: "", startAt: Date.now(), newFaces: [],
+    class: { subjectKey: cls.subject ?? "", label: cls.label, start: cls.start, end: cls.end, textId: picked?.id ?? "", text: picked?.text ?? "" },
+  };
+  saveStageScene(scene);
+  // 固定文本直接写进这一章当开场，不等她打字、不调 AI
+  pushVnMessage({ sessionId: session.id, role: "assistant", rawContent: picked?.text ?? "今天这节课照常进行。", chapterIndex: ch.index });
+  return { chapterIndex: ch.index, scene };
+}
+
+/**
+ * 下课结算：名册里的她涨数值（数字打成文字）、扣行动点、世界时间走到下课、记到场。
+ * 有挂着的剧情时返回 plotPremise（AI 直接接着演），没有就写「这节课结束了」并归档。
+ */
+export async function settleClassScene(chapterIndex: number): Promise<{ lines: string[]; plotPremise: string | null }> {
+  const chId = chapterIdOf(chapterIndex);
+  const scene = chId ? getStageScene(chId) : null;
+  if (!scene?.class || scene.class.settled) throw new Error("这场课已经下过了");
+  const cls = scene.class;
+  const session = worldVnSession();
+  const lines: string[] = [];
+  // 数值结算：八门课走名册结算；特色课不涨八项，只给一句收尾
+  if (cls.subjectKey && CLASS_TEXT_KEYS[cls.subjectKey]) {
+    const g = settlePlayerClass(cls.subjectKey as StarSubject);
+    if (g) lines.push(formatClassGain(cls.label, g));
+  }
+  // 扣行动点：这节课占一个整格（08:00–24:00 内才扣）
+  const slot = apSlotOf(cls.start);
+  if (slot != null) consumeAp(cls.start, [slot], cls.label);
+  // 世界时间走到下课（迟到了也从下课时间接着走）
+  if (Date.now() < cls.end) setWorldTime(cls.end);
+  // 记到场：judge 只认这个
+  markClassAttended(cls.start, (cls.subjectKey || null) as StarSubject | null);
+  saveStageScene({ ...scene, class: { ...cls, settled: true, attended: true } });
+  // 第一批先没有挂着的剧情（课堂八类/独立剧情接上来以后走这里）
+  const plotPremise: string | null = null;
+  if (plotPremise) {
+    pushVnMessage({ sessionId: session.id, role: "assistant", rawContent: lines.join("\n"), chapterIndex });
+  } else {
+    lines.push("这节课结束了。");
+    pushVnMessage({ sessionId: session.id, role: "assistant", rawContent: lines.join("\n"), chapterIndex });
+    saveStageScene({ ...getStageScene(chId!)!, ended: true });
+    archiveChapter(session.id, chapterIndex);
+  }
+  return { lines, plotPremise };
 }
 
 function frameText(raw: string, role: string): string {

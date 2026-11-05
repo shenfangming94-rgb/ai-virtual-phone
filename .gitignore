@@ -31,3 +31,9 @@ tools/weixin-local-assistant/config.txt
 
 # 项目预览图（截图），不进仓库
 previews/
+
+# 构建缓存(Next dev 会生成,别提交)
+.next-ins-comment-check/
+.next-ins-comments-check/
+.next-relations-check/
+.DS_Store

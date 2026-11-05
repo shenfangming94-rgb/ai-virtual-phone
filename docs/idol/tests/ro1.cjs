@@ -46,6 +46,17 @@ const single = JSON.parse(JSON.stringify(state.npcs[0]));
 R.settleNpcWeeks(state, 1, mulberry32(1));
 check('结算不破坏结构(每人都有进度)', state.npcs.every(n => n.progress && ['vocal', 'dance', 'rap'].every(s => n.progress[s] >= 0)));
 
+// ── 上课结算（settleProgress 要把涨的数和升级报出来，上课管线靠它打数字） ──
+const pupil = JSON.parse(JSON.stringify(state.player));
+pupil.progress.vocal = 4.5; // 还差 0.5 进度升 1 点（0-59 段 5 进度升 1）
+const r1 = T.settleProgress(pupil, 'vocal', 1);
+check('结算返回涨了多少', r1.gained === 1);
+check('差 0.5 升 1 点时能升出来', r1.levels.length === 1 && r1.levels[0].from === 45 && r1.levels[0].to === 46, JSON.stringify(r1));
+check('升完剩 0.5 进度(带着走)', Math.abs(pupil.progress.vocal - 0.5) < 1e-9, String(pupil.progress.vocal));
+const r2 = T.settleProgress(pupil, 'vocal', 10);
+check('10 点进度 = 升 2 点(5+5)', r2.levels.length === 2 && pupil.stats.vocal === 48, JSON.stringify(r2.levels));
+check('特长课 ×1.5、别的课 ×1', T.coursePoints(pupil, 'dance') === 1.5 && T.coursePoints(pupil, 'vocal') === 1);
+
 // ── 行动点 ──
 const now = new Date(2026, 6, 1, 10, 30).getTime(); // 本地时间 10:30
 let ap = AP.emptyAp(now);

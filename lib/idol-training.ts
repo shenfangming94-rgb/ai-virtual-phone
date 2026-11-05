@@ -15,12 +15,12 @@ export const ATTITUDE_LABEL: Record<Attitude, string> = {
   extreme: '极度自律', diligent: '勤奋', normal: '普通', lazy: '懈怠',
 };
 
-/** 态度 → 固定课有效完成率 / 每周加练节数 / 普通型每周加练 1 节的概率 */
+/** 态度 → 固定课有效完成率 / 每周加练节数 / 普通型每周加练 1 节的概率（按 Flora 拍板：NPC 加练频率与完成率都比方案原表低一点） */
 export const ATTITUDES: Record<Attitude, { completion: number; weeklyPractice: number; practiceChance: number }> = {
-  extreme: { completion: 1.0, weeklyPractice: 2, practiceChance: 0 },
-  diligent: { completion: 0.95, weeklyPractice: 1, practiceChance: 0 },
-  normal: { completion: 0.9, weeklyPractice: 0, practiceChance: 0.5 },
-  lazy: { completion: 0.8, weeklyPractice: 0, practiceChance: 0 },
+  extreme: { completion: 0.95, weeklyPractice: 1, practiceChance: 0 },
+  diligent: { completion: 0.9, weeklyPractice: 0, practiceChance: 0.5 },
+  normal: { completion: 0.85, weeklyPractice: 0, practiceChance: 0.5 },
+  lazy: { completion: 0.75, weeklyPractice: 0, practiceChance: 0 },
 };
 
 /** 分段升级：当前能力值 → 升 1 分需要的训练进度 */
@@ -105,10 +105,9 @@ export function settleWeek(t: Trainee, tt: Timetable, rng: () => number): void {
   }
 }
 
-/** 加练科目：偏好 → 特长 → 当前最弱的可训练科目 */
+/** 加练科目：偏好 → 当前最弱的可训练科目（方案：无偏好按能力短板安排） */
 export function practiceSubject(t: Trainee): Subject {
   if (t.practicePreference !== 'none') return t.practicePreference;
-  if (t.specialty !== 'none') return t.specialty;
   return [...TRAINABLE_SUBJECTS].sort((a, b) => t.stats[a] - t.stats[b])[0];
 }
 
@@ -148,7 +147,7 @@ export function runawayBand(first: number, second: number): RunawayBand {
   return 'none';
 }
 
-/** 班级 → 三项平均的目标区间（NPC 生成用，方案第八节） */
+/** 班级 → 三项平均的目标区间（NPC 生成用，方案第八节原值） */
 export const CLASS_RANGE: Record<ClassLetter, [number, number]> = {
   A: [58, 62],
   B: [52, 56],
@@ -173,7 +172,10 @@ export function generateNpc(id: string, rng: () => number, opts: { specialty?: S
   const specialty = opts.specialty ?? SPECIALTY_POOL[Math.floor(rng() * SPECIALTY_POOL.length)];
   const [lo, hi] = CLASS_RANGE[klass];
   const center = (lo + hi) / 2;
-  const mk = (s: Subject) => Math.round((center - 2 + rng() * 8) + (specialty === s ? 10 : 0));
+  // 特长者偏科：特长科突出（底子+10），其他两科走区间下沿（贴合方案例：55/68/54）
+  const mk = (s: Subject) => specialty === s
+    ? Math.round(center - 2 + rng() * 8 + 10)
+    : Math.round(specialty !== 'none' ? center - 4 + rng() * 4 : center - 2 + rng() * 8);
   const stats: Stats = { vocal: mk('vocal'), dance: mk('dance'), rap: mk('rap'), variety: 45, acting: 45, visual: 50 };
   const attitude = opts.attitude ?? (['extreme', 'diligent', 'normal', 'lazy'] as Attitude[])[Math.floor(rng() * 4)];
   return {
@@ -187,16 +189,22 @@ export function generateNpc(id: string, rng: () => number, opts: { specialty?: S
   };
 }
 
-/** 态度分布池：按比例抽。默认现实感（极度自律少、懈怠少、普通最多） */
+/** 态度分布池：按比例抽。现实感（极度自律最少、懈怠次之、普通最多） */
 export const ATTITUDE_POOL_REALISTIC: Attitude[] = [
-  ...Array<Attitude>(4).fill('extreme'),
+  ...Array<Attitude>(2).fill('extreme'),
+  ...Array<Attitude>(10).fill('diligent'),
+  ...Array<Attitude>(20).fill('normal'),
+  ...Array<Attitude>(8).fill('lazy'),
+];
+/** A 班态度池：天才反而懒/普通（叙事：底子好的人未必最努力；规则统一、非暗改） */
+export const ATTITUDE_POOL_TOP: Attitude[] = [
   ...Array<Attitude>(12).fill('diligent'),
-  ...Array<Attitude>(18).fill('normal'),
-  ...Array<Attitude>(6).fill('lazy'),
+  ...Array<Attitude>(20).fill('normal'),
+  ...Array<Attitude>(8).fill('lazy'),
 ];
 export const ATTITUDE_POOL_UNIFORM: Attitude[] = ['extreme', 'diligent', 'normal', 'lazy'];
 
-/** 生成 39 名同期：A10 B10 C9 D10（玩家占 C 班一个坑） */
+/** 生成 39 名同期：A10 B10 C9 D10（玩家占 C 班一个坑）。A 班态度走 TOP 池（无极度自律），其余走现实池。 */
 export function generateRoster(rng: () => number, attitudePool: Attitude[] = ATTITUDE_POOL_REALISTIC): Trainee[] {
   const pool = [...SPECIALTY_POOL];
   const out: Trainee[] = [];
@@ -205,7 +213,8 @@ export function generateRoster(rng: () => number, attitudePool: Attitude[] = ATT
     const count = klass === 'C' ? 9 : 10;
     for (let i = 0; i < count; i++) {
       const sp = pool.splice(Math.floor(rng() * pool.length), 1)[0];
-      const attitude = attitudePool[Math.floor(rng() * attitudePool.length)];
+      const ap = klass === 'A' ? ATTITUDE_POOL_TOP : attitudePool;
+      const attitude = ap[Math.floor(rng() * ap.length)];
       out.push(generateNpc(`npc-${n++}`, rng, { klass, specialty: sp, attitude }));
     }
   }

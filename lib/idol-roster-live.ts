@@ -108,3 +108,12 @@ export function formatClassGain(subjectLabel: string, g: ClassGain): string {
   for (const lv of g.levels) parts.push(`${subjectLabel} ${lv.from}→${lv.to}`);
   return parts.join("，");
 }
+
+/** 机会/奖励的经验结算：1 经验 = 3 训练进度（对着加练的量级）。她的机会奖励表用「经验」作单位。 */
+export function settlePlayerExp(subject: Subject, exp: number): ClassGain | null {
+  const s = ensureRoster();
+  if (!s) return null;
+  const r = settleProgress(s.player, subject, Math.max(0, exp) * 3);
+  save(s);
+  return { gained: r.gained, levels: r.levels, stat: s.player.stats[subject] };
+}

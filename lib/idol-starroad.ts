@@ -111,7 +111,8 @@ function weeklyCounts(companyId: string): Record<Subject, number> {
 /** 不算进八门、只当场景的课 */
 const SIDE_CLASSES: Record<string, string[]> = { jyp: ["体能课", "人性课"], sm: ["礼仪课"] };
 
-const TIMES: [string, string][] = [["10:00", "12:00"], ["14:00", "16:00"], ["16:30", "18:30"], ["19:30", "21:00"]];
+// 整格课表（Flora 2026-11-05 定：1 行动点 = 2 小时，课全排在 8-10、10-12 这种整格上，不出现半点）
+const TIMES: [string, string][] = [["10:00", "12:00"], ["14:00", "16:00"], ["16:00", "18:00"], ["18:00", "20:00"]];
 
 function buildTimetable(companyId: string, subjects: Record<Subject, SubjectState>, seed: number): Slot[] {
   const counts = weeklyCounts(companyId);
@@ -253,12 +254,12 @@ export function practicedToday(now = Date.now()): boolean {
   return loadCareer().nodes.some(n => n.kind === "practice" && dayKey(n.dueAt) === day && n.status !== "declined");
 }
 
-/** 星路点「加练」：进提醒事项「我自己记的」，今晚九点（过了就明晚）打勾写一句就算 */
+/** 星路点「加练」：进提醒事项「我自己记的」，今晚八点（过了就明晚）打勾写一句就算。占 20:00-22:00 一个行动点 */
 export function addPractice(subject: Subject): CareerNode | null {
   const s = ensure();
   if (!s) return null;
   const now = Date.now();
-  const d = new Date(now); d.setHours(21, 0, 0, 0);
+  const d = new Date(now); d.setHours(20, 0, 0, 0);
   if (d.getTime() < now + 30 * MIN) d.setDate(d.getDate() + 1);
   if (practicedToday(d.getTime())) return null;
   const sub = subjectOf(subject)!;
@@ -363,7 +364,7 @@ export function starPromptBlock(): string {
   const todays = classesOn(s, today.getTime());
   const leaveToday = s.leaves.filter(l => l.date === dayKey(now));
   return [
-    `【她的课】工作日白天在公司上课（${[...new Set(s.slots.map(x => `${WEEK[x.dow]} ${x.start}`))].length} 节/周，大多 10:00～18:30，个别晚上）。平常约她尽量排在晚上或周末。`,
+    `【她的课】工作日白天在公司上课（${[...new Set(s.slots.map(x => `${WEEK[x.dow]} ${x.start}`))].length} 节/周，整格排课，大多 10:00～18:00，个别晚上到 20:00）。平常约她尽量排在晚上或周末。`,
     "【课以课表为准】公司内部档案里如果写了别的课，以这里的课表为准。",
     todays.length ? `【今天的课】${todays.map(c => `${c.slot.label} ${c.slot.start}～${c.slot.end}`).join("、")}` : "",
     leaveToday.length ? `【今天请假】她今天${leaveToday.some(l => !l.subject) ? "请了一整天的假" : `请假没去${leaveToday.map(l => subjectOf(l.subject)?.cls).join("、")}`}，室长批了的。` : "",

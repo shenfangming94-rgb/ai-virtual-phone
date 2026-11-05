@@ -8,12 +8,16 @@ import { AlbumApp } from "./album/album-app";
 import { worldWeatherTick } from "@/lib/idol-weather";
 import { ensureIdolWeatherApp } from "@/lib/idol-weather-install";
 import { ClockApp } from "./clock-app";
+import { TheQooApp } from "./theqoo/theqoo-app";
+import { THEQOO_NOTICE } from "@/lib/theqoo-store";
+import { pushLockNote } from "@/lib/idol-notes";
 import { ContactsApp } from "./contacts/contacts-app";
 import { CareerApp } from "./career/career-app";
 import { MelonApp } from "./melon-app";
 import { IdolSearchApp } from "./idolsearch/idol-search-app";
 import { StarRoadApp } from "./starroad/star-road-app";
 import { starroadTick } from "@/lib/idol-starroad";
+import { rosterTick } from "@/lib/idol-roster-live";
 import { destinyTick } from "@/lib/idol-destiny";
 import { InsApp } from "./ins/ins-app";
 import { insTick } from "@/lib/idol-ins";
@@ -1118,6 +1122,15 @@ export function DesktopShell({ initialThemeProfile, initialThemeAssets }: Deskto
   const [notice, setNotice] = useState<string | null>(null);
   // 爱豆小手机的通知：iOS 横幅，同时进锁屏
   const [banner, setBanner] = useState<LockNote | null>(null);
+  useEffect(() => {
+    const onForumNotice = (event: Event) => {
+      const detail = (event as CustomEvent<{ postId: string; title: string }>).detail;
+      if (!detail?.postId) return;
+      setBanner(pushLockNote({ app: "theqoo", title: "论坛有新帖", text: detail.title, at: Date.now(), postId: detail.postId }));
+    };
+    window.addEventListener(THEQOO_NOTICE, onForumNotice);
+    return () => window.removeEventListener(THEQOO_NOTICE, onForumNotice);
+  }, []);
   const idolNotify = useCallback((msg: string) => { setBanner(noteFromNotice(msg)); }, []);
   useEffect(() => {
     if (!banner) return;
@@ -1143,6 +1156,7 @@ export function DesktopShell({ initialThemeProfile, initialThemeAssets }: Deskto
       try { eventsTick(idolNotify); } catch { /* 同上 */ }
       try { rankTick(idolNotify); } catch { /* 同上 */ }
       try { starroadTick(idolNotify); } catch { /* 同上 */ }
+      try { rosterTick(); } catch { /* 名册结算出错不挡着用手机 */ }
       try { destinyTick(idolNotify); } catch { /* 同上 */ }
       try { debutTick(idolNotify); } catch { /* 同上 */ }
       try { yearlyTick(idolNotify); } catch { /* 同上 */ }
@@ -1646,6 +1660,14 @@ export function DesktopShell({ initialThemeProfile, initialThemeAssets }: Deskto
               kvSet(ICON_LAYOUT_STORAGE_KEY, JSON.stringify(normalized));
             }
             kvSet("idol_melon_icon_added_v1", "1");
+          }
+          if (!kvGet("idol_theqoo_icon_added_v1")) {
+            const present = new Set<string>([...hydratedDock, ...Object.values(hydratedFolders).flatMap(f => f.icons), ...getDesktopIconLayoutItems(normalized).map(i => i.id)]);
+            if (!present.has("theqoo")) {
+              normalized = appendIconsToFreeSlots(normalized, ["theqoo"], hydratedWidgets) as typeof normalized;
+              kvSet(ICON_LAYOUT_STORAGE_KEY, JSON.stringify(normalized));
+            }
+            kvSet("idol_theqoo_icon_added_v1", "1");
           }
           const sane = sanitizeDesktopFolders(hydratedFolders, normalized, hydratedDock, hydratedWidgets);
           setFolders(sane.folders);
@@ -4360,6 +4382,9 @@ html,body{margin:0;padding:0;width:100%;height:100%;background:#121110;color:rgb
     if (activeApp === "career") {
       return <CareerApp onClose={() => setActiveApp(null)} onNotice={setNotice} />;
     }
+    if (activeApp === "theqoo") {
+      return <TheQooApp onClose={() => setActiveApp(null)} />;
+    }
     if (activeApp === "contacts") {
       return <ContactsApp onClose={() => setActiveApp(null)} onNotice={setNotice} />;
     }
@@ -4485,6 +4510,7 @@ html,body{margin:0;padding:0;width:100%;height:100%;background:#121110;color:rgb
                     if (app === "kakao") setActiveApp("chat" as IconId);
                     else if (app === "reminders") setActiveApp("career" as IconId);
                     else if (app === "clock") setActiveApp("clock" as IconId);
+                    else if (app === "theqoo") { if (banner.postId) sessionStorage.setItem("theqoo-open-post", banner.postId); setActiveApp("theqoo"); window.dispatchEvent(new Event("theqoo-open-post")); }
                     else if (app === "starroad") setActiveApp("starroad" as IconId);
                     else if (app === "mail") { const ic = mailAppIcon(); if (ic) openApp(ic as DesktopIconId); }
                     else if (app === "stage" && banner.nodeId) requestStageForNode(banner.nodeId);

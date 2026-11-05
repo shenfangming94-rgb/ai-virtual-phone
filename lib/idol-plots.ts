@@ -120,6 +120,25 @@ function schedulePlotNode(title: string, place: string, premise: string, at: num
 const pad = (n: number) => String(n).padStart(2, "0");
 const fmtMD = (ms: number) => `${new Date(ms).getMonth() + 1}月${new Date(ms).getDate()}日`;
 
+/** 低频 NPC 恋爱配对：在同期里挑一个有实际交集的人，配一个恋人（另一位同期或公司外的人）。
+ *  情缘六线的候选男主不在这池里（他们不参与 NPC 自动恋爱配对，她定的）。 */
+function maybePairRomance(c: PlotCtx, rec: PlotRecord): { charId: string; partner: string; since: number }[] {
+  if (Math.random() >= 0.35) return [];
+  const npcs = (c.roster?.npcs ?? []).filter(n => n.charId);
+  const pool = npcs.filter(n => {
+    const p = c.profiles[n.charId!];
+    if (!p) return false;
+    return p.met || (p.events?.length ?? 0) > 0 || (p.leave?.log?.length ?? 0) > 0;
+  }).sort(() => Math.random() - 0.5);
+  const pick = pool[0];
+  if (!pick?.charId) return [];
+  const partnerNpc = npcs.find(n => n.charId && n.charId !== pick.charId && c.profiles[n.charId] && Math.random() < 0.4);
+  const partner = partnerNpc?.charId
+    ? (c.characters.find(x => x.id === partnerNpc.charId)?.name ?? "另一位练习生")
+    : Math.random() < 0.5 ? "公司里的另一个人" : "公司外认识的人";
+  return [{ charId: pick.charId, partner, since: c.now }];
+}
+
 // ── 触发检查 ──
 
 /** 查一遍条件：条件满的进 ready。返回新进 ready 的 key 列表 */
@@ -448,6 +467,140 @@ export const PLOTS: PlotDef[] = [
       return {
         premise: `某节课上，老师宣布同期${name}即将离开当前班级（${snap[moved!.charId!]} 班 → ${moved!.klass} 班，月考后的调整，代码定的）。她可能是她的好朋友、竞争对手、关系不好的同期，也可能只是陌生人；她本人怎么反应、其他人怎么评价，按真实人设和关系演。调班不等于退社，她还在公司。`,
       };
+    },
+  },
+  // ── 条件特殊生活剧情（6 类）──
+  {
+    key: "night_call", title: "深夜的秘密电话", hook: "scene", max: 1,
+    check(c, rec) {
+      const h = new Date(c.now).getHours();
+      const night = h >= 22 || h <= 2;
+      if (!night) return false;
+      const friend = Object.values(c.profiles).some(p => (p.relation === "朋友" || p.relation === "好朋友" || p.relation === "暧昧" || p.relation === "恋人") && /练习生|同期/.test(`${p.role}${p.group}`));
+      return friend;
+    },
+    fire(c) {
+      const her = loadTraineeCard()?.name ?? "你";
+      return {
+        premise: `夜里，${her}偶然听见一位关系不错的同期在打电话（朋友及以上的同期里挑一个）。通话对象和内容按她真实的家庭背景、私人关系和当前生活状况决定：可能是和家人商量事情，也可能是朋友、生活安排或别的私人问题。不固定成家庭争吵，不强制对方正遭遇困难；她有没有发现被听见、之后怎么回应，按人物性格演；她可以选择问或不问。`,
+      };
+    },
+  },
+  {
+    key: "missed_invite", title: "没有收到的邀请", hook: "date", max: 1,
+    check(c) {
+      const met = Object.values(c.profiles).filter(p => p.met && /练习生|同期/.test(`${p.role}${p.group}`));
+      if (met.length < 5) return false;
+      return c.roster?.npcs.some(n => n.friends.length > 0) ?? false;
+    },
+    fire(c) {
+      const at = new Date(c.now + 2 * DAY); at.setHours(19, 0, 0, 0);
+      const node = schedulePlotNode("她们私下聚了", "江南 咖啡店", `几个同期私下组织了一次聚会（她的同期里真实存在的朋友圈）。她可能收到邀请，也可能之后通过 KKT、ins 或聊天才知道她们聚过。有没有邀请她，按她和组织者、参与者的真实关系、聚会性质和那个朋友圈的构成来判定。没收到邀请不等于被孤立——普通社交安排别写成排挤；真有故意排除她的行为，必须有真实关系支撑。`, at.getTime());
+      return { premise: node.premise, node };
+    },
+  },
+  {
+    key: "mate_birthday", title: "同期生日聚会", hook: "date", max: null,
+    check(c, rec) {
+      const now = new Date(c.now);
+      const md = `${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+      const last = rec.extra?.lastDay as string | undefined;
+      if (last === `${now.getFullYear()}-${md}`) return false;
+      const hit = c.roster?.npcs.find(n => n.birthday === md && n.charId && ["朋友", "好朋友", "暧昧", "恋人"].includes(c.profiles[n.charId]?.relation ?? ""));
+      return Boolean(hit);
+    },
+    fire(c, rec) {
+      const now = new Date(c.now);
+      const md = `${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+      const hit = c.roster?.npcs.filter(n => n.birthday === md && n.charId && ["朋友", "好朋友", "暧昧", "恋人"].includes(c.profiles[n.charId]?.relation ?? ""));
+      const name = hit?.[0]?.charId ? c.characters.find(x => x.id === hit[0].charId)?.name : "一位同期";
+      const at = new Date(c.now); at.setHours(18, 0, 0, 0);
+      if (at.getTime() < c.now) at.setTime(c.now + 60 * 60e3);
+      const node = schedulePlotNode(`${name}的生日`, "江南 餐厅", `${name}生日：她可能主动邀请她参加聚会，也可能由她的其他朋友联系她一起准备惊喜。聚会地点、参与者按她真实的朋朋友圈决定；有没有惊喜按人设和安排来。她可以接受或拒绝；没参加，聚会也照常发生。不同同期的生日可以分别产生事件。`, at.getTime());
+      const all = load();
+      all["mate_birthday"] = { ...(all["mate_birthday"] ?? rec), extra: { ...(rec.extra ?? {}), lastDay: `${now.getFullYear()}-${md}` } };
+      save(all);
+      return { premise: node.premise, node };
+    },
+  },
+  {
+    key: "mate_romance", title: "同期的秘密恋情", hook: "class", max: 1,
+    check(c, rec) {
+      const romances = (rec.extra?.romances as { charId: string; partner: string; since: number }[]) ?? [];
+      // 低频发展：距上次检查约 30 个世界日才看一次
+      const lastCheck = (rec.extra?.lastCheck as number) ?? 0;
+      if (c.now - lastCheck > 30 * 864e5) {
+        const all = load();
+        all["mate_romance"] = { ...(all["mate_romance"] ?? rec), extra: { ...(rec.extra ?? {}), lastCheck: c.now, ...(romances.length ? {} : { romances: maybePairRomance(c, rec) }) } };
+        save(all);
+        return false;
+      }
+      if (!romances.length) return false;
+      // 发现条件：当事同期和她有实际交集、恋情没公开
+      const any = romances.some(r => {
+        const p = c.profiles[r.charId];
+        return p && (p.met || (p.events?.length ?? 0) > 0);
+      });
+      return any && rec.extra?.revealed !== true;
+    },
+    fire(c, rec) {
+      const romances = (rec.extra?.romances as { charId: string; partner: string; since: number }[]) ?? [];
+      const r = romances.find(x => c.profiles[x.charId] && (c.profiles[x.charId].met || (c.profiles[x.charId].events?.length ?? 0) > 0));
+      const all = load();
+      all["mate_romance"] = { ...(all["mate_romance"] ?? rec), extra: { ...(rec.extra ?? {}), revealed: true } };
+      save(all);
+      if (!r) return { premise: "", done: true };
+      const name = c.characters.find(x => x.id === r.charId)?.name ?? "一位同期";
+      const ways = ["她因为信任她，主动把自己的恋爱情况告诉了她", "她外出时碰巧遇见她和恋人在一起，或相处中察觉了情况", "另一位同期在聊天中提起相关信息（要区分真实事实和未经证实的猜测）"];
+      const way = ways[Math.floor(Math.random() * ways.length)];
+      return {
+        premise: `她发现同期${name}有一段还没公开的恋情（${way}）。恋爱对象是${r.partner}。整段练习生阶段只触发这一次发现剧情；她的反应、之后怎么发展，按真实关系和人设演，不默认她会保密、揭露或参与。`,
+      };
+    },
+  },
+  {
+    key: "roommate_left", title: "室友突然退社", hook: "class", max: null,
+    check(c) {
+      const roommates = c.career.roommates ?? [];
+      return roommates.some(id => c.profiles[id]?.leave?.phase === "left");
+    },
+    fire(c, rec) {
+      const roommates = c.career.roommates ?? [];
+      const left = roommates.find(id => c.profiles[id]?.leave?.phase === "left");
+      const name = left ? c.characters.find(x => x.id === left)?.name : "一位室友";
+      const all = load();
+      all["roommate_left"] = { ...(all["roommate_left"] ?? rec), extra: { ...(rec.extra ?? {}), handled: (rec.extra?.handled as string[] ?? []).concat(left ? [left] : []) } };
+      save(all);
+      if (!left) return { premise: "", done: true };
+      return {
+        premise: `她的室友${name}正式退社了，需要搬离练习生宿舍。剧情围绕：收拾个人物品、宿舍里的告别、其他室友的反应、她和这位室友的实际关系。退社原因要符合她的事业和个人经历（想走想留系统里真实发生的）；不强制伤感告别。`,
+      };
+    },
+  },
+  {
+    key: "dayoff_invite", title: "休息日的临时邀约", hook: "date", max: null,
+    check(c, rec) {
+      const d = new Date(c.now);
+      if (d.getDay() !== 0 && d.getDay() !== 6) return false;
+      const last = rec.extra?.lastDay as string | undefined;
+      const today = `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+      if (last === today) return false;
+      const good = Object.values(c.profiles).filter(p => p.relation === "好朋友" && /练习生|同期/.test(`${p.role}${p.group}`));
+      if (!good.length) return false;
+      return !(c.career.nodes ?? []).some(n => (n.status === "pending" || n.status === "invite") && ["weekly", "monthly", "makeup", "selection", "debut", "talk", "event"].includes(n.kind) && new Date(n.dueAt).getDate() === d.getDate());
+    },
+    fire(c, rec) {
+      const good = Object.values(c.profiles).filter(p => p.relation === "好朋友" && /练习生|同期/.test(`${p.role}${p.group}`)).map(p => c.characters.find(x => x.id === p.charId)?.name).filter(Boolean);
+      const who = good[Math.floor(Math.random() * good.length)] ?? "一位好朋友";
+      const kinds = ["逛街", "吃饭", "看电影", "去汉江", "逛唱片店"];
+      const kind = kinds[Math.floor(Math.random() * kinds.length)];
+      const d = new Date(c.now);
+      const at = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 14, 0, 0);
+      const node = schedulePlotNode(`和${who}出去`, "弘大", `${who}约她休息日一起出去（${kind}）。活动按邀请者的人设和兴趣来；她可以接受、拒绝或提出别的安排；已接受的活动进日历，当天通过「此刻」展开。可以自然重复，不规定整个存档只出现一次。`, at.getTime());
+      const all = load();
+      all["dayoff_invite"] = { ...(all["dayoff_invite"] ?? rec), extra: { ...(rec.extra ?? {}), lastDay: `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}` } };
+      save(all);
+      return { premise: node.premise, node };
     },
   },
   // ── 固定生活剧情（date 类）──

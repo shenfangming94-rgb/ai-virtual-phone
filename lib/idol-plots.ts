@@ -19,6 +19,8 @@ import { loadCharacters } from "./character-storage";
 import { loadRoster } from "./idol-roster-live";
 import { fameTotal } from "./idol-fame";
 import { loadGrades, type GradeView } from "./idol-starroad";
+import { findLunar } from "./idol-calendar";
+import { mainlineState } from "./idol-mainline";
 import type { Character } from "./character-types";
 import type { RosterState } from "./idol-roster";
 
@@ -127,8 +129,21 @@ export function plotTick(): string[] {
   const became: string[] = [];
   for (const d of PLOTS) {
     const rec = all[d.key];
+    if (d.max == null) {
+      // 每年类（生日/樱花/初雪）：去年触发过的，条件重新成立前先回 watching
+      if (rec.state === "done") {
+        if (!d.check(c, rec)) all[d.key] = { ...rec, state: "watching" };
+        continue;
+      }
+      if (rec.state === "watching") {
+        try {
+          if (d.check(c, rec)) { all[d.key] = { ...rec, state: "ready" }; became.push(d.key); }
+        } catch { /* 一条出错不挡别的 */ }
+      }
+      continue;
+    }
     if (rec.state !== "watching") continue;
-    if (d.max != null && rec.firedCount >= d.max) continue;
+    if (rec.firedCount >= d.max) continue;
     try {
       if (d.check(c, rec)) {
         all[d.key] = { ...rec, state: "ready" };
@@ -157,6 +172,26 @@ export async function takeClassPlot(): Promise<{ key: string; premise: string } 
       save(all);
       return { key: d.key, premise: r.premise };
     } catch { /* 这条触发失败，留给下一节 */ }
+  }
+  return null;
+}
+
+/** 此刻开场景/下课结算时问的：有没有 ready 的 scene 类剧情；有就触发并返回开场（她在哪都衔接，比如初雪） */
+export function takeScenePlot(): { key: string; premise: string } | null {
+  const all = plotRecords();
+  const c = ctx();
+  for (const d of PLOTS) {
+    if (d.hook !== "scene") continue;
+    const rec = all[d.key];
+    if (rec.state !== "ready") continue;
+    try {
+      const r = d.fire(c, rec) as PlotFireResult;
+      if (!r?.premise) continue;
+      const fresh = load()[d.key] ?? rec;
+      all[d.key] = { ...fresh, state: "done", firedCount: fresh.firedCount + 1, lastFiredAt: Date.now() };
+      save(all);
+      return { key: d.key, premise: r.premise };
+    } catch { /* 这条留给下一次 */ }
   }
   return null;
 }
@@ -387,6 +422,136 @@ export const PLOTS: PlotDef[] = [
       const at = new Date(c.now + 3 * DAY); at.setHours(10, 0, 0, 0);
       const node = schedulePlotNode("练习生集体外出", "汉江公园", `公司安排部分练习生集体外出（${kind}）：提前通知、到当天一起出发。参与的人按公司安排，同期之间按真实关系互动，可以认识之前不熟的同期；不强制发生矛盾或友情升温。`, at.getTime());
       return { premise: node.premise, node };
+    },
+  },
+  {
+    key: "my_birthday", title: "我的生日", hook: "date", max: null,
+    check(c, rec) {
+      const bd = loadTraineeCard()?.birthday; // YYYY-MM-DD
+      if (!bd || bd.length < 10) return false;
+      const now = new Date(c.now);
+      if ((rec.extra?.lastYear as number) === now.getFullYear()) return false;
+      const md = `${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+      return bd.slice(5) === md;
+    },
+    fire(c, rec) {
+      const good = Object.values(c.profiles).filter(p => p.relation === "好朋友").map(p => c.characters.find(x => x.id === p.charId)?.name).filter(Boolean);
+      const her = loadTraineeCard()?.name ?? "你";
+      const branch = good.length >= 3
+        ? `几位好朋友（${good.slice(0, 3).join("、")}等）给${her}过生日：可能秘密筹备聚会，也可能提前告诉她。聚会地点、参与的人、有没有惊喜，按各自性格和真实关系演；同一天最多一场主要的同期庆祝。`
+        : good.length >= 1
+          ? `好朋友${good.slice(0, 2).join("、")}单独约${her}出去玩或小范围庆祝生日（吃饭、逛街、看电影都行），按关系和人设演。`
+          : `不强制安排生日聚会；认识她的同期（尤其是熟人和朋友）可能通过 KKT 送来生日祝福，谁来、说什么，按真实关系和人设决定。`;
+      const at = new Date(c.now); at.setHours(18, 0, 0, 0);
+      if (at.getTime() < c.now) at.setTime(c.now + 2 * 60e3 * 60);
+      const node = schedulePlotNode("我的生日", "宿舍", `${her}的生日。${branch}`, at.getTime());
+      const all = load();
+      all["my_birthday"] = { ...(all["my_birthday"] ?? rec), extra: { ...(rec.extra ?? {}), lastYear: new Date(c.now).getFullYear() } };
+      save(all);
+      return { premise: node.premise, node };
+    },
+  },
+  {
+    key: "first_long_holiday", title: "第一次放长假", hook: "date", max: 1,
+    check(c) {
+      const now = new Date(c.now);
+      const y = now.getFullYear();
+      const spring = findLunar(y, "正月", "初一", [0, 15], [1, 25]);
+      const autumn = findLunar(y, "八月", "十五", [8, 1], [9, 15]);
+      const today = `${y}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+      return today === spring || today === autumn;
+    },
+    fire(c) {
+      const now = new Date(c.now);
+      const isSpring = now.getMonth() <= 2;
+      const at = new Date(c.now); at.setHours(19, 0, 0, 0);
+      const node = schedulePlotNode("放长假", "宿舍", `公司放${isSpring ? "春节" : "中秋"}假（连续几天）。不同同期各有安排：回家探亲、留在首尔、和朋友外出、忙自己的事，都按她们的家庭背景、居住地和日程来。她怎么过，由她自己决定；放假前后的生活情境在「此刻」演出来。`, at.getTime());
+      return { premise: node.premise, node };
+    },
+  },
+  {
+    key: "family_dinner", title: "年末家族聚餐", hook: "date", max: 1,
+    check(c) {
+      const ml = mainlineState().find(n => n.key === "family_concert");
+      return ml?.state === "done";
+    },
+    fire(c) {
+      const at = new Date(c.now + DAY); at.setHours(19, 0, 0, 0);
+      const node = schedulePlotNode("公司年末聚餐", "江南 烤肉店", `年末家族演唱会结束后，公司组织年末聚餐：女练习生、男练习生、出道的前辈、老师、工作人员都可能在场（不要求全部到）。具体座位、互动、谈话按真实人物和关系演；之前在课堂或活动里认识的前辈可以自然再出现。不预设冲突或表白。`, at.getTime());
+      return { premise: node.premise, node };
+    },
+  },
+  {
+    key: "sakura", title: "春日樱花季", hook: "date", max: null,
+    check(c, rec) {
+      const sy = c.career.signedAt ? new Date(c.career.signedAt).getFullYear() : 0;
+      const now = new Date(c.now);
+      if ((rec.extra?.lastYear as number) === now.getFullYear()) return false;
+      const inWindow = (now.getMonth() === 2 && now.getDate() >= 20) || (now.getMonth() === 3 && now.getDate() <= 10);
+      return now.getFullYear() === sy + 1 && inWindow;
+    },
+    fire(c, rec) {
+      const at = new Date(c.now); at.setHours(15, 0, 0, 0);
+      const node = schedulePlotNode("樱花季", "南山塔", `首尔樱花开了。不安排公司统一赏樱：系统按她当前的关系、地点和日程决定展开方式——好朋友可能 KKT 约她赏樱、某位同期临时约她出门、她在外面偶然遇见熟悉的人、或忙碌的训练间隙独自经过一段春日场景。不固定邀请者、不固定同行、不强制她接受；即使没出门，也可以在她当前地点演一段春日剧情。`, at.getTime());
+      const all = load();
+      all["sakura"] = { ...(all["sakura"] ?? rec), extra: { ...(rec.extra ?? {}), lastYear: new Date(c.now).getFullYear() } };
+      save(all);
+      return { premise: node.premise, node };
+    },
+  },
+  {
+    key: "rainstorm", title: "夏日暴雨", hook: "date", max: 1,
+    check(c) {
+      const sy = c.career.signedAt ? new Date(c.career.signedAt).getFullYear() : 0;
+      const now = new Date(c.now);
+      const inWindow = (now.getMonth() === 6 && now.getDate() >= 20) || (now.getMonth() === 7 && now.getDate() <= 31);
+      return now.getFullYear() === sy && inWindow;
+    },
+    fire(c) {
+      // 优先挑「降雨最强的一天」：接天气数据后细化，先按窗口内随机工作日（她的方案允许可执行的兜底判定）
+      const now = new Date(c.now);
+      const at = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1 + Math.floor(Math.random() * 4), 16, 0, 0);
+      const node = schedulePlotNode("夏日暴雨", "便利店", `首尔下暴雨。当天按她当时的位置、行动、同行的人和天气状况生成剧情：下课后因暴雨暂时无法离开、与同期或朋友一起找地方避雨、原本的外出安排受影响、或在街道/便利店经历一段突如其来的雨天故事。不固定地点和人物，不预设情感发展，不为了触发事件强行改变她的位置。`, at.getTime());
+      return { premise: node.premise, node };
+    },
+  },
+  {
+    key: "music_festival", title: "秋季大学音乐节", hook: "date", max: 1,
+    check(c) {
+      const sy = c.career.signedAt ? new Date(c.career.signedAt).getFullYear() : 0;
+      const now = new Date(c.now);
+      return now.getFullYear() === sy && now.getMonth() >= 8 && now.getMonth() <= 10;
+    },
+    fire(c) {
+      const now = new Date(c.now);
+      const at = new Date(now.getFullYear(), now.getMonth(), Math.min(now.getDate() + 5 + Math.floor(Math.random() * 5), 28), 18, 0, 0);
+      const node = schedulePlotNode("大学音乐节", "汉江公园", `首尔某所大学办秋季音乐节，邀请多组已出道爱豆和歌手演出（第一阶段：活动排期）。优先由符合条件的同期通过 KKT 邀请她一起去（邀请者按兴趣、关系和日程挑，不固定）；没人邀请，她也可以从日历知道、自己决定去不去。当天若参加，通过「此刻」演绎现场：舞台、应援、观众互动、练习生视角的演出体验。`, at.getTime());
+      return { premise: node.premise, node };
+    },
+  },
+  // ── 固定生活剧情（scene 类：她在哪都衔接）──
+  {
+    key: "first_snow", title: "首尔初雪", hook: "scene", max: null,
+    check(c, rec) {
+      const now = new Date(c.now);
+      const season = now.getMonth() >= 8 ? now.getFullYear() : now.getFullYear() - 1;
+      if ((rec.extra?.lastSeason as number) === season) return false;
+      try {
+        const s = JSON.parse(kvGet(`idol_weather_first_snow_v1:${season}`) || "null") as { at?: number } | null;
+        if (!s?.at) return false;
+        const snowDay = new Date(s.at);
+        return snowDay.getFullYear() === now.getFullYear() && snowDay.getMonth() === now.getMonth() && snowDay.getDate() === now.getDate();
+      } catch { return false; }
+    },
+    fire(c, rec) {
+      const now = new Date(c.now);
+      const season = now.getMonth() >= 8 ? now.getFullYear() : now.getFullYear() - 1;
+      const all = load();
+      all["first_snow"] = { ...(all["first_snow"] ?? rec), extra: { ...(rec.extra ?? {}), lastSeason: season } };
+      save(all);
+      return {
+        premise: `首尔今天迎来这个秋冬季的初雪。按她此刻所在的地方、同行的人、正在做的事衔接这段初雪剧情：独处、和朋友、和同期、或在约会都可以有不同发展；不强制出现特定人物、不强制恋爱发展、不为了初雪强行改变她的位置。保留初雪的双语文案和氛围感（初雪动画另做）。`,
+      };
     },
   },
 ];

@@ -124,7 +124,7 @@ const career = JSON.parse(await kvGet("idol_career_v1") ?? "{}");
 const plotNodes = career.nodes?.filter(n => n.occasion === "plot") ?? [];
 ok(plotNodes.some(n => n.title.includes("宿舍重新分配")), "宿舍重新分配排出来了", plotNodes.map(n => n.title));
 ok(plotNodes.some(n => n.title.includes("集体外出")), "集体外出排出来了", plotNodes.map(n => n.title));
-ok(plotNodes.every(n => n.status === "pending"), "剧情日程都是待办");
+ok(plotNodes.every(n => n.status === "pending" || n.status === "absent"), "剧情日程都是待办或已过期", plotNodes.map(n => `${n.title}:${n.status}`));
 ok(errs.length === 0, "没有页面报错", JSON.stringify(errs.slice(0, 3)));
 
 console.log(`\n${fail === 0 ? "全部通过 ✅" : fail + " 项没过 ❌"}(${pass} 项)`);

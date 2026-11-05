@@ -27,7 +27,7 @@ import { formatClassGain, settlePlayerClass } from "./idol-roster-live";
 import { apSlotOf } from "./idol-actionpoints";
 import { consumeAp } from "./idol-ap-live";
 import { setWorldTime } from "./world-clock";
-import { markIntroDone, plotTick, takeClassPlot, takeIntroPremise } from "./idol-plots";
+import { markIntroDone, plotTick, takeClassPlot, takeIntroPremise, takeScenePlot } from "./idol-plots";
 
 export const STAGE_APP_NAME = "此刻";
 
@@ -381,13 +381,21 @@ export function startStageScene(opts: { placeKey: string; placeName?: string; me
   const ch = startNewChapter(session.id, title, `${fmtWorld(Date.now()).slice(5)} · ${place}`);
   if (!ch) return null;
   const ids = [WORLD_CHAR_ID, ...(opts.meetIds ?? []).filter(id => id !== WORLD_CHAR_ID)];
+  // 剧情池的场景剧情（初雪这种）：她在哪都衔接，开场卡点一下就 AI 直接开场
+  let premise = (opts.premise ?? node?.premise ?? "").trim();
+  let plotAuto = false;
+  try {
+    const scenePlot = takeScenePlot();
+    if (scenePlot) { premise = premise ? `${premise}\n${scenePlot.premise}` : scenePlot.premise; plotAuto = true; }
+  } catch { /* 剧情池出错不影响开场景 */ }
   const scene: StageScene = {
     chapterId: ch.id, bg: opts.placeKey, ids,
-    place, premise: (opts.premise ?? node?.premise ?? "").trim(), startAt: Date.now(), newFaces: [],
+    place, premise, startAt: Date.now(), newFaces: [],
     ...(opts.nodeId ? { nodeId: opts.nodeId } : {}),
     ...(opts.taken ? { taken: opts.taken } : {}),
     ...(ids.length === 1 ? { open: true } : {}),
     ...(opts.avoid?.length ? { avoid: opts.avoid } : {}),
+    ...(plotAuto ? { plotAuto: true } : {}),
   };
   saveStageScene(scene);
   return { chapterIndex: ch.index, scene };
@@ -480,7 +488,8 @@ export async function settleClassScene(chapterIndex: number): Promise<{ lines: s
       markIntroDone();
     } else {
       plotTick();
-      const plot = await takeClassPlot();
+      const scenePlot = takeScenePlot(); // 初雪这种场景剧情优先
+      const plot = scenePlot ?? await takeClassPlot();
       if (plot) plotPremise = plot.premise;
     }
   } catch { /* 剧情池出错不影响下课 */ }

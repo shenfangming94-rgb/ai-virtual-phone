@@ -1723,6 +1723,8 @@ export function VnPlayer({ characterId, chapterIndex, onClose, onChapterEnd, vnT
           setStageOpening(false);
           // 第一次课的「老师介绍新练习生」：AI 直接开场，不等她打第一个字
           if (!allFrames.length && stageScene.class?.preScene) { void handleSendAll(`开场：${stageScene.premise}`); return; }
+          // 剧情池的场景剧情（初雪这种）：AI 直接开场
+          if (!allFrames.length && stageScene.plotAuto) { void handleSendAll(`开场：${stageScene.premise}`); return; }
           // 带着「!」进来的：别人的事正在发生，AI 先把现场写出来
           if (!allFrames.length && !sideOn && (stageScene.taken?.fate || stageScene.taken?.life)) void handleSendAll("开场：照这一场正在发生的事，先把现场写出来，写到一个她可以决定要不要参与的地方停");
         }}>
@@ -1730,7 +1732,7 @@ export function VnPlayer({ characterId, chapterIndex, onClose, onChapterEnd, vnT
           <div className="vn-stage-open-place">{stageScene.place}</div>
           {worldWeatherLabel(stageScene.startAt) ? <div className="vn-stage-open-weather">{worldWeatherLabel(stageScene.startAt)}</div> : null}
           {stageScene.nodeId ? <div className="vn-stage-open-title">{session.chapters[chapterIndex]?.title}</div> : null}
-          <div className="vn-stage-open-hint">{!allFrames.length && stageScene.class?.preScene ? "点一下，这节课开始了" : !allFrames.length && !sideOn && (stageScene.taken?.fate || stageScene.taken?.life) ? "点一下，看看发生了什么" : "点一下，说你的第一句"}</div>
+          <div className="vn-stage-open-hint">{!allFrames.length && (stageScene.class?.preScene || stageScene.plotAuto) ? "点一下，这场戏开始了" : !allFrames.length && !sideOn && (stageScene.taken?.fate || stageScene.taken?.life) ? "点一下，看看发生了什么" : "点一下，说你的第一句"}</div>
           {/* 带「!」进来的会自动开场，番外得在开场前选：开场卡上也放一个 */}
           {!allFrames.length && !stageScene.nodeId && (stageScene.taken?.fate || stageScene.taken?.life) ? (
             <button type="button" className="vn-mode-btn vn-stage-open-side" data-active={sideOn ? "true" : undefined} onClick={(e) => { e.stopPropagation(); toggleSide(); }}>番外</button>

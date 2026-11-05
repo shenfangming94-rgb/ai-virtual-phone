@@ -36,7 +36,7 @@ import { loadApiConfigs, loadBindingConfig, resolveBinding } from "./settings-st
 export const WORLD_CHAR_ID = HIDDEN_WORLD_CHAR_ID;
 const META_KEY = "idol_scene_meta_v1";
 
-export type SceneMeta = { place: string; premise: string; startAt: number; newFaces: string[]; ended?: boolean; summary?: string; nodeId?: string; /** 谁在交给世界 */ open?: boolean; /** 不想碰见的人（名字） */ avoid?: string[]; /** 番外：她不一定在场，看他们自己的视角；不拨世界时间、新人不进她的通讯录 */ side?: boolean };
+export type SceneMeta = { place: string; premise: string; startAt: number; newFaces: string[]; ended?: boolean; summary?: string; nodeId?: string; /** 谁在交给世界 */ open?: boolean; /** 不想碰见的人（名字） */ avoid?: string[]; /** 番外：她不一定在场，看他们自己的视角；不拨世界时间、新人不进她的通讯录 */ side?: boolean; /** 剧情池给的场景剧情（初雪这种）：开场卡点一下就 AI 直接开场 */ plotAuto?: boolean };
 
 /** 她未成年：新出场、跟她有来往的男生大多跟她差不多大，年龄写进新人资料 */
 function peerAgeHint(): string {

@@ -1,52 +1,132 @@
+/**
+ * 剧情池端到端：第一次课=老师介绍(前置)、第二节课后触发「竞争同一个机会」、入社满 90 天排宿舍重分配。
+ * 跑法：node docs/idol/tests/pl1.mjs /tmp/pl1   前提：dev 服务在跑（默认 3001，IDOL_TEST_URL 覆盖）
+ */
 import puppeteer from "puppeteer-core";
-const OUT=process.argv[2]||".";
-const b=await puppeteer.launch({executablePath:"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",headless:"new"});
-const p=await b.newPage(); await p.setViewport({width:430,height:900,deviceScaleFactor:2});
-const errs=[]; p.on("pageerror",e=>errs.push(e.message));
-const sleep=ms=>new Promise(r=>setTimeout(r,ms));
-const log=[];
-function reply(body){
-  const s=body||"";
-  if(s.includes("补成完整的卡")) return JSON.stringify({name:"申多恩",role:"同期练习生 · 今天刚来",group:"同期练习生",age:"17",isIdol:false,publicLabels:[],publicText:"",privateLines:["紧张的时候会一直捏衣角","釜山口音一着急就冒出来","吃饭特别快，吃完会帮别人收盘子","手机壁纸是老家的海"],speech:"平时说首尔话，一激动就是釜山话",taboo:""});
-  if(s.includes("带新人练习生的管理老师")) return JSON.stringify({name:"朴珍熙",role:"练习生管理老师",group:"公司",age:"34",isIdol:false,publicLabels:[],publicText:"",privateLines:["通知永远提前一天发","群里只发正事"],speech:"简短，句尾爱加「哦」",taboo:""});
-  if(s.includes("发日程通知")) return "明天下午五点周评，B2 练习室，提前十分钟到哦。";
-  if(s.includes("把这场戏记下来")) return JSON.stringify({summary:"第一天在练习室认识了申多恩。",people:[{name:"韩智元",event:"拿走了你的 ID",impression:""},{name:"申多恩",event:"把 KakaoTalk ID 写在你手背上",impression:"觉得你人很好"}]});
-  if(s.includes("这一场戏")) return "申多恩从口袋里摸出一支笔，抓过你的手，在手背上写了一串字母：「dawn_0712，回去加我！」\n\n韩智元凑过来：「你的 ID 也给我呗。」\n[新人:申多恩|今天刚来的同期练习生]\n[给号:申多恩|dawn_0712]\n[加你:韩智元|我是智元，练习室那个]\n[收尾]";
-  return "嗯嗯！看到你加我了，好开心～";
+const OUT = process.argv[2] || ".";
+const URL = process.env.IDOL_TEST_URL || "http://127.0.0.1:3001/";
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+let pass = 0, fail = 0;
+const ok = (c, n, x = "") => { if (c) { pass++; console.log("  ✓", n); } else { fail++; console.log("  ✗", n, JSON.stringify(x).slice(0, 400)); } };
+
+const b = await puppeteer.launch({ executablePath: "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome", headless: "new", userDataDir: `/tmp/idol-pl1-${Date.now()}`, protocolTimeout: 300000 });
+const p = await b.newPage(); await p.setViewport({ width: 430, height: 932, deviceScaleFactor: 2 });
+const errs = []; p.on("pageerror", e => errs.push(e.message));
+
+const setClock = async (target) => {
+  await p.evaluate(world => {
+    const wc = window.__worldClock;
+    if (wc) { wc.frozen = null; wc.offset = world - wc.RealDate.now(); }
+    const offset = wc ? wc.offset : world - Date.now();
+    localStorage.setItem("idol_world_clock_v1", JSON.stringify({ real: false, offset, world }));
+  }, target);
+};
+const kvGet = async (key) => p.evaluate(async k => {
+  const db = await new Promise(res => { const r = indexedDB.open("AiPhoneKvDB"); r.onsuccess = () => res(r.result); });
+  const tx = db.transaction("entries", "readonly"); const st = tx.objectStore("entries");
+  return await new Promise(res => { const q = st.get(k); q.onsuccess = () => res(q.result?.value ?? null); });
+}, key);
+const kvPut = async (key, value) => p.evaluate(async (k, v) => {
+  const db = await new Promise(res => { const r = indexedDB.open("AiPhoneKvDB"); r.onsuccess = () => res(r.result); });
+  const tx = db.transaction("entries", "readwrite"); const st = tx.objectStore("entries");
+  st.put({ key: k, value: JSON.stringify(v) });
+  await new Promise(res => tx.oncomplete = res);
+}, key, value);
+function nextDow(dow, hour, min = 0) { const d = new Date(); d.setHours(hour, min, 0, 0); const add = (dow - d.getDay() + 7) % 7; d.setDate(d.getDate() + add); return d.getTime(); }
+const pump = async () => {
+  await p.evaluate(() => { try { window.__idolNew?.rosterTick?.(); window.__idolNew?.plotTick?.(); window.__idolNew?.plotDateTick?.(); } catch { /* 不管 */ } });
+  await sleep(600);
+};
+const ensureRoster = async () => { for (let i = 0; i < 20; i++) { await p.evaluate(() => window.__idolNew?.rosterTick?.()); await sleep(500); if (await kvGet("idol_roster_v1")) return true; } return false; };
+
+// 1. 播种：签约 40 天（竞争机会条件满，宿舍重分配还没到）
+await p.goto(URL, { waitUntil: "networkidle2", timeout: 300000 });
+await p.waitForFunction(() => window.__idolNew, { timeout: 240000, polling: 500 });
+const signedAt = Date.now() - 40 * 864e5;
+await kvPut("idol_trainee_card_v1", { name: "沈清仪", photo: null, birthday: "2001-04-12", nationality: "中国", start: "2016-03-01", trainLength: "一年", family: "normal", talents: ["dance"], company: "JYP", no: "x", createdAt: 1 });
+await kvPut("idol_career_v1", { stage: "trainee", companyId: "jyp", signedAt, facts: [], offers: [], offersMadeAt: Date.now(), nodes: [] });
+await setClock(nextDow(1, 8, 0));
+await p.reload({ waitUntil: "networkidle2" }); await p.waitForFunction(() => window.__idolNew, { timeout: 240000, polling: 500 });
+await ensureRoster();
+for (let i = 0; i < 6; i++) await pump();
+const records1 = await p.evaluate(() => window.__idolNew?.plotRecords?.());
+ok(records1?.compete?.state === "ready", "签约 40 天:竞争机会进 ready", JSON.stringify(records1?.compete));
+ok(records1?.dorm_shuffle?.state === "watching", "签约 40 天:宿舍重分配还 watching", records1?.dorm_shuffle?.state);
+
+// 2. 第一次课：找课、进公司 → 前置剧情「老师介绍新练习生」
+const findClass = async (skipDow) => {
+  for (let dow = 1; dow <= 5; dow++) {
+    if (dow === skipDow) continue;
+    await setClock(nextDow(dow, 8, 0)); await p.reload({ waitUntil: "networkidle2" }); await p.waitForFunction(() => window.__idolNew, { timeout: 240000, polling: 500 });
+    let raw = null;
+    for (let i = 0; i < 30 && !raw; i++) { await sleep(1000); raw = await kvGet("idol_starroad_v1"); }
+    const s = raw ? JSON.parse(raw) : null;
+    const monday = new Date(nextDow(dow, 8, 0)); monday.setHours(0, 0, 0, 0); monday.setDate(monday.getDate() - ((monday.getDay() + 6) % 7));
+    const parity = Math.floor(monday.getTime() / (7 * 864e5)) % 2;
+    const slot = (s?.slots ?? []).find(x => x.dow === dow && x.subject && (x.parity == null || x.parity === parity));
+    if (slot) { const [h, m] = slot.start.split(":").map(Number); return { dow, start: nextDow(dow, h, m), end: nextDow(dow, h + 2, m), subject: slot.subject }; }
+  }
+  return null;
+};
+const cls1 = await findClass(null);
+ok(Boolean(cls1), "找了第一节要上的课");
+await setClock(cls1.start + 20 * 60e3);
+await p.reload({ waitUntil: "networkidle2" }); await p.waitForFunction(() => window.__idolNew, { timeout: 240000, polling: 500 }); await sleep(1500);
+await p.evaluate(() => window.postMessage({ type: "OS_CMD", action: "open_app", appId: "vnmode" }, "*")); await sleep(2500);
+await p.evaluate(() => { const el = [...document.querySelectorAll(".stg-mpin, .stg-card")].find(e => (e.textContent ?? "").includes("公司")); el?.click(); }); await sleep(2000);
+const scenes1 = JSON.parse(await kvGet("idol_stage_scenes_v1") ?? "{}");
+const introScene = Object.values(scenes1).find(s => s.class?.preScene === "intro");
+ok(Boolean(introScene), "第一次课开了前置剧情(老师介绍)", Object.values(scenes1).map(s => s.class?.preScene));
+ok((introScene?.premise ?? "").includes("介绍"), "开场是介绍新练习生", introScene?.premise?.slice(0, 40));
+ok((introScene?.class?.text ?? "") === "", "第一次课不放固定文本", introScene?.class?.text);
+// 开场卡点一下 → AI 直接开场（测试环境没配 API，AI 失败后照样能下课）
+await p.evaluate(() => document.querySelector(".vn-stage-open")?.click()); await sleep(2500);
+let gotEnd = false;
+for (let i = 0; i < 30 && !gotEnd; i++) {
+  gotEnd = await p.evaluate(() => document.body.innerText.includes("下课"));
+  if (!gotEnd) { await p.evaluate(() => document.querySelector(".vn-shell")?.click()); await sleep(350); }
 }
-const CORS={"Access-Control-Allow-Origin":"*","Access-Control-Allow-Headers":"*","Access-Control-Allow-Methods":"POST, OPTIONS"};
-await p.setRequestInterception(true);
-p.on("request",r=>{ if(r.url().includes("mock.test")&&r.method()==="OPTIONS"){r.respond({status:204,headers:CORS});return;} if(r.url().includes("mock.test")){ const c=reply(r.postData()); log.push(c.slice(0,30)); r.respond({status:200,headers:CORS,contentType:"application/json",body:JSON.stringify({choices:[{message:{role:"assistant",content:c},finish_reason:"stop"}]})}); } else r.continue(); });
-await p.goto("http://localhost:3031/",{waitUntil:"networkidle2",timeout:300000}); await sleep(2000);
-await p.evaluate(async()=>{
-  const now=new Date().toISOString();
-  const mk=(id,name)=>({id,name,avatar:null,persona:"",wechatID:"jiwon_99",tags:[],createdAt:now,updatedAt:now});
-  const base={layer:"main",group:"同期练习生",role:"同期练习生 · 室友",age:"18",isIdol:false,publicLabels:[],publicText:"",face:"mixed",privateLines:["爱拆台"],speech:"说话快",taboo:"",withYou:"室友",met:true,events:[],note:""};
-  const db=await new Promise((res,rej)=>{const r=indexedDB.open("AiPhoneKvDB");r.onsuccess=()=>res(r.result);r.onerror=rej;});
-  const tx=db.transaction("entries","readwrite"); const st=tx.objectStore("entries");
-  st.put({key:"ai_phone_characters_v1",value:JSON.stringify([mk("c2","韩智元")])});
-  st.put({key:"idol_people_v1",value:JSON.stringify({c2:{...base,charId:"c2"}})});
-  st.put({key:"ai_phone_api_configs_v1",value:JSON.stringify([{id:"m1",name:"mock",provider:"openai",apiKey:"x",baseUrl:"https://mock.test/v1",defaultModel:"m",enableImageRecognition:false,enableImageGeneration:false}])});
-  st.put({key:"ai_phone_user_identities_v1",value:JSON.stringify([{id:"identity-1",name:"Flora",bio:"",gender:"女",age:"16",occupation:"",customSettings:""}])});
-  st.put({key:"idol_trainee_card_v1",value:JSON.stringify({name:"Flora",photo:null,birthday:"1998-04-11",nationality:"中国",mbti:"",looks:"",start:"2015-03-01",trainLength:"一年半",family:"normal",familyCustom:"",familyNote:"",talents:["vocal"],talentNote:"",weakness:"",other:"",signature:null,company:"JYP",no:"x",createdAt:1})});
-  const t0=new Date("2015-03-02T09:00:00").getTime();
-  st.put({key:"idol_career_v1",value:JSON.stringify({stage:"trainee",companyId:"jyp",signedAt:t0-86400000,facts:[],offers:[],offersMadeAt:1,nodes:[
-    {id:"n1",kind:"first_day",title:"进公司第一天",place:"JYP 公司大楼",premise:"第一天",dueAt:t0,status:"pending",companyId:"jyp",remindedEve:true,remindedDue:true},
-    {id:"n2",kind:"weekly",title:"周评",place:"JYP 公司 练习室",premise:"周评",dueAt:new Date("2015-03-06T17:00:00").getTime(),status:"pending",companyId:"jyp",remindedEve:true}]})});
-  await new Promise(r=>tx.oncomplete=r);
-});
-await p.reload({waitUntil:"networkidle2"}); await sleep(2500);
-await p.evaluate(()=>{const wc=window.__worldClock; wc.offset=new Date("2015-03-03T21:40:00").getTime()-wc.RealDate.now();});
-await p.evaluate(()=>document.querySelector(".lock-swipe")?.click()); await sleep(800);
-await p.evaluate(()=>window.postMessage({type:"OS_CMD",action:"open_app",appId:"story"},"*")); await sleep(2500);
-await p.evaluate(()=>document.querySelector('button[aria-label="开一场戏"]').click()); await sleep(600);
-await p.screenshot({path:OUT+"/p1.png"});
-await p.evaluate(()=>[...document.querySelectorAll(".story-place-grid button")].find(x=>x.textContent==="练习室").click()); await sleep(300);
-await p.screenshot({path:OUT+"/p2.png"});
-await p.evaluate(()=>[...document.querySelectorAll(".story-place-tabs button")].find(x=>x.textContent==="出去玩").click());
-await p.evaluate(()=>[...document.querySelectorAll(".story-place-grid button")].find(x=>x.textContent==="汉江公园").click());
-await p.evaluate(()=>[...document.querySelectorAll(".story-place-seg button")][1].click()); await sleep(300);
-await p.screenshot({path:OUT+"/p3.png"});
-await p.evaluate(()=>[...document.querySelectorAll(".story-place-tabs button")].find(x=>x.textContent==="自己写").click()); await sleep(300);
-await p.screenshot({path:OUT+"/p4.png"});
-console.log(errs.slice(0,3)); await b.close();
+ok(gotEnd, "介绍开场卡点完出现下课");
+await p.evaluate(() => { [...document.querySelectorAll("button")].find(x => x.textContent?.includes("下课") && !x.textContent.includes("中"))?.click(); }); await sleep(2500);
+const records2 = await p.evaluate(() => window.__idolNew?.plotRecords?.());
+ok(records2?.intro_new_trainee?.firedCount === 1, "介绍剧情记成已触发", JSON.stringify(records2?.intro_new_trainee));
+ok(await p.evaluate(() => document.body.innerText.includes("这节课结束了")), "第一次课下课收尾");
+
+// 3. 第二次课：正常固定文本 → 下课 → 竞争机会接在课后
+const cls2 = await findClass(cls1.dow);
+ok(Boolean(cls2), "找了第二节课");
+await setClock(cls2.start + 20 * 60e3);
+await p.reload({ waitUntil: "networkidle2" }); await p.waitForFunction(() => window.__idolNew, { timeout: 240000, polling: 500 }); await sleep(1500);
+await p.evaluate(() => window.postMessage({ type: "OS_CMD", action: "open_app", appId: "vnmode" }, "*")); await sleep(2500);
+await p.evaluate(() => { const el = [...document.querySelectorAll(".stg-mpin, .stg-card")].find(e => (e.textContent ?? "").includes("公司")); el?.click(); }); await sleep(2000);
+const scenes2 = JSON.parse(await kvGet("idol_stage_scenes_v1") ?? "{}");
+const clsScene2 = Object.values(scenes2).find(s => s.class && !s.class.preScene && !s.class.settled);
+ok(Boolean(clsScene2), "第二次课是普通课(固定文本)", clsScene2?.class?.text?.slice(0, 30));
+let gotEnd2 = false;
+for (let i = 0; i < 50 && !gotEnd2; i++) {
+  gotEnd2 = await p.evaluate(() => document.body.innerText.includes("下课"));
+  if (!gotEnd2) { await p.evaluate(() => document.querySelector(".vn-shell")?.click()); await sleep(350); }
+}
+ok(gotEnd2, "文本点完出现下课");
+await p.evaluate(() => { [...document.querySelectorAll("button")].find(x => x.textContent?.includes("下课") && !x.textContent.includes("中"))?.click(); }); await sleep(3000);
+const records3 = await p.evaluate(() => window.__idolNew?.plotRecords?.());
+ok(records3?.compete?.firedCount === 1 && records3?.compete?.state === "done", "竞争机会触发了一次", JSON.stringify(records3?.compete));
+ok(Array.isArray(records3?.compete?.extra?.subjects) && records3.compete.extra.subjects.length === 1, "记了用过的课程", JSON.stringify(records3?.compete?.extra));
+const scenes3 = JSON.parse(await kvGet("idol_stage_scenes_v1") ?? "{}");
+const afterScene2 = Object.values(scenes3).find(s => s.class && s.class.settled && s.startAt === clsScene2.startAt);
+ok(afterScene2?.ended !== true, "挂了剧情的课不归档(接着演)", afterScene2?.ended);
+
+// 4. 入社满 90 天：宿舍重分配 + 集体外出排出来
+await setClock(signedAt + 95 * 864e5);
+await p.reload({ waitUntil: "networkidle2" }); await p.waitForFunction(() => window.__idolNew, { timeout: 240000, polling: 500 });
+for (let i = 0; i < 8; i++) await pump();
+const career = JSON.parse(await kvGet("idol_career_v1") ?? "{}");
+const plotNodes = career.nodes?.filter(n => n.occasion === "plot") ?? [];
+ok(plotNodes.some(n => n.title.includes("宿舍重新分配")), "宿舍重新分配排出来了", plotNodes.map(n => n.title));
+ok(plotNodes.some(n => n.title.includes("集体外出")), "集体外出排出来了", plotNodes.map(n => n.title));
+ok(plotNodes.every(n => n.status === "pending"), "剧情日程都是待办");
+ok(errs.length === 0, "没有页面报错", JSON.stringify(errs.slice(0, 3)));
+
+console.log(`\n${fail === 0 ? "全部通过 ✅" : fail + " 项没过 ❌"}(${pass} 项)`);
+await b.close();
+process.exit(fail ? 1 : 0);

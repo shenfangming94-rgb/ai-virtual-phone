@@ -27,6 +27,7 @@ import { formatClassGain, settlePlayerClass } from "./idol-roster-live";
 import { apSlotOf } from "./idol-actionpoints";
 import { consumeAp } from "./idol-ap-live";
 import { setWorldTime } from "./world-clock";
+import { markIntroDone, plotTick, takeClassPlot, takeIntroPremise } from "./idol-plots";
 
 export const STAGE_APP_NAME = "此刻";
 
@@ -349,6 +350,8 @@ export type StageScene = SceneMeta & {
     text: string;
     settled?: boolean;
     attended?: boolean;
+    /** 第一次进练习室的前置剧情（老师介绍新练习生）：AI 先演，固定文本这节课不放 */
+    preScene?: "intro";
   };
 };
 
@@ -417,6 +420,7 @@ function classTextKey(cls: { subject: StarSubject | null; label: string }): stri
 /**
  * 开一节上课场景：先显示固定课堂文本（55 段里抽的，不走 AI），
  * 下课结算时数字打出来；点错秒退不算（结算只发生在下课）。
+ * 第一次进练习室：老师介绍新练习生的前置剧情（AI 直接开场，这节课不放固定文本）。
  */
 export function startClassScene(placeKey: string): { chapterIndex: number; scene: StageScene } | null {
   const cls = classHappeningNow();
@@ -427,14 +431,21 @@ export function startClassScene(placeKey: string): { chapterIndex: number; scene
   if (!ch) return null;
   const key = classTextKey(cls);
   const picked = pickClassText(key);
+  const intro = takeIntroPremise();
   const scene: StageScene = {
     chapterId: ch.id, bg: placeKey, ids: [WORLD_CHAR_ID],
-    place, premise: "", startAt: Date.now(), newFaces: [],
-    class: { subjectKey: cls.subject ?? "", label: cls.label, start: cls.start, end: cls.end, textId: picked?.id ?? "", text: picked?.text ?? "" },
+    place, premise: intro?.premise ?? "", startAt: Date.now(), newFaces: [],
+    class: {
+      subjectKey: cls.subject ?? "", label: cls.label, start: cls.start, end: cls.end,
+      textId: picked?.id ?? "", text: intro ? "" : (picked?.text ?? ""),
+      ...(intro ? { preScene: "intro" as const } : {}),
+    },
   };
   saveStageScene(scene);
-  // 固定文本直接写进这一章当开场，不等她打字、不调 AI
-  pushVnMessage({ sessionId: session.id, role: "assistant", rawContent: picked?.text ?? "今天这节课照常进行。", chapterIndex: ch.index });
+  // 第一次课：AI 直接演「老师介绍新练习生」（开场卡点一下就开场）；之后的课固定文本直接写进这一章当开场
+  if (!intro) {
+    pushVnMessage({ sessionId: session.id, role: "assistant", rawContent: picked?.text ?? "今天这节课照常进行。", chapterIndex: ch.index });
+  }
   return { chapterIndex: ch.index, scene };
 }
 
@@ -462,8 +473,17 @@ export async function settleClassScene(chapterIndex: number): Promise<{ lines: s
   // 记到场：judge 只认这个
   markClassAttended(cls.start, (cls.subjectKey || null) as StarSubject | null);
   saveStageScene({ ...scene, class: { ...cls, settled: true, attended: true } });
-  // 第一批先没有挂着的剧情（课堂八类/独立剧情接上来以后走这里）
-  const plotPremise: string | null = null;
+  // 下课结算后：先刷一遍剧情池条件（刚上完的课可能正好满足），再问有没有挂着的剧情
+  let plotPremise: string | null = null;
+  try {
+    if (cls.preScene === "intro") {
+      markIntroDone();
+    } else {
+      plotTick();
+      const plot = await takeClassPlot();
+      if (plot) plotPremise = plot.premise;
+    }
+  } catch { /* 剧情池出错不影响下课 */ }
   if (plotPremise) {
     pushVnMessage({ sessionId: session.id, role: "assistant", rawContent: lines.join("\n"), chapterIndex });
   } else {

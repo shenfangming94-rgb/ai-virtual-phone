@@ -50,6 +50,8 @@ const nowIso = new Date().toISOString();
 const signedAt = Date.now() - 3 * 864e5;
 await kvPut("idol_trainee_card_v1", { name: "沈清仪", photo: null, birthday: "2001-04-12", nationality: "中国", start: "2016-03-01", trainLength: "一年", family: "normal", talents: ["dance"], company: "JYP", no: "x", createdAt: 1 });
 await kvPut("idol_career_v1", { stage: "trainee", companyId: "jyp", signedAt, facts: [], offers: [], offersMadeAt: Date.now(), nodes: [] });
+// 老师介绍已经演过（这测试专测课管线本身，前置剧情在 pl1 里测）
+await kvPut("idol_plots_v1", { intro_new_trainee: { key: "intro_new_trainee", state: "done", firedCount: 1 } });
 await setClock(nextDow(1, 8, 0));
 await p.reload({ waitUntil: "networkidle2" }); await p.waitForFunction(() => window.__idolTest, { timeout: 240000, polling: 1000 }); await sleep(2500);
 

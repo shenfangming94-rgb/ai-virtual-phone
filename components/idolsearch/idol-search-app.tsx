@@ -387,7 +387,7 @@ function ArtistPage({ name, onBack }: { name: string; onBack: () => void }) {
           {a.fandom ? <div><b>粉丝名</b><span>{a.fandom}</span></div> : null}
           {a.recent ? <div><b>最近</b><span>{a.recent}</span></div> : null}
         </div>
-        {a.members?.length ? <><div className="is-sec"><div className="is-sh"><b>成员</b></div></div><div className="is-mem">{a.members.map(m => <span key={m.name}><i style={{ background: artistBg(m.name) }} />{m.name}{m.position ? <small>{m.position}</small> : null}</span>)}</div></> : null}
+        {a.members?.length ? <><div className="is-sec"><div className="is-sh"><b>成员</b></div></div><div className="is-mem">{a.members.map(m => <span key={m.name}><i style={{ background: artistBg(m.name) }} />{m.name}</span>)}</div></> : null}
         {a.songs?.length ? <><div className="is-sec"><div className="is-sh"><b>代表曲</b></div></div>{a.songs.map(s => <div className="is-song" key={s.title}><span className="cv" style={{ background: artistBg(s.title) }} /><span>{s.title}<small>{[s.year, s.note].filter(Boolean).join(" · ")}</small></span></div>)}</> : null}
         <div className="is-sec"><div className="is-sh"><b>相关新闻</b></div></div>
         <div className="is-pad">{res ? <NewsList items={res.results} /> : <div className="is-empty">加载中……</div>}</div>

@@ -571,7 +571,7 @@ export function StoryApp({ onClose }: StoryAppProps) {
   const [scenePeopleOpen, setScenePeopleOpen] = useState(false);
   const [sceneHint, setSceneHint] = useState(false);
   const [sceneNewOpen, setSceneNewOpen] = useState(false);
-  const [sceneEnd, setSceneEnd] = useState<null | "ask" | "working" | { summary: string; recorded: string[]; firstMeet: string[]; milestone?: string }>(null);
+  const [sceneEnd, setSceneEnd] = useState<null | "ask" | "working" | { summary: string; recorded: string[]; firstMeet: string[]; milestone?: string; gains?: string }>(null);
   const worldAvatarInputRef = useRef<HTMLInputElement | null>(null);
   const userIdentity = useMemo(
     () => resolveUserIdentity(activeCharacterId, "story") ?? resolveUserIdentity(activeCharacterId) ?? resolveUserIdentity(),
@@ -2322,6 +2322,7 @@ export function StoryApp({ onClose }: StoryAppProps) {
                 {sceneEnd.recorded.length ? <p className="story-idol-sub">{sceneEnd.recorded.join("、")}各记了一笔{sceneEnd.firstMeet.length ? `；${sceneEnd.firstMeet.join("、")}是第一次见你，写上了第一印象` : ""}</p> : null}
                 {sceneEnd.summary ? <p className="story-idol-quote">{sceneEnd.summary}</p> : null}
                 {sceneEnd.milestone ? <p className="story-idol-text">🎉 {sceneEnd.milestone}。日程排好了，去「提醒事项」看看</p> : null}
+                {sceneEnd.gains ? <p className="story-idol-text">🌟 {sceneEnd.gains}</p> : null}
                 <p className="story-idol-sub">接下来跳到什么时候？</p>
                 <div className="story-idol-jumps">
                   <button type="button" onClick={() => { showVoiceNotice(jumpWorld(Date.now() + 3600e3) || "过了 1 小时"); setSceneEnd(null); }}>过 1 小时</button>

@@ -117,3 +117,28 @@ export function settlePlayerExp(subject: Subject, exp: number): ClassGain | null
   save(s);
   return { gained: r.gained, levels: r.levels, stat: s.player.stats[subject] };
 }
+
+/** 科目中文名（打给她看的数字行） */
+export const SUBJECT_LABEL: Record<Subject, string> = { vocal: "声乐", dance: "舞蹈", rap: "Rap", compose: "创作", acting: "演技", variety: "综艺感", language: "语言", visual: "形象管理" };
+
+/** 大机遇成长（数值方案 growth 字段：模拟器里大机遇 +10、中机遇 +5 的那一类）：
+ *  直接涨能力值，不占加练、不超 100；同一场戏只结一次（sceneKey 去重），amount 代码钳到 1~10。 */
+export function settlePlayerGrowth(subject: Subject, amount: number, sceneKey: string): ClassGain | null {
+  if (!(["vocal", "dance", "rap", "compose", "acting", "variety", "language", "visual"] as const).includes(subject as never)) return null;
+  const s = ensureRoster();
+  if (!s) return null;
+  const settled = growthSettledKeys();
+  if (settled.includes(sceneKey)) return null;
+  const from = s.player.stats[subject];
+  const amt = Math.max(1, Math.min(10, Math.round(amount)));
+  s.player.stats[subject] = Math.min(100, from + amt);
+  save(s);
+  saveGrowthSettled([...settled, sceneKey].slice(-50));
+  return { gained: s.player.stats[subject] - from, levels: [{ from, to: s.player.stats[subject] }], stat: s.player.stats[subject] };
+}
+
+const GROWTH_SETTLED_KEY = "idol_growth_settled_v1";
+function growthSettledKeys(): string[] {
+  try { const v = JSON.parse(kvGet(GROWTH_SETTLED_KEY) || "[]"); return Array.isArray(v) ? v.map(String) : []; } catch { return []; }
+}
+function saveGrowthSettled(keys: string[]) { kvSet(GROWTH_SETTLED_KEY, JSON.stringify(keys)); }

@@ -1,49 +1,81 @@
-// 圈内名册：大事记先写的团，官网照着来；别家官网抢不走；重写官网改不了成员
+/**
+ * 大机遇成长通道端到端：数值级涨能力、一场戏只结一次、amount 钳到 1~10、100 封顶、存档落盘。
+ * 跑法：node docs/idol/tests/gr1.mjs /tmp/gr1   前提：dev 服务在跑（默认 3001，IDOL_TEST_URL 覆盖）
+ */
 import puppeteer from "puppeteer-core";
-const b = await puppeteer.launch({ executablePath: "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome", headless: "new" });
-const p = await b.newPage(); await p.setViewport({ width: 430, height: 900 });
-const errs = []; p.on("pageerror", e => errs.push(e.message));
+const OUT = process.argv[2] || ".";
+const URL = process.env.IDOL_TEST_URL || "http://127.0.0.1:3001/";
 const sleep = ms => new Promise(r => setTimeout(r, ms));
-let siteRound = 0; const prompts = [];
-function reply(s) {
-  if (s.includes("圈内大事记")) return JSON.stringify({ items: [{ day: 5, company: "SM", group: "Aurora", title: "Aurora 回归", note: "" }, { day: 9, company: "", group: "", title: "金唱片颁奖", note: "" }] });
-  if (s.includes("的官网")) {
-    prompts.push(s);
-    if (s.includes("「JYP」")) return JSON.stringify({ about: [{ h_ko: "a", h_zh: "a", ko: "a", zh: "a" }], history: [], notices: [], artists: [{ name: "Aurora", kind: "女团", members: ["抢人甲"], debut: 2011 }, { name: "LUMINA", kind: "女团", members: ["朴智恩", "崔叙允"], debut: 2012 }] });
-    siteRound++;
-    const members = siteRound === 1 ? ["金瑞雅", "宋夏妍", "林恩"] : ["换人乙", "换人丙"];
-    return JSON.stringify({ about: [{ h_ko: "a", h_zh: "a", ko: "a", zh: "a" }], history: [], notices: [], artists: [{ name: "Aurora", kind: "女团", size: 3, debut: 2013, members, recent: siteRound === 1 ? "准备回归" : "回归一位" }] });
-  }
-  return "{}";
-}
-const CORS = { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers": "*", "Access-Control-Allow-Methods": "POST, OPTIONS" };
-await p.setRequestInterception(true);
-p.on("request", r => {
-  if (r.url().includes("mock.test") && r.method() === "OPTIONS") { r.respond({ status: 204, headers: CORS }); return; }
-  if (r.url().includes("mock.test")) { const c = reply(r.postData() || ""); r.respond({ status: 200, headers: CORS, contentType: "application/json", body: JSON.stringify({ choices: [{ message: { role: "assistant", content: c }, finish_reason: "stop" }] }) }); }
-  else r.continue();
-});
-await p.goto("http://localhost:3031/", { waitUntil: "networkidle2", timeout: 300000 }); await sleep(1500);
-await p.evaluate(async () => {
+let pass = 0, fail = 0;
+const ok = (c, n, x = "") => { if (c) { pass++; console.log("  ✓", n); } else { fail++; console.log("  ✗", n, JSON.stringify(x).slice(0, 400)); } };
+
+const b = await puppeteer.launch({ executablePath: "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome", headless: "new", userDataDir: `/tmp/idol-gr1-${Date.now()}`, protocolTimeout: 300000 });
+const p = await b.newPage(); await p.setViewport({ width: 430, height: 932, deviceScaleFactor: 2 });
+const errs = []; p.on("pageerror", e => errs.push(e.message));
+
+const setClock = async (target) => {
+  await p.evaluate(world => {
+    const wc = window.__worldClock;
+    if (wc) { wc.frozen = null; wc.offset = world - wc.RealDate.now(); }
+    const offset = wc ? wc.offset : world - Date.now();
+    localStorage.setItem("idol_world_clock_v1", JSON.stringify({ real: false, offset, world }));
+  }, target);
+};
+const kvGet = async (key) => p.evaluate(async k => {
+  const db = await new Promise(res => { const r = indexedDB.open("AiPhoneKvDB"); r.onsuccess = () => res(r.result); });
+  const tx = db.transaction("entries", "readonly"); const st = tx.objectStore("entries");
+  return await new Promise(res => { const q = st.get(k); q.onsuccess = () => res(q.result?.value ?? null); });
+}, key);
+const kvPut = async (key, value) => p.evaluate(async (k, v) => {
   const db = await new Promise(res => { const r = indexedDB.open("AiPhoneKvDB"); r.onsuccess = () => res(r.result); });
   const tx = db.transaction("entries", "readwrite"); const st = tx.objectStore("entries");
-  for (const k of ["idol_groups_v1", "idol_search_v1", "idol_almanac_v1"]) st.delete(k);
-  st.put({ key: "ai_phone_api_configs_v1", value: JSON.stringify([{ id: "m1", name: "mock", provider: "openai", apiKey: "x", baseUrl: "https://mock.test/v1", defaultModel: "m" }]) });
-  st.put({ key: "idol_trainee_card_v1", value: JSON.stringify({ name: "Flora", photo: null, birthday: "1999-04-12", nationality: "中国", mbti: "", looks: "", start: "2015-03-01", trainLength: "一年半", family: "normal", familyCustom: "", familyNote: "", talents: [], talentNote: "", weakness: "", other: "", signature: null, company: "", no: "x", createdAt: 1 }) });
-  await new Promise(r => tx.oncomplete = r);
-});
-await p.reload({ waitUntil: "networkidle2" }); await sleep(3000);
-const G = () => p.evaluate(() => window.__idolGroups.load());
-await p.evaluate(() => window.__idolGroups.month("2015-03", true));
-console.log("1 大事记先写：", JSON.stringify(await G()));
-await p.evaluate(() => window.__idolGroups.site("sm", true));
-console.log("2 SM 官网补成员：", JSON.stringify((await G()).aurora));
-console.log("   SM 官网提示词里有 Aurora 要照抄：", prompts[0].includes("Aurora（SM"));
-await p.evaluate(() => window.__idolGroups.site("jyp", true));
-const g3 = await G();
-console.log("3 JYP 想抢 Aurora：", g3.aurora.companyId, g3.aurora.members.join("、"), "| LUMINA 进了 JYP：", g3.lumina?.companyId);
-await p.evaluate(() => window.__idolGroups.site("sm", true));
-const g4 = await G();
-console.log("4 SM 官网重写换成员：", g4.aurora.members.join("、"), "| 最近：", g4.aurora.recent);
-console.log(errs.slice(0, 3));
+  st.put({ key: k, value: JSON.stringify(v) });
+  await new Promise(res => tx.oncomplete = res);
+}, key, value);
+const ensureRoster = async () => { for (let i = 0; i < 20; i++) { await p.evaluate(() => window.__idolNew?.rosterTick?.()); await sleep(500); if (await kvGet("idol_roster_v1")) return true; } return false; };
+
+await p.goto(URL, { waitUntil: "networkidle2", timeout: 300000 });
+await p.waitForFunction(() => window.__idolNew, { timeout: 240000, polling: 500 });
+const signedAt = Date.now() - 300 * 864e5; // 签约近一年
+await kvPut("idol_trainee_card_v1", { name: "沈清仪", photo: null, birthday: "2001-04-12", nationality: "中国", start: "2016-03-01", trainLength: "一年", family: "normal", talents: ["dance"], company: "JYP", no: "x", createdAt: 1 });
+await kvPut("idol_career_v1", { stage: "trainee", companyId: "jyp", signedAt, facts: [], offers: [], offersMadeAt: Date.now(), nodes: [] });
+await kvPut("idol_plots_v1", { intro_new_trainee: { key: "intro_new_trainee", state: "done", firedCount: 1 } });
+await setClock(new Date(new Date().getFullYear(), 8, 20, 10, 0, 0).getTime());
+await p.reload({ waitUntil: "networkidle2" }); await p.waitForFunction(() => window.__idolNew, { timeout: 240000, polling: 500 });
+await ensureRoster();
+
+// 1. 数值级成长：acting +10
+const before = await p.evaluate(() => window.__idolNew?.loadRoster()?.player?.stats?.acting);
+const g1 = await p.evaluate(() => window.__idolNew?.settleGrowth?.("acting", 10, "scene:test1"));
+ok(g1?.gained === 10, "大机遇 +10 数值级涨", JSON.stringify(g1));
+const after = await p.evaluate(() => window.__idolNew?.loadRoster()?.player?.stats?.acting);
+ok(after === before + 10, "能力值直接 +10", JSON.stringify([before, after]));
+
+// 2. 同一场戏只结一次
+const g2 = await p.evaluate(() => window.__idolNew?.settleGrowth?.("acting", 10, "scene:test1"));
+ok(g2 === null, "同一场戏不重复结算", JSON.stringify(g2));
+
+// 3. amount 钳到 1~10
+const g3 = await p.evaluate(() => window.__idolNew?.settleGrowth?.("vocal", 99, "scene:test2"));
+ok(g3?.gained === 10, "amount 99 钳到 10", JSON.stringify(g3));
+const g4 = await p.evaluate(() => window.__idolNew?.settleGrowth?.("vocal", -5, "scene:test3"));
+ok(g4?.gained === 1, "amount -5 钳到 1", JSON.stringify(g4));
+
+// 4. 100 封顶
+const g5 = await p.evaluate(() => { const r = window.__idolNew.loadRoster(); r.player.stats.visual = 96; window.__idolNew.saveRoster(r); return window.__idolNew.settleGrowth("visual", 10, "scene:test4"); });
+ok(g5?.gained === 4, "100 封顶只涨到 100", JSON.stringify(g5));
+const vis = await p.evaluate(() => window.__idolNew?.loadRoster()?.player?.stats?.visual);
+ok(vis === 100, "封顶后就是 100", vis);
+
+// 5. 非法科目不结算
+const g6 = await p.evaluate(() => { try { return window.__idolNew?.settleGrowth?.("cooking", 10, "scene:test5"); } catch (e) { return "threw"; } });
+ok(g6 === null || g6 === "threw" || g6 === undefined, "非法科目不涨", JSON.stringify(g6));
+
+// 6. 结算记录落盘
+const settled = JSON.parse(await kvGet("idol_growth_settled_v1") ?? "[]");
+ok(settled.includes("scene:test1") && settled.includes("scene:test4"), "去重记录写进存档", JSON.stringify(settled));
+ok(errs.length === 0, "没有页面报错", JSON.stringify(errs.slice(0, 3)));
+
+console.log(`\n${fail === 0 ? "全部通过 ✅" : fail + " 项没过 ❌"}(${pass} 项)`);
 await b.close();
+process.exit(fail ? 1 : 0);

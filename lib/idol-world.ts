@@ -307,7 +307,7 @@ function chatConfig() {
 const uid = (p: string) => `${p}_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
 
 /** 这场结束：每个在场的人在档案里记一笔，第一次见的写第一印象。不写长期记忆（每段的小总结进短期，攒多了宿主自己总结进长期） */
-export type SceneCloseResult = { summary: string; recorded: string[]; firstMeet: string[]; milestone?: string };
+export type SceneCloseResult = { summary: string; recorded: string[]; firstMeet: string[]; milestone?: string; gains?: string };
 
 export async function closeWorldScene(groupId: string, sessionId: string): Promise<SceneCloseResult> {
   return closeSceneWith(storyHost(groupId, sessionId));
@@ -360,13 +360,14 @@ export async function closeSceneWith(host: SceneHost): Promise<SceneCloseResult>
   let fame: string | null | undefined;
   let perf: string | undefined;
   let companyIntentNote = "";
+  let gains: string | undefined;
   if (present.length && transcript) {
     const res = await simpleLLMCall(chatConfig(), [
-      { role: "system", content: `把这场戏记下来。只输出 JSON：{"summary":"这场戏两三句",${examNode ? `"performance":"good/ok/bad：这场${examNode.title}她表现得怎么样，按她在戏里实际做了什么、准备得怎么样判断，她认真准备了不能硬说不好","performanceWhy":"一句话原因",` : ""}"practice":["她这场里真的在练/上课的科目，只能写 vocal dance rap compose acting variety language visual，没练写空数组"],"companyIntent":null,"fame":null,"people":[{"name":"","event":"站在这个人的角度，这场里他和她之间发生了什么，一句话；没交集就写空","impression":"只给第一次见她的人写：他对她的第一印象，一两句；其他人写空","relation":"up/down/same","heart":"up/down/same","secretLearned":"她这场知道了他的秘密就写她是怎么知道的，一句话；没有就写空","status":"这场之后他最近在忙什么，世界视角一句；没变就写空","kakao":"他会写在 KakaoTalk 状态消息里的短句；没变就写空","stay":"只给同公司的练习生写：这场之后他更想留在公司写 stay、更想离开写 leave、没影响写 same","stayWhy":"stay 或 leave 时一句原因"}],"video":null}\ncompanyIntent：这场里公司方（选角组、星探、高层代表公司表态）明确给她录取或拒绝的结果才写 {"company":"公司名","result":"pass/fail"}，公司没表态写 null。\nvideo：只有这场里她确实给公司拍了要传到公司公开 YouTube 的视频（翻跳、唱歌、vlog、伴舞直拍之类）才写成 {"title":"真 YouTube 那样的韩文或英文标题","titleZh":"","kind":"练习生/直拍/vlog","dur":"m:ss","img":"画面两三句，照戏里实际拍到的写，写名字和谁站哪，她就写「她」，不编戏里没有的事","cast":[{"pos":"左一/中间/右二…","name":"她本人写「她」，别人照戏里的名字一个字不改"}]}，否则写 null。\nfame：这场里她做的事让外界更多人知道她了才写，按戏里实际的动静写 small（被路人拍到、小帖子转了一圈）/ medium（视频在网上传开、上了小新闻、在大场合露脸）/ big（上热搜、大面积火了，好事坏事都算）；只是去公司开会、面谈、上课、私下见人这类外界看不到的写 null。\n关系和心动只按这场里真的发生的事判断，一场最多动一格，没发生什么就写 same；没有心动线的人 heart 写 same。\n${ROMANCE_EXTRACTION_RULE}\n${romanceSceneHint()}\n人物日常event/status/kakao只写本人实际知情的事，不把未证实的恋爱猜测写成事实；私密知情与处理细节只放romance字段，不放公开状态或其他人的记忆。\n第一次见她的人：${firstMeet.join("、") || "无"}` },
+      { role: "system", content: `把这场戏记下来。只输出 JSON：{"summary":"这场戏两三句",${examNode ? `"performance":"good/ok/bad：这场${examNode.title}她表现得怎么样，按她在戏里实际做了什么、准备得怎么样判断，她认真准备了不能硬说不好","performanceWhy":"一句话原因",` : ""}"practice":["她这场里真的在练/上课的科目，只能写 vocal dance rap compose acting variety language visual，没练写空数组"],"growth":null,"companyIntent":null,"fame":null,"people":[{"name":"","event":"站在这个人的角度，这场里他和她之间发生了什么，一句话；没交集就写空","impression":"只给第一次见她的人写：他对她的第一印象，一两句；其他人写空","relation":"up/down/same","heart":"up/down/same","secretLearned":"她这场知道了他的秘密就写她是怎么知道的，一句话；没有就写空","status":"这场之后他最近在忙什么，世界视角一句；没变就写空","kakao":"他会写在 KakaoTalk 状态消息里的短句；没变就写空","stay":"只给同公司的练习生写：这场之后他更想留在公司写 stay、更想离开写 leave、没影响写 same","stayWhy":"stay 或 leave 时一句原因"}],"video":null}\ngrowth：这场戏里她真实经历了重大成长机遇（大舞台、前辈亲自指导、大师课、特别训练这类，普通上课/私下见面不算）才写 {"subject":"vocal/dance/rap/compose/acting/variety/language/visual","amount":1~10 的数,"why":"一句话"}，没到那种程度写 null。AI 只提议，代码会校验。\ncompanyIntent：这场里公司方（选角组、星探、高层代表公司表态）明确给她录取或拒绝的结果才写 {"company":"公司名","result":"pass/fail"}，公司没表态写 null。\nvideo：只有这场里她确实给公司拍了要传到公司公开 YouTube 的视频（翻跳、唱歌、vlog、伴舞直拍之类）才写成 {"title":"真 YouTube 那样的韩文或英文标题","titleZh":"","kind":"练习生/直拍/vlog","dur":"m:ss","img":"画面两三句，照戏里实际拍到的写，写名字和谁站哪，她就写「她」，不编戏里没有的事","cast":[{"pos":"左一/中间/右二…","name":"她本人写「她」，别人照戏里的名字一个字不改"}]}，否则写 null。\nfame：这场里她做的事让外界更多人知道她了才写，按戏里实际的动静写 small（被路人拍到、小帖子转了一圈）/ medium（视频在网上传开、上了小新闻、在大场合露脸）/ big（上热搜、大面积火了，好事坏事都算）；只是去公司开会、面谈、上课、私下见人这类外界看不到的写 null。\n关系和心动只按这场里真的发生的事判断，一场最多动一格，没发生什么就写 same；没有心动线的人 heart 写 same。\n${ROMANCE_EXTRACTION_RULE}\n${romanceSceneHint()}\n人物日常event/status/kakao只写本人实际知情的事，不把未证实的恋爱猜测写成事实；私密知情与处理细节只放romance字段，不放公开状态或其他人的记忆。\n第一次见她的人：${firstMeet.join("、") || "无"}` },
       { role: "user", content: `地点：${meta.place}\n在场：\n${present.map(c => { const pp = getProfile(c.id); return `- ${c.name}：关系 ${relationOf(pp)}${pp.canCrush && pp.heart ? `，心动 ${pp.heart}` : "，没有心动线"}${pp.secret && pp.secret.kind !== "none" && pp.secret.text && !pp.secret.revealed ? `，秘密：${pp.secret.text}` : ""}`; }).join("\n")}\n\n${transcript}` },
     ], { temperature: 0.4, label: "剧情记账" });
     if (!res.content) throw new Error(res.error || "AI 没回");
-    const j = JSON.parse(res.content.match(/\{[\s\S]*\}/)?.[0] ?? "{}") as { romanceObservations?: RomanceObservation[]; romanceOutcomes?: { observer?: string; partner?: string; quote?: string; text?: string }[]; practice?: string[]; fame?: string | null; video?: SceneVideo | null; summary?: string; performance?: string; performanceWhy?: string; companyIntent?: { company?: string; result?: string } | null; people?: { name?: string; event?: string; impression?: string; relation?: string; heart?: string; secretLearned?: string; status?: string; kakao?: string; stay?: string; stayWhy?: string }[] };
+    const j = JSON.parse(res.content.match(/\{[\s\S]*\}/)?.[0] ?? "{}") as { romanceObservations?: RomanceObservation[]; romanceOutcomes?: { observer?: string; partner?: string; quote?: string; text?: string }[]; practice?: string[]; fame?: string | null; video?: SceneVideo | null; summary?: string; performance?: string; performanceWhy?: string; growth?: { subject?: string; amount?: number; why?: string } | null; companyIntent?: { company?: string; result?: string } | null; people?: { name?: string; event?: string; impression?: string; relation?: string; heart?: string; secretLearned?: string; status?: string; kakao?: string; stay?: string; stayWhy?: string }[] };
     summary = String(j.summary ?? "");
     fame = j.fame;
     recordSceneRomance({ sourceId: `scene:${host.key}`, at: Date.now(), transcript, present, people: chars, playerName: loadTraineeCard()?.name, witnessTranscript: host.witnessTranscript, observations: j.romanceObservations, outcomes: j.romanceOutcomes });
@@ -383,6 +384,18 @@ export async function closeSceneWith(host: SceneHost): Promise<SceneCloseResult>
       onScenePractice(j.practice.map(String), meta.startAt);
       // 新存档模式：名册里的她也涨（戏里真练了的科目）
       void import("./idol-roster-live").then(m => { for (const p of (j.practice as string[]).slice(0, 1)) m.settlePlayerClass(p as never); }).catch(() => undefined);
+    }
+    // 大机遇成长：AI 提议 subject+amount，代码校验后按数值方案直接涨能力值（一场戏只结一次）
+    const growth = j.growth;
+    if (growth && typeof growth === "object" && typeof growth.subject === "string" && Number.isFinite(Number(growth.amount))) {
+      const subj = growth.subject.trim();
+      if ((["vocal", "dance", "rap", "compose", "acting", "variety", "language", "visual"] as const).includes(subj as never)) {
+        try {
+          const m = await import("./idol-roster-live");
+          const g = m.settlePlayerGrowth(subj as never, Number(growth.amount), `scene:${host.key}`);
+          if (g && g.gained > 0) gains = `大机遇 · ${String(growth.why ?? "").trim() || "这场的经历"}：${m.SUBJECT_LABEL[subj as never] ?? subj} +${g.gained}`;
+        } catch { /* 名册没接上不影响记账 */ }
+      }
     }
     for (const item of j.people ?? []) {
       const c = present.find(x => x.name === item.name);
@@ -412,5 +425,5 @@ export async function closeSceneWith(host: SceneHost): Promise<SceneCloseResult>
   if (fame === "small" || fame === "medium" || fame === "big") fameEvent(fame, summary || node?.title || `在${meta.place}`, meta.startAt);
   const milestone = meta.nodeId ? await completeNode(meta.nodeId, perf) : null;
   await afterNodeScene(node, present.map(c => c.id), meta.place).catch(() => undefined);
-  return { summary, recorded, firstMeet: firstMeet.filter(n => recorded.includes(n)), ...(milestone || companyIntentNote ? { milestone: [milestone, companyIntentNote].filter(Boolean).join("\n") } : {}) };
+  return { summary, recorded, firstMeet: firstMeet.filter(n => recorded.includes(n)), ...(gains ? { gains } : {}), ...(milestone || companyIntentNote ? { milestone: [milestone, companyIntentNote].filter(Boolean).join("\n") } : {}) };
 }

@@ -1763,6 +1763,7 @@ export function VnPlayer({ characterId, chapterIndex, onClose, onChapterEnd, vnT
               {stageEnd.summary ? <div className="vn-stage-sum">{stageEnd.summary}</div> : null}
               {stageEnd.recorded.length ? <div className="vn-stage-sub">{stageEnd.recorded.join("、")}{stageEnd.recorded.length > 1 ? "各" : ""}记了一笔{stageEnd.firstMeet.length ? `；${stageEnd.firstMeet.join("、")}是第一次见你` : ""}</div> : null}
               {stageEnd.milestone ? <div className="vn-stage-sub">🎉 {stageEnd.milestone}</div> : null}
+              {stageEnd.gains ? <div className="vn-stage-sub">🌟 {stageEnd.gains}</div> : null}
               {!sideOnlyEnd ? <button className="vn-end-btn vn-stage-merge" disabled={Boolean(noteBusy)} onClick={async () => {
                 setNoteBusy("合成中…");
                 try { await mergeSummaries(chapterIndex); setNotesVer(v => v + 1); setNotesOpen(true); }

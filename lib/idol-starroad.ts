@@ -173,7 +173,7 @@ export function classAt(t: number): string | null {
 }
 
 /** 课表页：这一周（周一起）每天的课 + 已经过去的那几节怎么样了 */
-export function weekTimetable(weekStart = mondayOf(Date.now())): { day: number; label: string; classes: { label: string; start: string; end: string; extra?: boolean; status?: ClassMark["status"]; leave?: boolean }[] }[] {
+export function weekTimetable(weekStart = mondayOf(Date.now())): { day: number; label: string; classes: { label: string; start: string; end: string; extra?: boolean; status?: ClassMark["status"]; leave?: boolean; subject: Subject | null }[] }[] {
   const s = ensure();
   if (!s) return [];
   const out = [];
@@ -181,7 +181,7 @@ export function weekTimetable(weekStart = mondayOf(Date.now())): { day: number; 
     const day = weekStart + i * DAY;
     const list = classesOn(s, day).map(c => {
       const mark = s.marks.find(m => m.at === c.start);
-      return { label: c.slot.label, start: c.slot.start, end: c.slot.end, extra: c.slot.extra, status: mark?.status, leave: isLeave(s, day, c.slot.subject) };
+      return { label: c.slot.label, start: c.slot.start, end: c.slot.end, extra: c.slot.extra, status: mark?.status, leave: isLeave(s, day, c.slot.subject), subject: c.slot.subject };
     });
     out.push({ day, label: `${WEEK[new Date(day).getDay()]} ${mdLabel(day)}`, classes: list });
   }
@@ -343,6 +343,19 @@ export function onScenePractice(subjects: string[], startAt: number, perf?: stri
 function isLeave(s: State, day: number, subject: Subject | null): boolean {
   const k = dayKey(day);
   return s.leaves.some(l => l.date === k && (!l.subject || l.subject === subject));
+}
+
+/** 课表页左滑请假 / 取消请假。室长 KKT 批假是另一条路，这里她直接操作同样生效。 */
+export function leaveClass(day: number, subject: Subject | null, on: boolean): void {
+  const s = ensure();
+  if (!s) return;
+  const date = dayKey(day);
+  if (on) {
+    if (!s.leaves.some(l => l.date === date && l.subject === subject)) s.leaves = [...s.leaves, { date, ...(subject ? { subject } : {}) }];
+  } else {
+    s.leaves = s.leaves.filter(l => !(l.date === date && l.subject === subject));
+  }
+  save(s);
 }
 
 /** 室长在 KakaoTalk 批了的假：「10月30日」整天，或「10月30日 声乐课」一节。返回说给她听的那句，认不出返回 null */

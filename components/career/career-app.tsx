@@ -2,7 +2,7 @@
 
 import { requestStageForNode } from "@/lib/idol-stage";
 import { useEffect, useRef, useState } from "react";
-import { BarChart3, Building2, CalendarDays, Check, ChevronLeft, ChevronRight, Clock3, FileText, Inbox, Info, List, Mail, Minus, Pencil, Plus, RefreshCw, Star, Trash2, Users, X } from "lucide-react";
+import { BarChart3, Building2, CalendarDays, Check, ChevronLeft, ChevronRight, Clock3, FileText, Inbox, Info, List, Mail, Minus, Pencil, Plus, RefreshCw, RotateCcw, Star, Trash2, Users, X } from "lucide-react";
 
 import {
   CAREER_EVENT,
@@ -20,7 +20,7 @@ import {
   pendingNoticeFailures, retryNotice, acceptInvite, addMine, checkNode, declineInvite, deleteNode, isNightNow, leaveNode, setNote, setWish, teacherOf, uncheckNode,
 } from "@/lib/idol-reminders";
 import { loadMonths, overrideMyRank, RANK_EVENT } from "@/lib/idol-ledger";
-import { STARROAD_EVENT, classAt, weekTimetable } from "@/lib/idol-starroad";
+import { STARROAD_EVENT, classAt, leaveClass, weekTimetable } from "@/lib/idol-starroad";
 
 const WEEK = ["日", "一", "二", "三", "四", "五", "六"];
 const DAY = 864e5;
@@ -474,6 +474,8 @@ function TimetablePage({ onBack }: { onBack: () => void }) {
   useEffect(() => { const f = () => set(x => x + 1); window.addEventListener(STARROAD_EVENT, f); return () => window.removeEventListener(STARROAD_EVENT, f); }, []);
   const [offset, setOffset] = useState(0);
   const [selectedDay, setSelectedDay] = useState(() => (new Date().getDay() + 6) % 7);
+  const [swipedKey, setSwipedKey] = useState<string | null>(null);
+  const swipeStart = useRef<{ x: number; y: number } | null>(null);
   const mon = (() => { const d = new Date(); d.setHours(0, 0, 0, 0); d.setDate(d.getDate() - ((d.getDay() + 6) % 7) + offset * 7); return d.getTime(); })();
   const week = weekTimetable(mon);
   const selected = week[selectedDay];
@@ -499,9 +501,14 @@ function TimetablePage({ onBack }: { onBack: () => void }) {
       </div>
       <div className="tt-days" role="group" aria-label="选择课程日期">{week.map((day,i) => <button type="button" key={day.day} className={i === selectedDay ? "selected" : ""} aria-pressed={i === selectedDay} aria-label={day.label} onClick={() => setSelectedDay(i)}><small>周{WEEK[new Date(day.day).getDay()]}</small><b>{new Date(day.day).getDate()}</b><i style={{ visibility: day.classes.length ? "visible" : "hidden" }} /></button>)}</div>
       <div className="tt-dayhead"><b>周{selected ? WEEK[new Date(selected.day).getDay()] : "一"}{selected && new Date(selected.day).toDateString() === today ? <span> · 今天</span> : null}</b><small>{selected?.classes.length ?? 0} 节课程</small></div>
-      <div className="tt-timeline">{selected?.classes.map((c,i) => <div className="tt-class" key={`${selected.day}-${c.start}-${c.label}`} style={{ ["--accent" as string]: colors[i % colors.length] }}><div className="tt-time">{c.start}<small>{c.end}</small></div><div className="tt-course"><span className="tt-course-tag">{c.extra ? "加强课程" : "公司课程"}</span><b>{c.label}</b><div><span>{company?.name || "公司"} · 练习生课程</span><em className={c.status ? `st-${c.status}` : c.leave ? "st-leave" : ""}>{statusOf(c)}</em></div></div></div>)}</div>
+      <div className="tt-timeline">{selected?.classes.map((c,i) => {
+        const key = `${selected.day}-${c.start}-${c.label}`;
+        const canAct = Boolean(c.leave || !c.status);
+        const row = <div className="tt-class" style={{ ["--accent" as string]: colors[i % colors.length], background: "#f6f6f9", ...(swipedKey === key ? { transform: "translateX(-75px)" } : {}) }} onPointerDown={canAct ? (e => { swipeStart.current = { x: e.clientX, y: e.clientY }; }) : undefined} onPointerUp={canAct ? (e => { const s = swipeStart.current; swipeStart.current = null; if (!s) return; const dx = e.clientX - s.x; if (Math.abs(dx) > 30 && Math.abs(dx) > Math.abs(e.clientY - s.y)) setSwipedKey(dx < 0 ? key : null); }) : undefined}><div className="tt-time">{c.start}<small>{c.end}</small></div><div className="tt-course"><span className="tt-course-tag">{c.extra ? "加强课程" : "公司课程"}</span><b>{c.label}</b><div><span>{company?.name || "公司"} · 练习生课程</span><em className={c.status ? `st-${c.status}` : c.leave ? "st-leave" : ""}>{statusOf(c)}</em></div></div></div>;
+        return canAct ? <div className="rm-swipe" key={key}><div className="rm-acts">{c.leave ? <button type="button" className="a-leave" onClick={() => { leaveClass(selected!.day, c.subject, false); setSwipedKey(null); }}><RotateCcw size={20} />取消请假</button> : <button type="button" className="a-leave" onClick={() => { leaveClass(selected!.day, c.subject, true); setSwipedKey(null); }}><FileText size={20} />请假</button>}</div>{row}</div> : <div key={key}>{row}</div>;
+      })}</div>
       {!selected?.classes.length ? <p className="rm-empty">{week.some(d => d.classes.length) ? "今天没有安排课程" : "这一周暂无课程安排"}</p> : null}
-      <div className="tt-foot">课程默认参加，无需逐节打勾。<br />需要请假时，在 KakaoTalk 联系室长。<br />上课时外出游玩会算旷课，请留意撞课提示。</div>
+      <div className="tt-foot">课程要亲自去公司上，才会计入进度。<br />需要请假时，左滑课程即可请假，或在 KakaoTalk 联系室长。<br />上课时间待在外面会算旷课，请留意撞课提示。</div>
     </div>
   );
 }

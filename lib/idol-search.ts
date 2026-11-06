@@ -188,60 +188,24 @@ about 写四段：我们是谁、我们怎样培养练习生、我们的音乐�
     const s0 = load();
     save({ ...s0, sites: { ...s0.sites, [companyId]: site } });
 
-    // 第二次：旗下团 + 公告
+    // 第二次：只写公告。旗下艺人不再让 AI 写——她的定稿名单 + 后续新出道团都直接读圈内名册。
     try {
-      const roster = await simpleLLMCall(config(), [
+      const noticesRes = await simpleLLMCall(config(), [
         {
           role: "system",
-          content: `你在给一出韩国娱乐圈的戏写「${c.name}」${year}年官网的「旗下艺人」和「公告」。旗下艺人和团体全部虚构，不得出现真实艺人或团体。
+          content: `你在给一出韩国娱乐圈的戏写「${c.name}」${year}年官网的「公告」。内容全部虚构，不写真实艺人。只输出 JSON：{"notices":[{"tag":"오디션","ko":"韩语公告","zh":"中文翻译","date":"06.20"}]}
 
-【团体】
-- 这家已有的团必须全部保留在 artists 里，团名、类型、出道年份、成员、粉丝名照抄不改，只补缺的和更新 recent。
-- 一共三个团（已有超过三个就全留，不删；不足就补新的），不能跟别家已有的团重名。
-- 出道年份：至少两个 ${year - 4}～${year - 1} 年出道，一个 ${year - 8}～${year - 5} 年出道，最多一个更早的老前辈；${year} 年出道的只能写成刚出道。
-- size 是实际人数（团体 4～9 人，Solo 填 1），members 要完整列出，数量和 size 一致。
-- 每个团只写一首代表歌（歌名、年份、一句备注）。recent 写截至 ${today.getMonth() + 1}月${today.getDate()}日这个团最近在做什么，不能写这之后的事。
-
-【style —— 重点】
-style 是这个团长期的核心定位，不是某次回归的专辑概念。要像韩国公司官网或维基对组合的介绍：一句、具体、能让人直接想象出音乐、造型、舞台和视觉气质。
-
-写法参照（只看写法，不要照搬）：
-「青春、成长与悲伤男孩美学」
-「清新邻家男孩（Boyhood Pop），主打童年感性与青春成长主题」
-「吸血鬼与暗黑美学」
-「优雅千金与轻熟风」
-「Y2K 少女文化与 Teen Crush」
-
-味道可以从这些里来（是范围，不是关键词清单）：纯风、元气风、夏日风、校园风、少年感、青春风、清凉风、甜美风、可爱风、仙女风、梦幻风、公主风、千金风、优雅风、轻熟风、成熟风、性感风、健康性感、Girl Crush、Teen Crush、酷飒风、拽姐风、御姐风、强势姐姐、硬核风、暗黑风、吸血鬼风、怪诞风、病娇风、怨妇风、复古风、Y2K风、City Boy/Girl风、街头风、嘻哈风、滑板风、运动风、健身风、力量风、异域风、奇幻风、童话风、叙事概念风、世界观团、大众流行风、清新乐队风。
-
-硬规矩：
-- 每个团一个明确的核心定位，最多搭一个自然互补的方向，不许堆关键词。
-- 三个团必须有明显差异；不要都写成暗黑、奇幻或世界观团，普通的青春、清纯、甜美、校园、性感、Girl Crush 一样合格。
-- 禁止解释性说法：「融合」「并列」「围绕」「最终落到」「以…为核心」「结合…元素」。
-- 禁止科技科幻：AI、赛博、机器人、虚拟偶像、数字生命、元宇宙、量子、机械、未来科技、多维时空、宇宙系统。
-- members 写成员本名全名，带姓（韩国人三个字，外国成员按本国写法）。
-
-判断标准：看到 style 能直接想象出这个团的样子。「清新邻家少年与青春成长」合格，「数字灵魂与未来记忆交织的幻想世界」不合格。
-
-【公告】
-notices 两条：一条公开试镜（tag 오디션），一条公司日常（tag 공지）。日期在 ${year}年${today.getMonth() + 1}月1日到${today.getDate()}日之间，格式 MM.DD。ko 是地道韩语官方语气，zh 是准确翻译，不加原文没有的信息。
-
-【输出】
-只输出合法 JSON，不要代码围栏、前言或解释。结构：
-{"artists":[{"name":"团名","kind":"女团/男团/Solo","size":5,"debut":2018,"style":"一句定位","fandom":"粉丝名","recent":"最近在做什么","members":["成员全名"],"songs":[{"title":"歌名","year":2018,"note":"出道曲"}]}],"notices":[{"tag":"오디션","ko":"韩语公告","zh":"中文翻译","date":"06.20"}]}
-
-整体简短：每团一首歌、recent 一句、style 一个短语、公告每条一句。输出有长度上限，写太长会断掉。`,
+notices 两条：一条公开试镜（tag 오디션），一条公司日常（tag 공지）。日期在 ${year}年${today.getMonth() + 1}月1日到${today.getDate()}日之间，格式 MM.DD。ko 是地道韩语官方语气，zh 是准确翻译，不加原文没有的信息。公告每条一句话，输出有长度上限，写太长会断掉。`,
         },
-        { role: "user", content: `公司资料：\n规模：${c.scale}\n风格：${c.style}\n练习生：${c.trainee}\n名声：${c.fame}\n\n这家已经有的团（必须照抄）：\n${mine.map(a => `- ${groupLine(a)}`).join("\n") || "还没有"}\n\n${others}` },
-      ], { temperature: 0.8, label: `${c.name} 官网·艺人` });
-      const j2 = pickJson<{ artists?: Artist[]; notices?: Site["notices"] }>(roster.content);
-      if (j2.artists?.length) upsertGroups(j2.artists.map(a => ({ ...a, companyId, debut: a.debut && a.debut > year ? year : a.debut })), "site", companyId);
+        { role: "user", content: `公司资料：\n规模：${c.scale}\n风格：${c.style}\n练习生：${c.trainee}\n名声：${c.fame}` },
+      ], { temperature: 0.8, label: `${c.name} 官网·公告` });
+      const j2 = pickJson<{ notices?: Site["notices"] }>(noticesRes.content);
       const notices = (j2.notices ?? []).filter(n => n && (n.ko || n.zh));
       if (notices.length) {
         const s = load();
         save({ ...s, sites: { ...s.sites, [companyId]: { ...(s.sites[companyId] ?? site), notices } } });
       }
-    } catch { /* 团和公告没写出来不影响官网打开，下次进来还能补 */ }
+    } catch { /* 公告没写出来不影响官网打开，下次进来还能补 */ }
   } finally {
     siteBusy.delete(companyId);
   }

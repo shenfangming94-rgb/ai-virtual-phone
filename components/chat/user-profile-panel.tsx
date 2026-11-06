@@ -390,9 +390,6 @@ export function UserProfilePanel({ onClose, className }: UserProfilePanelProps) 
                                 ) : (
                                     <User size={38} color="var(--c-icon)" />
                                 )}
-                                <span className="absolute right-0 bottom-0 w-6 h-6 rounded-full bg-black/65 text-white flex items-center justify-center border-2 border-white/80">
-                                    <Camera size={12} />
-                                </span>
                             </button>
                             <input
                                 ref={profileAvatarInputRef}

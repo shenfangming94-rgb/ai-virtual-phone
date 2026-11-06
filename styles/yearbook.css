@@ -60,7 +60,7 @@
   color: var(--yb-ink);
   font-family: "Old Standard TT", "Noto Serif SC", serif;
 }
-.yb-app { padding-top: var(--page-header-safe-top, 44px); box-sizing: border-box; position: relative; }
+.yb-app { padding-top: max(var(--page-header-safe-top, 44px), 44px); box-sizing: border-box; position: relative; }
 .yb-app *, .yb-embedded * { box-sizing: border-box; }
 .yb-app button, .yb-embedded button, .yb-app textarea, .yb-embedded textarea { font: inherit; color: inherit; }
 .yb-app button, .yb-embedded button { -webkit-tap-highlight-color: transparent; }
@@ -82,7 +82,7 @@
 .yb-appbar button.yb-close { font-size: 15px; font-weight: 400; }
 .yb-appbar > span { font: 400 10px "Old Standard TT", serif; letter-spacing: .24em; text-transform: uppercase; color: var(--yb-ink); }
 /* 封面页：顶栏浮在封面上方，不占空间（定稿封面没有顶栏） */
-.yb-app.is-cover .yb-appbar { position: absolute; top: var(--page-header-safe-top, 44px); left: 0; right: 0; z-index: 2; background: transparent; }
+.yb-app.is-cover .yb-appbar { position: absolute; top: max(var(--page-header-safe-top, 44px), 44px); left: 0; right: 0; z-index: 2; background: transparent; }
 .yb-app.is-cover .yb-appbar button, .yb-app.is-cover .yb-appbar > span { color: #fff; }
 .yb-app.is-cover .yb-appbar > span { visibility: hidden; }
 
@@ -151,7 +151,7 @@
 .yb-pagebar { height: 44px; flex: none; display: flex; align-items: center; justify-content: center; position: relative; }
 .yb-pagebar button { position: absolute; left: 22px; top: 8px; border: 0; background: none; padding: 0; color: var(--yb-ink); font: 300 24px/1 -apple-system, BlinkMacSystemFont, sans-serif; }
 .yb-pagebar > span { font: 400 10px "Old Standard TT", serif; letter-spacing: .24em; text-transform: uppercase; color: var(--yb-ink); }
-.yb-embedded { padding-top: var(--page-header-safe-top, 44px); overflow: auto; overscroll-behavior: contain; }
+.yb-embedded { padding-top: max(var(--page-header-safe-top, 44px), 44px); overflow: auto; overscroll-behavior: contain; }
 .yb-embedded .yb-sheet { margin-top: 0; }
 
 /* 学生卡（定稿 .card，只有卡在框里） */

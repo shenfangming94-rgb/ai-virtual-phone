@@ -54,6 +54,7 @@ import { FameCardBlock } from "./fame-card";
 import { loadUserIdentities, resolveUserIdentity, saveUserIdentities, USER_IDENTITIES_UPDATED_EVENT } from "@/lib/settings-storage";
 import { canFollow, followRoute, romanceState } from "@/lib/idol-romance-live";
 import { ROUTE_NODES } from "@/lib/idol-romance-lines";
+import { ContactYearbookPage } from "@/components/yearbook/yearbook-app";
 
 type Notice = ((message: string) => void) | undefined;
 type View =
@@ -155,6 +156,13 @@ export function ContactsApp({ onClose, onNotice }: { onClose: () => void; onNoti
   const data = usePeople();
 
   useEffect(() => {
+    const characterId = sessionStorage.getItem("contacts-open-character");
+    if (characterId) {
+      sessionStorage.removeItem("contacts-open-character");
+      setStack([{ name: "list", filter: { kind: "all" } }]);
+      setView({ name: "card", id: characterId });
+      return;
+    }
     if (sessionStorage.getItem("contacts-open-view") !== "me") return;
     sessionStorage.removeItem("contacts-open-view");
     setStack([{ name: "list", filter: { kind: "all" } }]);
@@ -182,7 +190,11 @@ export function ContactsApp({ onClose, onNotice }: { onClose: () => void; onNoti
         />
       ) : null}
       {view.name === "lists" ? <ListsView data={data} onBack={back} onPick={filter => go({ name: "list", filter })} onNotice={onNotice} /> : null}
-      {view.name === "card" ? <CardView data={data} id={view.id} onBack={back} onEdit={() => go({ name: "edit", id: view.id })} onNotice={onNotice} /> : null}
+      {view.name === "card" ? (
+        data.profiles[view.id]?.group === "同期练习生"
+          ? <ContactYearbookPage id={view.id} onBack={back} />
+          : <CardView data={data} id={view.id} onBack={back} onEdit={() => go({ name: "edit", id: view.id })} onNotice={onNotice} />
+      ) : null}
       {view.name === "edit" ? <EditView data={data} id={view.id} onDone={back} onDeleted={() => { setStack([]); setView({ name: "list", filter: { kind: "all" } }); }} onNotice={onNotice} /> : null}
       {view.name === "me" ? <MeView onBack={back} onNotice={onNotice} /> : null}
       {adding ? <AddSheet onClose={() => setAdding(false)} onCreated={id => { setAdding(false); go({ name: "card", id }); }} onNotice={onNotice} /> : null}

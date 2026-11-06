@@ -73,6 +73,17 @@ await p.evaluate(() => {
     if (n === roommate) { prof.relation = "认识"; prof.leave = { score: 10, log: [], phase: "left" }; }
     people.saveProfile(prof);
   }
+  // 新设计：组织者跟她朋友以上才发 KKT 邀请。名册里有朋友圈的同期都设成朋友，保证能生成邀请节点。
+  for (const n of roster.npcs) {
+    if (!(n.friends?.length > 0) || n.id === roommate.id) continue;
+    const prof = people.getProfile(n.charId);
+    if (!prof) continue;
+    prof.met = true;
+    prof.group = "同期练习生";
+    prof.role = "同期练习生";
+    if (prof.relation === "陌生") prof.relation = "朋友";
+    people.saveProfile(prof);
+  }
   const c = career.loadCareer();
   c.roommates = [roommate.charId];
   career.saveCareer(c);
@@ -83,7 +94,7 @@ await sleep(1000);
 // 1. 没收到邀请(认识≥5 同期 + 朋友圈)→ ready → 排出来
 await pump(6);
 let titles = await plotTitles();
-ok(titles.some(t => t.includes("她们私下聚了")), "没收到邀请排出来了", JSON.stringify(titles));
+ok(titles.some(t => t.includes("同期私下聚会")), "没收到邀请排出来了", JSON.stringify(titles));
 
 // 2. 同期生日:把某 npc 生日改成今天,关系朋友
 await p.evaluate(() => {

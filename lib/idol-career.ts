@@ -63,6 +63,10 @@ export type CareerNode = {
   inviterIds?: string[];
   participantIds?: string[];
   occasion?: string;
+  /** 并进这一场的情缘节点（「情缘节点：key」）：比如路演那天他正好路过，就接在主线路演里 */
+  romance?: string[];
+  /** 番外：从他的视角，她不在场（掉马他刷到视频那一段） */
+  side?: boolean;
   doneAt?: number;
   /** 出道那几件事：name 队名公布 / record 录音 / mv / showcase */
   step?: string;

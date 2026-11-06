@@ -40,7 +40,9 @@ export type IconId =
   | "idolsearch"
   | "ins"
   | "youtube"
-  | "starroad";
+  | "starroad"
+  | "theqoo"
+  | "yearbook";
 
 // 桌面文件夹：以 folder: 前缀的 id 伪装成图标占一个格子参与拖拽/换页，
 // 内容（名字 + 成员图标）另存 DesktopFolderMap。文件夹不允许进 dock。
@@ -69,6 +71,8 @@ export type IconMeta = {
 export const PAGE_1_DEFAULT: IconId[] = ["chat", "contacts", "career", "vnmode", "idolsearch", "ins", "youtube", "starroad", "diary", "music", "calendar", "checkphone", "shopping", "reading", "clock"];
 
 export const PAGE_2_DEFAULT: IconId[] = [
+  "yearbook",
+  "theqoo",
   "melon",
   "appmarket",
   "xiaohongshu",
@@ -143,6 +147,8 @@ export const ICONS: Record<IconId, IconMeta> = {
   idolsearch: { id: "idolsearch", label: "IdolSearch", tone: "var(--c-icon-green)", placeholder: false },
   ins: { id: "ins", label: "Instagram", tone: "var(--c-icon-violet)", placeholder: false },
   youtube: { id: "youtube", label: "YouTube", tone: "var(--c-icon-rose, #e5383b)", placeholder: false },
+  theqoo: { id: "theqoo", label: "더쿠", tone: "#326ba5", placeholder: false },
+  yearbook: { id: "yearbook", label: "名册", tone: "#171717", placeholder: false },
   starroad: { id: "starroad", label: "星路", tone: "var(--c-icon-slate)", placeholder: false },
 };
 

@@ -15,7 +15,7 @@ import { getLunarInfo } from "./lunar";
 import { COMPANIES, careerPromptBlock, companyOf, loadCareer } from "./idol-career";
 import { loadTraineeCard, describeTrainee } from "./trainee-card";
 import { loadCharacters } from "./character-storage";
-import { loadProfiles } from "./idol-people";
+import { loadProfiles, RELATIONS } from "./idol-people";
 import { companyIdByName, rosterPrompt, upsertGroups } from "./idol-groups";
 import { deleteCalendarScheduleItem, loadOwnerCalendarPlans, upsertCalendarScheduleItem } from "./calendar-storage";
 import { getWeekDates, getWeekStartIso, getWeekdayLabel, parseIsoDate } from "./calendar-utils";
@@ -88,7 +88,7 @@ function fixedFor(year: number): AlmanacItem[] {
   add(`${year}-12-25`, "圣诞节");
   add(`${year}-12-31`, "跨年");
   if (card?.birthday && /^\d{4}-\d{2}-\d{2}$/.test(card.birthday)) add(`${year}-${card.birthday.slice(5)}`, "我的生日");
-  if (company && career.stage !== "pre") add(nthWeekday(year, 11, 6, 3), `${company} 年末家族演唱会`, "全公司的艺人都上，练习生有时会被选去当伴舞");
+  if (company && career.stage !== "pre" && !kvGet("idol_roster_v1")) add(nthWeekday(year, 11, 6, 3), `${company} 年末家族演唱会`, "全公司的艺人都上，练习生有时会被选去当伴舞");
   add(nthWeekday(year, 11, 3, 1), "年末颁奖季开始", "接下来一个月颁奖礼一场接一场");
   fixedCache.set(key, out);
   return out;
@@ -100,7 +100,7 @@ function careerItems(): AlmanacItem[] {
   const out: AlmanacItem[] = [];
   if (career.signedAt) out.push({ id: "career_signed", date: isoOf(new Date(career.signedAt)), title: `签约 ${companyOf(career.companyId)?.name ?? ""}`.trim(), kind: "career" });
   for (const n of career.nodes) {
-    if (n.kind !== "selection" && n.kind !== "debut") continue;
+    if (n.kind !== "selection" && n.kind !== "debut" && n.occasion !== "mainline") continue;
     if (n.status === "declined") continue;
     out.push({ id: `career_${n.id}`, date: isoOf(new Date(n.dueAt)), title: n.step === "showcase" && career.debut?.team ? `${career.debut.team.en.toUpperCase()} 出道` : n.title, kind: "career" });
   }
@@ -114,6 +114,8 @@ function birthdays(y0: number, y1: number): AlmanacItem[] {
   for (const c of loadCharacters()) {
     const p = profiles[c.id];
     if (!p || p.layer !== "main" || !p.birthday || !/^\d{2}-\d{2}$/.test(p.birthday)) continue;
+    // 同期只标朋友以上的（她定的；其他人去名册看）
+    if (/同期/.test(`${p.role}${p.group}`) && RELATIONS.indexOf(p.relation as never) < RELATIONS.indexOf("朋友")) continue;
     for (let y = y0; y <= y1; y++) out.push({ id: `bday_${c.id}_${y}`, date: `${y}-${p.birthday}`, title: `🎂${c.name}`, kind: "birthday" });
   }
   return out;

@@ -39,7 +39,7 @@ export type VnGenerationResult = {
   model: string;
   presetName: string;
   /** 场景 app（「世界」）：新加的人、给她看的提示、这一场是不是收尾了 */
-  idol?: { added: string[]; notes: string[]; closing: boolean };
+  idol?: { added: string[]; notes: string[]; closing: boolean; danmaku?: { ko: string; zh: string }[] };
   /** 场景 app：这一段的小总结 */
   summary?: string;
 };
@@ -144,7 +144,7 @@ export async function generateVnCompletion(
     rawOutput = ex.text;
     const chId = chapterIdOf(sceneChapter);
     const host = chId ? stageHost(chId) : null;
-    idol = { ...(host ? applySceneTagsTo(host, ex.tags, ex.text) : { added: [], notes: [] }), closing: ex.tags.closing };
+    idol = { ...(host ? applySceneTagsTo(host, ex.tags, ex.text) : { added: [], notes: [] }), closing: ex.tags.closing, danmaku: ex.tags.danmaku };
     rawOutput = normalizeStageRaw(rawOutput);
     // 认识的人开口说话了但 AI 忘了写 [出场]：也算进这一场
     if (host) {

@@ -14,9 +14,9 @@
 import { kvGet, kvSet } from "./kv-db";
 import { loadCareer, saveCareer, addToCalendar, type CareerNode } from "./idol-career";
 import { loadTraineeCard } from "./trainee-card";
-import { loadProfiles } from "./idol-people";
+import { loadProfiles, RELATIONS } from "./idol-people";
 import { loadCharacters } from "./character-storage";
-import { loadRoster } from "./idol-roster-live";
+import { loadRoster, settlePlayerBonus, formatClassGain } from "./idol-roster-live";
 import { fameTotal } from "./idol-fame";
 import { loadGrades, type GradeView } from "./idol-starroad";
 import { findLunar } from "./idol-calendar";
@@ -51,7 +51,7 @@ export type PlotCtx = {
   signedDays: number;
 };
 
-export type PlotFireResult = { premise: string; node?: CareerNode; done?: boolean };
+export type PlotFireResult = { premise: string; node?: CareerNode; done?: boolean; /** 打给她看的数字行（竞争获胜） */ gain?: string };
 
 export type PlotDef = {
   key: string;
@@ -117,6 +117,19 @@ function schedulePlotNode(title: string, place: string, premise: string, at: num
   return node;
 }
 
+/** 排一个「有人约她」的剧情：真发 KKT 问她，她答应了才进日历（她定的） */
+function scheduleInvitePlot(title: string, place: string, premise: string, at: number, from: { id: string; name: string }, ask: string): CareerNode {
+  const career = loadCareer();
+  const node: CareerNode = {
+    id: uid("plot"), kind: "date", title, place, premise, dueAt: at, status: "invite",
+    companyId: career.companyId, occasion: "plot", from: from.name, fromId: from.id,
+    replyBy: Math.max(at - 3 * 3600e3, Date.now() + 3600e3),
+  };
+  saveCareer({ ...career, nodes: [...career.nodes, node].sort((a, b) => a.dueAt - b.dueAt) });
+  void import("./idol-reminders").then(m => m.queueMessage(from.id, ask, (20 + Math.random() * 60) * 60e3, { node, dedupeKey: `plot_invite_${node.id}` })).catch(() => undefined);
+  return node;
+}
+
 const pad = (n: number) => String(n).padStart(2, "0");
 const fmtMD = (ms: number) => `${new Date(ms).getMonth() + 1}月${new Date(ms).getDate()}日`;
 
@@ -176,8 +189,14 @@ export function plotTick(): string[] {
 }
 
 /** 上课管线问的：有没有 ready 的 class 类剧情；有就触发它并返回开场 */
-export async function takeClassPlot(): Promise<{ key: string; premise: string } | null> {
+export async function takeClassPlot(): Promise<{ key: string; premise: string; gain?: string } | null> {
   const all = plotRecords();
+  const mi = all["missed_invite"]?.extra as { mentionAfter?: number; mention?: string } | undefined;
+  if (mi?.mention && Date.now() >= (mi.mentionAfter ?? 0)) {
+    all["missed_invite"] = { ...all["missed_invite"], extra: {} };
+    save(all);
+    return { key: "missed_invite", premise: mi.mention };
+  }
   const c = ctx();
   for (const d of PLOTS) {
     if (d.hook !== "class" || d.key === "intro_new_trainee") continue;
@@ -190,7 +209,7 @@ export async function takeClassPlot(): Promise<{ key: string; premise: string } 
       const fresh = load()[d.key] ?? rec;
       all[d.key] = { ...fresh, state: "done", firedCount: fresh.firedCount + 1, lastFiredAt: Date.now() };
       save(all);
-      return { key: d.key, premise: r.premise };
+      return { key: d.key, premise: r.premise, ...(r.gain ? { gain: r.gain } : {}) };
     } catch { /* 这条触发失败，留给下一节 */ }
   }
   return null;
@@ -204,6 +223,14 @@ export function takeScenePlot(): { key: string; premise: string } | null {
     if (d.hook !== "scene") continue;
     const rec = all[d.key];
     if (rec.state !== "ready") continue;
+    // 就绪后再核一次条件：窗口过了的就退回 watching，别把上季度的剧情接到这一场
+    try {
+      if (!d.check(c, rec)) {
+        all[d.key] = { ...load()[d.key] ?? rec, state: "watching" };
+        save(all);
+        continue;
+      }
+    } catch { continue; }
     try {
       const r = d.fire(c, rec) as PlotFireResult;
       if (!r?.premise) continue;
@@ -251,8 +278,10 @@ export function plotDateTick(): string[] {
     if (rec.state !== "ready") continue;
     try {
       const r = d.fire(c, rec) as PlotFireResult;
-      if (!r || !r.node) continue;
-      all[d.key] = { ...rec, state: "done", firedCount: rec.firedCount + 1, lastFiredAt: Date.now() };
+      if (!r || (!r.node && !r.done)) continue;
+      // fire 里可能写了 extra（没被邀请的聚会要下课聊起）：以最新的为准
+      const fresh = load()[d.key] ?? rec;
+      all[d.key] = { ...fresh, state: "done", firedCount: rec.firedCount + 1, lastFiredAt: Date.now() };
       fired.push(d.key);
     } catch { /* 下次再试 */ }
   }
@@ -365,7 +394,15 @@ export const PLOTS: PlotDef[] = [
         extra: { subjects: [...used, subject], streak },
       };
       save(all);
+      let gain: string | undefined;
+      if (win) {
+        try {
+          const g = settlePlayerBonus(subject, 1.5);
+          if (g) gain = `🏆 拿下了机会 · ${formatClassGain(subjectLabel[subject], g)}`;
+        } catch { /* 结算失败不影响剧情 */ }
+      }
       return {
+        gain,
         premise: `老师宣布了一个机会：${chanceLabels[subject]}。竞争者包括她和${rival?.name ?? "一位同期"}，围绕${subjectLabel[subject]}这个方向的实力来争。结果是代码定的：${win ? `她拿下了这个机会（按她的实际表现写，不夸大）` : `机会给了${rival?.name ?? "对方"}（写清楚对方哪方面更合适，不贬低她）`}。按这个结果把这场戏演出来，含报名/考核/公布的过程。`,
       };
     },
@@ -375,7 +412,7 @@ export const PLOTS: PlotDef[] = [
     check(c) {
       const talents = loadTraineeCard()?.talents ?? [];
       // 非开局特长、从 D 一路升到 B 的科目
-      return c.grades.some(g => !talents.includes(g.id) && g.grade === "B" && g.last?.dir === "up");
+      return c.grades.some(g => !talents.includes(g.id) && g.grade === "B" && (g.last?.dir === "up" || (!g.last && Boolean(c.roster))));
     },
     fire(c) {
       const talents = loadTraineeCard()?.talents ?? [];
@@ -495,8 +532,23 @@ export const PLOTS: PlotDef[] = [
     },
     fire(c) {
       const at = new Date(c.now + 2 * DAY); at.setHours(19, 0, 0, 0);
-      const node = schedulePlotNode("她们私下聚了", "江南 咖啡店", `几个同期私下组织了一次聚会（她的同期里真实存在的朋友圈）。她可能收到邀请，也可能之后通过 KKT、ins 或聊天才知道她们聚过。有没有邀请她，按她和组织者、参与者的真实关系、聚会性质和那个朋友圈的构成来判定。没收到邀请不等于被孤立——普通社交安排别写成排挤；真有故意排除她的行为，必须有真实关系支撑。`, at.getTime());
-      return { premise: node.premise, node };
+      const host = c.roster?.npcs.filter(n => n.charId && n.friends.length > 0).sort(() => Math.random() - 0.5)[0];
+      const hostP = host?.charId ? c.profiles[host.charId] : undefined;
+      if (!host?.charId || !hostP) throw new Error("没有合适的组织者，下次再试");
+      const circle = host.friends.map(f => c.roster!.npcs.find(n => n.id === f.charId)?.name).filter(Boolean).join("、");
+      const premise = `${host.name}和她的朋友圈（${circle || "几个关系好的同期"}）私下聚了一次。普通社交安排别写成排挤；真有故意排除她的行为，必须有真实关系支撑。`;
+      const invited = RELATIONS.indexOf(hostP.relation as never) >= RELATIONS.indexOf("朋友");
+      if (invited) {
+        const career = loadCareer();
+        const node: CareerNode = { id: uid("plot"), kind: "date", title: "同期私下聚会", place: "江南 咖啡店", premise, dueAt: at.getTime(), status: "invite", companyId: career.companyId, from: host.name, fromId: host.charId, occasion: "plot", replyBy: at.getTime() - 3 * 3600e3 };
+        saveCareer({ ...career, nodes: [...career.nodes, node].sort((a, b) => a.dueAt - b.dueAt) });
+        void import("./idol-reminders").then(m => m.queueMessage(host.charId!, `你们几个关系好的同期（${circle}）后天晚上七点在江南的咖啡店私下聚一下，你想叫上她。按你的性格在 KakaoTalk 上约她。`, (20 + Math.random() * 60) * 60e3, { node, dedupeKey: `plot_gather_${node.id}` })).catch(() => undefined);
+        return { premise, node };
+      }
+      const all = load();
+      all["missed_invite"] = { ...(all["missed_invite"] ?? { key: "missed_invite", state: "watching", firedCount: 0 }), extra: { mentionAfter: at.getTime() + 3 * 3600e3, mention: `下课后，几个同期聊起前几天${premise}她这才知道她们聚过，她当时没被叫上。怎么聊、她听到以后什么反应，按人物关系和性格演。` } };
+      save(all);
+      return { premise, done: true };
     },
   },
   {
@@ -513,10 +565,18 @@ export const PLOTS: PlotDef[] = [
       const now = new Date(c.now);
       const md = `${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
       const hit = c.roster?.npcs.filter(n => n.birthday === md && n.charId && ["朋友", "好朋友", "暧昧", "恋人"].includes(c.profiles[n.charId]?.relation ?? ""));
-      const name = hit?.[0]?.charId ? c.characters.find(x => x.id === hit[0].charId)?.name : "一位同期";
+      const birthdayNpc = hit?.[0];
+      const name = birthdayNpc?.charId ? c.characters.find(x => x.id === birthdayNpc.charId)?.name ?? "一位同期" : "一位同期";
       const at = new Date(c.now); at.setHours(18, 0, 0, 0);
       if (at.getTime() < c.now) at.setTime(c.now + 60 * 60e3);
-      const node = schedulePlotNode(`${name}的生日`, "江南 餐厅", `${name}生日：她可能主动邀请她参加聚会，也可能由她的其他朋友联系她一起准备惊喜。聚会地点、参与者按她真实的朋朋友圈决定；有没有惊喜按人设和安排来。她可以接受或拒绝；没参加，聚会也照常发生。不同同期的生日可以分别产生事件。`, at.getTime());
+      const premise = `${name}生日：她可能主动邀请她参加聚会，也可能由她的其他朋友联系她一起准备惊喜。聚会地点、参与者按她真实的朋朋友圈决定；有没有惊喜按人设和安排来。她可以接受或拒绝；没参加，聚会也照常发生。不同同期的生日可以分别产生事件。`;
+      let node: CareerNode;
+      const birthdayId = birthdayNpc?.charId;
+      if (birthdayId) {
+        node = scheduleInvitePlot(`${name}的生日`, "江南 餐厅", premise, at.getTime(), { id: birthdayId, name }, `你今天生日，晚上在江南的餐厅和朋友们聚一下，想叫上她。按你的性格在 KakaoTalk 上约她。`);
+      } else {
+        node = schedulePlotNode(`${name}的生日`, "江南 餐厅", premise, at.getTime());
+      }
       const all = load();
       all["mate_birthday"] = { ...(all["mate_birthday"] ?? rec), extra: { ...(rec.extra ?? {}), lastDay: `${now.getFullYear()}-${md}` } };
       save(all);
@@ -590,13 +650,17 @@ export const PLOTS: PlotDef[] = [
       return !(c.career.nodes ?? []).some(n => (n.status === "pending" || n.status === "invite") && ["weekly", "monthly", "makeup", "selection", "debut", "talk", "event"].includes(n.kind) && new Date(n.dueAt).getDate() === d.getDate());
     },
     fire(c, rec) {
-      const good = Object.values(c.profiles).filter(p => p.relation === "好朋友" && /练习生|同期/.test(`${p.role}${p.group}`)).map(p => c.characters.find(x => x.id === p.charId)?.name).filter(Boolean);
-      const who = good[Math.floor(Math.random() * good.length)] ?? "一位好朋友";
+      const good = Object.values(c.profiles).filter(p => p.relation === "好朋友" && /练习生|同期/.test(`${p.role}${p.group}`)).map(p => c.characters.find(x => x.id === p.charId)).filter((x): x is NonNullable<typeof x> => Boolean(x));
+      const inviter = good[Math.floor(Math.random() * good.length)];
+      const who = inviter?.name ?? "一位好朋友";
       const kinds = ["逛街", "吃饭", "看电影", "去汉江", "逛唱片店"];
       const kind = kinds[Math.floor(Math.random() * kinds.length)];
       const d = new Date(c.now);
       const at = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 14, 0, 0);
-      const node = schedulePlotNode(`和${who}出去`, "弘大", `${who}约她休息日一起出去（${kind}）。活动按邀请者的人设和兴趣来；她可以接受、拒绝或提出别的安排；已接受的活动进日历，当天通过「此刻」展开。可以自然重复，不规定整个存档只出现一次。`, at.getTime());
+      const premise = `${who}约她休息日一起出去（${kind}）。活动按邀请者的人设和兴趣来；她可以接受、拒绝或提出别的安排；已接受的活动进日历，当天通过「此刻」展开。可以自然重复，不规定整个存档只出现一次。`;
+      const node = inviter
+        ? scheduleInvitePlot(`和${who}出去`, "弘大", premise, at.getTime(), { id: inviter.id, name: who }, `你休息日想约她一起出去${kind}。按你的性格在 KakaoTalk 上约她，问问她想去哪儿。`)
+        : schedulePlotNode(`和${who}出去`, "弘大", premise, at.getTime());
       const all = load();
       all["dayoff_invite"] = { ...(all["dayoff_invite"] ?? rec), extra: { ...(rec.extra ?? {}), lastDay: `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}` } };
       save(all);
@@ -685,7 +749,7 @@ export const PLOTS: PlotDef[] = [
     },
   },
   {
-    key: "sakura", title: "春日樱花季", hook: "date", max: null,
+    key: "sakura", title: "春日樱花季", hook: "scene", max: null,
     check(c, rec) {
       const sy = c.career.signedAt ? new Date(c.career.signedAt).getFullYear() : 0;
       const now = new Date(c.now);
@@ -694,16 +758,14 @@ export const PLOTS: PlotDef[] = [
       return now.getFullYear() === sy + 1 && inWindow;
     },
     fire(c, rec) {
-      const at = new Date(c.now); at.setHours(15, 0, 0, 0);
-      const node = schedulePlotNode("樱花季", "南山塔", `首尔樱花开了。不安排公司统一赏樱：系统按她当前的关系、地点和日程决定展开方式——好朋友可能 KKT 约她赏樱、某位同期临时约她出门、她在外面偶然遇见熟悉的人、或忙碌的训练间隙独自经过一段春日场景。不固定邀请者、不固定同行、不强制她接受；即使没出门，也可以在她当前地点演一段春日剧情。`, at.getTime());
       const all = load();
       all["sakura"] = { ...(all["sakura"] ?? rec), extra: { ...(rec.extra ?? {}), lastYear: new Date(c.now).getFullYear() } };
       save(all);
-      return { premise: node.premise, node };
+      return { premise: `首尔樱花开了。接在她现在这一场里，按她此刻在哪、跟谁在一起来展开：好朋友可能 KKT 约她赏樱、某位同期临时约她出门、她在外面偶然看到樱花或遇见熟悉的人、或训练间隙经过一段春日场景。不固定邀请者和同行的人，不强制她做什么。` };
     },
   },
   {
-    key: "rainstorm", title: "夏日暴雨", hook: "date", max: 1,
+    key: "rainstorm", title: "夏日暴雨", hook: "scene", max: 1,
     check(c) {
       const sy = c.career.signedAt ? new Date(c.career.signedAt).getFullYear() : 0;
       const now = new Date(c.now);
@@ -711,11 +773,7 @@ export const PLOTS: PlotDef[] = [
       return now.getFullYear() === sy && inWindow;
     },
     fire(c) {
-      // 优先挑「降雨最强的一天」：接天气数据后细化，先按窗口内随机工作日（她的方案允许可执行的兜底判定）
-      const now = new Date(c.now);
-      const at = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1 + Math.floor(Math.random() * 4), 16, 0, 0);
-      const node = schedulePlotNode("夏日暴雨", "便利店", `首尔下暴雨。当天按她当时的位置、行动、同行的人和天气状况生成剧情：下课后因暴雨暂时无法离开、与同期或朋友一起找地方避雨、原本的外出安排受影响、或在街道/便利店经历一段突如其来的雨天故事。不固定地点和人物，不预设情感发展，不为了触发事件强行改变她的位置。`, at.getTime());
-      return { premise: node.premise, node };
+      return { premise: `首尔突然下起暴雨。接在她现在这一场里，按她此刻的位置、在做什么、同行的人来展开：下课后被雨困住、和同期或朋友找地方避雨、原本的安排受影响、或在路上遇到一段突如其来的雨天故事。不预设情感发展，不为了触发事件强行改变她的位置。` };
     },
   },
   {
@@ -728,7 +786,13 @@ export const PLOTS: PlotDef[] = [
     fire(c) {
       const now = new Date(c.now);
       const at = new Date(now.getFullYear(), now.getMonth(), Math.min(now.getDate() + 5 + Math.floor(Math.random() * 5), 28), 18, 0, 0);
-      const node = schedulePlotNode("大学音乐节", "汉江公园", `首尔某所大学办秋季音乐节，邀请多组已出道爱豆和歌手演出（第一阶段：活动排期）。优先由符合条件的同期通过 KKT 邀请她一起去（邀请者按兴趣、关系和日程挑，不固定）；没人邀请，她也可以从日历知道、自己决定去不去。当天若参加，通过「此刻」演绎现场：舞台、应援、观众互动、练习生视角的演出体验。`, at.getTime());
+      const premise = `首尔某所大学办秋季音乐节，邀请多组已出道爱豆和歌手演出（第一阶段：活动排期）。优先由符合条件的同期通过 KKT 邀请她一起去（邀请者按兴趣、关系和日程挑，不固定）；没人邀请，她也可以从日历知道、自己决定去不去。当天若参加，通过「此刻」演绎现场：舞台、应援、观众互动、练习生视角的演出体验。`;
+      // 有朋友以上的同期就真发 KKT 邀请；实在没有才走日历
+      const inviter = c.roster?.npcs.filter(n => n.charId && ["朋友", "好朋友", "暧昧", "恋人"].includes(c.profiles[n.charId]?.relation ?? "")).sort(() => Math.random() - 0.5)[0];
+      const inviterChar = inviter?.charId ? c.characters.find(x => x.id === inviter.charId) : undefined;
+      const node = inviterChar
+        ? scheduleInvitePlot("大学音乐节", "汉江公园", premise, at.getTime(), { id: inviterChar.id, name: inviterChar.name }, `大学音乐节那几天你想去汉江公园看演出，想叫上她一起。按你的性格在 KakaoTalk 上约她。`)
+        : schedulePlotNode("大学音乐节", "汉江公园", premise, at.getTime());
       return { premise: node.premise, node };
     },
   },

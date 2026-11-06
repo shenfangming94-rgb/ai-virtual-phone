@@ -163,6 +163,8 @@ const PRIMARY_DATA_MODULES: DataModuleDefinition[] = [
           "idol_search_v1",
           "idol_melon_v1",
           "idol_starroad_v1",
+          "idol_theqoo_v1",
+          "idol_theqoo_demo_v1",
           "idol_lock_notes_v1",
         ],
       },

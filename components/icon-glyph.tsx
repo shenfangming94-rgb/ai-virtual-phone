@@ -83,6 +83,8 @@ const MDI_PATHS: Record<IconId, string> = {
   youtube: mdiYoutube,
   melon: mdiMusic,
   starroad: mdiStarFourPointsOutline,
+  theqoo: mdiNoteTextOutline,
+  yearbook: mdiBookOpenVariant,
   vnplay: mdiPlayCircle,
   vnchapters: mdiBookmark,
   moments: mdiCamera,

@@ -417,33 +417,23 @@ async function handlePushedMessage(msg: ChatMessage) {
 
 // ── 启动 ─────────────────────────────────────
 
+/* char 主动给她买东西已按她的决定停掉：不再每天掷骰子，聊天里的礼物卡片也不再转订单。
+   她主动送 char 的礼物（签收反应/评价）和物流照常。 */
 async function tick() {
     try {
         handleArrivals();
     } catch (error) {
         console.warn("[ShoppingGift] 签收检查失败", error);
     }
-    if (rolling || Date.now() - lastRollAt < ROLL_EVERY_MS) return;
-    rolling = true;
-    lastRollAt = Date.now();
-    try {
-        await rollGifts();
-    } catch (error) {
-        console.warn("[ShoppingGift] 送礼骰子失败", error);
-    } finally {
-        rolling = false;
-    }
 }
 
 const onPushed = (event: Event) => {
-    const msg = (event as CustomEvent<{ message?: ChatMessage }>).detail?.message;
-    if (msg) void handlePushedMessage(msg);
+    void event;
+    // 礼物卡片转订单已停用（handlePushedMessage 保留，将来要恢复时把监听加回来）
 };
 
 export function startShoppingGiftService() {
     if (stopTick || typeof window === "undefined") return;
-    // 刚打开小手机先缓一会儿再掷骰子，别和其他启动任务挤
-    lastRollAt = Date.now() - ROLL_EVERY_MS + 60_000;
     stopTick = bgSetInterval(() => void tick(), TICK_MS);
     window.setTimeout(() => void tick(), 5_000);
     window.addEventListener(CHAT_MESSAGE_PUSHED_EVENT, onPushed);

@@ -50,6 +50,8 @@ export type Channel = {
 export type Video = {
   id: string; ch: string; title: string; titleZh?: string; kind: string; at: number; dur: string;
   img: Img; cast?: CastRow[]; target: number; likes: number; cmts: Cmt[]; mine?: boolean; liked?: boolean; announced?: boolean;
+  /** Set by code for the September official trainee video milestone; not AI-authored. */
+  forumStoryKind?: "practice_video";
 };
 type State = { channels: Record<string, Channel>; videos: Video[]; subs: string[]; feedAt?: number; me: { handle: string; avatar?: string } };
 
@@ -132,7 +134,7 @@ export const visibleVideos = () => loadYt().videos.filter(v => v.at <= Date.now(
 
 // ── 她的视频：戏里拍的 ──
 
-export type SceneVideo = { title?: string; titleZh?: string; kind?: string; img?: string; cast?: { pos?: string; name?: string }[]; dur?: string };
+export type SceneVideo = { title?: string; titleZh?: string; kind?: string; img?: string; cast?: { pos?: string; name?: string }[]; dur?: string; forumStoryKind?: "practice_video" };
 /** 结束一场戏时：这场她给公司公开频道拍了视频，过几天传上去 */
 export function recordSceneVideo(v: SceneVideo, sceneAt: number): void {
   const companyId = loadCareer().companyId;
@@ -155,6 +157,7 @@ export function recordSceneVideo(v: SceneVideo, sceneAt: number): void {
       id: uid("v"), ch: ch.id, title: String(v.title), titleZh: v.titleZh ? String(v.titleZh) : undefined, kind: v.kind ? String(v.kind) : "练习生",
       at: sceneAt + rnd(2, 6) * DAY, dur: /^\d{1,2}:\d{2}$/.test(String(v.dur ?? "")) ? String(v.dur) : `${Math.floor(rnd(2, 4))}:${pad(Math.floor(rnd(0, 59)))}`,
       img: { desc: String(v.img) }, cast, target: Math.round(target), likes: 0, cmts: [], mine: true,
+      ...(v.forumStoryKind === "practice_video" ? { forumStoryKind: "practice_video" as const } : {}),
     };
     video.likes = Math.round(target * rnd(0.05, 0.09));
     return { ...s, videos: [...s.videos, video] };
@@ -172,6 +175,13 @@ export function ytTick(notify: (m: string) => void): void {
     notify(`公司 YouTube 传了你出镜的视频：${v.titleZh || v.title}`);
   }
   patch(x => ({ ...x, videos: x.videos.map(v => due.some(d => d.id === v.id) ? { ...v, announced: true } : v) }));
+  for (const video of due) {
+    if (video.forumStoryKind === "practice_video") {
+      void import("./theqoo-triggers").then(m => m.publishOfficialPracticeVideo({ ...video, announced: true })).catch(error => {
+        console.warn("[TheQoo] public trainee video hook failed:", error);
+      });
+    }
+  }
 }
 
 // ── 首页：一周一批 ──
@@ -223,7 +233,7 @@ export async function fillFeed(): Promise<number> {
     ], { temperature: 0.8, label: "YouTube 首页" });
     if (!res.content) throw new Error(res.error || "AI 没回");
     const j = pickJson<{ videos?: RawVideo[]; groups?: { name?: string; company?: string; kind?: string; debut?: number; members?: string[]; tier?: string }[] }>(res.content);
-    for (const g of j.groups ?? []) if (g?.name) upsertGroups([{ name: g.name, kind: g.kind, debut: g.debut, members: g.members, ...(g.tier && ["top", "mid", "small", "rookie"].includes(g.tier) ? { tier: g.tier as "top" } : {}) }], "search", companyIdByName(g.company));
+    for (const g of j.groups ?? []) if (g?.name) upsertGroups([{ name: g.name, kind: g.kind, debut: g.debut, members: g.members?.map(m => typeof m === "string" ? { name: m } : m), ...(g.tier && ["top", "mid", "small", "rookie"].includes(g.tier) ? { tier: g.tier as "top" } : {}) }], "search", companyIdByName(g.company));
     let n = 0;
     patch(s => { const add = addRaw(s, j.videos ?? [], from, now); n = add.length; return { ...s, videos: [...s.videos, ...add], feedAt: now }; });
     return n;
@@ -250,8 +260,11 @@ export function searchYt(q: string): Hit[] {
   for (const ch of Object.values(s.channels)) if (keyOf(ch.name).includes(k)) push({ ch, name: ch.name, kind: ch.kind, sub: ch.kind === "group" ? "团体频道" : ch.kind === "person" ? "个人频道" : "官方频道", companyId: ch.companyId });
   for (const g of Object.values(loadGroups())) {
     if (keyOf(g.name).includes(k)) push({ name: g.name, kind: "group", sub: groupLine(g), companyId: g.companyId });
-    const m = g.members?.find(x => keyOf(x).includes(k));
-    if (m) push({ name: g.name, kind: "group", sub: `成员 ${m} · ${companyOf(g.companyId)?.name ?? ""}`, companyId: g.companyId });
+    const m = g.members?.find(x => keyOf(typeof x === "string" ? x : x.name).includes(k));
+    if (m) {
+      const mn = typeof m === "string" ? m : m.name;
+      push({ name: g.name, kind: "group", sub: `成员 ${mn} · ${companyOf(g.companyId)?.name ?? ""}`, companyId: g.companyId });
+    }
   }
   return hits.slice(0, 20);
 }

@@ -8,7 +8,11 @@ export type VnFrame = {
   sourceRole?: VnMessage["role"];
   sourceCreatedAt?: string;
   voiceAudio?: VnFrameAudio;
+  /** 直播双排场景的观众弹幕，随回复保存并供回放使用。 */
+  streamDanmaku?: StreamDanmaku[];
 };
+
+export type StreamDanmaku = { ko: string; zh: string };
 
 export type VnOptions = { choices: string[] };
 
@@ -63,6 +67,8 @@ export type VnMessage = {
   frameAudio?: Record<number, VnFrameAudio>;
   /** 场景 app：这一段的小总结（进在场每个人的短期记忆，侧边栏能改） */
   summary?: string;
+  /** 直播双排场景的观众弹幕，存于 VN 消息元数据。 */
+  streamDanmaku?: StreamDanmaku[];
 };
 
 export type VnFrameAudio = {

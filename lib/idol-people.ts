@@ -67,6 +67,8 @@ export type IdolProfile = {
   role: string;
   age: string;
   nationality?: string;
+  /** 罗马字英文名（同期练习生由 AI 生成，如 Kim Seoyeon；仅名册展示用） */
+  enName?: string;
   /** 开局本地家庭档案：允许性格等字段留空，不自动触发 AI 补全。 */
   familyMemberId?: string;
   occupation?: string;
@@ -104,6 +106,8 @@ export type IdolProfile = {
   /** 生日 MM-DD */
   birthday?: string;
   mbti?: string;
+  /** 同期档案页展示的小细节；不会拼进人物提示词。 */
+  tmi?: string[];
   relation?: Relation;
   /** undefined = 没有心动线 */
   heart?: Heart;
@@ -366,6 +370,15 @@ export function saveProfile(input: IdolProfile, charPatch?: Partial<Pick<Charact
       locks: { ...m.locks, ...Object.fromEntries(Object.entries({ name: charPatch?.name ?? m.name, age: p.age, nationality: p.nationality ?? "", occupation: p.occupation ?? "", location: p.location ?? "", background: p.familyBackground ?? "" }).filter(([key, value]) => value !== m[key as keyof typeof m]).map(([key]) => [key, true])) },
     }) });
   }
+}
+
+/** 同学录「我的印象」专用写入：只保存玩家输入的内容，不重建人物提示词。 */
+export function savePersonalNote(charId: string, note: string): void {
+  const all = loadProfiles();
+  const current = all[charId];
+  if (!current) return;
+  all[charId] = { ...current, note };
+  saveProfiles(all);
 }
 
 /** 新建一个人：建角色 + 存档案 */

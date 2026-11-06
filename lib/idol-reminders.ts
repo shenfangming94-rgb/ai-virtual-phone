@@ -438,6 +438,12 @@ export function installIdolChatHooks(notify: (msg: string) => void): void {
   if (hooked || typeof window === "undefined") return;
   hooked = true;
   window.addEventListener(MAIL_EVENT, syncMailInvitations);
+  // 情缘羁绊：电话/视频打满一分钟算一通（一天只算一次，规则在 idol-bond）
+  window.addEventListener("active-call-ended", (e: Event) => {
+    const d = (e as CustomEvent<{ characterId?: string; seconds?: number }>).detail;
+    if (!d?.characterId || (d.seconds ?? 0) < 60) return;
+    void import("./idol-romance-live").then(m => m.recordCall(d.characterId!)).catch(() => undefined);
+  });
   syncMailInvitations();
   const actions = new Map<string, InvitationAction[]>();
   getChatPluginHookBus().registerTransform("idol-reminders", "message.beforePersist", (raw: unknown) => {

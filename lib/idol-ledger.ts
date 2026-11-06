@@ -33,7 +33,7 @@ export type MonthRank = {
   total: number;
   prevRank?: number;
   comment: string;        // 老师给她的评语
-  rows: { id: string; name: string; group: string; rank: number; change: string }[];
+  rows: { id: string; name: string; group: string; rank: number; change: string; klass?: string }[];
   image: string;
   messageId?: string;
   at: number;
@@ -208,7 +208,7 @@ function computeRankHard(node: CareerNode): MonthRank {
     const group = t.specialty === "vocal" ? "vocal 组" : t.specialty === "rap" ? "rap 组" : "舞蹈组";
     const before = prevPos.get(t.id);
     const change = !prev ? "—" : before == null ? "NEW" : before === i + 1 ? "—" : before > i + 1 ? `↑${before - i - 1}` : `↓${i + 1 - before}`;
-    return { id: t.id, name, group, rank: i + 1, change };
+    return { id: t.id, name, group, rank: i + 1, change, klass: t.klass };
   });
   // 分班结果写回名册（升降班/被调离剧情靠这个变）
   if (roster) saveRoster(roster);

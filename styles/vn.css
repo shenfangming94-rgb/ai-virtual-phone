@@ -840,6 +840,57 @@
           z-index: 5;
         }
 
+        /* Only shown for the esports stream-duo romance scene. */
+        .vn-stream-overlay {
+          position: absolute;
+          z-index: 18;
+          top: calc(var(--page-header-safe-top, 48px) + 38px);
+          right: 10px;
+          width: min(222px, 59vw);
+          pointer-events: none;
+          user-select: none;
+        }
+        .vn-stream-window {
+          overflow: hidden;
+          border: 1px solid rgba(255,255,255,.2);
+          border-radius: 9px;
+          background: rgba(9,12,17,.52);
+          color: #fff;
+          box-shadow: 0 5px 18px rgba(0,0,0,.13);
+          backdrop-filter: blur(8px);
+          -webkit-backdrop-filter: blur(8px);
+        }
+        .vn-stream-head {
+          height: 26px;
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          padding: 0 8px;
+          border-bottom: 1px solid rgba(255,255,255,.14);
+          color: rgba(255,255,255,.8);
+          font: 600 8px/1 -apple-system,BlinkMacSystemFont,sans-serif;
+          letter-spacing: .1em;
+        }
+        .vn-stream-head>span { display:flex; align-items:center; gap:5px; }
+        .vn-stream-head i { width:5px; height:5px; border-radius:50%; background:#fb5c69; box-shadow:0 0 7px rgba(251,92,105,.7); }
+        .vn-stream-head button {
+          width:22px; height:22px; border:0; border-radius:50%; padding:0;
+          background:rgba(255,255,255,.12); color:#fff; font:400 15px/1 -apple-system,sans-serif;
+          pointer-events:auto; cursor:pointer;
+        }
+        .vn-stream-lines { display:flex; flex-direction:column; gap:3px; padding:5px 0 7px; }
+        .vn-stream-line {
+          width:max-content; max-width:none; padding:3px 10px;
+          white-space:nowrap; border-radius:999px; background:rgba(0,0,0,.23);
+          animation:vn-stream-scroll 9s linear infinite; will-change:transform;
+        }
+        .vn-stream-line>b { display:block; color:#fff; font:600 9px/1.35 -apple-system,BlinkMacSystemFont,sans-serif; }
+        .vn-stream-line>small { display:block; color:rgba(255,255,255,.68); font:400 8px/1.35 -apple-system,BlinkMacSystemFont,sans-serif; }
+        .vn-stream-overlay.is-minimized { width:85px; }
+        .vn-stream-overlay.is-minimized .vn-stream-head { border:0; }
+        @keyframes vn-stream-scroll { from { transform:translateX(105%); } to { transform:translateX(-115%); } }
+        @media (prefers-reduced-motion: reduce) { .vn-stream-line { animation-duration:20s; } }
+
         /* ── VN Slider Override (reuse ui-slider structure, dark skin) ── */
         .vn-shell .ui-slider-label {
           color: var(--vn-ui-text);

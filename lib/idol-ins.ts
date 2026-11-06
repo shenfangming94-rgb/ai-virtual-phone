@@ -470,14 +470,21 @@ export async function myPost(input: { imgs: Img[]; cap: string; place?: string; 
   const s0 = loadIns();
   const post: Post = { id: uid("post"), by: ME, at: Date.now(), imgs: input.imgs, cap: input.cap, place: input.place, likes: 0, comments: [], hideLikes: input.hideLikes, noComments: input.noComments, wasPublic: !s0.me.private };
   patch(s => ({ ...s, posts: [...s.posts, post] }));
-  try { await reactToMine(post.id); } catch { /* 没 API 也先发出去 */ }
-  return loadIns().posts.find(p => p.id === post.id) ?? post;
+  let forumWorthDiscussing = false;
+  try { forumWorthDiscussing = await reactToMine(post.id); } catch { /* 没 API 也先发出去 */ }
+  const saved = loadIns().posts.find(p => p.id === post.id) ?? post;
+  if (forumWorthDiscussing && saved.wasPublic && saved.imgs.length && !saved.hiddenAt && !saved.deleted && !saved.archived) {
+    void import("./theqoo-triggers").then(m => m.publishPublicInsPost(saved)).catch(error => {
+      console.warn("[TheQoo] public INS hook failed:", error);
+    });
+  }
+  return saved;
 }
 
-async function reactToMine(postId: string): Promise<void> {
+async function reactToMine(postId: string): Promise<boolean> {
   const s = loadIns();
   const post = s.posts.find(p => p.id === postId);
-  if (!post) return;
+  if (!post) return false;
   const tier = { name: fameBand() };
   const profiles = loadProfiles();
   const fl = s.followers.map(id => s.accs[id]).filter(Boolean).map(a => `@${a.handle}（${a.name}${a.charId && profiles[a.charId] ? `，${profiles[a.charId].role}，跟她：${profiles[a.charId].relation ?? "认识"}` : ""}）`).join("、");
@@ -487,9 +494,10 @@ async function reactToMine(postId: string): Promise<void> {
 {"likers":["点赞的 handle"],"comments":[{"handle":"","text":"","zh":"不是中文时的翻译"}],"risk":{"level":"none / low / mid / high","why":"给她看的一句：会不会被认出来、能认出谁、哪里露馅","love":true或false}}
 一、点赞和评论：${post.wasPublic ? `她的号是公开的，陌生人也看得到。她现在是「${tier.name}」：普通人就只有零星陌生人路过；小有人知会有人认出她；公众人物满屏粉丝。` : "她的号锁着，只有关注她的人看得到。"}关注她的人：${fl || "还没有"}。评论照每个人的身份和跟她的关系。${LANG}${post.noComments ? "她关了评论，comments 空着。" : ""}
 二、风险：照这条帖子判断会不会被扒。吃的、风景、碎碎念 none；露脸自拍、练习室日常看她多出名，普通人基本 low；透露公司内部的事（排名、名单、吐槽公司）mid 以上；秀恩爱看对方能不能被认出来（露脸、他的手表戒指纹身衣服、能对上的时间地点），认不出 low，能认出 high，love 写 true。why 要具体。` },
+    { role: "system", content: `在原 JSON 上额外返回 forumWorthDiscussing 布尔值。它只判断这条公开动态是否值得路人搬到 TheQoo 讨论：私密账号、普通风景/食物、没有辨识度的碎碎念或没有真实照片素材必须为 false；公开照片里有明确穿搭造型、可识别的公开身份、公开活动或配文有具体讨论点时才可为 true。只能判断当前公开帖子，不补写事实。` },
     { role: "user", content: `帖子：\n${imgs}\n配文：${post.cap || "（没写）"}${post.place ? `\n地点：${post.place}` : ""}\n\n${idolWorldPrompt()}` },
   ], { temperature: 0.85, label: "ins 她发帖" });
-  const j = pickJson<{ likes?: number; likers?: string[]; comments?: { handle?: string; text?: string; zh?: string }[]; risk?: Risk }>(res.content);
+  const j = pickJson<{ likes?: number; likers?: string[]; comments?: { handle?: string; text?: string; zh?: string }[]; risk?: Risk; forumWorthDiscussing?: boolean }>(res.content);
   const level = (["none", "low", "mid", "high"].includes(String(j.risk?.level)) ? j.risk!.level : "none") as Risk["level"];
   const risk: Risk = { level, why: String(j.risk?.why ?? ""), love: Boolean(j.risk?.love) };
   // 会不会被扒、什么时候：风险越大越快；出名、公开号更容易
@@ -509,6 +517,7 @@ async function reactToMine(postId: string): Promise<void> {
     notes: [...x.notes, ...(j.likers ?? []).slice(0, 3).map(h => ({ id: uid("n"), at: now + rnd(2, 60) * MIN, kind: "like" as const, from: accByHandle(String(h))?.id ?? String(h), postId })),
       ...(j.comments ?? []).slice(0, 3).filter(c => c?.text).map(c => ({ id: uid("n"), at: now + rnd(5, 90) * MIN, kind: "comment" as const, from: accByHandle(String(c.handle))?.id ?? String(c.handle), text: String(c.text), postId }))],
   }));
+  return j.forumWorthDiscussing === true && post.wasPublic === true && post.imgs.length > 0;
 }
 
 /** 删帖 / 归档：记下时间，被扒那边看早不早 */
@@ -678,6 +687,38 @@ export async function replyDm(id: string, opts: { first?: boolean; redo?: string
     setDm(id, x => ({ ...x, lastMine: undefined, msgs: [...x.msgs, ...lines.map((l, i) => ({ id: uid("m"), me: false, text: String(l.text), zh: l.zh ? String(l.zh) : undefined, at: now + i * 1000 }))] }));
   } finally { dmBusy.delete(id); }
 }
+/** 情缘·私生骚扰风波：他的私生找到她的 ins，好几个小号来发骚扰私信（陌生号、进私信请求）。返回发来私信的 handle */
+export async function sasaengDm(hisName: string, hisRole: string): Promise<string[]> {
+  const me = loadIns().me;
+  const res = await simpleLLMCall(config(), [
+    { role: "system", content: `${hisName}（${hisRole}）的私生饭比普通粉丝更早发现他和「她」（@${me.handle}，还没出道的练习生）关系不一般，找到了她的 ins。写两到四个不同的私生，各用自己的小号给她发私信：骚扰、辱骂、警告她离他远一点，有的人可能暗示知道她的行踪。每个人说话方式不一样。恋情还没公开，她们只是怀疑。不要写成直接的人身威胁。
+只输出 JSON：{"accounts":[{"handle":"小号的 ins id（英文数字下划线）","name":"昵称","lines":[{"text":"","zh":"不是中文时的中文翻译"}]}]}，每个号一到四句，像真人连发私信：短、情绪化。${LANG}` },
+    { role: "user", content: idolWorldPrompt() },
+  ], { temperature: 0.9, label: "ins 私生私信" });
+  const j = pickJson<{ accounts?: { handle?: string; name?: string; lines?: { text?: string; zh?: string }[] }[] }>(res.content);
+  const now = Date.now();
+  const made: { acc: InsAcc; lines: { text?: string; zh?: string }[] }[] = [];
+  for (const x of (j.accounts ?? []).slice(0, 4)) {
+    const lines = (x.lines ?? []).filter(l => l?.text).slice(0, 4);
+    if (!lines.length) continue;
+    const a = strangerAcc();
+    const h = String(x.handle || "").replace(/[^\w.]/g, "");
+    if (h) { a.handle = h; a.name = String(x.name || h); a.hue = hueOf(h); }
+    made.push({ acc: a, lines });
+  }
+  if (!made.length) return [];
+  patch(st => {
+    const accs = { ...st.accs }, dms = { ...st.dms };
+    made.forEach(({ acc, lines }, k) => {
+      const at = now + k * 90e3; // 一个接一个来
+      accs[acc.id] = acc;
+      dms[acc.id] = { msgs: lines.map((l, i) => ({ id: uid("m"), me: false, text: String(l.text), zh: l.zh ? String(l.zh) : undefined, at: at + i * 1000 })), status: "request", auto: false, proactive: false };
+    });
+    return { ...st, accs, dms };
+  });
+  return made.map(m => m.acc.handle);
+}
+
 export const dmReplying = (id: string) => dmBusy.has(id);
 
 export function unseenNotes(): number { const s = loadIns(); return s.notes.filter(n => n.at <= Date.now() && n.at > (s.seenNotesAt ?? 0)).length; }

@@ -28,6 +28,9 @@ export type RosterState = {
   npcs: NpcRecord[];
   /** trainTick 结算到哪一天（世界日期 YYYY-MM-DD），防重复补算 */
   settledUntil: string;
+  /** 新档签约时的 39 人资料补全队列；失败时保留，后续可重试。 */
+  profilePending?: string[];
+  profileRetryAt?: number;
 };
 
 /** 玩家基准：三项 45 起，特长 +10，C 班。视觉 50、软实力 45（模拟器同款基准） */

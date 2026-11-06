@@ -9,7 +9,9 @@ import { worldWeatherTick } from "@/lib/idol-weather";
 import { ensureIdolWeatherApp } from "@/lib/idol-weather-install";
 import { ClockApp } from "./clock-app";
 import { TheQooApp } from "./theqoo/theqoo-app";
+import { YearbookApp } from "./yearbook/yearbook-app";
 import { THEQOO_NOTICE } from "@/lib/theqoo-store";
+import { retryFailedForumDiscussions } from "@/lib/theqoo-events";
 import { pushLockNote } from "@/lib/idol-notes";
 import { ContactsApp } from "./contacts/contacts-app";
 import { CareerApp } from "./career/career-app";
@@ -34,7 +36,7 @@ import { casualTick } from "@/lib/idol-casual";
 import { socialTick } from "@/lib/idol-social";
 import { careerTick, deliverAuditionResults } from "@/lib/idol-career";
 import { mailAppIcon, mailAppTick, searchTick } from "@/lib/idol-search";
-import { kakaoTick } from "@/lib/idol-kakao";
+import { KAKAO_NOTICE, kakaoTick } from "@/lib/idol-kakao";
 import { installIdolChatHooks, reminderTick } from "@/lib/idol-reminders";
 import { eventsTick } from "@/lib/idol-events";
 import { rankTick } from "@/lib/idol-ledger";
@@ -1130,12 +1132,28 @@ export function DesktopShell({ initialThemeProfile, initialThemeAssets }: Deskto
   const [banner, setBanner] = useState<LockNote | null>(null);
   useEffect(() => {
     const onForumNotice = (event: Event) => {
-      const detail = (event as CustomEvent<{ postId: string; title: string }>).detail;
+      const detail = (event as CustomEvent<{ postId: string; title: string; owner?: "player" | "romance" }>).detail;
       if (!detail?.postId) return;
-      setBanner(pushLockNote({ app: "theqoo", title: "论坛有新帖", text: detail.title, at: Date.now(), postId: detail.postId }));
+      const related = detail.owner === "player" || detail.owner === "romance";
+      setBanner(pushLockNote({
+        app: "theqoo",
+        title: related ? "TheQoo 舆情提醒" : "论坛有新帖",
+        text: related ? `有一篇与你有关的帖子正在受到关注：「${detail.title}」` : detail.title,
+        at: Date.now(),
+        postId: detail.postId,
+      }));
     };
     window.addEventListener(THEQOO_NOTICE, onForumNotice);
     return () => window.removeEventListener(THEQOO_NOTICE, onForumNotice);
+  }, []);
+  useEffect(() => {
+    const onKakaoNotice = (event: Event) => {
+      const detail = (event as CustomEvent<{ from: string; text: string }>).detail;
+      if (!detail?.text) return;
+      setBanner(pushLockNote({ app: "kakao", title: detail.from || "KakaoTalk", text: detail.text, at: Date.now() }));
+    };
+    window.addEventListener(KAKAO_NOTICE, onKakaoNotice);
+    return () => window.removeEventListener(KAKAO_NOTICE, onKakaoNotice);
   }, []);
   const idolNotify = useCallback((msg: string) => { setBanner(noteFromNotice(msg)); }, []);
   useEffect(() => {
@@ -1167,7 +1185,7 @@ export function DesktopShell({ initialThemeProfile, initialThemeAssets }: Deskto
       try { plotTick(); } catch { /* 剧情池出错不挡着用手机 */ }
       try { plotDateTick(); } catch { /* 同上 */ }
       try { opportunitiesTick(); } catch { /* 机会系统出错不挡着用手机 */ }
-      try { romanceLinesTick(); } catch { /* 情缘线系统出错不挡着用手机 */ }
+      try { romanceLinesTick(idolNotify); } catch { /* 情缘线系统出错不挡着用手机 */ }
       try { branchesTick(); } catch { /* 支线引擎出错不挡着用手机 */ }
       try { debutPipelineTick(); } catch { /* 出道管道出错不挡着用手机 */ }
       try { destinyTick(idolNotify); } catch { /* 同上 */ }
@@ -1181,6 +1199,7 @@ export function DesktopShell({ initialThemeProfile, initialThemeAssets }: Deskto
       try { ytTick(idolNotify); } catch { /* 同上 */ }
       try { leaveTick(); } catch { /* 同上 */ }
       try { casualTick(); } catch { /* 同上 */ }
+      try { void retryFailedForumDiscussions(); } catch { /* 论坛重试出错不挡着用手机 */ }
       try { socialTick(); } catch { /* 同上 */ }
       try { syncIdolWorldBook(); } catch { /* 同上 */ }
     };
@@ -4398,6 +4417,9 @@ html,body{margin:0;padding:0;width:100%;height:100%;background:#121110;color:rgb
     }
     if (activeApp === "theqoo") {
       return <TheQooApp onClose={() => setActiveApp(null)} />;
+    }
+    if (activeApp === "yearbook") {
+      return <YearbookApp onClose={() => setActiveApp(null)} />;
     }
     if (activeApp === "contacts") {
       return <ContactsApp onClose={() => setActiveApp(null)} onNotice={setNotice} />;

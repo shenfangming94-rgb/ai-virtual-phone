@@ -10,18 +10,46 @@
 import { kvGet, kvSet } from "./kv-db";
 import { loadTraineeCard } from "./trainee-card";
 import { loadCareer } from "./idol-career";
-import { createPerson, emptyProfile, herAge } from "./idol-people";
+import { createPerson, emptyProfile, herAge, loadProfiles, saveProfile } from "./idol-people";
 import { genKakaoId } from "./idol-kakao";
-import { coursePoints, settleProgress, type Subject } from "./idol-training";
+import { ATTITUDE_LABEL, coursePoints, settleProgress, type ClassLetter, type Subject } from "./idol-training";
 import { generateRosterState, settleNpcWeeks, type RosterState } from "./idol-roster";
+import { simpleLLMCall } from "./api-helpers";
+import { loadApiConfigs, loadBindingConfig, resolveBinding } from "./settings-storage";
 
 const KEY = "idol_roster_v1";
 const DAY = 864e5;
+export const ROSTER_UPDATED_EVENT = "idol-roster-updated";
+const PROFILE_RETRY_DELAY = 15 * 60e3;
+let profileGenerationJob: Promise<void> | null = null;
+
+type NpcProfileDraft = {
+  charId: string;
+  enName: string;
+  nationality: string;
+  heightCm: number;
+  appearance: string;
+  privateLines: string[];
+  familyBackground: string;
+  tmi: string[];
+  mbti: string;
+  speech: string;
+};
+
+function chatConfig() {
+  const slot = resolveBinding(loadBindingConfig(), undefined, "chat");
+  const config = loadApiConfigs().find(c => c.id === slot.apiConfigId) ?? loadApiConfigs()[0];
+  if (!config) throw new Error("还没配置 Chat API");
+  return config;
+}
 
 function load(): RosterState | null {
   try { return JSON.parse(kvGet(KEY) || "null") as RosterState | null; } catch { return null; }
 }
-function save(s: RosterState) { kvSet(KEY, JSON.stringify(s)); }
+function save(s: RosterState) {
+  kvSet(KEY, JSON.stringify(s));
+  if (typeof window !== "undefined") window.dispatchEvent(new Event(ROSTER_UPDATED_EVENT));
+}
 
 /** 同款种子随机（模拟器同源） */
 function mulberry32(seed: number): () => number {
@@ -44,7 +72,7 @@ export function ensureRoster(): RosterState | null {
   const career = loadCareer();
   if (career.stage !== "trainee") return null;
   let s = load();
-  if (s) return s;
+  if (s) { queueRosterProfileGeneration(s); return s; }
   const card = loadTraineeCard();
   if (!card) return null;
   const rng = mulberry32((career.signedAt ?? Date.now()) % 4294967296);
@@ -67,15 +95,175 @@ export function ensureRoster(): RosterState | null {
     }, null, genKakaoId());
     n.charId = char.id;
   }
+  s.profilePending = s.npcs.map(n => n.charId).filter((id): id is string => Boolean(id));
+  s.profileRetryAt = Date.now();
   save(s);
+  queueRosterProfileGeneration(s);
+  queueRosterNameBackfill(s);
   return s;
 }
 
+const CLASS_ORDER: ClassLetter[] = ["A", "B", "C", "D"];
+const SPECIALTY_NAME: Record<string, string> = {
+  vocal: "声乐", dance: "舞蹈", rap: "说唱", visual: "形象管理", acting: "演技", variety: "综艺", compose: "作曲", language: "语言", none: "暂无",
+};
+
+function normalizeForUnique(value: string): string {
+  return value.toLowerCase().replace(/[\s\p{P}\p{S}]/gu, "");
+}
+
+/** 可独立验证的批次解析器：严格保留代码已有骨架，不接受 AI 改名或改班。 */
+export function parseRosterProfileBatch(raw: string, expectedIds: string[], existingTmi: string[] = []): NpcProfileDraft[] {
+  const match = raw.match(/\{[\s\S]*\}/);
+  if (!match) throw new Error("同期资料没有返回 JSON");
+  const parsed = JSON.parse(match[0]) as { profiles?: unknown };
+  if (!Array.isArray(parsed.profiles)) throw new Error("同期资料缺少 profiles 列表");
+  const byId = new Map<string, NpcProfileDraft>();
+  for (const item of parsed.profiles) {
+    if (!item || typeof item !== "object") continue;
+    const x = item as Record<string, unknown>;
+    const charId = String(x.charId ?? "");
+    if (!expectedIds.includes(charId) || byId.has(charId)) continue;
+    const privateLines = Array.isArray(x.privateLines) ? x.privateLines.map(String).map(v => v.trim()).filter(Boolean).slice(0, 2) : [];
+    const tmi = Array.isArray(x.tmi) ? x.tmi.map(String).map(v => v.trim()).filter(Boolean).slice(0, 2) : [];
+    const mbti = String(x.mbti ?? "").toUpperCase().replace(/[^A-Z]/g, "").slice(0, 4);
+    const enName = String(x.enName ?? "").trim();
+    const heightCm = Number(x.heightCm);
+    const draft: NpcProfileDraft = {
+      charId,
+      enName,
+      nationality: String(x.nationality ?? "").trim(),
+      heightCm: Number.isFinite(heightCm) ? Math.round(heightCm) : 0,
+      appearance: String(x.appearance ?? "").trim(),
+      privateLines,
+      familyBackground: String(x.familyBackground ?? "").trim(),
+      tmi,
+      mbti,
+      speech: String(x.speech ?? "").trim(),
+    };
+    if (!draft.nationality || draft.heightCm < 140 || draft.heightCm > 195 || !draft.appearance || !privateLines.length || !draft.familyBackground || !tmi.length || !/^[EI][NS][TF][JP]$/.test(mbti) || !draft.speech) {
+      throw new Error(`同期资料字段不完整（${charId}）`);
+    }
+    byId.set(charId, draft);
+  }
+  if (expectedIds.some(id => !byId.has(id))) throw new Error("同期资料没有覆盖整批人物");
+  const allTmi = [...existingTmi, ...[...byId.values()].flatMap(x => x.tmi)].map(normalizeForUnique).filter(Boolean);
+  if (new Set(allTmi).size !== allTmi.length) throw new Error("TMI 与同批或已有人物重复，需要重新生成");
+  const introductions = [...byId.values()].map(x => normalizeForUnique(x.privateLines.join(" ").slice(0, 8))).filter(Boolean);
+  if (new Set(introductions).size !== introductions.length) throw new Error("性格描述开头重复，需要重新生成");
+  return expectedIds.map(id => byId.get(id)!);
+}
+
+function rosterBatchPrompt(state: RosterState, klass: ClassLetter): { ids: string[]; input: string; existingTmi: string[] } {
+  const profiles = loadProfiles();
+  const chars = state.npcs.filter(n => n.charId).map(n => ({ n, p: profiles[n.charId!] }));
+  const pending = new Set(state.profilePending ?? []);
+  const batch = chars.filter(x => pending.has(x.n.charId!) && x.n.klass === klass);
+  // friends[].charId 在名册骨架里保存的是 Trainee.id（不是通讯录 Character.id）。
+  const nameById = new Map(state.npcs.map(n => [n.id, n.name]));
+  const existingTmi = chars.filter(x => !pending.has(x.n.charId!)).flatMap(x => x.p?.tmi ?? []);
+  const skeleton = batch.map(({ n, p }) => ({
+    charId: n.charId,
+    name: nameById.get(n.charId!) ?? n.name,
+    age: p?.age || "",
+    birthday: n.birthday,
+    initialClass: n.initialClass,
+    currentClass: n.klass,
+    specialty: SPECIALTY_NAME[n.specialty] ?? n.specialty,
+    attitude: ATTITUDE_LABEL[n.attitude],
+    friends: n.friends.map(f => nameById.get(f.charId) ?? f.charId).slice(0, 4),
+  }));
+  return {
+    ids: batch.map(x => x.n.charId!),
+    existingTmi,
+    input: JSON.stringify({ skeleton, usedTmi: existingTmi }, null, 2),
+  };
+}
+
+async function generateProfileBatch(state: RosterState, klass: ClassLetter): Promise<void> {
+  const batch = rosterBatchPrompt(state, klass);
+  if (!batch.ids.length) return;
+  const res = await simpleLLMCall(chatConfig(), [
+    { role: "system", content: `为韩国娱乐圈练习生模拟游戏，补写同一初始班级的同期女生人物档案。只输出 JSON 对象：{"profiles":[{"charId":"","enName":"","nationality":"","heightCm":163,"appearance":"","privateLines":[""],"familyBackground":"","tmi":[""],"mbti":"ISFP","speech":""}]}。\n\n必须尊重给定骨架：名字、年龄、生日、初始班级、当前班级、特长、态度和朋友圈全部由代码确定，不能更改；按特长与态度写出匹配的性格与生活细节（懈怠的人不能被写成拼命三娘）。外籍比例自然：韩国人占多数，每批可有 1～2 位日本、中国、泰国或美国等国籍女生，其余以韩国为主。\n\nenName 写罗马字英文名：韩国人按韩语罗马字（如 金瑞妍 → Kim Seoyeon，姓在前）；日本人用 Hepburn 罗马字（如 佐藤美咲 → Sato Misaki）；中国人用拼音（如 王一诺 → Wang Yinuo）；泰国、美国等按本国常见拼写。每个词首字母大写，姓和名之间一个空格，不写昵称不写大小写混搭。\n\n外貌、性格、家庭、TMI 要具体、自然、彼此区分，不堆同一套模板；同批人物不能用相同句式开头。每人写 1～2 条独有 TMI，不能与输入中的已用 TMI 或同批其他人的 TMI 重复。家庭背景写普通而可信的生活背景，不强加创伤、秘密或戏剧冲突。speech 写一句她自然会说的话，不使用 MBTI 推导性格。MBTI 只作为名册档案字段生成，不要写进外貌、性格、家庭、TMI 或 speech。所有文本使用简体中文。只返回列表里给出的 charId 对应人物，不增减人物。` },
+    { role: "user", content: `请补全 ${klass} 班这批人物的资料。代码骨架与已用 TMI 如下：\n${batch.input}` },
+  ], { temperature: 0.88, max_tokens: 6500, label: `名册同期资料 ${klass} 班` });
+  if (!res.content) throw new Error(res.error || `${klass} 班资料生成失败`);
+  const drafts = parseRosterProfileBatch(res.content, batch.ids, batch.existingTmi);
+  for (const draft of drafts) {
+    const profile = loadProfiles()[draft.charId];
+    if (!profile) continue;
+    saveProfile({ ...profile, enName: draft.enName, nationality: draft.nationality, heightCm: draft.heightCm, appearance: draft.appearance, privateLines: draft.privateLines, familyBackground: draft.familyBackground, tmi: draft.tmi, mbti: draft.mbti, speech: draft.speech });
+  }
+  const latest = load();
+  if (!latest) return;
+  const done = new Set(batch.ids);
+  save({ ...latest, profilePending: (latest.profilePending ?? []).filter(id => !done.has(id)), profileRetryAt: Date.now() });
+}
+
+function queueRosterProfileGeneration(state: RosterState): void {
+  if (typeof window === "undefined" || !state.profilePending?.length || profileGenerationJob) return;
+  if ((state.profileRetryAt ?? 0) > Date.now()) return;
+  profileGenerationJob = (async () => {
+    try {
+      // 先检查配置，避免 API 未配置时每 5 秒重复尝试。
+      chatConfig();
+      let failed = false;
+      for (const klass of CLASS_ORDER) {
+        const current = load();
+        if (!current?.profilePending?.length) break;
+        try { await generateProfileBatch(current, klass); }
+        catch (error) { failed = true; console.warn(`[idol-roster] ${klass} 班资料暂未补全：`, error); }
+      }
+      const latest = load();
+      if (latest?.profilePending?.length) save({ ...latest, profileRetryAt: Date.now() + (failed ? PROFILE_RETRY_DELAY : 60e3) });
+    } catch (error) {
+      const latest = load();
+      if (latest?.profilePending?.length) save({ ...latest, profileRetryAt: Date.now() + PROFILE_RETRY_DELAY });
+      console.warn("[idol-roster] 同期资料会在之后重试：", error);
+    }
+  })().finally(() => { profileGenerationJob = null; });
+}
+
 /** 桌面每 5 秒跑：把没结算的周补上（跳时间跳多久补多久） */
+/** 老档补英文名：只补 enName 一个字段，不动已经生成好的其他资料。 */
+let nameBackfillJob: Promise<void> | null = null;
+function queueRosterNameBackfill(state: RosterState): void {
+  if (typeof window === "undefined" || nameBackfillJob) return;
+  const profiles = loadProfiles();
+  const missing = state.npcs.filter(n => n.charId && !profiles[n.charId]?.enName);
+  if (!missing.length) return;
+  nameBackfillJob = (async () => {
+    try {
+      chatConfig();
+      const latestProfiles = loadProfiles();
+      const items = missing.map(n => ({ charId: n.charId, name: n.name, nationality: latestProfiles[n.charId!]?.nationality ?? "" }));
+      const res = await simpleLLMCall(chatConfig(), [
+        { role: "system", content: `为韩国娱乐圈练习生模拟游戏，给同期练习生补写罗马字英文名。只输出 JSON 对象：{"names":[{"charId":"","enName":""}]}。\n\n韩国人按韩语罗马字（如 金瑞妍 → Kim Seoyeon，姓在前）；日本人用 Hepburn 罗马字（如 佐藤美咲 → Sato Misaki）；中国人用拼音（如 王一诺 → Wang Yinuo）；泰国、美国等按本国常见拼写。每个词首字母大写，姓和名之间一个空格，不写昵称、不写大小写混搭。只输出给出的 charId 对应人物，不增减。` },
+        { role: "user", content: `请补全这些同期练习生的英文名：\n${JSON.stringify(items)}` },
+      ], { temperature: 0.7, max_tokens: 1500, label: "名册同期英文名" });
+      if (!res.content) throw new Error(res.error || "英文名生成失败");
+      const match = res.content.match(/\{[\s\S]*\}/);
+      const parsed = match ? JSON.parse(match[0]) as { names?: { charId: string; enName: string }[] } : null;
+      if (!parsed?.names?.length) throw new Error("英文名没有返回列表");
+      const byId = new Map(parsed.names.filter(x => x && typeof x.charId === "string" && typeof x.enName === "string" && x.enName.trim()).map(x => [x.charId, x.enName.trim().slice(0, 40)]));
+      const currentProfiles = loadProfiles();
+      for (const n of missing) {
+        const en = n.charId ? byId.get(n.charId) : undefined;
+        const p = n.charId ? currentProfiles[n.charId] : undefined;
+        if (!en || !p || p.enName) continue;
+        saveProfile({ ...p, enName: en });
+      }
+    } catch (error) {
+      console.warn("[idol-roster] 同期英文名会在之后重试：", error);
+    }
+  })().finally(() => { nameBackfillJob = null; });
+}
+
 export function rosterTick(): void {
   const s = ensureRoster();
   if (typeof window !== "undefined") (window as unknown as { __idolNewMode?: boolean }).__idolNewMode = Boolean(s);
   if (!s) return;
+  queueRosterProfileGeneration(s);
   const today = dayKey(Date.now());
   if (today <= s.settledUntil) return;
   const weeks = weeksBetween(s.settledUntil, today);
@@ -107,6 +295,15 @@ export function formatClassGain(subjectLabel: string, g: ClassGain): string {
   const parts = [`${subjectLabel} +${g.gained}`];
   for (const lv of g.levels) parts.push(`${subjectLabel} ${lv.from}→${lv.to}`);
   return parts.join("，");
+}
+
+/** 比一节正常课多一点（mult 倍的一节课训练进度）：课堂竞争获胜用 */
+export function settlePlayerBonus(subject: Subject, mult: number): ClassGain | null {
+  const s = ensureRoster();
+  if (!s) return null;
+  const r = settleProgress(s.player, subject, coursePoints(s.player, subject) * mult);
+  save(s);
+  return { gained: r.gained, levels: r.levels, stat: s.player.stats[subject] };
 }
 
 /** 机会/奖励的经验结算：1 经验 = 3 训练进度（对着加练的量级）。她的机会奖励表用「经验」作单位。 */

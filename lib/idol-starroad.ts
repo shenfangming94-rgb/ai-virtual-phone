@@ -7,6 +7,7 @@
  */
 
 import { kvGet, kvSet } from "./kv-db";
+import { needFor } from "./idol-training";
 import { loadTraineeCard } from "./trainee-card";
 import { addToCalendar, loadCareer, saveCareer, type CareerNode } from "./idol-career";
 
@@ -231,7 +232,29 @@ function settle(s: State, now: number): string[] {
 export type GradeView = { id: Subject; en: string; zh: string; grade: Grade; pts: number; left: number; waitDays: number; last?: SubjectState["last"] };
 
 /** 成绩单：每门现在几档、离下一档还差几次加练 */
+/** 新档：0～100 的能力值换算成等级（她定的：保留等级，按新数值换算） */
+const NEW_GRADE_FLOOR: [Grade, number][] = [["A", 85], ["B", 70], ["C", 55], ["D", 40], ["F", 0]];
+const newGradeOf = (v: number): Grade => NEW_GRADE_FLOOR.find(([, f]) => v >= f)![0];
+
+function loadNewGrades(): GradeView[] | null {
+  let roster: { player?: { stats: Record<string, number>; progress: Record<string, number>; specialty: string } } | null = null;
+  try { roster = JSON.parse(kvGet("idol_roster_v1") || "null"); } catch { return null; }
+  const pl = roster?.player;
+  if (!pl) return null;
+  return SUBJECTS.map(sub => {
+    const v = pl.stats[sub.id] ?? 45;
+    const grade = newGradeOf(v);
+    const target = grade === "A" ? null : NEW_GRADE_FLOOR[NEW_GRADE_FLOOR.findIndex(([g]) => g === grade) - 1][1];
+    let need = 0;
+    if (target !== null) { for (let x = v; x < target; x++) need += needFor(x); need -= pl.progress[sub.id] ?? 0; }
+    const per = pl.specialty === sub.id ? 1.5 : 1; // 加练一节的训练进度（特长 ×1.5）
+    return { id: sub.id, en: sub.en, zh: sub.zh, grade, pts: v, left: target === null ? 0 : Math.max(1, Math.ceil(need / per)), waitDays: 0 };
+  });
+}
+
 export function loadGrades(): GradeView[] {
+  const fresh = loadNewGrades();
+  if (fresh) return fresh;
   const s = ensure();
   const now = Date.now();
   return SUBJECTS.map(sub => {
@@ -478,7 +501,9 @@ export function starroadTick(notify: (msg: string) => void): void {
     void assignHomework(sub, mon);
   }
   save(s);
-  for (const m of msgs) notify(m);
+  // 新档：等级按新数值换算，旧的升档/退档提醒不发（会跟成绩单对不上）
+  const fresh = Boolean(kvGet("idol_roster_v1"));
+  for (const m of msgs) if (!(fresh && m.startsWith("🌠 星路："))) notify(m);
   if (firstSkips.length) void onSkipped(firstSkips, s);
 }
 

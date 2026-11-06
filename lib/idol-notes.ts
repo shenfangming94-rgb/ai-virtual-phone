@@ -5,8 +5,8 @@
 
 import { kvGet, kvSet } from "./kv-db";
 
-export type NoteApp = "kakao" | "naver" | "reminders" | "clock" | "mail" | "stage" | "starroad" | "system";
-export type LockNote = { id: string; app: NoteApp; title: string; text: string; at: number; from?: string; seen?: boolean; /** 固定排在最上面（出道当天那一串） */ pin?: boolean; /** 场景 app：点了开这件事那一场 */ nodeId?: string };
+export type NoteApp = "kakao" | "naver" | "reminders" | "clock" | "mail" | "stage" | "starroad" | "system" | "theqoo";
+export type LockNote = { id: string; app: NoteApp; title: string; text: string; at: number; from?: string; seen?: boolean; /** 固定排在最上面（出道当天那一串） */ pin?: boolean; /** 场景 app：点了开这件事那一场 */ nodeId?: string; postId?: string };
 
 const KEY = "idol_lock_notes_v1";
 export const LOCK_NOTES_EVENT = "idol-lock-notes-changed";
@@ -19,6 +19,7 @@ export const APP_LOOK: Record<NoteApp, { name: string; icon: string; bg: string;
   mail: { name: "邮件", icon: "✉", bg: "#1e88ff", fg: "#fff" },
   stage: { name: "此刻", icon: "◐", bg: "#2b2140", fg: "#f5c4dc" },
   starroad: { name: "星路", icon: "✦", bg: "#1c1c1e", fg: "#f7f7f6" },
+  theqoo: { name: "더쿠", icon: "Q", bg: "#326ba5", fg: "#fff" },
   system: { name: "通知", icon: "•", bg: "#8e8e93", fg: "#fff" },
 };
 

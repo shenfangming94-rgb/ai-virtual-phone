@@ -70,7 +70,7 @@ export function catalogue(now = Date.now()): {
     if (debut?.status === 'debuted' && debut.team && debut.debutAt && debut.debutAt <= now) {
         const name = debut.team.en || debut.team.ko;
         const existing = artists.find(g => g.name === name);
-        const own: Group = { ...existing, name, members: debut.members?.map(m => m.name), debut: new Date(debut.debutAt).getFullYear(), tier: existing?.tier || 'rookie', songs: [...(existing?.songs || [])] };
+        const own: Group = { ...existing, name, members: debut.members?.map(m => ({ name: m.name })), debut: new Date(debut.debutAt).getFullYear(), tier: existing?.tier || 'rookie', songs: [...(existing?.songs || [])] };
         if (debut.song && !own.songs!.some(s => s.title === debut.song))
             own.songs!.push({ title: debut.song, year: own.debut });
         if (existing)
@@ -102,7 +102,7 @@ export function catalogue(now = Date.now()): {
             const id = releaseId(g.name, song.title);
             if (releases.some(r => r.id === id))
                 continue;
-            releases.push({ id, title: song.title, artist: g.name, year: song.year || (exactAt ? new Date(exactAt).getFullYear() : undefined), at: own ? debut.debutAt : exactAt, album: song.album, albumId: song.album ? releaseId(g.name, 'album:' + song.album) : undefined, track: song.track, note: song.note, members: g.members || [], tier: g.tier, real: song.real === true || /现实歌曲|真实歌曲/.test(song.note || '') });
+            releases.push({ id, title: song.title, artist: g.name, year: song.year || (exactAt ? new Date(exactAt).getFullYear() : undefined), at: own ? debut.debutAt : exactAt, album: song.album, albumId: song.album ? releaseId(g.name, 'album:' + song.album) : undefined, track: song.track, note: song.note, members: (g.members ?? []).map(m => m.name), tier: g.tier, real: song.real === true || /现实歌曲|真实歌曲/.test(song.note || '') });
         }
     return { artists, releases };
 }

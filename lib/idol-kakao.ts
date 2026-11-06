@@ -18,11 +18,12 @@ import { createPerson, emptyProfile, fmtDay, getProfile, saveProfile, draftPerso
 import { companyOf, loadCareer, saveCareer, type CareerNode } from "./idol-career";
 import { simpleLLMCall } from "./api-helpers";
 import { loadTraineeCard } from "./trainee-card";
-import { seedCrowd } from "./idol-crowd";
+import { clearCrowd } from "./idol-crowd";
 import { debutNoticeTarget } from "./idol-debut";
 import { idolLanguageHint } from "./idol-language";
 
 const KEY = "idol_kakao_v1";
+export const KAKAO_NOTICE = "idol-kakao-notice";
 const MIN = 60e3;
 const HOUR = 60 * MIN;
 const KAKAO_BILINGUAL_RULE = "每句先用角色应说的语言写原文（韩国日常对话默认韩语），再写 ` | ` 和对应的简体中文翻译；不能只写中文，也不要把两种语言混在原文里。";
@@ -36,12 +37,14 @@ type KakaoState = {
   teacherId?: string;
   /** 已经在群里通知过的节点 */
   noticed: string[];
+  /** 已送达的公司绯闻谈话私信，防场景重开重复发送 */
+  scandalNotices?: string[];
 };
 
 function load(): KakaoState {
   try {
     const raw = JSON.parse(kvGet(KEY) || "null") as KakaoState | null;
-    if (raw) return { ...raw, incoming: raw.incoming ?? [], noticed: raw.noticed ?? [] };
+    if (raw) return { ...raw, incoming: raw.incoming ?? [], noticed: raw.noticed ?? [], scandalNotices: raw.scandalNotices ?? [] };
   } catch { /* 坏数据当新的 */ }
   return { incoming: [], noticed: [] };
 }
@@ -68,6 +71,33 @@ export function myKakaoId(): string {
 export function setMyKakaoId(id: string): void {
   const clean = id.trim();
   if (clean) save({ ...load(), myId: clean });
+}
+
+/** Underground-rumour story hook: deliver the already-scheduled company meeting through the real KKT chat. */
+export function sendCompanyScandalNotice(eventId: string): Promise<boolean> {
+  return (async () => {
+    if (!eventId) return false;
+    const state = load();
+    if (state.scandalNotices?.includes(eventId)) return true;
+    let teacher = state.teacherId ? loadCharacters().find(c => c.id === state.teacherId) : undefined;
+    // 兜底：室长是固定角色，老档/异常档没有就补建一个再发，不静默跳过
+    if (!teacher) {
+      const career = loadCareer();
+      const c = companyOf(career.companyId);
+      if (!c) return false;
+      teacher = await makeTeacher(c.name);
+      save({ ...load(), teacherId: teacher.id });
+    }
+    if (!isKakaoFriend(teacher.id)) addChatContact(teacher.id);
+    const session = createOrGetSession(teacher.id);
+    const when = new Date().toLocaleString("ko-KR", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit", hour12: false });
+    const content = `회사에서 온라인에 퍼진 소문의 경위를 확인하고 싶어 합니다. 오늘 ${when} 회사에서 담당자와 이야기해 주세요. | 公司想了解网上正在流传的传闻，请你今天 ${when} 到公司和负责人谈一谈。`;
+    pushChatMessage({ sessionId: session.id, role: "assistant", content, senderCharacterId: teacher.id, senderName: teacher.name, status: "sent" });
+    const latest = load();
+    save({ ...latest, scandalNotices: [...new Set([...(latest.scandalNotices ?? []), eventId])] });
+    if (typeof window !== "undefined") window.dispatchEvent(new CustomEvent(KAKAO_NOTICE, { detail: { from: teacher.name, text: `公司想了解网上正在流传的传闻，请你今天 ${when} 到公司和负责人谈一谈。` } }));
+    return true;
+  })();
 }
 
 export function isKakaoFriend(charId: string): boolean {
@@ -300,13 +330,18 @@ let groupBusy = false;
 export async function ensureTraineeGroup(present: Character[], notify?: (msg: string) => void): Promise<void> {
   const s = load();
   if (groupBusy) return;
+  // 名册里的 39 名同期（群成员就是她们 + 她，不要路人）
+  let rosterIds: string[] = [];
+  try { rosterIds = ((JSON.parse(kvGet("idol_roster_v1") || "null") as { npcs?: { charId?: string }[] } | null)?.npcs ?? []).map(n => n.charId).filter((id): id is string => Boolean(id)); } catch { /* 旧档没有名册 */ }
   if (s.groupId && loadChatSessions().some(x => x.id === s.groupId)) {
-    // 旧存档：室友当初没进群，补进去
+    // 旧档/旧群：把 39 名同期补进群，清掉路人（转正过的保留）
     const rm = loadCareer().roommates ?? [];
     const sessions = loadChatSessions();
     const g = sessions.find(x => x.id === s.groupId)!;
-    const missing = rm.filter(id => !(g.participantIds ?? []).includes(id));
+    const have = new Set(g.participantIds ?? []);
+    const missing = [...rm, ...rosterIds].filter(id => !have.has(id));
     if (missing.length) saveChatSessions(sessions.map(x => x.id === g.id ? { ...x, participantIds: [...(x.participantIds ?? []), ...missing] } : x));
+    clearCrowd(s.groupId);
     return;
   }
   const career = loadCareer();
@@ -325,12 +360,11 @@ export async function ensureTraineeGroup(present: Character[], notify?: (msg: st
       const unmet = roommates.filter(r => !present.some(p => p.id === r.id)).map(r => r.name);
       await teacherAddsHer(teacher, c.name, name, unmet);
     }
-    const memberIds = [...new Set([teacher.id, ...mates.map(m => m.id), ...roommates.map(m => m.id)])];
+    const memberIds = [...new Set([teacher.id, ...rosterIds, ...mates.map(m => m.id), ...roommates.map(m => m.id)])];
     const session = createGroupSession(name, memberIds);
     saveChatSessions(loadChatSessions().map(x => x.id === session.id ? { ...x, groupOwnerId: teacher.id } : x));
     const userName = resolveUserIdentity()?.name || "她";
     pushChatMessage({ sessionId: session.id, role: "system", content: `${teacher.name}邀请${userName}加入了群聊「${name}」`, status: "sent" });
-    seedCrowd(session.id, 30 + Math.floor(Math.random() * 30), [teacher.name, ...mates.map(m => m.name), ...roommates.map(m => m.name)]);
     save({ ...load(), groupId: session.id, teacherId: teacher.id });
     notify?.(`💬 KakaoTalk：${teacher.name} 把你拉进了群「${name}」`);
   } finally {
@@ -431,15 +465,4 @@ export function kakaoTick(notify: (msg: string) => void): void {
     }
     void ensureTraineeGroup([]);
   }
-  const teacher = s.teacherId ? loadCharacters().find(c => c.id === s.teacherId) : undefined;
-  if (!s.groupId || !teacher || !loadChatSessions().some(x => x.id === s.groupId)) return;
-  const next = career.nodes.find(n => n.status === "pending" && n.kind !== "first_day" && n.kind !== "debut" && !s.noticed.includes(n.id)
-    && now >= n.dueAt - 20 * HOUR && now < n.dueAt);
-  if (!next) return;
-  tickBusy = true;
-  save({ ...s, noticed: [...s.noticed, next.id] });
-  void teacherNotice(teacher, next).then(text => {
-    pushChatMessage({ sessionId: s.groupId!, role: "assistant", content: text, senderCharacterId: teacher.id, senderName: teacher.name, status: "sent" });
-    notify(`💬 ${teacher.name}：${text}`);
-  }).finally(() => { tickBusy = false; });
 }

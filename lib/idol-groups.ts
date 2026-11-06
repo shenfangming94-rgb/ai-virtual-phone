@@ -8,25 +8,32 @@
 
 import { kvGet, kvSet } from "./kv-db";
 import { COMPANIES, companyOf } from "./idol-career";
+import { FIXED_GROUPS } from "./idol-fixed-groups";
+
+export type GroupMember = { name: string; ko?: string; position?: string };
 
 export type Group = {
   name: string;
+  /** 韩文团名 */
+  ko?: string;
   companyId?: string;
   kind?: string;
   size?: number;
   debut?: number;
+  /** 有具体月份的出道月（1～12） */
+  debutMonth?: number;
   style?: string;
   fandom?: string;
   recent?: string;
-  members?: string[];
+  members?: GroupMember[];
   /** 名气档位：第一次出现时 AI 说一句，之后定死（数字的规矩在 idol-scale.ts） */
   tier?: "top" | "mid" | "small" | "rookie";
   songs?: { title: string; year?: number; note?: string;
     /** 已知发行资料；Melon 只读，不根据搜索改写。 */
     album?: string; releasedAt?: string; track?: number; real?: boolean;
   }[];
-  /** 第一次是在哪写出来的 */
-  from?: "site" | "almanac" | "search";
+  /** 第一次是在哪写出来的（fixed = 她的定稿名单） */
+  from?: "site" | "almanac" | "search" | "fixed";
   at?: number;
 };
 
@@ -34,8 +41,42 @@ const KEY = "idol_groups_v1";
 export const GROUPS_EVENT = "idol-groups-changed";
 const keyOf = (name: string) => name.trim().toLowerCase();
 
+/** 老数据里成员是纯名字数组，统一成对象 */
+function normalizeMembers(members: unknown): GroupMember[] {
+  if (!Array.isArray(members)) return [];
+  return members.map(m => (typeof m === "string" ? { name: m } : { name: String((m as GroupMember)?.name ?? ""), ...(typeof (m as GroupMember)?.ko === "string" ? { ko: (m as GroupMember).ko } : {}), ...(typeof (m as GroupMember)?.position === "string" ? { position: (m as GroupMember).position } : {}) })).filter(m => m.name);
+}
+
+/** 新档开局：把她和 GPT 定稿的 18 个团写进名册（AI 只能读不能改） */
+function seedFixedGroups(): Record<string, Group> {
+  const Y = new Date().getFullYear();
+  const out: Record<string, Group> = {};
+  for (const s of FIXED_GROUPS) {
+    out[keyOf(s.name)] = {
+      name: s.name, ko: s.ko, companyId: s.companyId, kind: s.kind,
+      size: s.members.length, debut: Y + s.debutY,
+      ...(s.debutM ? { debutMonth: s.debutM } : {}),
+      style: s.style, tier: s.tier,
+      members: s.members.map(m => ({ ...m })),
+      from: "fixed",
+      at: Date.now(),
+    };
+  }
+  save(out);
+  return out;
+}
+
 export function loadGroups(): Record<string, Group> {
-  try { return (JSON.parse(kvGet(KEY) || "null") as Record<string, Group> | null) ?? migrate(); } catch { return {}; }
+  try {
+    const raw = JSON.parse(kvGet(KEY) || "null") as Record<string, Group> | null;
+    if (raw) {
+      for (const g of Object.values(raw)) g.members = normalizeMembers(g.members);
+      return raw;
+    }
+  } catch { /* 落盘坏了就重建 */ }
+  const migrated = migrate();
+  if (Object.keys(migrated).length) return migrated;
+  return seedFixedGroups();
 }
 function save(g: Record<string, Group>) {
   kvSet(KEY, JSON.stringify(g));
@@ -63,7 +104,7 @@ export function upsertGroups(list: Partial<Group>[], from: Group["from"], compan
     const name = String(raw?.name || "").trim();
     if (!name) continue;
     const k = keyOf(name);
-    const incoming: Group = { ...raw, name, companyId: raw.companyId || companyId } as Group;
+    const incoming: Group = { ...raw, name, companyId: raw.companyId || companyId, members: normalizeMembers(raw.members) } as Group;
     const old = all[k];
     if (!old) { all[k] = { ...incoming, from, at: Date.now() }; changed = true; continue; }
     if (old.companyId && incoming.companyId && old.companyId !== incoming.companyId) continue;
@@ -94,8 +135,10 @@ export function findGroup(q: string): Group | undefined {
 /** 一个团一行，给 AI 看 */
 export function groupLine(g: Group): string {
   const c = companyOf(g.companyId)?.name;
-  const bits = [c, g.kind, g.debut ? `${g.debut}年出道` : "", g.members?.length ? `成员：${g.members.join("、")}` : "", g.fandom ? `粉丝名 ${g.fandom}` : "", g.style].filter(Boolean);
-  return `${g.name}（${bits.join("；")}）`;
+  const debutText = g.debut ? `${g.debut}年${g.debutMonth ? `${g.debutMonth}月` : ""}出道` : "";
+  const membersText = (g.members ?? []).length ? `成员：${(g.members ?? []).map(m => `${m.name}${m.position ? `（${m.position}）` : ""}`).join("、")}` : "";
+  const bits = [c, g.kind, debutText, membersText, g.fandom ? `粉丝名 ${g.fandom}` : "", g.style].filter(Boolean);
+  return `${g.name}${g.ko ? ` ${g.ko}` : ""}（${bits.join("；")}）`;
 }
 
 /** 给各处提示词：已经有的团，必须照着用 */

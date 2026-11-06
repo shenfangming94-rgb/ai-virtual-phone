@@ -762,16 +762,25 @@ export function StoryApp({ onClose }: StoryAppProps) {
   // 星路里点「去演这场」：开一场带节点的戏
   useEffect(() => {
     if (!ready) return;
-    const open = () => {
+    let openingScene = false;
+    const open = async () => {
+      if (openingScene) return;
       const pending = takePendingScene();
       if (!pending) return;
-      const { groupId, session } = createWorldScene(pending.place, pending.premise, [], pending.nodeId);
-      setSceneHint(false);
-      setActiveGroupId(groupId);
-      setActiveCharacterId(WORLD_CHAR_ID);
-      activateStorySession(session);
+      openingScene = true;
+      try {
+        const { groupId, session } = await createWorldScene(pending.place, pending.premise, [], pending.nodeId);
+        setSceneHint(false);
+        setActiveGroupId(groupId);
+        setActiveCharacterId(WORLD_CHAR_ID);
+        activateStorySession(session);
+      } catch (error) {
+        showVoiceNotice(error instanceof Error ? error.message : "场景没能打开");
+      } finally {
+        openingScene = false;
+      }
     };
-    open();
+    void open();
     window.addEventListener(OPEN_SCENE_EVENT, open);
     return () => window.removeEventListener(OPEN_SCENE_EVENT, open);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -2292,13 +2301,17 @@ export function StoryApp({ onClose }: StoryAppProps) {
         };
         reader.readAsDataURL(file);
       }} />
-      {sceneNewOpen ? <StorySceneNewDialog onClose={() => setSceneNewOpen(false)} onStart={(place, premise, ids) => {
-        const { groupId, session } = createWorldScene(place, premise, ids);
-        setSceneNewOpen(false);
-        setSceneHint(false);
-        setActiveGroupId(groupId);
-        setActiveCharacterId(WORLD_CHAR_ID);
-        activateStorySession(session);
+      {sceneNewOpen ? <StorySceneNewDialog onClose={() => setSceneNewOpen(false)} onStart={async (place, premise, ids) => {
+        try {
+          const { groupId, session } = await createWorldScene(place, premise, ids);
+          setSceneNewOpen(false);
+          setSceneHint(false);
+          setActiveGroupId(groupId);
+          setActiveCharacterId(WORLD_CHAR_ID);
+          activateStorySession(session);
+        } catch (error) {
+          showVoiceNotice(error instanceof Error ? error.message : "场景没能打开");
+        }
       }} /> : null}
       {sceneEnd && activeGroup ? (
         <div className="story-dialog-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget && sceneEnd === "ask") setSceneEnd(null); }}>

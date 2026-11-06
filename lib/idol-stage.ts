@@ -24,6 +24,7 @@ import { loadAllCharacters } from "./character-storage";
 import { classHappeningNow, markClassAttended, type Subject as StarSubject } from "./idol-starroad";
 import { CLASS_TEXT_KEYS, CLASS_TEXTS, pickClassText } from "./idol-class-texts";
 import { formatClassGain, settlePlayerClass } from "./idol-roster-live";
+import { takeRomanceSceneBeat as romanceSceneBeat, takeRomanceAfterScene, setDormSceneProbe } from "./idol-romance-live";
 import { apSlotOf } from "./idol-actionpoints";
 import { consumeAp } from "./idol-ap-live";
 import { setWorldTime } from "./world-clock";
@@ -372,7 +373,7 @@ export function worldVnSession(): VnSession {
 }
 
 /** 开一场：新的一章 + 记下时间地点。不写开场，等她说第一句 */
-export function startStageScene(opts: { placeKey: string; placeName?: string; meetIds?: string[]; avoid?: string[]; nodeId?: string; premise?: string; taken?: StageScene["taken"] }): { chapterIndex: number; scene: StageScene } | null {
+export function startStageScene(opts: { placeKey: string; placeName?: string; meetIds?: string[]; avoid?: string[]; nodeId?: string; premise?: string; taken?: StageScene["taken"]; side?: boolean }): { chapterIndex: number; scene: StageScene } | null {
   ensureWorldCharacter();
   const session = worldVnSession();
   const node = opts.nodeId ? nodeById(opts.nodeId) : undefined;
@@ -387,6 +388,11 @@ export function startStageScene(opts: { placeKey: string; placeName?: string; me
   try {
     const scenePlot = takeScenePlot();
     if (scenePlot) { premise = premise ? `${premise}\n${scenePlot.premise}` : scenePlot.premise; plotAuto = true; }
+    else if (!opts.nodeId) {
+      // 情缘：出道危机「在哪儿碰见他」，她下一次随便去哪都接进来
+      const beat = romanceSceneBeat(place);
+      if (beat) { premise = premise ? `${premise}\n${beat.premise}` : beat.premise; plotAuto = true; if (!ids.includes(beat.charId)) ids.push(beat.charId); }
+    }
   } catch { /* 剧情池出错不影响开场景 */ }
   const scene: StageScene = {
     chapterId: ch.id, bg: opts.placeKey, ids,
@@ -396,6 +402,9 @@ export function startStageScene(opts: { placeKey: string; placeName?: string; me
     ...(ids.length === 1 ? { open: true } : {}),
     ...(opts.avoid?.length ? { avoid: opts.avoid } : {}),
     ...(plotAuto ? { plotAuto: true } : {}),
+    ...(opts.side ? { side: true } : {}),
+    // 排好的节点戏（情缘/主线/生活剧情）：她不知道这场会发生什么，AI 先写开场
+    ...(!plotAuto && node && premise ? { nodeAuto: node.kind === "date" ? "invite" as const : "happen" as const } : {}),
   };
   saveStageScene(scene);
   return { chapterIndex: ch.index, scene };
@@ -412,7 +421,7 @@ export function startNodeStage(node: CareerNode): { chapterIndex: number; scene:
   }
   const key = placeKeyFromText(node.place);
   // 写的就是地图上的地点（「江南·烤肉店」）：用地图的说法；不是的照它原来写的
-  return startStageScene({ placeKey: key, placeName: placeByKey(node.place.trim()) ? placeFullName(key) : node.place, nodeId: node.id, premise, ...(node.participantIds || node.inviterIds ? { meetIds: [...new Set([...(node.participantIds || []), ...(node.inviterIds || []), ...(node.fromId ? [node.fromId] : [])])] } : {}) });
+  return startStageScene({ placeKey: key, placeName: placeByKey(node.place.trim()) ? placeFullName(key) : node.place, nodeId: node.id, premise, ...(node.side ? { side: true } : {}), ...(node.participantIds || node.inviterIds ? { meetIds: [...new Set([...(node.participantIds || []), ...(node.inviterIds || []), ...(node.fromId ? [node.fromId] : [])])] } : {}) });
 }
 
 // ── 上课场景（上课大改，Flora 2026-11-05 定）：课表时间进公司 = 上课 ──
@@ -489,8 +498,10 @@ export async function settleClassScene(chapterIndex: number): Promise<{ lines: s
     } else {
       plotTick();
       const scenePlot = takeScenePlot(); // 初雪这种场景剧情优先
-      const plot = scenePlot ?? await takeClassPlot();
+      const romanceBeat = scenePlot ? null : (await import("./idol-romance-live")).takeRomanceClassBeat(); // 情缘：练习室指导/公司偶遇/出道危机
+      const plot = scenePlot ?? romanceBeat ?? await takeClassPlot();
       if (plot) plotPremise = plot.premise;
+      if (plot && "gain" in plot && plot.gain) lines.push(plot.gain as string);
     }
   } catch { /* 剧情池出错不影响下课 */ }
   if (plotPremise) {
@@ -648,7 +659,10 @@ export async function closeStageScene(chapterIndex: number): Promise<SceneCloseR
   const sc = getStageScene(chId!);
   if (sc?.side) saveStageScene({ ...sc, sideCounted: true });
   archiveChapter(worldVnSession().id, chapterIndex);
-  return res;
+  // 情缘：这场后面要接一场（失意之夜在宿舍、掉马他视角番外）
+  let next: string | null = null;
+  try { next = sc ? takeRomanceAfterScene(sc.place, Boolean(sc.side)) : null; } catch { /* 不挡收尾 */ }
+  return next ? { ...res, next } : res;
 }
 
 /** 开场时切成番外 / 切回来：番外不用掉「!」，开头只留她自己写的；返回要还回去（或重新用掉）的「!」 */
@@ -700,6 +714,8 @@ export function deleteStageScene(chapterIndex: number): void {
 }
 
 /** 还没结束的那几场（最近的在前） */
+setDormSceneProbe(() => { try { return openStageScenes().some(x => /宿舍/.test(x.scene.place) && !x.scene.side); } catch { return false; } });
+
 export function openStageScenes(): { chapterIndex: number; title: string; subtitle?: string; scene: StageScene }[] {
   const session = worldVnSession();
   return session.chapters

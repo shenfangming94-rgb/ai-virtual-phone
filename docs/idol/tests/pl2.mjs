@@ -66,19 +66,25 @@ ok(Boolean(bd), "生日排出来了", JSON.stringify(nodes));
 const bdNode = JSON.parse(await kvGet("idol_career_v1")).nodes.find(n => n.occasion === "plot" && n.title.includes("我的生日"));
 ok((bdNode?.premise ?? "").includes("不强制安排生日聚会"), "没有好朋友 → 走 C 分支(不强制聚会)", bdNode?.premise?.slice(0, 50));
 
-// 2. 樱花季（次年 3 月下旬，同一次跳时间里已经过了窗口，单独再跳一次）
-await setClock(new Date(year + 1, 2, 25, 9, 0, 0).getTime());
+// 2. 樱花季（次年 3 月下旬；新设计：场景式，开一场戏接进去）
+await setClock(new Date(year + 1, 2, 27, 14, 0, 0).getTime()); // 2027-03-27 周六
 await p.reload({ waitUntil: "networkidle2" }); await p.waitForFunction(() => window.__idolNew, { timeout: 240000, polling: 500 });
 await pump();
-nodes = await plotTitles();
-ok(nodes.some(n => n.title.includes("樱花季")), "樱花季排出来了", JSON.stringify(nodes));
+await p.evaluate(() => window.postMessage({ type: "OS_CMD", action: "open_app", appId: "vnmode" }, "*")); await sleep(2500);
+await p.evaluate(() => { const el = [...document.querySelectorAll(".stg-mpin, .stg-card")].find(e => (e.textContent ?? "").includes("汉江公园")); el?.click(); }); await sleep(1500);
+await p.evaluate(() => { const el = [...document.querySelectorAll("button")].find(e => e.textContent?.trim() === "进去"); el?.click(); }); await sleep(2500);
+let scenes2 = JSON.parse(await kvGet("idol_stage_scenes_v1") ?? "{}");
+ok(Object.values(scenes2).some(s => (s.premise ?? "").includes("樱花")), "樱花季接进了场景", Object.values(scenes2).map(s => s.premise?.slice(0, 15)));
 
-// 3. 暴雨（第一年 7 月下旬）
-await setClock(new Date(year, 6, 25, 9, 0, 0).getTime());
+// 3. 暴雨（第一年 7 月下旬；新设计：场景式，开一场戏接进去）
+await setClock(new Date(year, 6, 25, 14, 0, 0).getTime()); // 2026-07-25 周六
 await p.reload({ waitUntil: "networkidle2" }); await p.waitForFunction(() => window.__idolNew, { timeout: 240000, polling: 500 });
 await pump();
-nodes = await plotTitles();
-ok(nodes.some(n => n.title.includes("夏日暴雨")), "夏日暴雨排出来了", JSON.stringify(nodes));
+await p.evaluate(() => window.postMessage({ type: "OS_CMD", action: "open_app", appId: "vnmode" }, "*")); await sleep(2500);
+await p.evaluate(() => { const el = [...document.querySelectorAll(".stg-mpin, .stg-card")].find(e => (e.textContent ?? "").includes("汉江公园")); el?.click(); }); await sleep(1500);
+await p.evaluate(() => { const el = [...document.querySelectorAll("button")].find(e => e.textContent?.trim() === "进去"); el?.click(); }); await sleep(2500);
+scenes2 = JSON.parse(await kvGet("idol_stage_scenes_v1") ?? "{}");
+ok(Object.values(scenes2).some(s => (s.premise ?? "").includes("暴雨")), "夏日暴雨接进了场景", Object.values(scenes2).map(s => s.premise?.slice(0, 15)));
 
 // 4. 音乐节（第一年 9 月）
 await setClock(new Date(year, 8, 10, 9, 0, 0).getTime());
@@ -103,10 +109,10 @@ nodes = await plotTitles();
 ok(nodes.some(n => n.title.includes("放长假")), "春节放了长假剧情", JSON.stringify(nodes));
 
 // 7. 初雪：种一个「今天初雪」的天气记录 → 开一场自由场景 → 开场就是初雪剧情
-const now = new Date(year, 10, 20, 14, 0, 0); // 冬天，无课时间挑个下午——先确保没课再进
+const now = new Date(year, 10, 21, 14, 0, 0); // 冬天，周六下午——先确保没课再进
 await setClock(now.getTime());
 const season = year;
-await kvPut(`idol_weather_first_snow_v1:${season}`, { through: `${year}-11-20`, at: new Date(year, 10, 20, 13, 0, 0).getTime() });
+await kvPut(`idol_weather_first_snow_v1:${season}`, { through: `${year}-11-21`, at: new Date(year, 10, 21, 13, 0, 0).getTime() });
 await p.reload({ waitUntil: "networkidle2" }); await p.waitForFunction(() => window.__idolNew, { timeout: 240000, polling: 500 });
 await pump();
 const records = await p.evaluate(() => window.__idolNew?.plotRecords?.());

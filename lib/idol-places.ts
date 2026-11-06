@@ -15,6 +15,16 @@ export const PLACE_GROUPS: PlaceGroup[] = [
   { id: "debut", label: "出道后", places: ["打歌节目后台", "签售会场", "广播电台"], afterDebut: true },
 ];
 
+/** 地点自带的世界常识：在这里开戏时告诉 AI（不单独做地点） */
+export const PLACE_LORE: Record<string, string> = {
+  梨泰院: "梨泰院有一家叫 SIDE B 的地下音乐酒吧，常有乐队驻唱，圈里人和常来这一带玩的人都知道这家店。",
+};
+
+export function placeLore(place?: string): string {
+  if (!place) return "";
+  return Object.entries(PLACE_LORE).filter(([k]) => place.includes(k)).map(([, v]) => v).join("\n");
+}
+
 /** 地点的完整说法：公司和宿舍前面带上公司名 */
 export function fullPlaceName(groupId: string, place: string): string {
   const c = companyOf(loadCareer().companyId);

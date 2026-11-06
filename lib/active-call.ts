@@ -52,6 +52,6 @@ export function endActiveCall(): void {
     current = null;
     emit();
     if (typeof window !== "undefined") {
-        window.dispatchEvent(new CustomEvent(ACTIVE_CALL_ENDED_EVENT, { detail: { sessionId: ended.sessionId, kind: ended.kind } }));
+        window.dispatchEvent(new CustomEvent(ACTIVE_CALL_ENDED_EVENT, { detail: { sessionId: ended.sessionId, kind: ended.kind, characterId: ended.characterId, seconds: Math.round((Date.now() - ended.startedAt) / 1000) } }));
     }
 }

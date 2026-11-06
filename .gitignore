@@ -37,3 +37,6 @@ previews/
 .next-ins-comments-check/
 .next-relations-check/
 .DS_Store
+
+# 名册 QA 构建缓存（别提交）
+.next-yearbook-review/

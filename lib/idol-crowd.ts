@@ -135,6 +135,15 @@ export function removeCrowd(sessionId: string, crowdId: string): boolean {
   return true;
 }
 
+/** 清空一个群的路人（转正过的保留，历史消息里还要按名字认人） */
+export function clearCrowd(sessionId: string): void {
+  const all = loadAll();
+  const list = all[sessionId] ?? [];
+  if (!list.length) return;
+  all[sessionId] = list.filter(m => m.promotedTo);
+  saveAll(all);
+}
+
 /** 消息上记的是路人 id：转正过的换成真角色 id */
 export function resolveSenderId(id: string | undefined): string | undefined {
   if (!isCrowdId(id)) return id;

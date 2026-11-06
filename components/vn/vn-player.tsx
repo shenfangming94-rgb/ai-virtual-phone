@@ -20,13 +20,14 @@ import {
   loadVnConfig,
 } from "@/lib/vn-storage";
 import type { VnFrameAudio, VnMessage } from "@/lib/vn-types";
+import type { StreamDanmaku } from "@/lib/vn-types";
 import { generateVnCompletion } from "@/lib/vn-engine";
 import { parseVnResponse, packageUserInput, packageMultiActions } from "@/lib/vn-parser";
 import { resolveVnAssetMap, loadVnScenes, getVnSceneLayout, getVnSpriteLayout } from "@/lib/vn-asset-storage";
 import { resolveUserIdentity } from "@/lib/settings-storage";
 import type { VnFrame, VnOptions, VnBeat } from "@/lib/vn-types";
 import { splitBilingualText } from "@/lib/bilingual-text";
-import { loadStageSettings, placeByKey, saveStageSettings, addBackground, addCustomPlace, allMaps, pickBackground, placeBackgrounds, resolveStageBgMap, thumbsOf, chapterIdOf, chapterSummaries, closeStageScene, closeStageSideOnly, setStageSide, editSummary, getStageScene, mergeSummaries, placeLocked, setBigSummary, writeSummaryFor, settleClassScene } from "@/lib/idol-stage";
+import { loadStageSettings, placeByKey, saveStageSettings, addBackground, addCustomPlace, allMaps, pickBackground, placeBackgrounds, resolveStageBgMap, thumbsOf, chapterIdOf, chapterSummaries, closeStageScene, closeStageSideOnly, requestStageForNode, setStageSide, editSummary, getStageScene, mergeSummaries, placeLocked, setBigSummary, writeSummaryFor, settleClassScene } from "@/lib/idol-stage";
 import { jumpWorld } from "@/lib/idol-reminders";
 import { fmtWorld } from "@/lib/idol-scenes";
 import { subscribeWorldClock } from "@/lib/world-clock";
@@ -36,6 +37,7 @@ import { StageMusicPanel } from "./stage-music-panel";
 import { loadBgmMuted, saveBgmMuted, useStageBgm } from "./stage-bgm";
 import { forgetRetryHint, loadRetryHints, rememberRetryHint } from "@/lib/reply-versions";
 import { playAudioBlobViaMediaElement, resolveVoiceConfig, synthesizeSpeech, unlockAudioPlayback } from "@/lib/tts-service";
+import { nodeById } from "@/lib/idol-career";
 
 interface VnPlayerProps {
   characterId: string;
@@ -58,6 +60,7 @@ function tagFramesWithMessage(frames: VnFrame[], message: VnMessage): VnFrame[] 
     sourceRole: message.role,
     sourceCreatedAt: message.createdAt,
     voiceAudio: message.frameAudio?.[index],
+    ...(message.streamDanmaku?.length ? { streamDanmaku: message.streamDanmaku } : {}),
   }));
 }
 
@@ -105,6 +108,7 @@ async function dataUrlToBlob(dataUrl: string): Promise<Blob> {
 export function VnPlayer({ characterId, chapterIndex, onClose, onChapterEnd, vnTheme, stage, onStageReplay }: VnPlayerProps) {
   const [sceneVer, setSceneVer] = useState(0);
   const stageScene = useMemo(() => (stage ? getStageScene(chapterIdOf(chapterIndex) ?? "") : null), [stage, chapterIndex, sceneVer]);
+  const isStreamDuoScene = Boolean(stage && stageScene?.nodeId && nodeById(stageScene.nodeId)?.note === "情缘节点：stream_duo");
   // 番外：开场时在输入框那里选；演完问要不要计入主线
   const [sideOn, setSideOn] = useState(() => Boolean(stageScene?.side));
   const [sideOnlyEnd, setSideOnlyEnd] = useState(false);
@@ -120,6 +124,8 @@ export function VnPlayer({ characterId, chapterIndex, onClose, onChapterEnd, vnT
   const [stageOpening, setStageOpening] = useState(false);
   const [stageEnd, setStageEnd] = useState<null | "working" | SceneCloseResult | { error: string }>(null);
   const [stageToast, setStageToast] = useState("");
+  const [streamOverlayMinimized, setStreamOverlayMinimized] = useState(false);
+  useEffect(() => setStreamOverlayMinimized(false), [stageScene?.nodeId]);
   const [, setWeatherVersion] = useState(0);
   useEffect(() => { if (!stage) return; const update = () => setWeatherVersion(v => v + 1); window.addEventListener("idol-weather-updated", update); return () => window.removeEventListener("idol-weather-updated", update); }, [stage]);
   const [musicOpen, setMusicOpen] = useState(false);
@@ -388,7 +394,7 @@ export function VnPlayer({ characterId, chapterIndex, onClose, onChapterEnd, vnT
     setStageToast(msg);
     window.setTimeout(() => setStageToast(t => (t === msg ? "" : t)), 3600);
   }, []);
-  const handleStageResult = useCallback((idol: { added: string[]; notes: string[]; closing: boolean } | undefined) => {
+  const handleStageResult = useCallback((idol: { added: string[]; notes: string[]; closing: boolean; danmaku?: StreamDanmaku[] } | undefined) => {
     if (!idol) return;
     const parts = [...idol.notes];
     if (idol.added.length) parts.push(`认识了：${idol.added.join("、")}`);
@@ -483,6 +489,9 @@ export function VnPlayer({ characterId, chapterIndex, onClose, onChapterEnd, vnT
 
   // ── Replay advance ──
   const replayFrame = isReplaying ? replayFrames[replayIdx] : null;
+  const streamDanmaku = isStreamDuoScene && !stageEnd && (!stageScene?.ended || isReplaying)
+    ? (isReplaying ? replayFrame?.streamDanmaku : frame?.streamDanmaku) ?? []
+    : [];
 
   const advanceReplay = useCallback(() => {
     if (!isReplaying) return;
@@ -676,6 +685,7 @@ export function VnPlayer({ characterId, chapterIndex, onClose, onChapterEnd, vnT
         rawContent: result.rawText,
         chapterIndex,
         ...(result.summary ? { summary: result.summary } : {}),
+        ...(result.idol?.danmaku?.length ? { streamDanmaku: result.idol.danmaku } : {}),
       });
 
       // Update start message ID if needed
@@ -804,7 +814,7 @@ export function VnPlayer({ characterId, chapterIndex, onClose, onChapterEnd, vnT
       const allMessages = loadVnMessages(session.id);
       const result = await generateVnCompletion(characterId, allMessages);
       handleStageResult(result.idol);
-      const aiMsg = pushVnMessage({ sessionId: session.id, role: "assistant", rawContent: result.rawText, chapterIndex, ...(result.summary ? { summary: result.summary } : {}) });
+      const aiMsg = pushVnMessage({ sessionId: session.id, role: "assistant", rawContent: result.rawText, chapterIndex, ...(result.summary ? { summary: result.summary } : {}), ...(result.idol?.danmaku?.length ? { streamDanmaku: result.idol.danmaku } : {}) });
       updateChapterStartMessageId(session.id, chapterIndex, userMsg.id);
 
       const aiFrames = tagFramesWithMessage(result.frames, aiMsg);
@@ -931,7 +941,7 @@ export function VnPlayer({ characterId, chapterIndex, onClose, onChapterEnd, vnT
       const allMessages = loadVnMessages(session.id);
       const result = await generateVnCompletion(characterId, allMessages, { retryHint: hint });
       handleStageResult(result.idol);
-      const aiMsg = pushVnMessage({ sessionId: session.id, role: "assistant", rawContent: result.rawText, chapterIndex, ...(result.summary ? { summary: result.summary } : {}) });
+      const aiMsg = pushVnMessage({ sessionId: session.id, role: "assistant", rawContent: result.rawText, chapterIndex, ...(result.summary ? { summary: result.summary } : {}), ...(result.idol?.danmaku?.length ? { streamDanmaku: result.idol.danmaku } : {}) });
       rebuildFrames();
       // Play new AI frames
       const newMsgs = loadVnMessagesForChapter(session.id, chapterIndex);
@@ -1097,6 +1107,15 @@ export function VnPlayer({ characterId, chapterIndex, onClose, onChapterEnd, vnT
 
       {/* ── Atmospheric Overlay ── */}
       <div className="vn-atmosphere" />
+
+      {streamDanmaku.length > 0 ? (
+        <aside className={`vn-stream-overlay ${streamOverlayMinimized ? "is-minimized" : ""}`} onClick={event => event.stopPropagation()} aria-label="直播观众弹幕">
+          <div className="vn-stream-window">
+            <div className="vn-stream-head"><span><i /> LIVE · 弹幕</span><button type="button" onClick={() => setStreamOverlayMinimized(value => !value)} aria-label={streamOverlayMinimized ? "展开弹幕" : "最小化弹幕"}>{streamOverlayMinimized ? "+" : "−"}</button></div>
+            {!streamOverlayMinimized ? <div className="vn-stream-lines">{streamDanmaku.map((item, index) => <div className="vn-stream-line" style={{ animationDelay: `${index * 1.1}s` }} key={`${item.ko}-${index}`}><b>{item.ko}</b><small>{item.zh}</small></div>)}</div> : null}
+          </div>
+        </aside>
+      ) : null}
 
       {stage && musicOpen ? <StageMusicPanel onClose={() => setMusicOpen(false)} onPlay={() => { setBgmMuted(false); saveBgmMuted(false); }} /> : null}
 
@@ -1725,6 +1744,9 @@ export function VnPlayer({ characterId, chapterIndex, onClose, onChapterEnd, vnT
           if (!allFrames.length && stageScene.class?.preScene) { void handleSendAll(`开场：${stageScene.premise}`); return; }
           // 剧情池的场景剧情（初雪这种）：AI 直接开场
           if (!allFrames.length && stageScene.plotAuto) { void handleSendAll(`开场：${stageScene.premise}`); return; }
+          // 排好的节点戏：赴约写她到了、对方在等；事情找上她就先写现场
+          if (!allFrames.length && stageScene.nodeAuto === "invite") { void handleSendAll(`开场：她按约好的来到这里。先写她到了以后看到的场景和约她的人，不替她说话，写到该她开口的地方停。这一场：${stageScene.premise}`); return; }
+          if (!allFrames.length && stageScene.nodeAuto === "happen") { void handleSendAll(`开场：先写现场正在发生的事，只写开头这一段，写到她需要反应的地方停。这一场：${stageScene.premise}`); return; }
           // 带着「!」进来的：别人的事正在发生，AI 先把现场写出来
           if (!allFrames.length && !sideOn && (stageScene.taken?.fate || stageScene.taken?.life)) void handleSendAll("开场：照这一场正在发生的事，先把现场写出来，写到一个她可以决定要不要参与的地方停");
         }}>
@@ -1732,7 +1754,7 @@ export function VnPlayer({ characterId, chapterIndex, onClose, onChapterEnd, vnT
           <div className="vn-stage-open-place">{stageScene.place}</div>
           {worldWeatherLabel(stageScene.startAt) ? <div className="vn-stage-open-weather">{worldWeatherLabel(stageScene.startAt)}</div> : null}
           {stageScene.nodeId ? <div className="vn-stage-open-title">{session.chapters[chapterIndex]?.title}</div> : null}
-          <div className="vn-stage-open-hint">{!allFrames.length && (stageScene.class?.preScene || stageScene.plotAuto) ? "点一下，这场戏开始了" : !allFrames.length && !sideOn && (stageScene.taken?.fate || stageScene.taken?.life) ? "点一下，看看发生了什么" : "点一下，说你的第一句"}</div>
+          <div className="vn-stage-open-hint">{!allFrames.length && (stageScene.class?.preScene || stageScene.plotAuto || stageScene.nodeAuto) ? "点一下，这场戏开始了" : !allFrames.length && !sideOn && (stageScene.taken?.fate || stageScene.taken?.life) ? "点一下，看看发生了什么" : "点一下，说你的第一句"}</div>
           {/* 带「!」进来的会自动开场，番外得在开场前选：开场卡上也放一个 */}
           {!allFrames.length && !stageScene.nodeId && (stageScene.taken?.fate || stageScene.taken?.life) ? (
             <button type="button" className="vn-mode-btn vn-stage-open-side" data-active={sideOn ? "true" : undefined} onClick={(e) => { e.stopPropagation(); toggleSide(); }}>番外</button>
@@ -1771,11 +1793,17 @@ export function VnPlayer({ characterId, chapterIndex, onClose, onChapterEnd, vnT
                 finally { setNoteBusy(""); }
               }}>{noteBusy || "把小总结合成一段大总结"}</button> : null}
               {onStageReplay ? <button className="vn-end-btn vn-stage-merge" onClick={onStageReplay}>重播这一场</button> : null}
+              {stageEnd.next ? (
+              <div className="vn-stage-jumps">
+                <button className="vn-end-btn" onClick={() => { const next = stageEnd.next!; onChapterEnd(); requestStageForNode(next); }}>还没完 →</button>
+              </div>
+              ) : (
               <div className="vn-stage-jumps">
                 <button className="vn-end-btn" onClick={() => { onChapterEnd(); }}>就这样</button>
                 <button className="vn-end-btn" onClick={() => { const msg = jumpWorld(Date.now() + 3600e3, { activeNodeId: stageScene?.nodeId }); if (msg) showStageToast(msg); onChapterEnd(); }}>过 1 小时</button>
                 <button className="vn-end-btn" onClick={() => { const d = new Date(); const msg = jumpWorld(new Date(d.getFullYear(), d.getMonth(), d.getDate() + 1, 8, 0, 0).getTime(), { activeNodeId: stageScene?.nodeId }); if (msg) showStageToast(msg); onChapterEnd(); }}>第二天早上</button>
               </div>
+              )}
             </>
           )}
           <div className="vn-end-line" />

@@ -134,11 +134,11 @@ export function saveCareer(c: Career): void {
     return next;
   });
   if (announce.length) {
-    // 按发信人分批，不能把不同人的邀请冒充成同一个人的通知。
-    for (const sender of new Set(announce.map(n => n.fromId || n.from || n.companyId || "system"))) {
-      const batch = announce.filter(n => (n.fromId || n.from || n.companyId || "system") === sender);
-      const receipt = announceSchedule(batch);
-      batch.forEach(n => { n.notice = receipt; });
+    // 人物发的邀请（fromId/from 是具体的人）：不发「安排通知」盒子——他们各自会自然地在 KKT 上约她，
+    // 邀请卡片进提醒事项。公司安排（没有具体发信人）：室长在练习生群里自然说一句（AI 写），也不发盒子。
+    const companyBatches = announce.filter(n => !n.fromId);
+    if (companyBatches.length) {
+      void import("./idol-kakao").then(m => m.queueTeacherScheduleNotice?.(companyBatches)).catch(() => undefined);
     }
   }
   for (const n of changes) n.notice = announceSchedule([n], n.status === "leave" || n.status === "declined" ? "取消" : "变更");

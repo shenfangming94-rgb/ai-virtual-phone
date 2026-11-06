@@ -10,7 +10,7 @@
 import { kvGet, kvSet } from "./kv-db";
 import { loadAllCharacters, loadCharacters, HIDDEN_WORLD_CHAR_ID } from "./character-storage";
 import type { Character } from "./character-types";
-import { addChatContact, createGroupSession, createOrGetSession, loadChatContacts, loadChatSessions, pushChatMessage, saveChatSessions } from "./chat-storage";
+import { addChatContact, createGroupSession, createOrGetSession, loadChatContacts, loadChatMessages, loadChatSessions, pushChatMessage, saveChatSessions } from "./chat-storage";
 import { addFriendRequest, dispatchFriendRequestUpdated, loadFriendRequests, clearRequestsForCharacter } from "./friend-request-storage";
 import { PENDING_REPLY_PREFIX } from "./friend-request-engine";
 import { resolveUserIdentity, loadApiConfigs, loadBindingConfig, resolveBinding } from "./settings-storage";
@@ -370,6 +370,30 @@ export async function ensureTraineeGroup(present: Character[], notify?: (msg: st
   } finally {
     groupBusy = false;
   }
+}
+
+/** 公司新排的日程（主线大事等）：室长在练习生群里自然说一句（AI 写），不发「安排通知」盒子 */
+export function queueTeacherScheduleNotice(nodes: CareerNode[]): void {
+  if (!nodes.length) return;
+  void (async () => {
+    try {
+      const s = load();
+      const teacher = s.teacherId ? loadCharacters().find(c => c.id === s.teacherId) : undefined;
+      const group = s.groupId ? loadChatSessions().find(x => x.id === s.groupId && x.isGroup) : undefined;
+      if (!teacher || !group) return;
+      const when = (ms: number) => new Date(ms).toLocaleString("zh-CN", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit", hour12: false });
+      const lines = nodes.map(n => `「${n.title}」：${when(n.dueAt)}，${n.place || "公司"}`).join("；");
+      const res = await simpleLLMCall(chatConfig(), [
+        { role: "system", content: `你是${teacher.name}。${teacher.persona}${idolLanguageHint([{ id: teacher.id, name: teacher.name }])}\n\n公司的练习生日程里新安排了这些：${lines}。你在练习生 KakaoTalk 群里自然地说一句，像平时通知日程那样，不用逐条念，一两句带过，写清楚时间地点。日期照抄，不要说今天、明天、后天。${KAKAO_BILINGUAL_RULE}` },
+        { role: "user", content: "发消息。" },
+      ], { temperature: 0.8, label: "室长群通知" });
+      const text = res.content?.trim().replace(/^["「]|["」]$/g, "") || `新日程：${lines}，别迟到。`;
+      if (loadChatMessages(group.id).some(m => m.role === "assistant" && m.content === text)) return;
+      pushChatMessage({ sessionId: group.id, role: "assistant", content: text, senderCharacterId: teacher.id, senderName: teacher.name, status: "sent" });
+    } catch (error) {
+      console.warn("[idol-kakao] 室长群通知没发出去：", error);
+    }
+  })();
 }
 
 async function teacherNotice(teacher: Character, node: CareerNode): Promise<string> {

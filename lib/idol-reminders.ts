@@ -466,6 +466,10 @@ export function installIdolChatHooks(notify: (msg: string) => void): void {
     const parsed = actions.get(msg.id); actions.delete(msg.id);
     const session = loadChatSessions().find(s => s.id === msg.sessionId);
     const actor = session?.isGroup ? msg.senderCharacterId : session?.contactId;
+    // 情缘羁绊：他回她了 = 有来有回的 KKT 私聊 +1（日上限 2，引擎里限）
+    if (msg.role === "assistant" && actor && !session?.isGroup) {
+      try { void import("./idol-romance-live").then(m => m.recordKkt(actor)); } catch { /* 不影响聊天 */ }
+    }
     if (!parsed || !actor || proactive.has(actor)) return;
     applyInvitationActions(msg, parsed, { accept: id => { acceptInvite(id, "chat"); }, decline: id => { declineInvite(id, "chat"); }, notify });
   });

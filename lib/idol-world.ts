@@ -401,6 +401,8 @@ export async function closeSceneWith(host: SceneHost): Promise<SceneCloseResult>
       if (event) { next.events = [...p.events, { id: uid("ev"), at: meta.startAt, place: meta.place, text: event }]; recorded.push(c.name); }
       if (!p.withYou && item.impression) next.withYou = String(item.impression);
       saveProfile(next);
+      // 情缘羁绊：这场戏和线里的男主见了面（连续待一整天也只算这一次）
+      try { (await import("./idol-romance-live")).recordMeet(c.id); } catch { /* 情缘系统没接上不影响记账 */ }
       if (item.stay === "leave" || item.stay === "stay") nudgeLeave(c.id, item.stay === "leave" ? 1 : -1, String(item.stayWhy || event || `在${meta.place}`), meta.startAt);
     }
   }

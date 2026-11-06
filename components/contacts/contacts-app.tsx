@@ -4,7 +4,7 @@ import { compareFamilyContacts } from "@/lib/idol-family-data";
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { ChevronLeft, ChevronRight, Mail, MessageCircle, Pencil, Phone, Plus, Search, Sparkles, Trash2, Video, X } from "lucide-react";
+import { ChevronLeft, ChevronRight, Heart as HeartIcon, Mail, MessageCircle, Pencil, Phone, Plus, Search, Sparkles, Trash2, Video, X } from "lucide-react";
 import { fleshOut, myKakaoId, setMyKakaoId } from "@/lib/idol-kakao";
 
 import { loadCharacters, CHARACTERS_UPDATED_EVENT } from "@/lib/character-storage";
@@ -52,6 +52,8 @@ import { SavesPanel } from "@/components/settings/saves-settings";
 import { TraineeIdMini } from "@/components/opening/trainee-id-mini";
 import { FameCardBlock } from "./fame-card";
 import { loadUserIdentities, resolveUserIdentity, saveUserIdentities, USER_IDENTITIES_UPDATED_EVENT } from "@/lib/settings-storage";
+import { canFollow, followRoute, romanceState } from "@/lib/idol-romance-live";
+import { ROUTE_NODES } from "@/lib/idol-romance-lines";
 
 type Notice = ((message: string) => void) | undefined;
 type View =
@@ -448,9 +450,13 @@ function CardView({ data, id, onBack, onEdit, onNotice }: { data: Data; id: stri
   const [direction, setDirection] = useState("");
   const [busy, setBusy] = useState(false);
   const [peek, setPeek] = useState(false);
+  const [romVer, setRomVer] = useState(0);
   if (!char) return <div className="ct-page"><p className="ct-empty">这个人不在了</p></div>;
   const added = data.kakao.has(id);
   const idKnown = idVisible(p, added);
+  // 情缘关注：六类身份的人才显示按钮（按钮不标类型防剧透）；关注后这条线就锁他
+  const followable = canFollow(id);
+  const followed = Object.entries(romanceState().lines).find(([, l]) => l?.charId === id);
 
   const openChat = (call?: "voice" | "video") => {
     if (!added) {
@@ -511,6 +517,20 @@ function CardView({ data, id, onBack, onEdit, onNotice }: { data: Data; id: stri
           <button type="button" className="ct-glass-dark" onClick={() => openChat("video")}><Video size={22} /><span>视频</span></button>
           <button type="button" className="ct-glass-dark is-off" onClick={() => onNotice?.("邮件以后接邮箱 app")}><Mail size={22} /><span>邮件</span></button>
         </div>
+
+        {followable ? (
+          <div className="ct-actions" style={{ marginTop: 12 }}>
+            <button type="button" className="ct-glass-dark" onClick={() => {
+              const r = followRoute(id);
+              if (r.ok) { onNotice?.("关注了。这条线从现在开始。"); setRomVer(v => v + 1); } else onNotice?.(r.why);
+            }}><HeartIcon size={22} /><span>关注</span></button>
+          </div>
+        ) : followed ? (
+          <div className="ct-block">
+            <div className="ct-k">情缘</div>
+            <div className="ct-v">已关注 · 羁绊 {followed[1].bond} · 下一步：{ROUTE_NODES[followed[1].type].find(n => n.key === followed[1].nextNode)?.title ?? "都走完了"}</div>
+          </div>
+        ) : null}
 
         <div className="ct-block">
           <div className="ct-k"><span>KakaoTalk ID</span><span className={`ct-kakao ${added ? "on" : ""}`}>{added ? "已加" : "还没加"}</span></div>

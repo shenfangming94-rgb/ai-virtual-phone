@@ -38,8 +38,5 @@ previews/
 .next-relations-check/
 .DS_Store
 
-# 名册 QA 构建缓存（别提交）
-.next-yearbook-review/
-.next-danmaku-review/
-.next-theqoo-review/
-.next-char-world-audit/
+# 各类测试构建缓存（别提交，统一通配）
+.next-*/

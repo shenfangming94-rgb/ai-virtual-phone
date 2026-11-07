@@ -26,3 +26,5 @@
 .tq-app .meta{flex-wrap:wrap}
 .tq-preview{height:100dvh;width:100%;max-width:430px;margin:0 auto;--page-header-safe-top:0px;box-shadow:0 0 0 1px #ddd}
 .tq-preview-exit{max-width:430px;margin:60px auto;padding:24px;font-family:'PingFang SC',sans-serif;color:#4b5e73}
+
+.tq-delete{display:inline-block;margin-left:12px;border:0;background:none;color:#c0534a;font-size:11px;padding:6px 0}.tq-comment-del{margin-left:auto;border:0;background:none;color:#b9bec4;font-size:15px;padding:0 2px;line-height:1}.tq-comment-del:active{color:#c0534a}

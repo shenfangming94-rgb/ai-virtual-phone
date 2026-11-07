@@ -81,16 +81,18 @@ export async function requestForumDiscussion(
   finally { if (requestsInFlight.get(requestKey) === task) requestsInFlight.delete(requestKey); }
 }
 const WORLD_FILL_KEY = 'theqoo_world_fill_v1';
-const WORLD_FILL_GAP = 6 * 3600e3;
+const WORLD_FILL_GAP = 30 * 60e3;
 let worldFillBusy = false;
 /** 论坛不能只有她的事：定期补几条别人家的帖子（回归、绯闻、粉丝吵架这些吃瓜内容）。
  *  素材只用日历里已经公开的圈内大事 + 圈内名册里的团；跟她无关，不弹横幅。 */
-export async function maybeFillWorldGossip(): Promise<void> {
-  if (worldFillBusy || typeof localStorage === 'undefined') return;
-  try {
-    const last = Number(localStorage.getItem(WORLD_FILL_KEY) || 0);
-    if (Date.now() - last < WORLD_FILL_GAP) return;
-  } catch { /* 读不到就照常试 */ }
+export async function maybeFillWorldGossip(force = false): Promise<number> {
+  if (worldFillBusy || typeof localStorage === 'undefined') return 0;
+  if (!force) {
+    try {
+      const last = Number(localStorage.getItem(WORLD_FILL_KEY) || 0);
+      if (Date.now() - last < WORLD_FILL_GAP) return 0;
+    } catch { /* 读不到就照常试 */ }
+  }
   worldFillBusy = true;
   try {
     const now = Date.now();
@@ -103,7 +105,7 @@ export async function maybeFillWorldGossip(): Promise<void> {
     const [{ simpleLLMCall }, settings] = await Promise.all([import('./api-helpers'), import('./settings-storage')]);
     const slot = settings.resolveBinding(settings.loadBindingConfig(), undefined, 'chat');
     const config = settings.loadApiConfigs().find(c => c.id === slot.apiConfigId) ?? settings.loadApiConfigs()[0];
-    if (!config) return; // 没配 API 就不写，别烧
+    if (!config) return 0; // 没配 API 就不写，别烧
     const res = await simpleLLMCall(config, [
       { role: 'system', content: `你是 SEOUL:AM 世界里韩网匿名论坛的「路人写手」。写几条跟她无关的帖子，让论坛像真的有人天天在上面聊。只输出 JSON：
 {"posts":[{"eventId":"world_XXX","board":"idol/entertainment/daily","title":{"ko":"","zh":""},"body":[{"ko":"","zh":""}],"comments":[{"ko":"","zh":"","likes":0}],"views":0,"recommendations":0,"publicFacts":[""]}]}
@@ -138,8 +140,10 @@ export async function maybeFillWorldGossip(): Promise<void> {
       wrote++;
     }
     localStorage.setItem(WORLD_FILL_KEY, String(now));
+    return wrote;
   } catch (error) {
     console.warn('[TheQoo] 世界八卦没写成：', error);
+    return 0;
   } finally {
     worldFillBusy = false;
   }

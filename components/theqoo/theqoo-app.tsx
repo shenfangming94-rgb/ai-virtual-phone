@@ -6,7 +6,7 @@ import { ALMANAC_EVENT } from '@/lib/idol-calendar';
 import { forumCalendarCandidates, maybeFillWorldGossip } from '@/lib/theqoo-events';
 
 import { emptyForum, FORUM_BOARDS, type Bilingual, type ForumBoard, type ForumState } from '@/lib/theqoo-model';
-import { loadForum, markForumRead, setForumTranslation, THEQOO_EVENT, toggleForumLike } from '@/lib/theqoo-store';
+import { deleteForumComment, deleteForumPost, loadForum, markForumRead, setForumTranslation, THEQOO_EVENT, toggleForumLike } from '@/lib/theqoo-store';
 
 const names: Record<'hot' | ForumBoard, string> = { hot: 'HOT', idol: '케이돌토크', entertainment: '스퀘어', daily: '일상토크' };
 const fmt = (n: number) => n.toLocaleString('en-US');
@@ -48,7 +48,8 @@ export function TheQooApp({ onClose, preview = false }: { onClose: () => void; p
       <div className="app-back"><button onClick={onClose}>‹ {preview ? '退出试玩' : '小手机'}</button><span>SEOUL:AM</span></div>
       <header><button className="logo" onClick={home} aria-label="论坛首页">theqoo<small>더쿠</small></button><div className="utility">익명 커뮤니티<br/>匿名论坛</div></header>
       <nav className="nav" aria-label="板块">{(Object.keys(names) as (keyof typeof names)[]).map(b => <button key={b} className={board === b ? 'active' : ''} aria-label={b === 'hot' ? 'HOT 热帖' : FORUM_BOARDS[b]} onClick={() => { setBoard(b); setPage(1); setSearch(''); setQuery(''); home(); }}>{names[b]}</button>)}</nav>
-      <div className="subnav"><span>{board === 'hot' ? '전체 / 热帖汇总' : FORUM_BOARDS[board]}</span><button onClick={() => void action(() => setForumTranslation(mode, !state.translate))} disabled={busy}>{state.translate ? '隐藏中文翻译' : '显示中文翻译'}</button></div>
+      <div className="subnav"><span>{board === 'hot' ? '전체 / 热帖汇总' : FORUM_BOARDS[board]}</span><span className="subnav-right"><button disabled={busy} onClick={() => void action(async () => { const n = await maybeFillWorldGossip(true); if (n) setNotice(`补了 ${n} 条新帖子`); else setError('这次没写成，再点一次试试'); })}>{busy ? '补帖中…' : '刷新'}</button><button onClick={() => void action(() => setForumTranslation(mode, !state.translate))} disabled={busy}>{state.translate ? '隐藏中文翻译' : '显示中文翻译'}</button></span></div>
+      {notice && <button className="tq-notice" onClick={() => setNotice(null)}>{notice}　›</button>}
       {error && <div className="tq-error" role="alert">{error}<button onClick={() => { setError(''); setState(loadForum(mode)); }}>重新读取</button></div>}
       {!ready ? <div className="empty">{error ? '暂时无法读取论坛' : '读取已保存的帖子…'}</div> : !post ? <>
         <div className="boardhead"><h1>{board === 'hot' ? 'HOT' : names[board]}<small>{board === 'hot' ? '热帖' : FORUM_BOARDS[board]}</small></h1><span>{stamp(Date.now()).slice(0, 5)}</span></div>
@@ -69,9 +70,9 @@ export function TheQooApp({ onClose, preview = false }: { onClose: () => void; p
         <div className="vote"><button disabled={busy} aria-pressed={post.liked} onClick={() => void action(() => toggleForumLike(mode, post.id))}>추천 / 推荐　{post.recommendations + Number(post.liked)}</button></div>
         <div className="comment-head"><span>댓글 <b>{post.comments.length}</b> 评论</span><span className="tiny">匿名路人讨论</span></div>
         <div className="sortbar"><button className={sort === 'hot' ? 'active' : ''} onClick={() => setSort('hot')}>인기순 / 热门</button><button className={sort === 'new' ? 'active' : ''} onClick={() => setSort('new')}>최신순 / 最新</button></div>
-        {comments.slice(0, limit).map((c, i) => <div className="comment" key={c.id}><div className="comment-top"><strong>{post.comments.indexOf(c) + 1}. 무명의 더쿠</strong>{sort === 'hot' && i < 2 && <span className="best">BEST</span>}<time>{stamp(c.at)}</time></div><p>{text(c)}</p><div className="comment-bottom">추천 {c.likes}</div></div>)}
+        {comments.slice(0, limit).map((c, i) => <div className="comment" key={c.id}><div className="comment-top"><strong>{post.comments.indexOf(c) + 1}. 무명의 더쿠</strong>{sort === 'hot' && i < 2 && <span className="best">BEST</span>}<time>{stamp(c.at)}</time><button className="tq-comment-del" aria-label="删除这条评论" disabled={busy} onClick={() => void action(async () => { await deleteForumComment(mode, post.id, c.id); })}>×</button></div><p>{text(c)}</p><div className="comment-bottom">추천 {c.likes}</div></div>)}
         <button className="loadmore" disabled={limit >= comments.length} onClick={() => setLimit(n => n + 5)}>{limit >= comments.length ? '已显示全部评论' : '댓글 더보기 / 加载更多评论'}</button>
-        <div className="bottom-back"><button className="plain" onClick={home}>목록 / 返回列表</button></div>
+        <div className="bottom-back"><button className="plain" onClick={home}>목록 / 返回列表</button><button className="tq-delete" disabled={busy} onClick={() => void action(async () => { await deleteForumPost(mode, post.id); setNotice("帖子删掉了，相关记录一并清除"); setSelected(null); })}>删掉这条帖子</button></div>
       </>}
       <footer className="footer"><b>더쿠</b>　이용안내 · 匿名论坛<br/>SEOUL:AM · 阅读与推荐，不开放发帖和评论</footer>
     </div>

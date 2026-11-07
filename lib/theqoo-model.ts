@@ -32,8 +32,9 @@ export type ForumPost = {
   /** Persisted notification receipts, one per public revision. */
   notifiedRevisions?: number[];
 };
-export type ForumState = { version: 1; posts: ForumPost[]; translate: boolean };
-export const emptyForum = (): ForumState => ({ version: 1, posts: [], translate: true });
+/** 她删过的帖子事件：不再重新生成（连同相关记忆一起删） */
+export type ForumState = { version: 1; posts: ForumPost[]; translate: boolean; deleted?: string[] };
+export const emptyForum = (): ForumState => ({ version: 1, posts: [], translate: true, deleted: [] });
 export const FORUM_BOARDS = { idol: '爱豆讨论', entertainment: '娱乐八卦', daily: '日常' };
 /** Popularity flags may change while comments grow; public facts may change only with a revision. */
 export function sameForumSnapshot(a: ForumSource, b: ForumSource): boolean {
@@ -53,6 +54,7 @@ export function validateDraft(d: ForumDraft): void {
 export function publishForum(state: ForumState, source: ForumSource, draft: ForumDraft, batchId: string, now: number): ForumState {
   validateSource(source, now);
   if (!batchId.trim()) throw new Error('缺少评论批次编号');
+  if (state.deleted?.includes(source.eventId)) return state; // 她删过这个事件，别再发
   const old = state.posts.find(p => p.id === source.eventId);
   if (old && source.revision < old.source.revision) throw new Error('旧进展不能覆盖新进展');
   if (old?.batches.includes(batchId)) return state;

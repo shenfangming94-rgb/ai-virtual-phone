@@ -31,10 +31,22 @@ function editForum(mode: ForumMode, edit: (s: ForumState) => ForumState): Promis
   queue = run;
   return run;
 }
+/** 帖子只留最近这么多条；她推荐过（liked）的和跟她有关的（事件触发）永远不删 */
+const KEEP_POSTS = 60;
+function trimPosts(s: ForumState): ForumState {
+  if (s.posts.length <= KEEP_POSTS) return s;
+  const liked = s.posts.filter(p => p.liked || p.source.owner === 'player' || p.source.owner === 'romance');
+  const keepIds = new Set(liked.map(p => p.id));
+  const fresh = s.posts.filter(p => keepIds.has(p.id));
+  const rest = s.posts.filter(p => !keepIds.has(p.id)).sort((a, b) => b.createdAt - a.createdAt);
+  while (fresh.length < KEEP_POSTS && rest.length) fresh.push(rest.shift()!);
+  return { ...s, posts: fresh.sort((a, b) => a.createdAt - b.createdAt) };
+}
+
 export async function publishForumDraft(mode: ForumMode, source: ForumSource, draft: ForumDraft, batchId: string, now = Date.now()): Promise<ForumState> {
   let notificationTitle = '';
   const state = await editForum(mode, previous => {
-    const published = publishForum(previous, source, draft, batchId, now);
+    const published = trimPosts(publishForum(previous, source, draft, batchId, now));
     const post = published.posts.find(p => p.id === source.eventId);
     if (mode !== 'world' || !source.notify || !post || (post.notifiedRevisions ?? []).includes(source.revision)) return published;
     notificationTitle = draft.title.zh;
@@ -49,5 +61,21 @@ export async function publishForumDraft(mode: ForumMode, source: ForumSource, dr
   return state;
 }
 export const toggleForumLike = (mode: ForumMode, id: string) => editForum(mode, s => ({ ...s, posts: s.posts.map(p => p.id === id ? { ...p, liked: !p.liked } : p) }));
+/** 删掉她看不上的帖子：帖子、评论、通知回执一起没，事件进墓碑不再重发 */
+/** 删掉一条看不上的评论 */
+export function deleteForumComment(mode: ForumMode, postId: string, commentId: string): Promise<ForumState> {
+  return editForum(mode, s => ({ ...s, posts: s.posts.map(p => p.id === postId ? { ...p, comments: p.comments.filter(c => c.id !== commentId) } : p) }));
+}
+export function deleteForumPost(mode: ForumMode, id: string): Promise<ForumState> {
+  return editForum(mode, s => {
+    const post = s.posts.find(p => p.id === id);
+    if (!post) return s;
+    return {
+      ...s,
+      posts: s.posts.filter(p => p.id !== id),
+      deleted: [...new Set([...(s.deleted ?? []), post.source.eventId])],
+    };
+  });
+}
 export const markForumRead = (mode: ForumMode, id: string) => editForum(mode, s => ({ ...s, posts: s.posts.map(p => p.id === id ? { ...p, seenRevision: p.source.revision, seenCommentCount: p.comments.length } : p) }));
 export const setForumTranslation = (mode: ForumMode, translate: boolean) => editForum(mode, s => ({ ...s, translate }));

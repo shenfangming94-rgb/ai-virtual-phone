@@ -396,15 +396,14 @@ function CharListView({
     ?? worldGroups.find(g => g.id === DEFAULT_CHARACTER_WORLD_ID)
     ?? worldGroups[0];
   const memberSet = new Set(currentGroup?.memberIds ?? []);
-  // 爱豆小手机：背景人物只待在通讯录，档案库只摆主要人物；同期练习生见没见过都不进档案库（她反馈：39 个同期全进档案库不对）
+  // 爱豆小手机：背景人物只待在通讯录，档案库只摆主要人物（同期加了 KKT 会升主要人物，才进档案库）
   const idolProfiles = loadProfiles();
-  const archiveOk = (id: string) => { const p = idolProfiles[id]; return Boolean(p && p.layer !== "background" && p.group !== "同期练习生"); };
-  const worldCharacters = characters.filter(c => memberSet.has(c.id) && archiveOk(c.id));
+  const worldCharacters = characters.filter(c => memberSet.has(c.id) && idolProfiles[c.id]?.layer !== "background");
   const worldBgItems = (bgItems || []).filter(item => (item.worldId ?? DEFAULT_CHARACTER_WORLD_ID) === currentWorldId);
   // 爱豆小手机：背景人物只待在通讯录，档案库只摆主要人物；世界标签的人数也只数档案库里的
   const memberCounts = new Map(worldGroups.map(g => [g.id, g.memberIds.filter(id => {
     const c = characters.find(x => x.id === id);
-    return c && archiveOk(id);
+    return c && idolProfiles[c.id]?.layer !== "background";
   }).length]));
   const nameById = new Map(characters.map(c => [c.id, c.name || "未命名"]));
   // 连线与世界观关系同步：同一对角色的多条关系合并为一条线

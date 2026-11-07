@@ -15,6 +15,7 @@ import { genKakaoId } from "./idol-kakao";
 import { ATTITUDE_LABEL, coursePoints, settleProgress, type ClassLetter, type Specialty, type Subject } from "./idol-training";
 import { generateRosterState, dedupeRosterNames, settleNpcWeeks, type RosterState } from "./idol-roster";
 import { loadCharacters, saveCharacters } from "./character-storage";
+import { loadChatContacts } from "./chat-storage";
 import { simpleLLMCall } from "./api-helpers";
 import { loadApiConfigs, loadBindingConfig, resolveBinding } from "./settings-storage";
 
@@ -83,7 +84,7 @@ export function ensureRoster(): RosterState | null {
     const age = Math.max(14, Math.min(21, baseAge + Math.floor(rng() * 5) - 2)); // 她 ±2 岁
     const char = createPerson(n.name, {
       ...emptyProfile(""),
-      layer: "main",
+      layer: "background",
       group: "同期练习生",
       role: "同期练习生",
       gender: "女",
@@ -111,7 +112,9 @@ const SOFT_SUBJECTS = ["visual", "acting", "variety", "compose", "language"];
  *  1. 开局选了颜值特长但数值没兑现（旧 makePlayer 只认硬三门）→ 补到 A（85）；
  *     没选硬三门的人，特长别落在默认的舞蹈上，按她选的算。
  *  2. 同期重名 → 去重改名，同步通讯录里那个 Character 的名字。
- *  3. 同期资料缺字段或写成「暂无」的 → 重新塞回补全队列。 */
+ *  3. 同期资料缺字段或写成「暂无」的 → 重新塞回补全队列。
+ *  4. 同期建档错成主要人物（她反馈全灌进档案库）：没加过 KKT 的降回背景人物——
+ *     见面 → 通讯录；加了 KKT 才升主要人物、才进档案库（kakao 那边会 promote）。 */
 function healRosterSave(s: RosterState): void {
   const card = loadTraineeCard();
   if (card) {
@@ -126,6 +129,15 @@ function healRosterSave(s: RosterState): void {
       changed = true;
     }
     if (changed) save(s);
+  }
+  {
+    const kakaoIds = new Set(loadChatContacts().map(c => c.characterId));
+    const profiles = loadProfiles();
+    for (const n of s.npcs) {
+      if (!n.charId || kakaoIds.has(n.charId)) continue;
+      const p = profiles[n.charId];
+      if (p && p.group === "同期练习生" && p.layer === "main") saveProfile({ ...p, layer: "background" });
+    }
   }
   const renames = dedupeRosterNames(s.npcs);
   if (renames.length) {

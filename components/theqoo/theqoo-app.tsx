@@ -20,6 +20,7 @@ export function TheQooApp({ onClose, preview = false }: { onClose: () => void; p
   const [board, setBoard] = useState<'hot' | ForumBoard>('hot'), [query, setQuery] = useState(''), [search, setSearch] = useState('');
   const [page, setPage] = useState(1), [selected, setSelected] = useState<string | null>(null), [limit, setLimit] = useState(5), [sort, setSort] = useState<'hot' | 'new'>('hot');
   const [notice, setNotice] = useState<string | null>(null), [candidates, setCandidates] = useState<ReturnType<typeof forumCalendarCandidates>>([]);
+  const [confirmDel, setConfirmDel] = useState<{ kind: "post"; id: string } | { kind: "comment"; postId: string; id: string } | null>(null);
   const scroll = useRef<HTMLDivElement>(null);
   const top = () => scroll.current?.scrollTo({ top: 0 });
   useEffect(() => {
@@ -63,18 +64,19 @@ export function TheQooApp({ onClose, preview = false }: { onClose: () => void; p
       </> : <>
         <div className="backrow"><button onClick={home}>‹ 목록으로 / 返回列表</button></div>
         <div className="article-head"><div className="cat">{FORUM_BOARDS[post.source.board]}　·　잡담</div><h1>{text(post.title)}</h1><div className="author">무명의 더쿠 <span>匿名网友</span></div><div className="article-meta"><span>{stamp(post.createdAt)}</span><span>조회 {fmt(post.views)}</span><span>댓글 {post.comments.length}</span></div></div>
-        <article className="article">{post.body.map((b, i) => <div key={i}><p>{text(b)}</p>{i === 0 && post.source.images?.map(image => <figure className="photo" key={image.src}><img src={image.src} alt={image.caption} loading="lazy" onError={e => { e.currentTarget.style.display = 'none'; }}/><figcaption>{image.caption}</figcaption></figure>)}</div>)}
+        <article className="article" onClick={() => setConfirmDel({ kind: "post", id: post.id })}>{post.body.map((b, i) => <div key={i}><p>{text(b)}</p>{i === 0 && post.source.images?.map(image => <figure className="photo" key={image.src}><img src={image.src} alt={image.caption} loading="lazy" onError={e => { e.currentTarget.style.display = 'none'; }}/><figcaption>{image.caption}</figcaption></figure>)}</div>)}
           {post.updates.map(u => <section className="post-update" key={u.revision}><h2>추가 / 后续公开进展 <time>{stamp(u.at)}</time></h2>{u.body.map((b, i) => <p key={i}>{text(b)}</p>)}</section>)}
           <div className="source">{`公开事件：${post.source.title}`}</div>
         </article>
         <div className="vote"><button disabled={busy} aria-pressed={post.liked} onClick={() => void action(() => toggleForumLike(mode, post.id))}>추천 / 推荐　{post.recommendations + Number(post.liked)}</button></div>
         <div className="comment-head"><span>댓글 <b>{post.comments.length}</b> 评论</span><span className="tiny">匿名路人讨论</span></div>
         <div className="sortbar"><button className={sort === 'hot' ? 'active' : ''} onClick={() => setSort('hot')}>인기순 / 热门</button><button className={sort === 'new' ? 'active' : ''} onClick={() => setSort('new')}>최신순 / 最新</button></div>
-        {comments.slice(0, limit).map((c, i) => <div className="comment" key={c.id}><div className="comment-top"><strong>{post.comments.indexOf(c) + 1}. 무명의 더쿠</strong>{sort === 'hot' && i < 2 && <span className="best">BEST</span>}<time>{stamp(c.at)}</time><button className="tq-comment-del" aria-label="删除这条评论" disabled={busy} onClick={() => void action(async () => { await deleteForumComment(mode, post.id, c.id); })}>×</button></div><p>{text(c)}</p><div className="comment-bottom">추천 {c.likes}</div></div>)}
+        {comments.slice(0, limit).map((c, i) => <div className="comment" key={c.id} onClick={() => setConfirmDel({ kind: "comment", postId: post.id, id: c.id })}><div className="comment-top"><strong>{post.comments.indexOf(c) + 1}. 무명의 더쿠</strong>{sort === 'hot' && i < 2 && <span className="best">BEST</span>}<time>{stamp(c.at)}</time></div><p>{text(c)}</p><div className="comment-bottom">추천 {c.likes}</div></div>)}
         <button className="loadmore" disabled={limit >= comments.length} onClick={() => setLimit(n => n + 5)}>{limit >= comments.length ? '已显示全部评论' : '댓글 더보기 / 加载更多评论'}</button>
-        <div className="bottom-back"><button className="plain" onClick={home}>목록 / 返回列表</button><button className="tq-delete" disabled={busy} onClick={() => void action(async () => { await deleteForumPost(mode, post.id); setNotice("帖子删掉了，相关记录一并清除"); setSelected(null); })}>删掉这条帖子</button></div>
+        <div className="bottom-back"><button className="plain" onClick={home}>목록 / 返回列表</button></div>
       </>}
       <footer className="footer"><b>더쿠</b>　이용안내 · 匿名论坛<br/>SEOUL:AM · 阅读与推荐，不开放发帖和评论</footer>
+      {confirmDel ? <div className="tq-confirm-back" onClick={() => setConfirmDel(null)}><div className="tq-confirm" onClick={e => e.stopPropagation()}><b>{confirmDel.kind === "post" ? "删掉这条帖子？" : "删掉这条评论？"}</b><p>{confirmDel.kind === "post" ? "帖子、评论和通知回执都会一起清掉，不会再出现。" : "删掉后这条评论就没了。"}</p><div className="tq-confirm-btns"><button type="button" onClick={() => setConfirmDel(null)}>取消</button><button type="button" className="danger" disabled={busy} onClick={() => void action(async () => { if (confirmDel.kind === "post") { await deleteForumPost(mode, confirmDel.id); setNotice("帖子删掉了，相关记录一并清除"); setSelected(null); } else { await deleteForumComment(mode, confirmDel.postId, confirmDel.id); setNotice("评论删掉了"); } setConfirmDel(null); })}>删除</button></div></div></div> : null}
     </div>
   </div>;
 }

@@ -31,9 +31,10 @@
   "include": [
     "**/*.ts",
     "**/*.tsx",
+    ".next-melon-probe/types/**/*.ts",
     ".next/types/**/*.ts",
     "next-env.d.ts",
-    ".next-melon-probe/types/**/*.ts"
+    ".next-theqoo-shot/types/**/*.ts"
   ],
   "exclude": [
     "node_modules",

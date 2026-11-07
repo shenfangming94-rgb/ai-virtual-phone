@@ -256,3 +256,7 @@ textarea.ig-sv-text::placeholder, textarea.ig-sv-cap::placeholder { color: rgba(
 .ig-stn-write { width: 100%; }
 .ig-stn-top > .ig-stn-post { color: #111 !important; }
 .ig-stn-top > button:first-child svg, .ig-sv-btns svg { filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.45)); }
+
+/* INS app 是普通信息流：关掉查手机那套「一屏一条」的强制吸附滚动 */
+.ig-scroll .cp-instagram-feed { scroll-snap-type: none; }
+.ig-scroll .cp-instagram-feed-post { min-height: 0; scroll-snap-align: none; scroll-snap-stop: normal; }

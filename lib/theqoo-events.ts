@@ -1,6 +1,7 @@
 import { almanacBetween } from './idol-calendar';
 import type { ForumDraft, ForumSource } from './theqoo-model';
 import { sameForumSnapshot, validateDraft, validateSource } from './theqoo-model';
+import { groupLine, loadGroups } from './idol-groups';
 import { loadForum, publishForumDraft } from './theqoo-store';
 import { hydrateKvDb } from './kv-db';
 /** Calendar entries have NO public/completed flag. Read candidates, NEVER infer disclosure/results. */
@@ -79,6 +80,71 @@ export async function requestForumDiscussion(
   try { await task; }
   finally { if (requestsInFlight.get(requestKey) === task) requestsInFlight.delete(requestKey); }
 }
+const WORLD_FILL_KEY = 'theqoo_world_fill_v1';
+const WORLD_FILL_GAP = 6 * 3600e3;
+let worldFillBusy = false;
+/** 论坛不能只有她的事：定期补几条别人家的帖子（回归、绯闻、粉丝吵架这些吃瓜内容）。
+ *  素材只用日历里已经公开的圈内大事 + 圈内名册里的团；跟她无关，不弹横幅。 */
+export async function maybeFillWorldGossip(): Promise<void> {
+  if (worldFillBusy || typeof localStorage === 'undefined') return;
+  try {
+    const last = Number(localStorage.getItem(WORLD_FILL_KEY) || 0);
+    if (Date.now() - last < WORLD_FILL_GAP) return;
+  } catch { /* 读不到就照常试 */ }
+  worldFillBusy = true;
+  try {
+    const now = Date.now();
+    const d = new Date(now);
+    const iso = (v: Date) => `${v.getFullYear()}-${String(v.getMonth() + 1).padStart(2, '0')}-${String(v.getDate()).padStart(2, '0')}`;
+    const from = iso(new Date(d.getFullYear(), d.getMonth(), d.getDate() - 14));
+    const to = iso(new Date(d.getFullYear(), d.getMonth() + 1, 0));
+    const events = almanacBetween(from, to).filter(i => i.kind === 'world');
+    const groups = Object.values(loadGroups()).sort(() => Math.random() - 0.5).slice(0, 8);
+    const [{ simpleLLMCall }, settings] = await Promise.all([import('./api-helpers'), import('./settings-storage')]);
+    const slot = settings.resolveBinding(settings.loadBindingConfig(), undefined, 'chat');
+    const config = settings.loadApiConfigs().find(c => c.id === slot.apiConfigId) ?? settings.loadApiConfigs()[0];
+    if (!config) return; // 没配 API 就不写，别烧
+    const res = await simpleLLMCall(config, [
+      { role: 'system', content: `你是 SEOUL:AM 世界里韩网匿名论坛的「路人写手」。写几条跟她无关的帖子，让论坛像真的有人天天在上面聊。只输出 JSON：
+{"posts":[{"eventId":"world_XXX","board":"idol/entertainment/daily","title":{"ko":"","zh":""},"body":[{"ko":"","zh":""}],"comments":[{"ko":"","zh":"","likes":0}],"views":0,"recommendations":0,"publicFacts":[""]}]}
+写 2～4 条。素材只用下面给的圈内大事和团，不编日历里没有的回归/演唱会；可以写团的新歌讨论、舞台评价、综艺片段、机场照、恋爱传闻（写清楚是传闻）、粉丝吵架、练习生爆料这类吃瓜内容，但不要写违法和恶意伤人的。评论 6～12 条，韩语口语自然，立场不平均。团名、成员、风格照下面的抄，不许改。帖子之间题材不重样。` },
+      { role: 'user', content: `近两周圈内大事：\n${events.map(e => `- ${e.date} ${e.title}${e.note ? `：${e.note}` : ''}`).join('\n') || '（没有）'}\n\n这个世界里的团：\n${groups.map(g => `- ${groupLine(g)}`).join('\n')}` },
+    ], { temperature: 0.9, label: 'TheQoo 世界八卦' });
+    const j = JSON.parse((res.content || '').replace(/^```(?:json)?\s*|\s*```$/g, '').trim().match(/\{[\s\S]*\}/)?.[0] ?? '{}') as { posts?: { eventId?: string; board?: string; title?: { ko?: string; zh?: string }; body?: { ko?: string; zh?: string }[]; comments?: { ko?: string; zh?: string; likes?: number }[]; views?: number; recommendations?: number; publicFacts?: string[] }[] };
+    let wrote = 0;
+    for (const raw of j.posts ?? []) {
+      if (!raw?.title?.ko || !raw.title.zh) continue;
+      const source: ForumSource = {
+        eventId: String(raw.eventId || `world_${Date.now()}_${wrote}`),
+        revision: 1,
+        publicAt: now,
+        title: String(raw.title.zh),
+        publicFacts: (raw.publicFacts ?? []).filter(f => typeof f === 'string' && f.trim()).slice(0, 10),
+        phase: 'occurred',
+        board: (raw.board === 'idol' || raw.board === 'entertainment' || raw.board === 'daily') ? raw.board : 'idol',
+        hot: false,
+        notify: false,
+      };
+      if (!source.publicFacts.length) continue;
+      const draft: ForumDraft = {
+        title: { ko: String(raw.title.ko), zh: String(raw.title.zh) },
+        body: (raw.body ?? []).filter(b => b?.ko && b.zh).slice(0, 20).map(b => ({ ko: String(b.ko), zh: String(b.zh) })),
+        comments: (raw.comments ?? []).filter(c => c?.ko && c.zh && Number.isSafeInteger(c.likes) && (c.likes ?? 0) >= 0).slice(0, 60).map(c => ({ ko: String(c.ko), zh: String(c.zh), likes: Number(c.likes) })),
+        views: Number.isSafeInteger(raw.views) && (raw.views ?? 0) >= 0 ? Number(raw.views) : 0,
+        recommendations: Number.isSafeInteger(raw.recommendations) && (raw.recommendations ?? 0) >= 0 ? Number(raw.recommendations) : 0,
+      };
+      try { validateSource(source, now); validateDraft(draft); } catch { continue; }
+      await publishForumDraft('world', source, draft, `world:${source.eventId}`, now);
+      wrote++;
+    }
+    localStorage.setItem(WORLD_FILL_KEY, String(now));
+  } catch (error) {
+    console.warn('[TheQoo] 世界八卦没写成：', error);
+  } finally {
+    worldFillBusy = false;
+  }
+}
+
 export const FORUM_SYSTEM_PROMPT = `你生成 SEOUL:AM 的韩网匿名论坛讨论。只输出 JSON，不输出 Markdown。
 发帖者与评论者均为匿名路人，不能冒充玩家或已有角色。只依据 source.publicFacts 和已公开图片讨论，不补写事实，不推测为实锤；标题、正文、评论及翻译都不能泄露未提供的信息。
 source.phase=announced 只表示预告，不能假定活动已经发生。相同 revision 的新增评论只能重复、争论、表达期待或观点，不能引入新进展。新 revision 才允许谈新增事实，不能改写旧评论。

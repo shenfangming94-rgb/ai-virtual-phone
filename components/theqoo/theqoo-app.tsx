@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { hydrateKvDb } from '@/lib/kv-db';
 import { ALMANAC_EVENT } from '@/lib/idol-calendar';
-import { forumCalendarCandidates } from '@/lib/theqoo-events';
+import { forumCalendarCandidates, maybeFillWorldGossip } from '@/lib/theqoo-events';
 
 import { emptyForum, FORUM_BOARDS, type Bilingual, type ForumBoard, type ForumState } from '@/lib/theqoo-model';
 import { loadForum, markForumRead, setForumTranslation, THEQOO_EVENT, toggleForumLike } from '@/lib/theqoo-store';
@@ -26,6 +26,7 @@ export function TheQooApp({ onClose, preview = false }: { onClose: () => void; p
     let live = true;
     setReady(false); setError('');
     const update = () => { if (live) { try { setState(loadForum(mode)); setCandidates(forumCalendarCandidates()); } catch (e) { setError(String(e)); } } };
+    void maybeFillWorldGossip().catch(() => undefined); // 打开论坛顺便补几条别人家的帖子
     void hydrateKvDb().then(async () => { if (!live) return; update(); setReady(true); }).catch(e => { if (live) setError(String(e)); });
     window.addEventListener(THEQOO_EVENT, update); window.addEventListener(ALMANAC_EVENT, update);
     return () => { live = false; window.removeEventListener(THEQOO_EVENT, update); window.removeEventListener(ALMANAC_EVENT, update); };

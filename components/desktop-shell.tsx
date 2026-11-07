@@ -11,7 +11,7 @@ import { ClockApp } from "./clock-app";
 import { TheQooApp } from "./theqoo/theqoo-app";
 import { YearbookApp } from "./yearbook/yearbook-app";
 import { THEQOO_NOTICE } from "@/lib/theqoo-store";
-import { retryFailedForumDiscussions } from "@/lib/theqoo-events";
+import { maybeFillWorldGossip, retryFailedForumDiscussions } from "@/lib/theqoo-events";
 import { pushLockNote } from "@/lib/idol-notes";
 import { ContactsApp } from "./contacts/contacts-app";
 import { CareerApp } from "./career/career-app";
@@ -1200,6 +1200,7 @@ export function DesktopShell({ initialThemeProfile, initialThemeAssets }: Deskto
       try { leaveTick(); } catch { /* 同上 */ }
       try { casualTick(); } catch { /* 同上 */ }
       try { void retryFailedForumDiscussions(); } catch { /* 论坛重试出错不挡着用手机 */ }
+      try { void maybeFillWorldGossip(); } catch { /* 论坛世界八卦出错不挡着用手机 */ }
       try { socialTick(); } catch { /* 同上 */ }
       try { syncIdolWorldBook(); } catch { /* 同上 */ }
     };

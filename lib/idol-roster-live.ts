@@ -156,6 +156,7 @@ function healRosterSave(s: RosterState): void {
     save(s);
   }
   if (requeuePlaceholderProfiles(s)) save(s);
+  queueTmiReroll(s);
 }
 
 const CLASS_ORDER: ClassLetter[] = ["A", "B", "C", "D"];
@@ -216,6 +217,57 @@ export function queueProfileRegenerate(charId: string): void {
   s.profileRetryAt = 0;
   save(s);
   queueRosterProfileGeneration(s);
+}
+
+// ── 一次性 TMI 重写：老提示词写的 TMI 太人机（「衣柜里常年备着几罐柑橘味」），全册只重写 tmi 这一栏 ──
+
+let tmiRerollJob: Promise<void> | null = null;
+
+/** 全册同期用新提示词重写 TMI；其余字段不动，她手改过的 TMI 保留。幂等：全部重写完就不再跑。 */
+function queueTmiReroll(s: RosterState): void {
+  if (typeof window === "undefined" || s.tmiRerollDone || tmiRerollJob) return;
+  if ((s.tmiRerollAt ?? 0) > Date.now()) return;
+  const profiles = loadProfiles();
+  const targets = s.npcs.filter(n => n.charId && !(profiles[n.charId]?.handEdited ?? []).includes("tmi")).map(n => n.charId!).filter(Boolean);
+  if (!targets.length) {
+    s.tmiRerollDone = true;
+    save(s);
+    return;
+  }
+  tmiRerollJob = (async () => {
+    let failed = false;
+    try {
+      chatConfig();
+      for (let i = 0; i < targets.length; i += 10) {
+        const chunk = targets.slice(i, i + 10);
+        const input = JSON.stringify(chunk.map(id => {
+          const n = load()?.npcs.find(x => x.charId === id);
+          return { charId: id, name: n?.name ?? "" };
+        }));
+        const res = await simpleLLMCall(chatConfig(), [
+          { role: "system", content: `为韩国娱乐圈练习生模拟游戏，给同期练习生重写 TMI 栏。只输出 JSON 对象：{"tmis":[{"charId":"","tmi":[""]}]}。\n\nTMI 写 1～2 条自然可爱的小细节，像女生之间互相聊起来会说的那种：喜欢追剧、爱追星、喜欢吃辣、怕黑、收集可爱贴纸、睡前一定要听某首歌——短句、口语，一两句就够。禁止文艺长句，禁止「衣柜里常年备着几罐柑橘味……」这种硬凹出来的句子。TMI 不能与同批其他人重复。所有文本使用简体中文。只写给出的 charId 对应人物，不增减。` },
+          { role: "user", content: `请给这些同期重写 TMI：\n${input}` },
+        ], { temperature: 0.9, max_tokens: 2000, label: "名册同期 TMI 重写" });
+        if (!res.content) throw new Error(res.error || "TMI 重写失败");
+        const match = res.content.match(/\{[\s\S]*\}/);
+        const parsed = match ? JSON.parse(match[0]) as { tmis?: { charId: string; tmi: unknown }[] } : null;
+        if (!parsed?.tmis?.length) throw new Error("TMI 没有返回列表");
+        for (const row of parsed.tmis) {
+          const tmi = (Array.isArray(row.tmi) ? row.tmi.map(String).map(v => v.trim()).filter(v => v && !looksPlaceholder(v)).slice(0, 2) : []);
+          const p = loadProfiles()[row.charId];
+          if (!p || !tmi.length) continue;
+          saveProfile({ ...p, tmi });
+        }
+      }
+    } catch (error) {
+      failed = true;
+      console.warn("[idol-roster] TMI 重写暂未完成，稍后重试：", error);
+    }
+    const latest = load();
+    if (!latest) return;
+    if (failed) save({ ...latest, tmiRerollAt: Date.now() + PROFILE_RETRY_DELAY });
+    else save({ ...latest, tmiRerollDone: true });
+  })().finally(() => { tmiRerollJob = null; });
 }
 
 /** 可独立验证的批次解析器：严格保留代码已有骨架，不接受 AI 改名或改班。 */

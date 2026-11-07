@@ -32,6 +32,9 @@ export type RosterState = {
   /** 新档签约时的 39 人资料补全队列；失败时保留，后续可重试。 */
   profilePending?: string[];
   profileRetryAt?: number;
+  /** 一次性：老提示词写的 TMI 太人机，全册重写一遍 TMI（详见 idol-roster-live queueTmiReroll） */
+  tmiRerollDone?: boolean;
+  tmiRerollAt?: number;
 };
 
 /** 玩家基准：三项 45 起，特长 +10，C 班。视觉 50、软实力 45（模拟器同款基准）。

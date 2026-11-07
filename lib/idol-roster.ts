@@ -153,25 +153,32 @@ export function generateRosterState(talents: string[], rng: () => number, now = 
   };
 }
 
-/** 姓名去重（不用 rng，不扰动后续生日/宿舍的随机流）：撞名的后面那个换成没用过的名字，先挑同姓别的名字。
+/** 姓名去重+去相似（不用 rng，不扰动后续生日/宿舍的随机流）：
+ *  整册既不许撞全名，也不许撞「名」——她受够「允儿×3 只换姓」。撞了的换名不换姓，从没用过的名字里挑。
  *  返回改过的（npcId → 新名字），落地层拿去同步 Character 的名字。 */
 export function dedupeRosterNames(npcs: NpcRecord[]): { npcId: string; from: string; to: string }[] {
   const renames: { npcId: string; from: string; to: string }[] = [];
-  const taken = new Set(npcs.map(n => n.name));
-  const used = new Set<string>();
+  const usedFull = new Set<string>();
+  const usedGiven = new Set<string>();
   for (const n of npcs) {
-    if (!used.has(n.name)) { used.add(n.name); continue; }
-    let fresh = "";
-    const surname = n.name.slice(0, 1);
-    for (const g of GIVEN_POOL) { const cand = surname + g; if (!taken.has(cand)) { fresh = cand; break; } }
-    if (!fresh) {
-      outer: for (const s of SURNAME_POOL) for (const g of GIVEN_POOL) { const cand = s + g; if (!taken.has(cand)) { fresh = cand; break outer; } }
+    let surname = n.name.slice(0, 1);
+    const given = n.name.slice(1);
+    if (!usedFull.has(n.name) && !usedGiven.has(given)) {
+      usedFull.add(n.name);
+      usedGiven.add(given);
+      continue;
     }
-    if (!fresh) continue; // 池子全撞了，保底不改
-    renames.push({ npcId: n.id, from: n.name, to: fresh });
-    n.name = fresh;
-    taken.add(fresh);
-    used.add(fresh);
+    let fresh = "";
+    for (const g of GIVEN_POOL) { if (!usedGiven.has(g)) { fresh = g; break; } }
+    if (!fresh) {
+      outer: for (const s of SURNAME_POOL) for (const g of GIVEN_POOL) { if (!usedGiven.has(g)) { surname = s; fresh = g; break outer; } }
+    }
+    if (!fresh || usedFull.has(surname + fresh)) continue; // 池子全撞了的极端兜底
+    const to = surname + fresh;
+    renames.push({ npcId: n.id, from: n.name, to });
+    n.name = to;
+    usedFull.add(to);
+    usedGiven.add(fresh);
   }
   return renames;
 }

@@ -291,3 +291,19 @@
   .yb-field > span { font-size: 8px; }
   .yb-field > b, .yb-field > b.english { font-size: 10.5px; }
 }
+
+/* 她定的：档案每条点一下弹窗自己改；补全资料按钮 + 编辑弹窗（黑白纸张风，别加丑按钮） */
+.yb-profile-table tr.yb-editable { cursor: pointer; }
+.yb-profile-table tr.yb-editable:active { background: #f6f4ef; }
+.yb-edit-hint { margin-top: 8px; font: 400 9px/1.6 "Noto Serif SC", serif; color: var(--yb-grey); letter-spacing: .06em; }
+.yb-regen { display: block; margin: 14px auto 0; padding: 8px 18px; border: .7px solid var(--yb-ink); border-radius: 999px; background: transparent; color: var(--yb-ink); font: 500 10.5px/1.6 "Noto Serif SC", serif; letter-spacing: .12em; }
+.yb-regen:active { background: var(--yb-ink); color: var(--yb-paper, #fff); }
+.yb-regen:disabled { opacity: .45; }
+.yb-edit-mask { position: fixed; inset: 0; z-index: 60; background: rgba(20, 20, 20, .42); display: flex; align-items: flex-end; justify-content: center; }
+.yb-edit-sheet { width: 100%; max-width: 480px; background: #fbfaf6; border-radius: 18px 18px 0 0; padding: 20px 20px calc(20px + env(safe-area-inset-bottom)); box-shadow: 0 -8px 30px rgba(0, 0, 0, .12); }
+.yb-edit-head b { display: block; font: 600 13px/1.5 "Old Standard TT", serif; letter-spacing: .22em; color: var(--yb-ink); }
+.yb-edit-head small { display: block; margin-top: 5px; font: 400 10px/1.7 "Noto Serif SC", serif; color: var(--yb-grey); }
+.yb-edit-sheet textarea { width: 100%; margin-top: 14px; box-sizing: border-box; border: .7px solid var(--yb-soft, #d8d8d8); border-radius: 10px; background: #fff; padding: 11px 12px; font: 400 13px/1.9 "Noto Serif SC", serif; color: #333; resize: none; -webkit-appearance: none; }
+.yb-edit-btns { display: flex; gap: 10px; margin-top: 12px; }
+.yb-edit-btns button { flex: 1; padding: 10px 0; border: .7px solid var(--yb-soft, #d8d8d8); border-radius: 999px; background: transparent; color: var(--yb-grey); font: 500 12px/1.5 "Noto Serif SC", serif; letter-spacing: .1em; }
+.yb-edit-btns button.p { border-color: var(--yb-ink); background: var(--yb-ink); color: #fff; }

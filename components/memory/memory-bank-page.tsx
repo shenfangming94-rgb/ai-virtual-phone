@@ -268,10 +268,10 @@ export function MemoryBankPage({
 
     const loadCharacterList = useCallback(async (isCancelled?: () => boolean) => {
         const allChars = loadCharacters();
-        // 爱豆小手机：还没见过的同期练习生不进备忘录（她反馈 39 个同期全进来了）
-        const hiddenUnmetTrainee = (c: typeof allChars[number]) => {
+        // 爱豆小手机：背景人物不进备忘录（她定的：备忘录里是主要人物；背景人物只在通讯录）
+        const hiddenBackground = (c: typeof allChars[number]) => {
             const p = getProfile(c.id);
-            return p?.group === "同期练习生" && !p.met;
+            return Boolean(p && p.layer === "background");
         };
 
         let charIdsWithMem: string[] = [];
@@ -283,7 +283,7 @@ export function MemoryBankPage({
         // Characters with memories first
         for (const id of charIdsWithMem) {
             const char = allChars.find(c => c.id === id);
-            if (!char || hiddenUnmetTrainee(char)) continue;
+            if (!char || hiddenBackground(char)) continue;
             seen.add(id);
             let ltCount = 0;
             let coreCount = 0;
@@ -298,7 +298,7 @@ export function MemoryBankPage({
 
         // Remaining characters
         for (const char of allChars) {
-            if (seen.has(char.id) || hiddenUnmetTrainee(char)) continue;
+            if (seen.has(char.id) || hiddenBackground(char)) continue;
             infos.push({ character: char, longTermCount: 0, coreCount: 0, shortTermCount: 0 });
         }
 

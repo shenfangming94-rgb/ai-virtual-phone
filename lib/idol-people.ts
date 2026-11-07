@@ -108,6 +108,8 @@ export type IdolProfile = {
   mbti?: string;
   /** 同期档案页展示的小细节；不会拼进人物提示词。 */
   tmi?: string[];
+  /** 她在名册里手动改过的资料字段：AI 重新生成时保留这些，不覆盖她的手改 */
+  handEdited?: string[];
   relation?: Relation;
   /** undefined = 没有心动线 */
   heart?: Heart;

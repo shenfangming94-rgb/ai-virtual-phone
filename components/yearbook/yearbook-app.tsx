@@ -2,9 +2,9 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { loadCharacters, CHARACTERS_UPDATED_EVENT } from "@/lib/character-storage";
-import { getProfile, loadProfiles, relationOf, RELATIONS, savePersonalNote, PEOPLE_UPDATED_EVENT } from "@/lib/idol-people";
+import { getProfile, loadProfiles, relationOf, RELATIONS, savePersonalNote, saveProfile, PEOPLE_UPDATED_EVENT } from "@/lib/idol-people";
 import { loadCareer, CAREER_EVENT, type Career } from "@/lib/idol-career";
-import { loadRoster, ensureRoster, ROSTER_UPDATED_EVENT } from "@/lib/idol-roster-live";
+import { loadRoster, ensureRoster, queueProfileRegenerate, ROSTER_UPDATED_EVENT } from "@/lib/idol-roster-live";
 import type { NpcRecord, RosterState } from "@/lib/idol-roster";
 import { loadMonths, RANK_EVENT, type MonthRank } from "@/lib/idol-ledger";
 import { branchesState, type BranchRecord } from "@/lib/idol-branches";
@@ -286,9 +286,19 @@ function Section({ title, zh, children }: { title: string; zh: string; children:
   return <section className="yb-section"><h3>{title}</h3><div className="yb-section-zh">{zh.split("").join(" ")}</div>{children}</section>;
 }
 function EmptyText({ children }: { children: React.ReactNode }) { return <div className="yb-empty-line">{children}</div>; }
-function ProfileRow({ label, value }: { label: string; value?: string }) {
-  return <tr><td>{label}</td><td>{value?.trim() ? value : <span className="yb-missing">资料暂缺</span>}</td></tr>;
+function ProfileRow({ label, value, onEdit }: { label: string; value?: string; onEdit?: () => void }) {
+  return (
+    <tr className={onEdit ? "yb-editable" : undefined} onClick={onEdit}>
+      <td>{label}</td>
+      <td>{value?.trim() ? value : <span className="yb-missing">资料暂缺</span>}</td>
+    </tr>
+  );
 }
+
+type ProfileEditKey = "appearance" | "privateLines" | "familyBackground" | "tmi";
+const PROFILE_EDIT_LABEL: Record<ProfileEditKey, string> = {
+  appearance: "LOOKS", privateLines: "NATURE", familyBackground: "FAMILY", tmi: "TMI",
+};
 
 function ClassmatePage({ id, data, showPageBar = false }: { id: string; data: YearbookData; showPageBar?: boolean }) {
   const npc = npcByCharId(id, data);
@@ -296,6 +306,25 @@ function ClassmatePage({ id, data, showPageBar = false }: { id: string; data: Ye
   const profile = data.profiles[id] ?? getProfile(id);
   const [note, setNote] = useState(profile.note ?? "");
   useEffect(() => setNote(profile.note ?? ""), [id, profile.note]);
+  // 她定的：点档案里的某一条（TMI/性格/家庭…）弹窗自己改；改过的 AI 重生成也不会覆盖
+  const [editing, setEditing] = useState<{ key: ProfileEditKey; value: string } | null>(null);
+  const [regenUntil, setRegenUntil] = useState(0);
+  const regenBusy = Date.now() < regenUntil;
+  const openEdit = (key: ProfileEditKey, value: string) => setEditing({ key, value });
+  const saveEdit = () => {
+    if (!editing) return;
+    const p = getProfile(id);
+    const clean = editing.value.trim();
+    const hand = [...new Set([...(p.handEdited ?? []), editing.key])];
+    if (editing.key === "tmi") saveProfile({ ...p, tmi: clean ? clean.split(/\n+/).map(v => v.trim()).filter(Boolean).slice(0, 4) : [], handEdited: hand });
+    else if (editing.key === "privateLines") saveProfile({ ...p, privateLines: clean ? clean.split(/\n+/).map(v => v.trim()).filter(Boolean).slice(0, 4) : [], handEdited: hand });
+    else saveProfile({ ...p, [editing.key]: clean, handEdited: hand });
+    setEditing(null);
+  };
+  const onRegenerate = () => {
+    queueProfileRegenerate(id);
+    setRegenUntil(Date.now() + 6000);
+  };
   const roommate = Boolean(data.career.roommates?.includes(id));
   const rosterIndex = data.roster?.npcs.findIndex(n => n.charId === id) ?? -1;
   const relation = relationOf(profile);
@@ -355,11 +384,13 @@ function ClassmatePage({ id, data, showPageBar = false }: { id: string; data: Ye
 
     <Section title="Profile" zh="档案">
       <table className="yb-profile-table"><tbody>
-        <ProfileRow label="LOOKS" value={profile.appearance} />
-        <ProfileRow label="NATURE" value={profile.privateLines?.join("\n")} />
-        <ProfileRow label="FAMILY" value={profile.familyBackground} />
-        <ProfileRow label="TMI" value={profile.tmi?.join("\n")} />
+        <ProfileRow label="LOOKS" value={profile.appearance} onEdit={() => openEdit("appearance", profile.appearance ?? "")} />
+        <ProfileRow label="NATURE" value={profile.privateLines?.join("\n")} onEdit={() => openEdit("privateLines", profile.privateLines?.join("\n") ?? "")} />
+        <ProfileRow label="FAMILY" value={profile.familyBackground} onEdit={() => openEdit("familyBackground", profile.familyBackground ?? "")} />
+        <ProfileRow label="TMI" value={profile.tmi?.join("\n")} onEdit={() => openEdit("tmi", profile.tmi?.join("\n") ?? "")} />
       </tbody></table>
+      <div className="yb-edit-hint">· 点上面的条目可以自己改</div>
+      <button type="button" className="yb-regen" disabled={regenBusy} onClick={onRegenerate}>{regenBusy ? "补全中…" : "✦ 补全资料 / 重新生成 ✦"}</button>
     </Section>
 
     <Section title="Records" zh="月考">
@@ -392,6 +423,15 @@ function ClassmatePage({ id, data, showPageBar = false }: { id: string; data: Ye
       <div className="yb-note"><textarea value={note} onChange={event => { const value = event.target.value; setNote(value); savePersonalNote(id, value); }} placeholder="这一页留给你写。" aria-label="我的印象" /><span>WRITE</span></div>
     </Section>
     <div className="yb-end">— No. {number} · Trainee Yearbook —</div>
+    {editing ? (
+      <div className="yb-edit-mask" onClick={e => { if (e.target === e.currentTarget) setEditing(null); }}>
+        <div className="yb-edit-sheet">
+          <div className="yb-edit-head"><b>{PROFILE_EDIT_LABEL[editing.key]}</b><small>改完保存；改过的这条，AI 重新生成时不会覆盖</small></div>
+          <textarea value={editing.value} rows={5} onChange={event => setEditing({ ...editing, value: event.target.value })} placeholder="写点什么…（TMI / NATURE 可以一行一条）" aria-label={PROFILE_EDIT_LABEL[editing.key]} />
+          <div className="yb-edit-btns"><button type="button" onClick={() => setEditing(null)}>取消</button><button type="button" className="p" onClick={saveEdit}>保存</button></div>
+        </div>
+      </div>
+    ) : null}
   </div>;
 }
 

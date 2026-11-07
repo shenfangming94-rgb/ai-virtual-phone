@@ -27,7 +27,8 @@ import { createOrGetStorySession, createStoryGroup, loadStoryGroups, loadStoryMe
 import { simpleLLMCall } from "./api-helpers";
 import { addCompanyFacts, careerPromptBlock, companyByName, completeNode, nodeById, sendCompanyIntentMail } from "./idol-career";
 import { eventsPromptBlock } from "./idol-events";
-import { fameEvent } from "./idol-fame";
+import { fameBand, fameEvent } from "./idol-fame";
+import { loadForum } from "./theqoo-store";
 import { recordPerformance } from "./idol-ledger";
 import { onNodeDone, onScenePractice } from "./idol-starroad";
 import { KAKAO_TAG_RULES, afterNodeScene, applyKakaoTags, extractKakaoTags, genKakaoId, kakaoPromptLine, type KakaoTags } from "./idol-kakao";
@@ -145,6 +146,20 @@ export async function createWorldScene(place: string, premise: string, peopleIds
   return { groupId: group.id, session: { ...session, autoStartPrompt: opening } };
 }
 
+/** 外界公开知道她什么：名气 + 网上讨论。场景里的人只能知道这些，别的都不许知道 */
+function publicKnowledgeBlock(): string {
+  const lines = [
+    `关注度：${fameBand()}（路人认不认得出她、会不会议论她，按这个把握：越低越没人在意，别为了剧情硬让人认出她）`,
+  ];
+  try {
+    const posts = loadForum("world").posts.filter(p => p.source.owner === "player" || p.source.owner === "romance").slice(-4);
+    if (posts.length) {
+      lines.push(`网上公开讨论过她的事（人物可以提，但只能按这些公开内容提，不能新增爆料；绯闻只是传闻，不能当事实）：${posts.map(p => `「${p.title.zh}」`).join("、")}`);
+    }
+  } catch { /* 论坛没读到不碍事 */ }
+  return `【外界怎么看她】\n${lines.join("\n")}`;
+}
+
 function whoIsShe(): string {
   const card = loadTraineeCard();
   if (card) return describeTrainee(card);
@@ -178,6 +193,7 @@ export function worldPromptFor(meta: SceneMeta | null, fallbackPlace: string, pa
     "这是一出以韩国娱乐圈为背景的戏，主角是「她」（用户）。你是「世界」：写旁白和除她以外所有人的言行。",
     `【她是谁】\n${whoIsShe()}\n${kakaoPromptLine()}`,
     careerPromptBlock(),
+    publicKnowledgeBlock(),
     eventsPromptBlock(),
     romanceSceneHint(),
     scandalRule,

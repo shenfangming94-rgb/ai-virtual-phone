@@ -245,7 +245,7 @@ function queueTmiReroll(s: RosterState): void {
           return { charId: id, name: n?.name ?? "" };
         }));
         const res = await simpleLLMCall(chatConfig(), [
-          { role: "system", content: `为韩国娱乐圈练习生模拟游戏，给同期练习生重写 TMI 栏。只输出 JSON 对象：{"tmis":[{"charId":"","tmi":[""]}]}。\n\nTMI 写 1～2 条自然可爱的小细节，像女生之间互相聊起来会说的那种：喜欢追剧、爱追星、喜欢吃辣、怕黑、收集可爱贴纸、睡前一定要听某首歌——短句、口语，一两句就够。禁止文艺长句，禁止「衣柜里常年备着几罐柑橘味……」这种硬凹出来的句子。TMI 不能与同批其他人重复。所有文本使用简体中文。只写给出的 charId 对应人物，不增减。` },
+          { role: "system", content: `为韩国娱乐圈练习生模拟游戏，给同期练习生重写 TMI 栏。只输出 JSON 对象：{"tmis":[{"charId":"","tmi":[""]}]}。\n\nTMI 写 1～2 条她真实生活里的小爱好、小习惯、小特点，短句、口语，一两句就够。禁止长句和矫饰的写法。TMI 不能与同批其他人重复。所有文本使用简体中文。只写给出的 charId 对应人物，不增减。` },
           { role: "user", content: `请给这些同期重写 TMI：\n${input}` },
         ], { temperature: 0.9, max_tokens: 2000, label: "名册同期 TMI 重写" });
         if (!res.content) throw new Error(res.error || "TMI 重写失败");
@@ -344,7 +344,7 @@ async function generateProfileBatch(state: RosterState, klass: ClassLetter): Pro
     const batch = rosterBatchPrompt(state, klass);
     if (!batch.ids.length) return;
     const res = await simpleLLMCall(chatConfig(), [
-      { role: "system", content: `为韩国娱乐圈练习生模拟游戏，补写同一初始班级的同期女生人物档案。只输出 JSON 对象：{"profiles":[{"charId":"","enName":"","nationality":"","heightCm":163,"appearance":"","privateLines":[""],"familyBackground":"","tmi":[""],"mbti":"ISFP","speech":""}]}。\n\n必须尊重给定骨架：名字、年龄、生日、初始班级、当前班级、特长、态度和朋友圈全部由代码确定，不能更改；按特长与态度写出匹配的性格与生活细节（懈怠的人不能被写成拼命三娘）。外籍比例自然：韩国人占多数，每批可有 1～2 位日本、中国、泰国或美国等国籍女生，其余以韩国为主。\n\nenName 写罗马字英文名：韩国人按韩语罗马字（如 金瑞妍 → Kim Seoyeon，姓在前）；日本人用 Hepburn 罗马字（如 佐藤美咲 → Sato Misaki）；中国人用拼音（如 王一诺 → Wang Yinuo）；泰国、美国等按本国常见拼写。每个词首字母大写，姓和名之间一个空格，不写昵称不写大小写混搭。\n\n外貌、性格、家庭要具体、自然、彼此区分，不堆同一套模板；同批人物不能用相同句式开头。\nTMI 写 1～2 条自然可爱的小细节，像女生之间互相聊起来会说的那种：喜欢追剧、爱追星、喜欢吃辣、怕黑、收集可爱贴纸、睡前一定要听某首歌——短句、口语，一两句就够。禁止文艺长句，禁止「衣柜里常年备着几罐柑橘味……」这种硬凹出来的句子。TMI 不能与输入中的已用 TMI 或同批其他人的 TMI 重复。\n家庭背景写普通而可信的生活背景，不强加创伤、秘密或戏剧冲突。speech 写一句她自然会说的话，不使用 MBTI 推导性格。MBTI 只作为名册档案字段生成，不要写进外貌、性格、家庭、TMI 或 speech。所有文本使用简体中文。所有字段必须写真实内容，禁止写「暂无」「无」「未知」「未写」这类占位文案，写占位文案整批会被退回重写。只返回列表里给出的 charId 对应人物，不增减人物。` },
+      { role: "system", content: `为韩国娱乐圈练习生模拟游戏，补写同一初始班级的同期女生人物档案。只输出 JSON 对象：{"profiles":[{"charId":"","enName":"","nationality":"","heightCm":163,"appearance":"","privateLines":[""],"familyBackground":"","tmi":[""],"mbti":"ISFP","speech":""}]}。\n\n必须尊重给定骨架：名字、年龄、生日、初始班级、当前班级、特长、态度和朋友圈全部由代码确定，不能更改；按特长与态度写出匹配的性格与生活细节（懈怠的人不能被写成拼命三娘）。外籍比例自然：韩国人占多数，每批可有 1～2 位日本、中国、泰国或美国等国籍女生，其余以韩国为主。\n\nenName 写罗马字英文名：韩国人按韩语罗马字（如 金瑞妍 → Kim Seoyeon，姓在前）；日本人用 Hepburn 罗马字（如 佐藤美咲 → Sato Misaki）；中国人用拼音（如 王一诺 → Wang Yinuo）；泰国、美国等按本国常见拼写。每个词首字母大写，姓和名之间一个空格，不写昵称不写大小写混搭。\n\n外貌、性格、家庭要具体、自然、彼此区分，不堆同一套模板；同批人物不能用相同句式开头。\nTMI 写 1～2 条她真实生活里的小爱好、小习惯、小特点，短句、口语，一两句就够。禁止长句和矫饰的写法。TMI 不能与输入中的已用 TMI 或同批其他人的 TMI 重复。\n家庭背景写普通而可信的生活背景，不强加创伤、秘密或戏剧冲突。speech 写一句她自然会说的话，不使用 MBTI 推导性格。MBTI 只作为名册档案字段生成，不要写进外貌、性格、家庭、TMI 或 speech。所有文本使用简体中文。所有字段必须写真实内容，禁止写「暂无」「无」「未知」「未写」这类占位文案，写占位文案整批会被退回重写。只返回列表里给出的 charId 对应人物，不增减人物。` },
       { role: "user", content: `请补全 ${klass} 班这批人物的资料。代码骨架与已用 TMI 如下：\n${batch.input}` },
     ], { temperature: 0.88, max_tokens: 6500, label: `名册同期资料 ${klass} 班` });
     if (!res.content) throw new Error(res.error || `${klass} 班资料生成失败`);

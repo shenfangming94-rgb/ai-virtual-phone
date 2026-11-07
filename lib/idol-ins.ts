@@ -66,6 +66,8 @@ type State = {
   me: { handle: string; name: string; bio: string; private: boolean; riskHint: boolean; avatar?: string };
   accs: Record<string, InsAcc>;
   following: string[];
+  /** 已经补过以前主页的账号（点头像补历史帖，一人一次） */
+  backfilled: string[];
   followers: string[];
   requested: { id: string; at: number; decideAt: number }[];
   incoming: { id: string; at: number }[];
@@ -87,7 +89,7 @@ function defaults(): State {
   const base = (card?.name || "me").replace(/[^a-zA-Z0-9]/g, "").toLowerCase().slice(0, 6) || "flo";
   return {
     me: { handle: `${base}_${card?.birthday?.slice(5).replace("-", "") || "0412"}`, name: card?.name || "我", bio: "", private: true, riskHint: true },
-    accs: {}, following: [], followers: [], requested: [], incoming: [], posts: [], stories: [], notes: [], dms: {}, askedMe: [],
+    accs: {}, following: [], backfilled: [], followers: [], requested: [], incoming: [], posts: [], stories: [], notes: [], dms: {}, askedMe: [],
   };
 }
 export function loadIns(): State {
@@ -354,6 +356,52 @@ export async function fillFeed(): Promise<number> {
     });
     return n;
   } finally { fillBusy = false; }
+}
+
+let backfillBusy = false;
+/** 点头像补 TA 以前的主页：她刚关注的人之前也发过帖子，一次生成 9 条历史帖。一人只补一次。 */
+export async function backfillProfile(accId: string): Promise<number> {
+  if (backfillBusy) return 0;
+  const s = loadIns();
+  const a = s.accs[accId];
+  if (!a || s.backfilled.includes(accId)) return 0;
+  backfillBusy = true;
+  try {
+    const now = Date.now();
+    const from = now - 180 * DAY;
+    const p = a.charId ? loadProfiles()[a.charId] : undefined;
+    const char = a.charId ? loadCharacters().find(c => c.id === a.charId) : undefined;
+    const res = await simpleLLMCall(config(), [
+      { role: "system", content: `你在给一出韩国娱乐圈的戏补 @${a.handle} 的 ins 主页。TA 之前就发过帖子，只是她还没刷到。只输出 JSON：
+{"posts":[{"at":"YYYY-MM-DD HH:mm","imgs":[{"desc":"画面一句话","who":["照片里有谁的 handle，自己就写自己的"]}],"cap":"配文（十五字以内，可空或只有 emoji）","capZh":"","comments":[{"handle":"","text":"","zh":""}]}]}
+写 9 条，日期从几个月前到今天之前、从早到晚散开（练习生发得少，可能两三个星期才一条）。照 TA 的性格、身份和日常生活写：练习生多是练习室、吃的、天空、和朋友；出道爱豆大号营业、小号私下。照片里的人按 TA 真实认识的人写，不编 TA 没经历过的重大事件。${LANG}配文不是中文的给 capZh。别写现实艺人。` },
+      { role: "user", content: `${char ? `TA 是谁：${char.name}，${p?.role || ""}。${p?.appearance ? `外貌：${p.appearance}` : ""}${p?.privateLines?.length ? `性格：${p.privateLines.join("；")}` : ""}` : `TA 是谁：${a.name}${p ? `，${p.role}` : ""}`}
+
+${idolWorldPrompt()}` },
+    ], { temperature: 0.9, label: `ins 补主页 ${a.handle}` });
+    const j = pickJson<{ posts?: { at?: string; imgs?: { desc?: string; who?: string[] }[]; cap?: string; capZh?: string; comments?: { handle?: string; text?: string; zh?: string }[] }[] }>(res.content);
+    if (!j.posts?.length) throw new Error(res.error || "AI 没写出来");
+    let n = 0;
+    patch(x => {
+      const acc = x.accs[accId];
+      if (!acc) return x;
+      const posts = [...x.posts];
+      for (const raw of j.posts ?? []) {
+        const at = Math.min(now - 2 * HOUR, Math.max(from, parseAt(raw.at) ?? rnd(from, now - 2 * HOUR)));
+        const imgs = (raw.imgs ?? []).filter(i => i?.desc).slice(0, 5).map(i => ({ desc: String(i.desc), who: whoIds(i.who, acc) }));
+        if (!imgs.length) continue;
+        posts.push({ id: uid("post"), by: accId, at, imgs, cap: String(raw.cap ?? ""), capZh: raw.capZh ? String(raw.capZh) : undefined, likes: insLikes(`${acc.handle}${at}`, acc.followers, !acc.private), comments: (raw.comments ?? []).filter(c => c?.text).slice(0, 3).map(c => ({ by: String(c.handle || "user").replace(/^@/, ""), text: String(c.text), zh: c.zh ? String(c.zh) : undefined, at: at + rnd(5, 300) * MIN })) });
+        n++;
+      }
+      return { ...x, posts, backfilled: [...x.backfilled, accId] };
+    });
+    return n;
+  } catch (error) {
+    console.warn("[ins] 补主页没写成：", error);
+    return 0;
+  } finally {
+    backfillBusy = false;
+  }
 }
 
 /** 路人网名（代码起，不花调用） */

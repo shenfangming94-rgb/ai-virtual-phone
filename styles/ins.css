@@ -260,3 +260,12 @@ textarea.ig-sv-text::placeholder, textarea.ig-sv-cap::placeholder { color: rgba(
 /* INS app 是普通信息流：关掉查手机那套「一屏一条」的强制吸附滚动 */
 .ig-scroll .cp-instagram-feed { scroll-snap-type: none; }
 .ig-scroll .cp-instagram-feed-post { min-height: 0; scroll-snap-align: none; scroll-snap-stop: normal; }
+
+/* 补主页确认弹层 */
+.ig-sheet-back{position:fixed;inset:0;z-index:60;background:rgba(0,0,0,.35);display:flex;align-items:flex-end;justify-content:center;padding:20px}
+.ig-sheet{width:100%;max-width:400px;background:#fff;border-radius:20px;padding:22px 20px 18px}
+.ig-sheet>b{font-size:16px}
+.ig-sheet>p{font-size:13px;line-height:1.7;color:#666;margin:10px 0 16px}
+.ig-sheet-btns{display:flex;gap:10px;justify-content:flex-end}
+.ig-sheet-btns button{border:1px solid #dbdbdb;background:#fff;border-radius:10px;padding:9px 18px;font-size:13px;color:#333}
+.ig-sheet-btns button.p{background:#0095f6;border-color:#0095f6;color:#fff}

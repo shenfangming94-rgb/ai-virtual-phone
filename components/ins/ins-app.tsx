@@ -15,6 +15,7 @@ import {
   BGS, INS_EVENT, ME, accOf, activeStories, answerIncoming, canSee, charAvatar, dmAllowed, dmOf, dmReplying, deleteDm, editDm, fillFeed, follow, generateImg, hidePost,
   loadIns, markNotesSeen, maybeKnow, myPost, myStory, needsFill, ownerName, refreshExplore, relationTo, replyDm, searchAccs, sendDm, setDmFlags, setMe, setPrivate,
   unfollow, unarchive, purgePost, purgeStory, editImgDesc, likeStory, replyStory, unseenNotes, toggleLike, myComment, moreComments, commentsBusy, sendDmImg, type Img, type InsAcc, type Post, type Story,
+  backfillProfile,
 } from "@/lib/idol-ins";
 import { loadCharacters } from "@/lib/character-storage";
 import { loadProfiles } from "@/lib/idol-people";
@@ -373,6 +374,7 @@ function Profile({ id, onBack, onPosts, onReq, onNotice, tabbar, onChat, onStory
   const mine = id === ME;
   const [editing, setEditing] = useState(false);
   const [ptab, setPtab] = useState<"grid" | "video" | "tag">("grid");
+  const [askBackfill, setAskBackfill] = useState(false);
   if (!a) return <div className="ig-page"><div className="ig-bar"><button type="button" onClick={onBack}><ChevronLeft size={26} /></button><b /></div><div className="ig-empty">找不到这个号</div></div>;
   const posts = s.posts.filter(p => p.by === id && !p.deleted && (mine || !p.archived)).sort((x, y) => y.at - x.at);
   const see = canSee(id);
@@ -391,7 +393,7 @@ function Profile({ id, onBack, onPosts, onReq, onNotice, tabbar, onChat, onStory
         <div className="ig-scroll">
           <section className="cp-instagram-profile-card">
             <div className="cp-instagram-profile-top">
-              <button type="button" onClick={() => st.length && onStory(st)}><Avatar acc={a} size={76} ring={st.length ? "new" : undefined} /></button>
+              <button type="button" onClick={() => { if (st.length) onStory(st); else if (!mine && see && !posts.length && !s.backfilled.includes(id)) setAskBackfill(true); }}><Avatar acc={a} size={76} ring={st.length ? "new" : undefined} /></button>
               <div className="cp-instagram-profile-stats"><div><strong>{posts.length}</strong><span>帖子</span></div><div><strong>{fmtN(followers)}</strong><span>粉丝</span></div><div><strong>{fmtN(following)}</strong><span>关注</span></div></div>
             </div>
             {a.bio ? <div className="cp-instagram-profile-main"><p style={{ whiteSpace: "pre-wrap" }}>{a.bio}</p></div> : null}
@@ -417,6 +419,7 @@ function Profile({ id, onBack, onPosts, onReq, onNotice, tabbar, onChat, onStory
         </div>
       </div>
       {tabbar}
+      {askBackfill ? <div className="ig-sheet-back" onClick={() => setAskBackfill(false)}><div className="ig-sheet" onClick={e => e.stopPropagation()}><b>补一下 TA 以前的主页？</b><p>TA 之前就发过帖子。点「补上」会写 TA 过去几个月的 9 条动态；不补也可以。</p><div className="ig-sheet-btns"><button type="button" onClick={() => setAskBackfill(false)}>不用了</button><button type="button" className="p" onClick={() => { setAskBackfill(false); void backfillProfile(id).then(n => onNotice?.(n ? `补上了 ${n} 条动态` : "这次没写成，稍后再试")); }}>补上</button></div></div></div> : null}
       {editing ? <EditMe onClose={() => setEditing(false)} /> : null}
     </div>
   );

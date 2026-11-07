@@ -218,8 +218,8 @@ function filterTitle(f: Filter, lists: ContactList[]): string {
 function matches(f: Filter, c: Character, p: IdolProfile | undefined, data: Data): boolean {
   switch (f.kind) {
     case "all":
-      // 她定的：背景人物也进通讯录（带「背景」标），没见过的同期也在这——只有档案库和备忘录不收
-      return true;
+      // 她定的：只有见过面、认识的才进通讯录；没见过的（同期/路人）都不进
+      return !p || p.met === true;
     case "layer": return (p?.layer ?? "main") === f.layer;
     case "group": return (p?.group ?? "") === f.group;
     case "list": return data.lists.find(l => l.id === f.id)?.memberIds.includes(c.id) ?? false;

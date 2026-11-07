@@ -308,6 +308,7 @@ function ClassmatePage({ id, data, showPageBar = false }: { id: string; data: Ye
   useEffect(() => setNote(profile.note ?? ""), [id, profile.note]);
   // 她定的：点档案里的某一条（TMI/性格/家庭…）弹窗自己改；改过的 AI 重生成也不会覆盖
   const [editing, setEditing] = useState<{ key: ProfileEditKey; value: string } | null>(null);
+  const [regenOpen, setRegenOpen] = useState(false);
   const [regenUntil, setRegenUntil] = useState(0);
   const regenBusy = Date.now() < regenUntil;
   const openEdit = (key: ProfileEditKey, value: string) => setEditing({ key, value });
@@ -321,8 +322,10 @@ function ClassmatePage({ id, data, showPageBar = false }: { id: string; data: Ye
     else saveProfile({ ...p, [editing.key]: clean, handEdited: hand });
     setEditing(null);
   };
+  // 她定的：点主页的头像 → 弹小面板，里面才有「补全资料」；页面上不放大按钮
   const onRegenerate = () => {
     queueProfileRegenerate(id);
+    setRegenOpen(false);
     setRegenUntil(Date.now() + 6000);
   };
   const roommate = Boolean(data.career.roommates?.includes(id));
@@ -357,7 +360,7 @@ function ClassmatePage({ id, data, showPageBar = false }: { id: string; data: Ye
         <h2 className="yb-title" style={{ fontSize: 21 }}><i>✦</i>Student Card<i>✦</i></h2>
         <div className="yb-cap yb-card-cap">Trainee Yearbook · 2026</div>
         {withdrawn ? <div className="yb-withdrawn-band">WITHDRAWN · 已离开公司</div> : null}
-        <div className="yb-portrait">
+        <div className="yb-portrait" role="button" tabIndex={0} aria-label="补全资料" onClick={() => setRegenOpen(true)}>
           {char?.avatar ? <img src={char.avatar} alt="" /> : <span>{char?.name?.slice(0, 1) ?? ""}</span>}
           {roommate ? <div className="yb-seal"><b>ROOM<br />MATE</b></div> : null}
         </div>
@@ -389,8 +392,7 @@ function ClassmatePage({ id, data, showPageBar = false }: { id: string; data: Ye
         <ProfileRow label="FAMILY" value={profile.familyBackground} onEdit={() => openEdit("familyBackground", profile.familyBackground ?? "")} />
         <ProfileRow label="TMI" value={profile.tmi?.join("\n")} onEdit={() => openEdit("tmi", profile.tmi?.join("\n") ?? "")} />
       </tbody></table>
-      <div className="yb-edit-hint">· 点上面的条目可以自己改</div>
-      <button type="button" className="yb-regen" disabled={regenBusy} onClick={onRegenerate}>{regenBusy ? "补全中…" : "✦ 补全资料 / 重新生成 ✦"}</button>
+      <div className="yb-edit-hint">· 点上面的条目可以自己改{regenBusy ? " · 补全中…" : ""}</div>
     </Section>
 
     <Section title="Records" zh="月考">
@@ -429,6 +431,15 @@ function ClassmatePage({ id, data, showPageBar = false }: { id: string; data: Ye
           <div className="yb-edit-head"><b>{PROFILE_EDIT_LABEL[editing.key]}</b><small>改完保存；改过的这条，AI 重新生成时不会覆盖</small></div>
           <textarea value={editing.value} rows={5} onChange={event => setEditing({ ...editing, value: event.target.value })} placeholder="写点什么…（TMI / NATURE 可以一行一条）" aria-label={PROFILE_EDIT_LABEL[editing.key]} />
           <div className="yb-edit-btns"><button type="button" onClick={() => setEditing(null)}>取消</button><button type="button" className="p" onClick={saveEdit}>保存</button></div>
+        </div>
+      </div>
+    ) : null}
+    {regenOpen ? (
+      <div className="yb-edit-mask" onClick={e => { if (e.target === e.currentTarget) setRegenOpen(false); }}>
+        <div className="yb-edit-sheet">
+          <div className="yb-edit-head"><b>STUDENT PROFILE</b><small>资料不全或写得不好，都可以重新生成</small></div>
+          <button type="button" className="yb-regen-row" onClick={onRegenerate}><span>✦ 补全资料</span><small>AI 重新写这一页</small></button>
+          <div className="yb-edit-btns"><button type="button" onClick={() => setRegenOpen(false)}>取消</button></div>
         </div>
       </div>
     ) : null}

@@ -9,7 +9,7 @@ import { loadTraineeCard } from "./trainee-card";
 
 export type FameSize = "small" | "medium" | "big" | "debut";
 export type FameLog = { at: number; text: string; size?: FameSize | "start" | "manual" | "cool"; pop: number; heat: number; until?: number };
-type State = { pop: number; heat: number; at: number; log: FameLog[]; coolFrom?: number; coolSum?: number };
+type State = { pop: number; heat: number; at: number; log: FameLog[]; coolFrom?: number; coolSum?: number; traineeHeatPatched?: boolean };
 
 const KEY = "idol_fame_v1";
 export const FAME_EVENT = "idol-fame-changed";
@@ -49,18 +49,45 @@ function fresh(): State {
 function load(): State {
   try {
     const raw = JSON.parse(kvGet(KEY) || "null") as State | null;
-    if (raw) return { ...raw, log: raw.log ?? [] };
-    // 以前的关注度是一个数，存在 idol_events_v1.fame：开局那部分算人气，多出来的算热度
-    const old = (JSON.parse(kvGet("idol_events_v1") || "null") as { fame?: number } | null)?.fame;
-    if (typeof old === "number" && loadTraineeCard()) {
-      const s = fresh();
-      const extra = Math.max(0, old - (familyStart() - 5));
-      if (extra > 0) { s.heat = extra; s.log.push({ at: Date.now(), text: "以前攒下的热度", size: "medium", pop: 0, heat: extra }); }
-      save(s);
+    if (raw) {
+      const s = { ...raw, log: raw.log ?? [] };
+      healTraineeHeat(s);
       return s;
+    }
+    // 以前的关注度是一个数，存在 idol_events_v1.fame：开局那部分算人气，多出来的算热度。
+    // 旧事件的时间线已经跑到当前世界时间之后 = 那是上一个档的事，清档重开不能背过来。
+    const old = (JSON.parse(kvGet("idol_events_v1") || "null") as { fame?: number; events?: { at?: number }[]; posts?: { at?: number }[]; feed?: { at?: number }[]; happenings?: { at?: number }[]; setbacks?: { at?: number }[] } | null);
+    if (old && typeof old.fame === "number" && loadTraineeCard()) {
+      const stamps = [...(old.events ?? []), ...(old.posts ?? []), ...(old.feed ?? []), ...(old.happenings ?? []), ...(old.setbacks ?? [])].map(x => Number(x?.at) || 0).filter(Boolean);
+      const maxAt = stamps.length ? Math.max(...stamps) : 0;
+      if (maxAt <= Date.now() + DAY) {
+        const s = fresh();
+        const extra = Math.max(0, old.fame - (familyStart() - 5));
+        if (extra > 0) { s.heat = extra; s.log.push({ at: Date.now(), text: "以前攒下的热度", size: "medium", pop: 0, heat: extra }); }
+        save(s);
+        return s;
+      }
+      const f = fresh();
+      save(f);
+      return f;
     }
   } catch { /* 坏数据当新的 */ }
   return fresh();
+}
+
+/** 她反馈：一场试镜通过就热度 +20、直接「普通艺人」太离谱。
+ *  一次性自愈：练习生时期，单条超过 5 的热度（大事/旧档继承）钳到 5，热度本身也钳到 5。 */
+function healTraineeHeat(s: State): void {
+  if (s.traineeHeatPatched) return;
+  const stage = careerStage();
+  if (stage !== "pre" && stage !== "trainee") { s.traineeHeatPatched = true; return; }
+  let changed = false;
+  for (const e of s.log) {
+    if (e.heat > 5 && (e.size === "big" || e.text === "以前攒下的热度")) { e.heat = 5; changed = true; }
+  }
+  if (s.heat > 5) { s.heat = 5; changed = true; }
+  s.traineeHeatPatched = true;
+  if (changed) save(s);
 }
 function save(s: State) {
   kvSet(KEY, JSON.stringify({ ...s, log: s.log.slice(-300) }));

@@ -476,7 +476,9 @@ export async function closeSceneWith(host: SceneHost): Promise<SceneCloseResult>
   host.saveMeta({ ...meta, ended: true, summary });
   const node = meta.nodeId ? nodeById(meta.nodeId) : undefined;
   // 关注度看这场戏里外界到底知不知道，不看提醒事项是不是「机会」
-  if (fame === "small" || fame === "medium" || fame === "big") fameEvent(fame, summary || node?.title || `在${meta.place}`, meta.startAt);
+  // 她反馈过：一场试镜通过就热度 +20 太离谱——试镜外界基本看不见，最多算小事
+  const settledFame = node?.kind === "audition" && (fame === "medium" || fame === "big") ? "small" : fame;
+  if (settledFame === "small" || settledFame === "medium" || settledFame === "big") fameEvent(settledFame, summary || node?.title || `在${meta.place}`, meta.startAt);
   const milestone = meta.nodeId ? await completeNode(meta.nodeId, perf) : null;
   await afterNodeScene(node, present.map(c => c.id), meta.place).catch(() => undefined);
   void import("./theqoo-triggers").then(m => m.publishSceneForumEvents({ node, meta, transcript, evidence: publicEvidence })).catch(error => {

@@ -22,6 +22,7 @@ import {
     resolveVisionImagePromptLimit,
     type ChatMessage,
 } from "@/lib/chat-storage";
+import { getProfile } from "@/lib/idol-people";
 import {
     GROUP_SELF_KEY,
     applyGroupAdminAction,
@@ -762,7 +763,13 @@ export function ChatSettingsPanel({
         const friends = friendIds
             .map(id => characters.find(ch => ch.id === id))
             .filter((c): c is NonNullable<typeof c> => Boolean(c && !inGroup.has(c.id)));
-        const others = characters.filter(c => !inGroup.has(c.id) && !friendIds.includes(c.id));
+        const others = characters.filter(c => {
+            if (inGroup.has(c.id) || friendIds.includes(c.id)) return false;
+            // 爱豆小手机：还没见过的同期练习生不进拉人列表
+            const p = getProfile(c.id);
+            if (p?.group === "同期练习生" && !p.met) return false;
+            return true;
+        });
         return [...friends, ...others];
     })();
     const canInvite = session.isGroup && !session.isSpectator

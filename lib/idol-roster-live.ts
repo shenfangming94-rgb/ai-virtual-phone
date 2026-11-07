@@ -12,8 +12,9 @@ import { loadTraineeCard } from "./trainee-card";
 import { loadCareer } from "./idol-career";
 import { createPerson, emptyProfile, herAge, loadProfiles, saveProfile } from "./idol-people";
 import { genKakaoId } from "./idol-kakao";
-import { ATTITUDE_LABEL, coursePoints, settleProgress, type ClassLetter, type Subject } from "./idol-training";
-import { generateRosterState, settleNpcWeeks, type RosterState } from "./idol-roster";
+import { ATTITUDE_LABEL, coursePoints, settleProgress, type ClassLetter, type Specialty, type Subject } from "./idol-training";
+import { generateRosterState, dedupeRosterNames, settleNpcWeeks, type RosterState } from "./idol-roster";
+import { loadCharacters, saveCharacters } from "./character-storage";
 import { simpleLLMCall } from "./api-helpers";
 import { loadApiConfigs, loadBindingConfig, resolveBinding } from "./settings-storage";
 
@@ -72,7 +73,7 @@ export function ensureRoster(): RosterState | null {
   const career = loadCareer();
   if (career.stage !== "trainee") return null;
   let s = load();
-  if (s) { queueRosterProfileGeneration(s); return s; }
+  if (s) { healRosterSave(s); queueRosterProfileGeneration(s); return s; }
   const card = loadTraineeCard();
   if (!card) return null;
   const rng = mulberry32((career.signedAt ?? Date.now()) % 4294967296);
@@ -103,6 +104,48 @@ export function ensureRoster(): RosterState | null {
   return s;
 }
 
+const HARD_SUBJECTS = ["vocal", "dance", "rap"];
+const SOFT_SUBJECTS = ["visual", "acting", "variety", "compose", "language"];
+
+/** 老存档读档自愈（幂等，每次 ensureRoster 跑一遍也便宜）：
+ *  1. 开局选了颜值特长但数值没兑现（旧 makePlayer 只认硬三门）→ 补到 A（85）；
+ *     没选硬三门的人，特长别落在默认的舞蹈上，按她选的算。
+ *  2. 同期重名 → 去重改名，同步通讯录里那个 Character 的名字。
+ *  3. 同期资料缺字段或写成「暂无」的 → 重新塞回补全队列。 */
+function healRosterSave(s: RosterState): void {
+  const card = loadTraineeCard();
+  if (card) {
+    const talents = card.talents ?? [];
+    let changed = false;
+    if (talents.includes("visual") && s.player.stats.visual < 85) { s.player.stats.visual = 85; changed = true; }
+    const hasHard = talents.some(t => HARD_SUBJECTS.includes(t));
+    const firstSoft = talents.find(t => SOFT_SUBJECTS.includes(t));
+    if (!hasHard && firstSoft && s.player.specialty === "dance" && s.player.stats.dance === 55) {
+      s.player.specialty = firstSoft as Specialty;
+      s.player.stats[firstSoft as Subject] = Math.max(s.player.stats[firstSoft as Subject], 55);
+      changed = true;
+    }
+    if (changed) save(s);
+  }
+  const renames = dedupeRosterNames(s.npcs);
+  if (renames.length) {
+    const chars = loadCharacters();
+    const profiles = loadProfiles();
+    let charChanged = false;
+    for (const r of renames) {
+      const charId = s.npcs.find(n => n.id === r.npcId)?.charId;
+      const c = chars.find(x => x.id === charId);
+      if (c && c.name === r.from) { c.name = r.to; charChanged = true; }
+      // 旧英文名跟旧名字走，改名后清掉，免得名册里罗马音对不上
+      const p = charId ? profiles[charId] : undefined;
+      if (p && p.enName) saveProfile({ ...p, enName: "" });
+    }
+    if (charChanged) saveCharacters(chars);
+    save(s);
+  }
+  if (requeuePlaceholderProfiles(s)) save(s);
+}
+
 const CLASS_ORDER: ClassLetter[] = ["A", "B", "C", "D"];
 const SPECIALTY_NAME: Record<string, string> = {
   vocal: "声乐", dance: "舞蹈", rap: "说唱", visual: "形象管理", acting: "演技", variety: "综艺", compose: "作曲", language: "语言", none: "暂无",
@@ -110,6 +153,43 @@ const SPECIALTY_NAME: Record<string, string> = {
 
 function normalizeForUnique(value: string): string {
   return value.toLowerCase().replace(/[\s\p{P}\p{S}]/gu, "");
+}
+
+/** AI 偷懒写的占位文案（「暂无」「无」之类）一律不当有效资料 */
+const PLACEHOLDER_WORDS = new Set(
+  ["暂无", "无", "未知", "未写", "未填", "没写", "没有", "略", "无资料", "资料暂无", "资料暂缺", "暂无资料", "待补", "待定", "不写", "无内容", "未提供", "na", "none", "null", "tbd", "n/a"]
+    .map(normalizeForUnique),
+);
+const looksPlaceholder = (value: string) => PLACEHOLDER_WORDS.has(normalizeForUnique(value.trim()));
+
+/** 一条资料是否有效（字段齐、没有占位文案） */
+export function profileDetailValid(p: { nationality?: string; heightCm?: number; appearance?: string; privateLines?: string[]; familyBackground?: string; tmi?: string[]; mbti?: string; speech?: string }): boolean {
+  const lines = Array.isArray(p.privateLines) ? p.privateLines.map(String).map(v => v.trim()).filter(v => v && !looksPlaceholder(v)) : [];
+  const tmi = Array.isArray(p.tmi) ? p.tmi.map(String).map(v => v.trim()).filter(v => v && !looksPlaceholder(v)) : [];
+  return Boolean(
+    (p.nationality ?? "").trim() && !looksPlaceholder(String(p.nationality))
+    && Number(p.heightCm) >= 140 && Number(p.heightCm) <= 195
+    && (p.appearance ?? "").trim() && !looksPlaceholder(String(p.appearance))
+    && lines.length
+    && (p.familyBackground ?? "").trim() && !looksPlaceholder(String(p.familyBackground))
+    && tmi.length
+    && /^[EI][NS][TF][JP]$/.test(String(p.mbti ?? ""))
+    && (p.speech ?? "").trim() && !looksPlaceholder(String(p.speech)),
+  );
+}
+
+/** 缺资料或写成「暂无」的同期重新塞回补全队列（她的老档也靠这个自愈） */
+function requeuePlaceholderProfiles(s: RosterState): boolean {
+  const profiles = loadProfiles();
+  const pending = new Set(s.profilePending ?? []);
+  let changed = false;
+  for (const n of s.npcs) {
+    if (!n.charId || pending.has(n.charId)) continue;
+    const p = profiles[n.charId];
+    if (!p || !profileDetailValid(p)) { pending.add(n.charId); changed = true; }
+  }
+  if (changed) s.profilePending = [...pending];
+  return changed;
 }
 
 /** 可独立验证的批次解析器：严格保留代码已有骨架，不接受 AI 改名或改班。 */
@@ -124,8 +204,8 @@ export function parseRosterProfileBatch(raw: string, expectedIds: string[], exis
     const x = item as Record<string, unknown>;
     const charId = String(x.charId ?? "");
     if (!expectedIds.includes(charId) || byId.has(charId)) continue;
-    const privateLines = Array.isArray(x.privateLines) ? x.privateLines.map(String).map(v => v.trim()).filter(Boolean).slice(0, 2) : [];
-    const tmi = Array.isArray(x.tmi) ? x.tmi.map(String).map(v => v.trim()).filter(Boolean).slice(0, 2) : [];
+    const privateLines = Array.isArray(x.privateLines) ? x.privateLines.map(String).map(v => v.trim()).filter(v => v && !looksPlaceholder(v)).slice(0, 2) : [];
+    const tmi = Array.isArray(x.tmi) ? x.tmi.map(String).map(v => v.trim()).filter(v => v && !looksPlaceholder(v)).slice(0, 2) : [];
     const mbti = String(x.mbti ?? "").toUpperCase().replace(/[^A-Z]/g, "").slice(0, 4);
     const enName = String(x.enName ?? "").trim();
     const heightCm = Number(x.heightCm);
@@ -141,7 +221,7 @@ export function parseRosterProfileBatch(raw: string, expectedIds: string[], exis
       mbti,
       speech: String(x.speech ?? "").trim(),
     };
-    if (!draft.nationality || draft.heightCm < 140 || draft.heightCm > 195 || !draft.appearance || !privateLines.length || !draft.familyBackground || !tmi.length || !/^[EI][NS][TF][JP]$/.test(mbti) || !draft.speech) {
+    if (!profileDetailValid(draft)) {
       throw new Error(`同期资料字段不完整（${charId}）`);
     }
     byId.set(charId, draft);
@@ -158,7 +238,7 @@ function rosterBatchPrompt(state: RosterState, klass: ClassLetter): { ids: strin
   const profiles = loadProfiles();
   const chars = state.npcs.filter(n => n.charId).map(n => ({ n, p: profiles[n.charId!] }));
   const pending = new Set(state.profilePending ?? []);
-  const batch = chars.filter(x => pending.has(x.n.charId!) && x.n.klass === klass);
+  const batch = chars.filter(x => pending.has(x.n.charId!) && x.n.klass === klass).slice(0, 6);
   // friends[].charId 在名册骨架里保存的是 Trainee.id（不是通讯录 Character.id）。
   const nameById = new Map(state.npcs.map(n => [n.id, n.name]));
   const existingTmi = chars.filter(x => !pending.has(x.n.charId!)).flatMap(x => x.p?.tmi ?? []);
@@ -181,23 +261,28 @@ function rosterBatchPrompt(state: RosterState, klass: ClassLetter): { ids: strin
 }
 
 async function generateProfileBatch(state: RosterState, klass: ClassLetter): Promise<void> {
-  const batch = rosterBatchPrompt(state, klass);
-  if (!batch.ids.length) return;
-  const res = await simpleLLMCall(chatConfig(), [
-    { role: "system", content: `为韩国娱乐圈练习生模拟游戏，补写同一初始班级的同期女生人物档案。只输出 JSON 对象：{"profiles":[{"charId":"","enName":"","nationality":"","heightCm":163,"appearance":"","privateLines":[""],"familyBackground":"","tmi":[""],"mbti":"ISFP","speech":""}]}。\n\n必须尊重给定骨架：名字、年龄、生日、初始班级、当前班级、特长、态度和朋友圈全部由代码确定，不能更改；按特长与态度写出匹配的性格与生活细节（懈怠的人不能被写成拼命三娘）。外籍比例自然：韩国人占多数，每批可有 1～2 位日本、中国、泰国或美国等国籍女生，其余以韩国为主。\n\nenName 写罗马字英文名：韩国人按韩语罗马字（如 金瑞妍 → Kim Seoyeon，姓在前）；日本人用 Hepburn 罗马字（如 佐藤美咲 → Sato Misaki）；中国人用拼音（如 王一诺 → Wang Yinuo）；泰国、美国等按本国常见拼写。每个词首字母大写，姓和名之间一个空格，不写昵称不写大小写混搭。\n\n外貌、性格、家庭、TMI 要具体、自然、彼此区分，不堆同一套模板；同批人物不能用相同句式开头。每人写 1～2 条独有 TMI，不能与输入中的已用 TMI 或同批其他人的 TMI 重复。家庭背景写普通而可信的生活背景，不强加创伤、秘密或戏剧冲突。speech 写一句她自然会说的话，不使用 MBTI 推导性格。MBTI 只作为名册档案字段生成，不要写进外貌、性格、家庭、TMI 或 speech。所有文本使用简体中文。只返回列表里给出的 charId 对应人物，不增减人物。` },
-    { role: "user", content: `请补全 ${klass} 班这批人物的资料。代码骨架与已用 TMI 如下：\n${batch.input}` },
-  ], { temperature: 0.88, max_tokens: 6500, label: `名册同期资料 ${klass} 班` });
-  if (!res.content) throw new Error(res.error || `${klass} 班资料生成失败`);
-  const drafts = parseRosterProfileBatch(res.content, batch.ids, batch.existingTmi);
-  for (const draft of drafts) {
-    const profile = loadProfiles()[draft.charId];
-    if (!profile) continue;
-    saveProfile({ ...profile, enName: draft.enName, nationality: draft.nationality, heightCm: draft.heightCm, appearance: draft.appearance, privateLines: draft.privateLines, familyBackground: draft.familyBackground, tmi: draft.tmi, mbti: draft.mbti, speech: draft.speech });
+  // 一批最多 6 人：批次大了 AI 容易超长、偷懒，A 班这种 10 人的班分两次补
+  while (true) {
+    const batch = rosterBatchPrompt(state, klass);
+    if (!batch.ids.length) return;
+    const res = await simpleLLMCall(chatConfig(), [
+      { role: "system", content: `为韩国娱乐圈练习生模拟游戏，补写同一初始班级的同期女生人物档案。只输出 JSON 对象：{"profiles":[{"charId":"","enName":"","nationality":"","heightCm":163,"appearance":"","privateLines":[""],"familyBackground":"","tmi":[""],"mbti":"ISFP","speech":""}]}。\n\n必须尊重给定骨架：名字、年龄、生日、初始班级、当前班级、特长、态度和朋友圈全部由代码确定，不能更改；按特长与态度写出匹配的性格与生活细节（懈怠的人不能被写成拼命三娘）。外籍比例自然：韩国人占多数，每批可有 1～2 位日本、中国、泰国或美国等国籍女生，其余以韩国为主。\n\nenName 写罗马字英文名：韩国人按韩语罗马字（如 金瑞妍 → Kim Seoyeon，姓在前）；日本人用 Hepburn 罗马字（如 佐藤美咲 → Sato Misaki）；中国人用拼音（如 王一诺 → Wang Yinuo）；泰国、美国等按本国常见拼写。每个词首字母大写，姓和名之间一个空格，不写昵称不写大小写混搭。\n\n外貌、性格、家庭、TMI 要具体、自然、彼此区分，不堆同一套模板；同批人物不能用相同句式开头。每人写 1～2 条独有 TMI，不能与输入中的已用 TMI 或同批其他人的 TMI 重复。家庭背景写普通而可信的生活背景，不强加创伤、秘密或戏剧冲突。speech 写一句她自然会说的话，不使用 MBTI 推导性格。MBTI 只作为名册档案字段生成，不要写进外貌、性格、家庭、TMI 或 speech。所有文本使用简体中文。所有字段必须写真实内容，禁止写「暂无」「无」「未知」「未写」这类占位文案，写占位文案整批会被退回重写。只返回列表里给出的 charId 对应人物，不增减人物。` },
+      { role: "user", content: `请补全 ${klass} 班这批人物的资料。代码骨架与已用 TMI 如下：\n${batch.input}` },
+    ], { temperature: 0.88, max_tokens: 6500, label: `名册同期资料 ${klass} 班` });
+    if (!res.content) throw new Error(res.error || `${klass} 班资料生成失败`);
+    const drafts = parseRosterProfileBatch(res.content, batch.ids, batch.existingTmi);
+    for (const draft of drafts) {
+      const profile = loadProfiles()[draft.charId];
+      if (!profile) continue;
+      saveProfile({ ...profile, enName: draft.enName, nationality: draft.nationality, heightCm: draft.heightCm, appearance: draft.appearance, privateLines: draft.privateLines, familyBackground: draft.familyBackground, tmi: draft.tmi, mbti: draft.mbti, speech: draft.speech });
+    }
+    const latest = load();
+    if (!latest) return;
+    const done = new Set(batch.ids);
+    const next = { ...latest, profilePending: (latest.profilePending ?? []).filter(id => !done.has(id)), profileRetryAt: Date.now() };
+    save(next);
+    state = next;
   }
-  const latest = load();
-  if (!latest) return;
-  const done = new Set(batch.ids);
-  save({ ...latest, profilePending: (latest.profilePending ?? []).filter(id => !done.has(id)), profileRetryAt: Date.now() });
 }
 
 function queueRosterProfileGeneration(state: RosterState): void {

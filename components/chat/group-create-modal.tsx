@@ -4,6 +4,7 @@ import { useState } from "react";
 import { loadChatContacts } from "@/lib/chat-storage";
 import { loadCharacters } from "@/lib/character-storage";
 import { resolveUserIdentity } from "@/lib/settings-storage";
+import { getProfile } from "@/lib/idol-people";
 import { Character } from "@/lib/character-types";
 import { Input } from "@/components/ui/form";
 import { ChatFallbackAvatar } from "./chat-fallback-avatar";
@@ -25,9 +26,14 @@ export function GroupCreateModal({ onClose, onCreate }: GroupCreateModalProps) {
     const enriched = contacts
         .map(c => ({ ...c, char: chars.find(ch => ch.id === c.characterId) }))
         .filter(c => c.char) as (typeof contacts[number] & { char: Character })[];
-    // 不加好友也能拉进群：档案库里其他人
+    // 不加好友也能拉进群：档案库里其他人（爱豆小手机：还没见过的同期练习生不进拉人列表）
     const friendIds = new Set(enriched.map(c => c.characterId));
-    const archiveChars = chars.filter(c => !friendIds.has(c.id));
+    const archiveChars = chars.filter(c => {
+        if (friendIds.has(c.id)) return false;
+        const p = getProfile(c.id);
+        if (p?.group === "同期练习生" && !p.met) return false;
+        return true;
+    });
 
     const toggle = (id: string) => {
         setSelectedIds(prev => {

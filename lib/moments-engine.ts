@@ -63,6 +63,7 @@ import {
     isMomentRealCharacterAllowedForPost,
     isMomentRealCharacterAllowedForViewer,
 } from "./character-world-storage";
+import { getProfile } from "./idol-people";
 
 // ── Constants ──
 
@@ -97,8 +98,11 @@ function staggerOverduePosts() {
 
     const now = Date.now();
     const allSchedules = loadAIMomentSchedule();
-    // Ensure all contacts have a schedule
-    for (const c of contacts) getOrCreateSchedule(c.characterId);
+    // Ensure all contacts have a schedule（家人不排：爱豆小手机里爸妈不发动态）
+    for (const c of contacts) {
+        if (getProfile(c.characterId).familyMemberId) continue;
+        getOrCreateSchedule(c.characterId);
+    }
 
     const overdue = allSchedules.filter(s => s.nextPostAfter <= now);
     if (overdue.length > 1) {
@@ -120,6 +124,8 @@ function pollScheduledPosts() {
     const disabledIds = new Set(loadMomentsConfig().autoPostDisabledCharacterIds);
     for (const contact of contacts) {
         if (disabledIds.has(contact.characterId)) continue;
+        // 爱豆小手机：家人不自动发动态（她反馈爸妈不该发 KKT 动态，旧档也不发）
+        if (getProfile(contact.characterId).familyMemberId) continue;
         const schedule = getOrCreateSchedule(contact.characterId);
         if (schedule.nextPostAfter <= now) {
             isGenerating = true;

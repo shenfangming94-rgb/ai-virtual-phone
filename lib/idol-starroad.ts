@@ -172,13 +172,17 @@ export function classAt(t: number): string | null {
   return hit ? `${hit.slot.label} ${hit.slot.start}～${hit.slot.end}` : null;
 }
 
-/** 课表页：这一周（周一起）每天的课 + 已经过去的那几节怎么样了 */
+/** 课表页：这一周（周一起）每天的课 + 已经过去的那几节怎么样了。
+ *  签约当天还不是练习生：课表从进公司第一天（签约后第一个自然日）才开始有。 */
 export function weekTimetable(weekStart = mondayOf(Date.now())): { day: number; label: string; classes: { label: string; start: string; end: string; extra?: boolean; status?: ClassMark["status"]; leave?: boolean; subject: Subject | null }[] }[] {
   const s = ensure();
   if (!s) return [];
+  const career = loadCareer();
+  const firstDayStart = new Date((career.signedAt ?? 0) + DAY); firstDayStart.setHours(0, 0, 0, 0);
   const out = [];
   for (let i = 0; i < 7; i++) {
     const day = weekStart + i * DAY;
+    if (day < firstDayStart.getTime()) { out.push({ day, label: `${WEEK[new Date(day).getDay()]} ${mdLabel(day)}`, classes: [] }); continue; }
     const list = classesOn(s, day).map(c => {
       const mark = s.marks.find(m => m.at === c.start);
       return { label: c.slot.label, start: c.slot.start, end: c.slot.end, extra: c.slot.extra, status: mark?.status, leave: isLeave(s, day, c.slot.subject), subject: c.slot.subject };

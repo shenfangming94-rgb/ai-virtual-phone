@@ -195,6 +195,9 @@ export function CareerApp({ onClose, onNotice }: { onClose: () => void; onNotice
   const [swipeId, setSwipeId] = useState<string | null>(null);
   const dark = isNightNow();
   const company = companyOf(career.companyId);
+  // 进公司第一天（签约后第一个自然日）之前没有课表
+  const joinDay = new Date((career.signedAt ?? 0) + DAY); joinDay.setHours(0, 0, 0, 0);
+  const joined = Date.now() >= joinDay.getTime();
 
   const onCheck = (i: Item) => {
     if (i.status === "done") { uncheckNode(i.id); return; }
@@ -277,7 +280,7 @@ export function CareerApp({ onClose, onNotice }: { onClose: () => void; onNotice
             <span className="rm-lt">{company ? `${company.name} 内部档案` : "这个世界里的公司"}<small>{company ? "楼里、宿舍、一周、规矩" : "还没进公司"}</small></span>
             <span className="rm-lc"><ChevronRight size={18} /></span>
           </button>
-          {company ? <button type="button" className="rm-lrow" onClick={() => setPage({ p: "timetable" })}>
+          {company && joined ? <button type="button" className="rm-lrow" onClick={() => setPage({ p: "timetable" })}>
             <span className="rm-dot" style={{ background: "#5e5ce6" }}><CalendarDays size={18} /></span>
             <span className="rm-lt">课表<small>每周的课，默认都去；请假找室长</small></span>
             <span className="rm-lc"><ChevronRight size={18} /></span>
@@ -490,6 +493,16 @@ function TimetablePage({ onBack }: { onBack: () => void }) {
     const at = (value: string) => { const [h,m] = value.split(":").map(Number); const d = new Date(date); d.setHours(h,m,0,0); return d.getTime(); };
     return now < at(c.start) ? "待上课" : now < at(c.end) ? "上课时段" : "待记录";
   };
+  const joinDay = new Date((loadCareer().signedAt ?? 0) + DAY); joinDay.setHours(0, 0, 0, 0);
+  if (Date.now() < joinDay.getTime()) {
+    return (
+      <div className="rm-page rm-tt-page">
+        <div className="rm-top"><button type="button" className="rm-circle" onClick={onBack} aria-label="返回"><ChevronLeft size={22} /></button><span /></div>
+        <div className="tt-heading"><small>{company?.name || "STAR ROAD"} · TRAINEE SCHEDULE</small><h1>课程表</h1><p>按自己的节奏，一点一点进步。</p></div>
+        <p className="rm-empty">进公司第一天（{joinDay.getMonth() + 1}月{joinDay.getDate()}日）才有课程表。<br />那天会见到室长、分宿舍、见同期。</p>
+      </div>
+    );
+  }
   return (
     <div className="rm-page rm-tt-page">
       <div className="rm-top"><button type="button" className="rm-circle" onClick={onBack} aria-label="返回"><ChevronLeft size={22} /></button><span /></div>

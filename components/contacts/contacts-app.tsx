@@ -217,7 +217,9 @@ function filterTitle(f: Filter, lists: ContactList[]): string {
 
 function matches(f: Filter, c: Character, p: IdolProfile | undefined, data: Data): boolean {
   switch (f.kind) {
-    case "all": return true;
+    case "all":
+      // 爱豆小手机：同期练习生见了面才进通讯录（她反馈：还没见过的 39 个同期全在通讯录里不对）
+      return !(p?.group === "同期练习生" && !p.met);
     case "layer": return (p?.layer ?? "main") === f.layer;
     case "group": return (p?.group ?? "") === f.group;
     case "list": return data.lists.find(l => l.id === f.id)?.memberIds.includes(c.id) ?? false;

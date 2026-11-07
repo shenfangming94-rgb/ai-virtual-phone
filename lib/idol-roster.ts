@@ -9,6 +9,7 @@
 
 import {
   generateRoster, settleWeek, TIMETABLE_CURRENT,
+  GIVEN_POOL, SURNAME_POOL,
   type Specialty, type Stats, type Subject, type Trainee,
 } from "./idol-training";
 
@@ -33,12 +34,16 @@ export type RosterState = {
   profileRetryAt?: number;
 };
 
-/** 玩家基准：三项 45 起，特长 +10，C 班。视觉 50、软实力 45（模拟器同款基准） */
+/** 玩家基准：三项 45 起，特长 +10，C 班。视觉 50、软实力 45（模拟器同款基准）。
+ *  开局的任何特长都要兑现：硬三门优先当特长，没选硬三门就按她选的排；
+ *  选了颜值特长的直接 A（85，她定的：颜值没有课能练，不让她在 D 里熬）。 */
 export function makePlayer(talents: string[]): Trainee {
-  const first = talents.find(t => t === "vocal" || t === "dance" || t === "rap");
+  const SUBJECT_IDS: Subject[] = ["vocal", "dance", "rap", "visual", "acting", "variety", "compose", "language"];
+  const first = talents.find(t => t === "vocal" || t === "dance" || t === "rap") ?? talents.find(t => SUBJECT_IDS.includes(t as Subject));
   const specialty: Specialty = (first as Subject | undefined) ?? "dance";
   const stats: Stats = { vocal: 45, dance: 45, rap: 45, variety: 45, acting: 45, visual: 50, compose: 45, language: 45 };
   stats[specialty] += 10;
+  if (talents.includes("visual")) stats.visual = 85;
   return {
     id: "player", name: "玩家", specialty, stats,
     progress: { vocal: 0, dance: 0, rap: 0, variety: 0, acting: 0, visual: 0, compose: 0, language: 0 },
@@ -136,6 +141,7 @@ function assignBirthdays(npcs: NpcRecord[], rng: () => number): void {
 export function generateRosterState(talents: string[], rng: () => number, now = Date.now()): RosterState {
   const raw = generateRoster(rng);
   const npcs: NpcRecord[] = raw.map(t => ({ ...t, birthday: "", dorm: "", friends: [] }));
+  dedupeRosterNames(npcs);
   assignBirthdays(npcs, rng);
   assignDorms(npcs, rng);
   assignFriends(npcs, rng);
@@ -145,6 +151,29 @@ export function generateRosterState(talents: string[], rng: () => number, now = 
     npcs,
     settledUntil: new Date(now).toISOString().slice(0, 10),
   };
+}
+
+/** 姓名去重（不用 rng，不扰动后续生日/宿舍的随机流）：撞名的后面那个换成没用过的名字，先挑同姓别的名字。
+ *  返回改过的（npcId → 新名字），落地层拿去同步 Character 的名字。 */
+export function dedupeRosterNames(npcs: NpcRecord[]): { npcId: string; from: string; to: string }[] {
+  const renames: { npcId: string; from: string; to: string }[] = [];
+  const taken = new Set(npcs.map(n => n.name));
+  const used = new Set<string>();
+  for (const n of npcs) {
+    if (!used.has(n.name)) { used.add(n.name); continue; }
+    let fresh = "";
+    const surname = n.name.slice(0, 1);
+    for (const g of GIVEN_POOL) { const cand = surname + g; if (!taken.has(cand)) { fresh = cand; break; } }
+    if (!fresh) {
+      outer: for (const s of SURNAME_POOL) for (const g of GIVEN_POOL) { const cand = s + g; if (!taken.has(cand)) { fresh = cand; break outer; } }
+    }
+    if (!fresh) continue; // 池子全撞了，保底不改
+    renames.push({ npcId: n.id, from: n.name, to: fresh });
+    n.name = fresh;
+    taken.add(fresh);
+    used.add(fresh);
+  }
+  return renames;
 }
 
 /** 给 NPC 补算 weeks 周的训练（玩家不在这里涨：她的数值走真实上课/加练结算）。原地改。 */

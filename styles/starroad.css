@@ -53,7 +53,8 @@
 .sr-sh-en { font: italic 18px "SR Old Standard TT", serif; }
 .sr-sh-zh { font: 400 12px "Source Han Serif CN VF", "Noto Serif SC", serif; color: #888; }
 .sr-sh-g { margin-left: auto; font: 700 30px/1 "SR Playfair Display SC", serif; }
-.sr-sh-line { margin-top: 14px; font: 700 15px "Source Han Serif CN VF", "Noto Serif SC", serif; letter-spacing: .04em; }
+.sr-sh-now { margin-top: 12px; font: 400 12.5px "Source Han Serif CN VF", "Noto Serif SC", serif; color: #888; letter-spacing: .06em; }
+.sr-sh-line { margin-top: 6px; font: 700 15px "Source Han Serif CN VF", "Noto Serif SC", serif; letter-spacing: .04em; }
 .sr-sh-last { margin-top: 6px; font: 400 11px "Source Han Serif CN VF", "Noto Serif SC", serif; color: #888; }
 .sr-sh-tip { margin-top: 10px; font: 400 11px "Source Han Serif CN VF", "Noto Serif SC", serif; color: #999; line-height: 1.6; }
 .sr-sh-btn { margin-top: 16px; width: 100%; height: 42px; border-radius: 21px !important; background: #1c1c1e !important; color: #f7f7f6 !important; font: 600 14px "Source Han Serif CN VF", "Noto Serif SC", serif !important; letter-spacing: .2em; }

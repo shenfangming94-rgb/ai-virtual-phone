@@ -111,16 +111,18 @@ export function StarRoadApp({ onClose, onNotice }: { onClose: () => void; onNoti
 function GradeSheet({ g, onClose, onNotice }: { g: GradeView; onClose: () => void; onNotice?: Notice }) {
   const done = practicedToday();
   const next = g.grade === "A" ? null : ["F", "D", "C", "B", "A"][["F", "D", "C", "B", "A"].indexOf(g.grade) + 1];
+  // 一节 = 上完一节课或一次加练（特长 ×1.5 已经算进节数）；她要求把现在的数值打出来
   const line = g.grade === "A" ? "已经是 A 了，保持住"
-    : g.left > 0 ? `离 ${next} 还差 ${g.left} 次加练`
+    : g.left > 0 ? `离 ${next} 还差 ${g.left} 节`
     : g.waitDays > 0 ? `攒够了，再过 ${g.waitDays} 天升 ${next}` : `马上升 ${next}`;
   return (
     <div className="sr-mask" onClick={onClose}>
       <div className="sr-sheet" onClick={e => e.stopPropagation()}>
         <div className="sr-sh-head"><span className="sr-sh-en">{g.en}</span><span className="sr-sh-zh">{g.zh}</span><span className="sr-sh-g">{g.grade}</span></div>
+        <div className="sr-sh-now">现在 {g.pts} 分</div>
         <div className="sr-sh-line">{line}</div>
         {g.last ? <div className="sr-sh-last">{ym(g.last.at)} {g.last.from} → {g.last.to}</div> : null}
-        <div className="sr-sh-tip">上课会慢慢涨，老师的作业涨得多，加练最快。</div>
+        <div className="sr-sh-tip">上课一节、加练一次都算一节；作业涨得多。</div>
         <button type="button" className="sr-sh-btn" disabled={done} onClick={() => {
           const n = addPractice(g.id);
           if (!n) { onNotice?.("今天已经加练过了"); return; }

@@ -397,7 +397,7 @@ async function generateProfileBatch(state: RosterState, klass: ClassLetter): Pro
     for (const draft of drafts) {
       const profile = loadProfiles()[draft.charId];
       if (!profile) continue;
-      // 她手动改过的字段保留，AI 重生成不覆盖她的手改
+      // 她手动改过的字段保留，AI 重生成不覆盖她的手改；MBTI 只判一次——判过就锁死
       const hand = new Set(profile.handEdited ?? []);
       saveProfile({
         ...profile,
@@ -408,7 +408,7 @@ async function generateProfileBatch(state: RosterState, klass: ClassLetter): Pro
         privateLines: hand.has("privateLines") ? profile.privateLines : draft.privateLines,
         familyBackground: hand.has("familyBackground") ? profile.familyBackground : draft.familyBackground,
         tmi: hand.has("tmi") ? profile.tmi : draft.tmi,
-        mbti: hand.has("mbti") ? profile.mbti : draft.mbti,
+        mbti: hand.has("mbti") ? profile.mbti : (profile.mbti && /^[EI][NS][TF][JP]$/.test(profile.mbti) ? profile.mbti : draft.mbti),
         speech: hand.has("speech") ? profile.speech : draft.speech,
       });
     }

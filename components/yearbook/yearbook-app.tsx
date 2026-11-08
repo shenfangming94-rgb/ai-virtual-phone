@@ -343,7 +343,8 @@ function ClassmatePage({ id, data, showPageBar = false }: { id: string; data: Ye
   const entryRecord = npc ? [{ key: `entry-${id}`, stamp: data.career.signedAt ? monthLabel(new Date(data.career.signedAt).toISOString().slice(0, 7)) : "JUL", text: `入社 · ${npc.initialClass} 班`, rank: "—" }] : [];
   const examRecords = records.map(({ month, row }) => {
     let text = "月末评价";
-    if (row.klass && previousClass && row.klass !== previousClass) text = `升入 ${row.klass} 班`;
+    const CLASS_ORDER: Record<string, number> = { A: 0, B: 1, C: 2, D: 3 };
+    if (row.klass && previousClass && row.klass !== previousClass) text = (CLASS_ORDER[row.klass] < CLASS_ORDER[previousClass]) ? `升入 ${row.klass} 班` : `降到 ${row.klass} 班`;
     else if (row.change.startsWith("↑")) text = `名次上升 ${row.change.slice(1)} 位`;
     else if (row.change.startsWith("↓")) text = `名次下降 ${row.change.slice(1)} 位`;
     if (row.klass) previousClass = row.klass as NpcRecord["klass"];

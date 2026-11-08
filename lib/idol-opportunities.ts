@@ -230,6 +230,12 @@ export function flushPendingPublicFame(): void {
   save({ ...s, pendingPublic: [] });
 }
 
+/** 情缘专属奖励（写歌/MV/画报）的关注度：正式公开曝光后才结，先挂待公开队列 */
+export function queuePendingPublicFame(title: string, amount: number): void {
+  const s = load();
+  save({ ...s, pendingPublic: [...(s.pendingPublic ?? []), { subject: "visual" as Subject, title, amount }] });
+}
+
 /** 发一个新机会：邀约进提醒事项（待回复），结果当场定（代码判），赢了再排正式工作 */
 function fireOpportunity(): void {
   const s = load();

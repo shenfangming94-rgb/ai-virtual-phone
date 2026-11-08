@@ -13,7 +13,7 @@ import { loadCareer, saveCareer, addToCalendar, type CareerNode } from "./idol-c
 import { loadProfiles, type IdolProfile } from "./idol-people";
 import { loadCharacters } from "./character-storage";
 import { settlePlayerExp } from "./idol-roster-live";
-import { fameEvent } from "./idol-fame";
+
 import { mainlineState } from "./idol-mainline";
 import { isKakaoFriend } from "./idol-kakao";
 
@@ -22,6 +22,7 @@ import {
   ROUTE_NODES, ROUTE_TYPES, ROUTE_IDENTITY_HINTS,
   addMeet, addKkt, addCall, advanceNode, nodeReady, newLine,
   type LineState, type RouteType,
+  bondDayKey,
 } from "./idol-romance-lines";
 import type { Subject } from "./idol-training";
 
@@ -100,6 +101,9 @@ export function recordMeet(charId: string): void {
   try { if (!kvGet("idol_roster_v1")) return; } catch { return; }
   const hit = lineOfChar(charId);
   if (!hit) return;
+  // 连续待一整天只算一次：同一个世界日见过就不再计
+  const lastMeet = hit.line.history.filter(h => h.type === "meet").pop();
+  if (lastMeet && bondDayKey(lastMeet.at) === bondDayKey(Date.now())) return;
   const s = load();
   s.lines[hit.type] = addMeet(hit.line);
   save(s);
@@ -315,13 +319,13 @@ function pendingNodeNow(charId: string, note: string, title: string, place: stri
   return node.id;
 }
 
-/** 双向掉马：两半各自凑条件，顺序不定；两半都发生了才算这个节点走完 */
+/** 双向掉马：两半各自凑条件，顺序不定；两半都真的演完了才算这个节点走完 */
 function revealTick(s: State, type: RouteType, line: LineState, career: ReturnType<typeof loadCareer>): boolean {
   const his = charName(line.charId);
-  const has = (half: string) => career.nodes.some(n => n.fromId === line.charId && n.note === `情缘节点：mutual_reveal#${half}`)
+  const has = (half: string) => career.nodes.some(n => n.fromId === line.charId && n.note === `情缘节点：mutual_reveal#${half}` && (n.status === "pending" || n.status === "invite" || n.status === "done"))
     || [...(s.classBeats ?? []), ...(s.afterScene ?? [])].some(b => b.type === type && b.key === `mutual_reveal#${half}`);
-  const doneA = career.nodes.some(n => n.fromId === line.charId && n.note === "情缘节点：mutual_reveal#a");
-  const doneB = career.nodes.some(n => n.fromId === line.charId && n.note === "情缘节点：mutual_reveal#b");
+  const doneA = career.nodes.some(n => n.fromId === line.charId && n.note === "情缘节点：mutual_reveal#a" && n.status === "done");
+  const doneB = career.nodes.some(n => n.fromId === line.charId && n.note === "情缘节点：mutual_reveal#b" && n.status === "done");
   if (doneA && doneB) { s.lines[type] = advanceNode(line); return true; }
   if (!nodeReady(line)) return false;
   let changed = false;
@@ -355,6 +359,18 @@ export function takeRomanceAfterScene(place: string, wasSide: boolean): string |
   return pendingNodeNow(line.charId, b.note, b.title, b.place, b.premise, b.side);
 }
 
+/** 戏真的演完了：把这场戏里接的情缘节点标成完成（她定的：演完才推进，不是排出来就推进） */
+export function markPlayedBeatNodes(presentIds: string[], requirePresent: boolean): void {
+  try { if (!kvGet("idol_roster_v1")) return; } catch { return; }
+  const career = loadCareer();
+  const played = career.nodes.filter(n => n.occasion === "romance" && n.kind === "event"
+    && String(n.note ?? "").startsWith("情缘节点：") && n.status === "pending"
+    && Date.now() - n.dueAt < 8 * 3600e3
+    && (!requirePresent || (n.fromId && presentIds.includes(n.fromId))));
+  if (!played.length) return;
+  saveCareer({ ...career, nodes: career.nodes.map(n => played.some(p => p.id === n.id) ? { ...n, status: "done" as const, doneAt: Date.now() } : n) });
+}
+
 /** 上课管线下课时问的：有没有挂着的情缘节点；有就记成发生了，返回开场 */
 export function takeRomanceClassBeat(): { key: string; premise: string } | null {
   const s = load();
@@ -370,8 +386,8 @@ export function takeRomanceClassBeat(): { key: string; premise: string } | null 
     const his = charName(line.charId);
     const career = loadCareer();
     const node: CareerNode = {
-      id: uid("rom"), kind: "event", title: def.title, place: def.place, premise: def.premise, dueAt: Date.now(), status: "done",
-      companyId: career.companyId, from: his, fromId: line.charId, occasion: "romance", note: `情缘节点：${b.key}`, doneAt: Date.now(),
+      id: uid("rom"), kind: "event", title: def.title, place: def.place, premise: def.premise, dueAt: Date.now(), status: "pending",
+      companyId: career.companyId, from: his, fromId: line.charId, occasion: "romance", note: `情缘节点：${b.key}`,
     };
     saveCareer({ ...career, nodes: [...career.nodes, node].sort((a, c) => a.dueAt - c.dueAt) });
     return { key: b.key, premise: b.premise ?? `${def.premise}（跟${his}有关。这一段接在她刚上完的这节课之后发生，他要出场就写他出现了。）` };
@@ -395,7 +411,7 @@ export function takeRomanceSceneBeat(place: string): { key: string; premise: str
     s.sceneBeats = [...rest, ...beats];
     save(s);
     const career = loadCareer();
-    saveCareer({ ...career, nodes: [...career.nodes, { id: uid("rom"), kind: "event", title: def.title, place: def.place, premise: b.premise, dueAt: Date.now(), status: "done", companyId: career.companyId, from: charName(line.charId), fromId: line.charId, occasion: "romance", note: `情缘节点：${def.key}`, doneAt: Date.now() }] });
+    saveCareer({ ...career, nodes: [...career.nodes, { id: uid("rom"), kind: "event", title: def.title, place: def.place, premise: b.premise, dueAt: Date.now(), status: "pending", companyId: career.companyId, from: charName(line.charId), fromId: line.charId, occasion: "romance", note: `情缘节点：${def.key}` }] });
     return { key: def.key, premise: b.premise, charId: line.charId };
   }
   s.sceneBeats = rest;
@@ -407,25 +423,39 @@ export function takeRomanceSceneBeat(place: string): { key: string; premise: str
 
 function settleNodeReward(type: RouteType, nodeKey: string, node: CareerNode): void {
   if (node.status !== "done") return; // 缺席/拒绝没奖励
-  const her = loadCareer();
-  void her;
+  const did = new Set(node.practice ?? []); // 这场戏里她实际练/唱的科目
   if (nodeKey === "mv_lead") {
-    // 前辈爱豆 MV 女主角（爱豆线专属）：演技 +4、关注度 +4~6
+    // 前辈爱豆 MV 女主角（爱豆线专属）：演技 +4 现在结；关注度 +4~6 等公开后结
     settlePlayerExp("acting", 4);
-    fameEvent("medium", node.title, node.dueAt);
+    queuePendingPublicFame(`${node.title}（MV 公开）`, 4);
     return;
   }
   if (nodeKey === "luxury_pictorial") {
-    // 高端时尚杂志拍摄（富二代线专属）：形象管理 +4、关注度 +4~6
+    // 高端时尚杂志拍摄（富二代线专属）：形象管理 +4 现在结；关注度 +4~6 等公开后结
     settlePlayerExp("visual", 4);
-    fameEvent("medium", node.title, node.dueAt);
+    queuePendingPublicFame(`${node.title}（画报公开）`, 4);
     return;
   }
   if (nodeKey === "song_for_her") {
-    // 地下 Rapper 专属歌曲：公开后关注度 +6；她实际参与演唱/录制 → 声乐 +2；实际参与 Rap → Rap +2
-    fameEvent("medium", `${node.title}（歌曲公开）`, node.dueAt);
-    settlePlayerExp("vocal", 2);
-    settlePlayerExp("rap", 2);
+    // 地下 Rapper 专属歌曲（她定）：实际唱了才声乐+2、实际 Rap 才 Rap+2、正式公开才关注度+6
+    if (did.has("vocal")) settlePlayerExp("vocal", 2);
+    if (did.has("rap")) settlePlayerExp("rap", 2);
+    queuePendingPublicFame(`${node.title}（歌曲公开）`, 6);
     return;
   }
+  if (nodeKey === "collab_stage") {
+    // 情缘定稿第十节：合作舞台 舞蹈 +5
+    settlePlayerExp("dance", 5);
+    return;
+  }
+  if (nodeKey === "private_concert") {
+    // 情缘定稿第十节：私人演唱会 声乐 +3
+    settlePlayerExp("vocal", 3);
+    return;
+  }
+}
+
+/** 关注度要等公开曝光才结的（写歌/MV/画报）：挂到机会系统的待公开队列，她的公开视频发出时一起结 */
+function queuePendingPublicFame(title: string, amount: number): void {
+  void import("./idol-opportunities").then(m => m.queuePendingPublicFame(title, amount)).catch(() => undefined);
 }

@@ -65,6 +65,8 @@ export type CareerNode = {
   occasion?: string;
   /** 并进这一场的情缘节点（「情缘节点：key」）：比如路演那天他正好路过，就接在主线路演里 */
   romance?: string[];
+  /** 这场戏里她实际练/唱的科目（情缘奖励按这个分别结算） */
+  practice?: string[];
   /** 番外：从他的视角，她不在场（掉马他刷到视频那一段） */
   side?: boolean;
   doneAt?: number;

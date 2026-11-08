@@ -193,7 +193,11 @@ export function plotTick(): string[] {
       }
       continue;
     }
-    if (rec.state !== "watching") continue;
+    if (rec.state !== "watching") {
+      // 多段剧情（竞争同一个机会 2~3 次这类）：没到上限的回 watching，条件再满足会再来（她定的次数）
+      if (rec.firedCount < d.max) all[d.key] = { ...load()[d.key] ?? rec, state: "watching" };
+      continue;
+    }
     if (rec.firedCount >= d.max) continue;
     try {
       if (d.check(c, rec)) {
@@ -429,12 +433,12 @@ export const PLOTS: PlotDef[] = [
     key: "hidden_talent", title: "隐藏天赋被发掘", hook: "class", max: 1,
     check(c) {
       const talents = loadTraineeCard()?.talents ?? [];
-      // 非开局特长、从 D 一路升到 B 的科目
-      return c.grades.some(g => !talents.includes(g.id) && g.grade === "B" && (g.last?.dir === "up" || (!g.last && Boolean(c.roster))));
+      // 非开局特长、从 D 一路升到 B 的科目；新档成绩单没有 last 记录，按「现在就是 B」认
+      return c.grades.some(g => !talents.includes(g.id) && g.grade === "B" && (g.last?.dir === "up" || !g.last));
     },
     fire(c) {
       const talents = loadTraineeCard()?.talents ?? [];
-      const g = c.grades.find(x => !talents.includes(x.id) && x.grade === "B" && x.last?.dir === "up");
+      const g = c.grades.find(x => !talents.includes(x.id) && x.grade === "B" && (x.last?.dir === "up" || !x.last));
       if (!g) return { premise: "", done: true };
       return {
         premise: `${g.zh}课的老师注意到，她在一个原本并不突出的领域取得了明显突破（这门不是她开局的特长，从 D 一路练到了 B）。老师怎么发现、怎么评价、课堂里其他人什么反应，按她过去的训练经历写具体一点；不保证后面一定有资源。`,
@@ -470,8 +474,14 @@ export const PLOTS: PlotDef[] = [
     fire(c) {
       const same = rivalsOf(c).filter(r => /练习生|同期/.test(`${c.profiles[r.charId]?.role}${c.profiles[r.charId]?.group}`)).sort(() => Math.random() - 0.5);
       const picked = same.slice(0, 2 + Math.floor(Math.random() * 3));
+      const names = picked.map(r => r.name).join("、");
+      // 定稿三个连续阶段：公布分组（这一场）→ 排练 → 正式表演，后两个排成日程节点
+      const rehearsalAt = plotFreeDay(Date.now() + 3 * DAY);
+      schedulePlotNode("合作舞台排练", "公司 练习室", `她和${names}为小组合作表演排练（按实际情况演，不跳过排练过程）。`, rehearsalAt);
+      const stageAt = plotFreeDay(rehearsalAt + 4 * DAY);
+      schedulePlotNode("合作舞台演出", "公司 大练习室", `小组合作表演正式演出：她和${names}登台。按排练时的真实情况演，演出结果按实际表现，不夸大。`, stageAt);
       return {
-        premise: `声乐课/舞蹈课上，老师宣布公司要安排一次练习生小组合作表演（女同期小组，和 8 月主线的男女合作舞台是两回事）。她和${picked.map(r => r.name).join("、")}分到一组。这一场先演公布和分组：成员之间真实的亲疏关系、谁开心谁有意见，都按人设来；后续排练和正式表演由后面的场次接着演。`,
+        premise: `声乐课/舞蹈课上，老师宣布公司要安排一次练习生小组合作表演（女同期小组，和 8 月主线的男女合作舞台是两回事）。她和${names}分到一组。这一场先演公布和分组：成员之间真实的亲疏关系、谁开心谁有意见，都按人设来；排练和正式演出已经排进提醒事项，之后一场一场演。`,
       };
     },
   },

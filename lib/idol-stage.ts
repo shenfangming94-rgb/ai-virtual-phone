@@ -483,6 +483,7 @@ export async function settleClassScene(chapterIndex: number): Promise<{ lines: s
   if (Date.now() - cls.start > 30 * 60e3) {
     if (Date.now() < cls.end) setWorldTime(cls.end);
     saveStageScene({ ...scene, class: { ...cls, settled: true, attended: false } });
+    void import("./idol-romance-live").then(m => m.markPlayedBeatNodes([], false)).catch(() => undefined);
     return { lines: ["迟到了三十分钟以上，这节课算旷课了。"], plotPremise: null };
   }
   // 数值结算：八门课走名册结算；特色课不涨八项，只给一句收尾
@@ -498,6 +499,8 @@ export async function settleClassScene(chapterIndex: number): Promise<{ lines: s
   // 记到场：judge 只认这个
   markClassAttended(cls.start, (cls.subjectKey || null) as StarSubject | null);
   saveStageScene({ ...scene, class: { ...cls, settled: true, attended: true } });
+  // 课上接的情缘节点（classBeats）：下课算演完，记完成（她定的：演完才推进）
+  void import("./idol-romance-live").then(m => m.markPlayedBeatNodes([], false)).catch(() => undefined);
   // 下课结算后：先刷一遍剧情池条件（刚上完的课可能正好满足），再问有没有挂着的剧情
   let plotPremise: string | null = null;
   try {

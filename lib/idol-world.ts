@@ -25,7 +25,7 @@ import { jumpWorld, sceneTimeBoundaryHint } from "./idol-reminders";
 import { fmtWorld, parseReply, type SceneNewFace } from "./idol-scenes";
 import { createOrGetStorySession, createStoryGroup, loadStoryGroups, loadStoryMessages, updateStoryGroup, updateStorySession, type StorySession } from "./story-storage";
 import { simpleLLMCall } from "./api-helpers";
-import { addCompanyFacts, careerPromptBlock, companyByName, completeNode, nodeById, sendCompanyIntentMail } from "./idol-career";
+import { addCompanyFacts, careerPromptBlock, companyByName, completeNode, loadCareer, nodeById, saveCareer, sendCompanyIntentMail } from "./idol-career";
 import { eventsPromptBlock } from "./idol-events";
 import { rosterPromptBlock, type RosterState } from "./idol-roster";
 import { activeBranchCharIds, branchSceneEnded, branchSceneHint } from "./idol-branches";
@@ -515,9 +515,18 @@ export async function closeSceneWith(host: SceneHost): Promise<SceneCloseResult>
       if (event) { next.events = [...p.events, { id: uid("ev"), at: meta.startAt, place: meta.place, text: event }]; recorded.push(c.name); }
       if (!p.withYou && item.impression) next.withYou = String(item.impression);
       saveProfile(next);
-      // 情缘羁绊：这场戏和线里的男主见了面（连续待一整天也只算这一次）
-      try { (await import("./idol-romance-live")).recordMeet(c.id); } catch { /* 情缘系统没接上不影响记账 */ }
+      // 情缘羁绊：只算私下见面（小场子、非公开活动），连续待一整天也只算这一次
+      const privateMeet = present.length <= 3 && !/演唱|场馆|舞台|路演|签售|直播|观众/.test(meta.place);
+      if (privateMeet) { try { (await import("./idol-romance-live")).recordMeet(c.id); } catch { /* 情缘系统没接上不影响记账 */ } }
       if (item.stay === "leave" || item.stay === "stay") nudgeLeave(c.id, item.stay === "leave" ? 1 : -1, String(item.stayWhy || event || `在${meta.place}`), meta.startAt);
+    }
+    // 情缘节点：记下这场戏里她实际练/唱的科目（写歌奖励按这个分别结算）
+    if (meta.nodeId) {
+      const rn = nodeById(meta.nodeId);
+      if (rn?.occasion === "romance" && Array.isArray(j.practice)) {
+        const practice = j.practice.map(String).slice(0, 2);
+        saveCareer({ ...loadCareer(), nodes: loadCareer().nodes.map(n => n.id === rn.id ? { ...n, practice } : n) });
+      }
     }
     // 兜底：在场的人一律算见过（AI 记账漏了谁都不漏她认识的人）
     for (const c of present) {
@@ -526,6 +535,8 @@ export async function closeSceneWith(host: SceneHost): Promise<SceneCloseResult>
     }
     // 支线人物这场在场：这条支线告一段落（记历史、腾名额）
     try { branchSceneEnded(present.map(c => c.id), summary || ""); } catch { /* 支线没接上不影响 */ }
+    // 这场戏里接的情缘节点：演完了才记完成（她定的）
+    try { (await import("./idol-romance-live")).markPlayedBeatNodes(present.map(c => c.id), true); } catch { /* 没接上不影响 */ }
   }
   host.saveMeta({ ...meta, ended: true, summary });
   const node = meta.nodeId ? nodeById(meta.nodeId) : undefined;

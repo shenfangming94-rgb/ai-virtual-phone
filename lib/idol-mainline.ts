@@ -146,6 +146,19 @@ function mainlineTickInner(): void {
       const node = createMainlineNode(n, at);
       saveCareer({ ...loadCareer(), nodes: [...loadCareer().nodes, node].sort((a, b) => a.dueAt - b.dueAt) });
       addToCalendar(node);
+      if (n.big) {
+        // 她定的：大活动要「通知、排练、准备、正式举行」分阶段——正式活动前 2~4 天先排一场准备/排练
+        const prepAt = Math.max(now + DAY, at - (2 + Math.floor(Math.random() * 3)) * DAY);
+        const when = `${new Date(at).getMonth() + 1}月${new Date(at).getDate()}日`;
+        const prep: CareerNode = {
+          id: uid("mlp"), kind: "event", title: `${n.title}（准备）`, place: n.place,
+          premise: `${n.premise}（这一场是正式活动前的准备阶段：通知、分组、练习、准备过程，正式活动在 ${when}，那场另外演。）`,
+          dueAt: prepAt, status: "pending",
+          companyId: loadCareer().companyId, from: node.from, occasion: "mainline",
+        };
+        saveCareer({ ...loadCareer(), nodes: [...loadCareer().nodes, prep].sort((a, b) => a.dueAt - b.dueAt) });
+        addToCalendar(prep);
+      }
       changed = true;
       return { ...n, state: "scheduled" as const, scheduledAt: at, nodeId: node.id };
     }

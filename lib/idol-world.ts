@@ -27,6 +27,7 @@ import { createOrGetStorySession, createStoryGroup, loadStoryGroups, loadStoryMe
 import { simpleLLMCall } from "./api-helpers";
 import { addCompanyFacts, careerPromptBlock, companyByName, completeNode, nodeById, sendCompanyIntentMail } from "./idol-career";
 import { eventsPromptBlock } from "./idol-events";
+import { rosterPromptBlock, type RosterState } from "./idol-roster";
 import { fameBand, fameEvent } from "./idol-fame";
 import { loadForum } from "./theqoo-store";
 import { recordPerformance } from "./idol-ledger";
@@ -167,6 +168,16 @@ function whoIsShe(): string {
   return me ? `${me.name}。${me.bio || ""}` : "一个想当爱豆的女生。";
 }
 
+/** 新档：同期名册 + 她的班级给世界。她反馈过：进公司第一天的戏里 AI 新造了两个假同期——
+ *  出场「同期」只能从名册挑；名册外的练习生只能是「新来的练习生」（老师介绍那种）。 */
+function rosterPromptForScenes(): string {
+  try {
+    const state = JSON.parse(kvGet("idol_roster_v1") || "null") as RosterState | null;
+    if (!state?.npcs?.length) return "";
+    return `${rosterPromptBlock(state)}\n【同期怎么用】出场「同期」只能从上面的名册里挑名字；名册里没有的人不许写成她的同期（可以是前辈、工作人员、路人，或明确写「新来的练习生」）。她现在的班级：${state.player.klass} 班，同班的只有名册里写${state.player.klass} 班的那些。`;
+  } catch { return ""; }
+}
+
 /** 给「世界」主导的戏加的系统提示（文风、字数这些交给她自己的预设和剧情设置） */
 export function buildWorldScenePrompt(groupId: string | undefined, participantIds: string[]): string {
   const meta = groupId ? getSceneMeta(groupId) : null;
@@ -193,6 +204,7 @@ export function worldPromptFor(meta: SceneMeta | null, fallbackPlace: string, pa
     "这是一出以韩国娱乐圈为背景的戏，主角是「她」（用户）。你是「世界」：写旁白和除她以外所有人的言行。",
     `【她是谁】\n${whoIsShe()}\n${kakaoPromptLine()}`,
     careerPromptBlock(),
+    rosterPromptForScenes(),
     publicKnowledgeBlock(),
     eventsPromptBlock(),
     romanceSceneHint(),
@@ -317,6 +329,13 @@ function addFaces(host: SceneHost, faces: SceneTags["newFaces"], introduction: s
   const meta = host.meta() ?? { place: host.fallbackPlace, premise: "", startAt: Date.now(), newFaces: [] };
   const ids = [...host.ids()];
   const added: string[] = [];
+  // 名册里的人不许被新造出来当同期：名册外自称「同期」的新面孔，降成普通公司里的人
+  const rosterNames = (() => {
+    try {
+      const state = JSON.parse(kvGet("idol_roster_v1") || "null") as { npcs?: { name: string }[] } | null;
+      return state?.npcs?.length ? new Set(state.npcs.map(n => n.name)) : null;
+    } catch { return null; }
+  })();
   for (const f of faces) {
     if (!f.name || f.name.length > 12) continue;
     const linkedFamily = namedFamilyMember(f.name);
@@ -334,7 +353,9 @@ function addFaces(host: SceneHost, faces: SceneTags["newFaces"], introduction: s
       ...(pending?.gender && !f.facts?.gender ? { gender: pending.gender } : {}),
       ...(pending?.age && !f.facts?.age ? { age: pending.age } : {}),
     };
-    const char = createPerson(f.name, { ...emptyProfile(""), layer: "background", role: f.role || pending?.role || "", ...facts, sceneFacts: facts, introducedIn: introduction.slice(0, 12000), met: true, metAt: { at: Date.now(), place: meta.place } }, null, genKakaoId());
+    let role = f.role || pending?.role || "";
+    if (rosterNames && !rosterNames.has(f.name) && /同期/.test(role)) role = "公司里的人";
+    const char = createPerson(f.name, { ...emptyProfile(""), layer: "background", role, ...facts, sceneFacts: facts, introducedIn: introduction.slice(0, 12000), met: true, metAt: { at: Date.now(), place: meta.place } }, null, genKakaoId());
     ids.push(char.id);
     meta.newFaces.push(char.id);
     added.push(char.name);

@@ -313,11 +313,13 @@ export function onNodeDone(node: CareerNode, perf?: string): string[] {
   const now = Date.now();
   const out: string[] = [];
   const sub = node.subject as Subject | undefined;
-  if (node.kind === "homework" && sub) { const m = bump(s, sub, perfPts(perf, 8), now); if (m) out.push(m); }
+  if (node.kind === "homework" && sub) {
+    if (!newClassMode()) { const m = bump(s, sub, perfPts(perf, 8), now); if (m) out.push(m); }
+  }
   if (node.kind === "practice" && sub) {
     const day = dayKey(node.dueAt);
     if (!s.practiceDays.includes(day)) s.practiceDays = [...s.practiceDays.slice(-60), day];
-    const m = bump(s, sub, PRACTICE_PTS + (perf === "good" ? 1 : 0), now); if (m) out.push(m);
+    if (!newClassMode()) { const m = bump(s, sub, PRACTICE_PTS + (perf === "good" ? 1 : 0), now); if (m) out.push(m); }
   }
   if (node.kind === "weekly" || node.kind === "monthly") {
     for (const id of ["vocal", "dance", "rap"] as Subject[]) { const m = bump(s, id, perfPts(perf, node.kind === "monthly" ? 3 : 2) - 1, now); if (m) out.push(m); }
@@ -325,6 +327,26 @@ export function onNodeDone(node: CareerNode, perf?: string): string[] {
   s.pending = [...(s.pending ?? []), ...out];
   save(s);
   return out;
+}
+
+/** 打勾/演完的加练和作业结算过的节点（新存档模式防重复结算用） */
+const NODE_SETTLED_KEY = "idol_node_settled_v1";
+export function nodeSettledKeys(): string[] {
+  try { const v = JSON.parse(kvGet(NODE_SETTLED_KEY) || "[]"); return Array.isArray(v) ? v.map(String) : []; } catch { return []; }
+}
+export function saveNodeSettled(keys: string[]): void { kvSet(NODE_SETTLED_KEY, JSON.stringify(keys)); }
+
+/** 世界日期这天加练结过没有（只认旧星路里记的 practiceDays） */
+export function practiceDayUsed(ms: number): boolean {
+  return load()?.practiceDays.includes(dayKey(ms)) ?? false;
+}
+
+/** 往星路横幅队列塞一条（新档的加练/作业数字也走这里弹给她看） */
+export function pushStarroadMessage(msg: string): void {
+  const s = load();
+  if (!s) return;
+  s.pending = [...(s.pending ?? []), msg];
+  save(s);
 }
 
 /** 此刻里自己练了（结束这一场时 AI 说练了哪几门）：一天只算一次加练 */
@@ -336,7 +358,10 @@ export function onScenePractice(subjects: string[], startAt: number, perf?: stri
   if (!valid.length || s.practiceDays.includes(day)) return [];
   s.practiceDays = [...s.practiceDays.slice(-60), day];
   const out: string[] = [];
-  for (const id of valid) { const m = bump(s, id, PRACTICE_PTS + 1 + (perf === "good" ? 1 : 0), Date.now()); if (m) out.push(m); }
+  // 新档：数值走名册（idol-world 那边结算并打数字），老星路的档别动了
+  if (!newClassMode()) {
+    for (const id of valid) { const m = bump(s, id, PRACTICE_PTS + 1 + (perf === "good" ? 1 : 0), Date.now()); if (m) out.push(m); }
+  }
   s.pending = [...(s.pending ?? []), ...out];
   save(s);
   return out;

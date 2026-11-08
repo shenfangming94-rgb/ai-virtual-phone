@@ -31,7 +31,7 @@ import { rosterPromptBlock, type RosterState } from "./idol-roster";
 import { fameBand, fameEvent } from "./idol-fame";
 import { loadForum } from "./theqoo-store";
 import { recordPerformance } from "./idol-ledger";
-import { onNodeDone, onScenePractice } from "./idol-starroad";
+import { onNodeDone, onScenePractice, practiceDayUsed } from "./idol-starroad";
 import { KAKAO_TAG_RULES, afterNodeScene, applyKakaoTags, extractKakaoTags, genKakaoId, kakaoPromptLine, type KakaoTags } from "./idol-kakao";
 import { takePendingFace } from "./idol-pending-faces";
 import { loadApiConfigs, loadBindingConfig, resolveBinding } from "./settings-storage";
@@ -456,9 +456,18 @@ export async function closeSceneWith(host: SceneHost): Promise<SceneCloseResult>
     if (examNode && j.performance) { recordPerformance(examNode, String(j.performance), String(j.performanceWhy ?? "")); perf = String(j.performance); }
     if (examNode) onNodeDone(examNode, String(j.performance ?? "ok"));
     else if (Array.isArray(j.practice)) {
+      const dayUsed = practiceDayUsed(meta.startAt);
       onScenePractice(j.practice.map(String), meta.startAt);
-      // 新存档模式：名册里的她也涨（戏里真练了的科目）
-      void import("./idol-roster-live").then(m => { for (const p of (j.practice as string[]).slice(0, 1)) m.settlePlayerClass(p as never); }).catch(() => undefined);
+      // 新存档模式：名册里的她也涨（一天一次，戏里真练了的科目），数字打给结束画面看
+      if (!dayUsed) {
+        try {
+          const m = await import("./idol-roster-live");
+          for (const p of (j.practice as string[]).slice(0, 1)) {
+            const g = m.settlePlayerClass(p as never);
+            if (g) gains = `${m.SUBJECT_LABEL[p as never] ?? "练习"} 加练 +${g.gained}${g.levels.length ? `（${g.levels.map(l => `${l.from}→${l.to}`).join("，")}）` : ""}`;
+          }
+        } catch { /* 名册没接上不影响记账 */ }
+      }
     }
     // 大机遇成长：AI 提议 subject+amount，代码校验后按数值方案直接涨能力值（一场戏只结一次）
     const growth = j.growth;

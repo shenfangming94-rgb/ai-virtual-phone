@@ -162,6 +162,8 @@ export function recordSceneVideo(v: SceneVideo, sceneAt: number): void {
     video.likes = Math.round(target * rnd(0.05, 0.09));
     return { ...s, videos: [...s.videos, video] };
   });
+  // 幕后工作攒的待公开关注度：有公开视频出来了就一起结（NEED-5 第八节）
+  void import("./idol-opportunities").then(m => m.flushPendingPublicFame()).catch(() => undefined);
 }
 
 /** 上传那一刻：记关注度、告诉她 */

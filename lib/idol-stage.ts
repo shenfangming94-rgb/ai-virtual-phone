@@ -412,7 +412,9 @@ export function startStageScene(opts: { placeKey: string; placeName?: string; me
 
 /** 提醒事项里「去演」/ 横幅点进来 */
 export function startNodeStage(node: CareerNode): { chapterIndex: number; scene: StageScene } | null {
-  const premise = node.wish ? `${node.premise}（她想要的结果：${node.wish}。照这个结果写，写得合理，要有具体的原因）` : node.premise;
+  let premise = node.wish ? `${node.premise}（她想要的结果：${node.wish}。照这个结果写，写得合理，要有具体的原因）` : node.premise;
+  // 代码定的结果必须进开场（机会选拔的胜负等），不能现场 AI 说反（她反馈过）
+  if (node.note && /结果（代码定的）/.test(node.note)) premise = `${premise}\n（${node.note}）`;
   // 这件事已经开过一场、还没结束：接着那一场
   const session = worldVnSession();
   for (const ch of session.chapters) {

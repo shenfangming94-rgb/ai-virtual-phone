@@ -156,6 +156,15 @@ export function setFameTotal(target: number): void {
   save({ ...s, pop, heat: Math.min(s.heat, want), log: [...s.log, { at: Date.now(), text: `自己改成 ${want}`, size: "manual", pop: d, heat: 0 }] });
 }
 
+/** 按数量加关注度（机会奖励表：普通 +2 / 较重要 +4 / 高曝光 +6），算在人气上 */
+export function fameEventAmount(n: number, text: string, at = Date.now()): void {
+  if (!loadTraineeCard() || n <= 0) return;
+  const s = settle(load(), Math.max(at, load().at));
+  const next = { ...s, pop: Math.min(100, s.pop + Math.round(n)) };
+  next.log = [...s.log, { at, text: text.trim() || "有点动静", size: "medium", pop: Math.round(n), heat: 0 }];
+  save(next);
+}
+
 /** 给世界看的一句话 */
 export function fameWordNow(): string {
   const tier = fameTier(fameTotal());

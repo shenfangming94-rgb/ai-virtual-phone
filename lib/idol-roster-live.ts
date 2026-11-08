@@ -9,7 +9,7 @@
 
 import { kvGet, kvSet } from "./kv-db";
 import { loadTraineeCard } from "./trainee-card";
-import { loadCareer } from "./idol-career";
+import { loadCareer, saveCareer } from "./idol-career";
 import { createPerson, emptyProfile, herAge, loadProfiles, saveProfile } from "./idol-people";
 import { genKakaoId } from "./idol-kakao";
 import { ATTITUDE_LABEL, coursePoints, settleProgress, type ClassLetter, type Specialty, type Subject } from "./idol-training";
@@ -99,6 +99,12 @@ export function ensureRoster(): RosterState | null {
   }
   s.profilePending = s.npcs.map(n => n.charId).filter((id): id is string => Boolean(id));
   s.profileRetryAt = Date.now();
+  // 宿舍绑定（她定的新档形式）：室友 = 名册里跟她同一间宿舍的 2~3 人，标注从建档那天就一致；
+  // 见面仍走戏里（第一天的戏里自然认识，别提前标见过）
+  if (s.playerDorm) {
+    const mates = s.npcs.filter(n => n.dorm === s.playerDorm).map(n => n.charId).filter((id): id is string => Boolean(id));
+    if (mates.length) saveCareer({ ...loadCareer(), roommates: mates });
+  }
   save(s);
   queueRosterProfileGeneration(s);
   queueRosterNameBackfill(s);
@@ -162,7 +168,40 @@ function healRosterSave(s: RosterState): void {
     save(s);
   }
   if (requeuePlaceholderProfiles(s)) save(s);
+  healNamedRoommates(s);
+  healBranchNodes();
   queueTmiReroll(s);
+}
+
+/** 她 11-08 指认的室友（戏里分好的那三位）：只补标注，不动剧情关系。一次性。 */
+function healNamedRoommates(s: RosterState): void {
+  if (kvGet("idol_roommates_named_v1")) return;
+  const NAMED = ["南真英", "李瑞英", "申荷娜"];
+  const ids = NAMED.map(name => s.npcs.find(n => n.name === name)?.charId).filter((x): x is string => Boolean(x));
+  if (ids.length !== NAMED.length) return; // 不是她的档（名字对不上），跳过
+  saveCareer({ ...loadCareer(), roommates: ids });
+  for (const id of ids) {
+    const p = loadProfiles()[id];
+    if (!p) continue;
+    saveProfile({ ...p, met: true, metAt: p.metAt ?? { at: Date.now(), place: "宿舍" }, relation: p.relation && p.relation !== "陌生" ? p.relation : "认识" });
+  }
+  kvSet("idol_roommates_named_v1", "1");
+}
+
+/** 支线老实现乱排的日程（备注「支线：X」）：清掉节点和日历条目。一次性。 */
+function healBranchNodes(): void {
+  if (kvGet("idol_branch_nodes_cleared_v1")) return;
+  const career = loadCareer();
+  const bad = career.nodes.filter(n => n.occasion === "branch" && String(n.note ?? "").startsWith("支线：") && (n.status === "pending" || n.status === "invite"));
+  if (!bad.length) { kvSet("idol_branch_nodes_cleared_v1", "1"); return; }
+  saveCareer({ ...career, nodes: career.nodes.filter(n => !bad.includes(n)) });
+  void import("./calendar-storage").then(async m => {
+    const { getWeekStartIso } = await import("./calendar-utils");
+    for (const n of bad) {
+      try { m.deleteCalendarScheduleItem("user", "self", getWeekStartIso(new Date(n.dueAt)), `idol_${n.id}`); } catch { /* 日历条目不碍事 */ }
+    }
+  }).catch(() => undefined);
+  kvSet("idol_branch_nodes_cleared_v1", "1");
 }
 
 const CLASS_ORDER: ClassLetter[] = ["A", "B", "C", "D"];

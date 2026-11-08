@@ -304,7 +304,8 @@ async function ensureRoommates(mates: Character[]): Promise<void> {
     }
     for (const id of picks) {
       const p = getProfile(id);
-      saveProfile({ ...p, met: true, metAt: p.metAt ?? { at: Date.now(), place: "宿舍" }, relation: p.relation && p.relation !== "陌生" ? p.relation : "认识", group: "室友", role: p.role.includes("室友") ? p.role : `${p.role || "同期练习生"} · 室友` });
+      // 只标见过，不改分组——她们还是同期练习生，通讯录同期页照常
+      saveProfile({ ...p, met: true, metAt: p.metAt ?? { at: Date.now(), place: "宿舍" }, relation: p.relation && p.relation !== "陌生" ? p.relation : "认识" });
     }
     saveCareer({ ...loadCareer(), roommates: picks });
     return;

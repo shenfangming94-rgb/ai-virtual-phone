@@ -505,7 +505,7 @@ export function careerPromptBlock(): string {
     debut,
     `【公司】${c.name}：${c.scale}；${c.style}；练习生：${c.trainee}；名声：${c.fame}`,
     career.insider ? `【公司内部档案】\n${career.insider}` : "",
-    career.roommates?.length ? `【她的室友】${career.roommates.map(id => loadCharacters().find(c => c.id === id)?.name).filter(Boolean).join("、")}` : "",
+    career.roommates?.length ? `【她的室友】${career.roommates.map(id => loadCharacters().find(c => c.id === id)?.name).filter(Boolean).join("、")}（分宿舍这一场只能用这些人当室友，不许另编室友）` : "",
     career.facts.length ? `【戏里已经定下来的公司细节】\n${career.facts.slice(-30).map(f => `- ${f}`).join("\n")}` : "",
     next.length ? `【接下来的日程】${next.join("；")}` : "",
     starPromptBlock(),

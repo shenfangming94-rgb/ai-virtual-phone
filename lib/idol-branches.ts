@@ -8,14 +8,13 @@
  */
 
 import { kvGet, kvSet } from "./kv-db";
-import { loadCareer, saveCareer, addToCalendar, type CareerNode } from "./idol-career";
+import { loadCareer } from "./idol-career";
 import { loadProfiles, type IdolProfile } from "./idol-people";
 import { loadCharacters } from "./character-storage";
 import { loadRoster } from "./idol-roster-live";
 import type { Character } from "./character-types";
 
 const KEY = "idol_branches_v1";
-const DAY = 864e5;
 
 export type BranchType = "interest" | "family" | "past" | "friendship" | "worry";
 
@@ -42,7 +41,6 @@ function load(): State {
 }
 function save(s: State) { kvSet(KEY, JSON.stringify(s)); }
 
-const uid = (p: string) => `${p}_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
 const REL_TIER: Record<string, number> = { "跟你过不去": 0, "不喜欢你": 0, "有点烦你": 0, 陌生: 1, 认识: 2, 熟人: 3, 朋友: 4, 好朋友: 5, 暧昧: 5, 恋人: 5 };
 
 /** 每个同期按关系/互动/背景挑类型：满足条件进候选，每天最多开一条新支线（活跃上限 3） */
@@ -121,22 +119,53 @@ const OPENING: Record<BranchType, (name: string, history: string) => { title: st
   }),
 };
 
-/** 开一条支线：排一个日程节点（AI 直接开场演，结果存进 history） */
+/** 开一条支线（她定的三入口之一：KKT——人物自己主动聊起/邀约；她答应了才进日历） */
 function fireBranchOpening(rec: BranchRecord, type: BranchType, char?: Character): void {
   const name = char?.name ?? "一位同期";
   const history = rec.history.slice(-3).map(h => h.text).join("；");
   const o = OPENING[type](name, history);
-  const career = loadCareer();
-  const at = new Date(Date.now() + 2 * DAY);
-  at.setHours(16 + Math.floor(Math.random() * 3), 0, 0, 0);
-  const node: CareerNode = {
-    id: uid("br"), kind: "event", title: o.title, place: o.place, premise: o.premise,
-    dueAt: at.getTime(), status: "pending",
-    companyId: career.companyId, from: name, fromId: rec.charId,
-    occasion: "branch", note: `支线：${type}`,
-  };
-  saveCareer({ ...career, nodes: [...career.nodes, node].sort((a, b) => a.dueAt - b.dueAt) });
-  addToCalendar(node);
+  void import("./idol-reminders").then(m => {
+    m.queueMessage(rec.charId, `关于${name}的「${BRANCH_LABEL[type]}」支线。按你的性格和跟她的关系，在 KakaoTalk 上自然地聊起或约她：${o.premise} 别念设定、别硬塞话题；她回应了你再往下接。如果约了具体时间地点，按正常邀约发，她没答应就当没约成。`, 5 * 60e3);
+  }).catch(() => undefined);
+}
+
+/** 此刻场景的提示：这场如果合适，可以自然带出哪条同期支线（她定的三入口之一：此刻偶遇） */
+export function branchSceneHint(): string {
+  const s = load();
+  const active = s.branches.filter(b => b.active && b.firedCount === 0 && b.charId);
+  if (!active.length) return "";
+  const chars = loadCharacters();
+  const lines: string[] = [];
+  for (const b of active) {
+    const c = chars.find(x => x.id === b.charId);
+    const p = loadProfiles()[b.charId!];
+    if (!c || !p?.met) continue;
+    const o = OPENING[b.type](c.name, b.history.slice(-3).map(h => h.text).join("；"));
+    lines.push(`- ${c.name}（${BRANCH_LABEL[b.type]}）：${o.premise}`);
+  }
+  if (!lines.length) return "";
+  return `【同期支线】这一场如果合适，可以自然带出下面某位同期的个人故事。她出场了再演，没出场就不提；提了也别一次讲完，点到为止，往后的场次接着展开：\n${lines.join("\n")}`;
+}
+
+/** 让支线人物更容易出现在「可能碰上的人」里（正在开的故事优先） */
+export function activeBranchCharIds(): string[] {
+  try { return load().branches.filter(b => b.active && b.firedCount === 0 && b.charId).map(b => b.charId!); } catch { return []; }
+}
+
+/** 支线人物这场在场：这条支线告一段落（记历史、腾名额）；以后同一个人可以接着讲（延续优先） */
+export function branchSceneEnded(presentIds: string[], summary: string): void {
+  const s = load();
+  let changed = false;
+  for (const b of s.branches) {
+    if (!b.active || b.firedCount !== 0 || !b.charId) continue;
+    if (!presentIds.includes(b.charId)) continue;
+    b.active = false;
+    b.firedCount = 1;
+    b.lastAt = Date.now();
+    b.history = [...b.history.slice(-19), { at: Date.now(), text: summary || "她的故事在相处里自然展开了" }];
+    changed = true;
+  }
+  if (changed) save(s);
 }
 
 /** 支线节点完成：记结果（延续优先）、这条线告一段落，腾出活跃名额 */

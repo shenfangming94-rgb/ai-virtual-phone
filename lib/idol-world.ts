@@ -28,6 +28,7 @@ import { simpleLLMCall } from "./api-helpers";
 import { addCompanyFacts, careerPromptBlock, companyByName, completeNode, nodeById, sendCompanyIntentMail } from "./idol-career";
 import { eventsPromptBlock } from "./idol-events";
 import { rosterPromptBlock, type RosterState } from "./idol-roster";
+import { activeBranchCharIds, branchSceneEnded, branchSceneHint } from "./idol-branches";
 import { fameBand, fameEvent } from "./idol-fame";
 import { loadForum } from "./theqoo-store";
 import { recordPerformance } from "./idol-ledger";
@@ -205,6 +206,7 @@ export function worldPromptFor(meta: SceneMeta | null, fallbackPlace: string, pa
     `【她是谁】\n${whoIsShe()}\n${kakaoPromptLine()}`,
     careerPromptBlock(),
     rosterPromptForScenes(),
+    branchSceneHint(),
     publicKnowledgeBlock(),
     eventsPromptBlock(),
     romanceSceneHint(),
@@ -239,6 +241,7 @@ ${KAKAO_TAG_RULES}`,
 function mightMeetBlock(presentIds: string[], place: string, avoid: string[] = []): string {
   const profiles = loadProfiles();
   const friends = new Set(loadChatContacts().map(c => c.characterId));
+  const branchIds = new Set(activeBranchCharIds());
   const now = Date.now();
   const scored = loadCharacters()
     .filter(c => c.id !== WORLD_CHAR_ID && !presentIds.includes(c.id) && !avoid.includes(c.name) && profiles[c.id] && (profiles[c.id].met || profiles[c.id].layer === "main"))
@@ -252,6 +255,7 @@ function mightMeetBlock(presentIds: string[], place: string, avoid: string[] = [
       score += Math.max(0, 30 - days);
       if (p.layer === "main") score += 15;
       if (friends.has(c.id)) score += 10;
+      if (branchIds.has(c.id)) score += 60; // 正在开的同期支线优先出场
       score += Math.min(p.events.length, 10);
       return { c, p, last, score };
     })
@@ -510,6 +514,8 @@ export async function closeSceneWith(host: SceneHost): Promise<SceneCloseResult>
       const p = getProfile(c.id);
       if (!p.met) saveProfile({ ...p, met: true, metAt: { at: meta.startAt, place: meta.place } });
     }
+    // 支线人物这场在场：这条支线告一段落（记历史、腾名额）
+    try { branchSceneEnded(present.map(c => c.id), summary || ""); } catch { /* 支线没接上不影响 */ }
   }
   host.saveMeta({ ...meta, ended: true, summary });
   const node = meta.nodeId ? nodeById(meta.nodeId) : undefined;

@@ -29,6 +29,8 @@ export type RosterState = {
   npcs: NpcRecord[];
   /** trainTick 结算到哪一天（世界日期 YYYY-MM-DD），防重复补算 */
   settledUntil: string;
+  /** 她的宿舍号：分宿舍那天和这一间的人同住（室友 = 这一间的 2~3 人） */
+  playerDorm?: string;
   /** 新档签约时的 39 人资料补全队列；失败时保留，后续可重试。 */
   profilePending?: string[];
   profileRetryAt?: number;
@@ -153,7 +155,20 @@ export function generateRosterState(talents: string[], rng: () => number, now = 
     player: makePlayer(talents),
     npcs,
     settledUntil: new Date(now).toISOString().slice(0, 10),
+    playerDorm: assignPlayerDorm(npcs),
   };
+}
+
+/** 她的宿舍：优先有 C 班同期、原本只住两人的房间（加她正好三人） */
+function assignPlayerDorm(npcs: NpcRecord[]): string {
+  const byDorm = new Map<string, NpcRecord[]>();
+  for (const n of npcs) byDorm.set(n.dorm, [...(byDorm.get(n.dorm) ?? []), n]);
+  const rooms = [...byDorm.entries()].sort((a, b) => a[0].localeCompare(b[0]));
+  const pick = rooms.find(([, m]) => m.length === 2 && m.some(x => x.klass === "C"))
+    ?? rooms.find(([, m]) => m.some(x => x.klass === "C"))
+    ?? rooms.find(([, m]) => m.length === 2)
+    ?? rooms[0];
+  return pick?.[0] ?? "301";
 }
 
 /** 姓名去重+去相似（不用 rng，不扰动后续生日/宿舍的随机流）：

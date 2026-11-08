@@ -74,12 +74,14 @@ function windowOf(n: MainlineNode, year: number): { start: number; end: number }
 }
 function daysIn(y: number, m: number): number { return new Date(y, m + 1, 0).getDate(); }
 
-/** 某天是不是撞了：已排的周评/月考/主线节点 */
+/** 某天是不是撞了：已排的周评/月考/主线节点 + 她已答应的约会、拍摄机会、别的活动 */
 export function dayBlocked(ms: number, careerNodes: CareerNode[], mainline: MainlineNode[], selfKey?: string): boolean {
   const d = new Date(ms);
   const sameDay = (t: number) => { const x = new Date(t); return x.getFullYear() === d.getFullYear() && x.getMonth() === d.getMonth() && x.getDate() === d.getDate(); };
   const official = new Set(["weekly", "monthly", "makeup", "selection", "debut", "talk"]);
   if (careerNodes.some(n => official.has(n.kind) && n.status === "pending" && sameDay(n.dueAt))) return true;
+  // 她反馈/审计：已接受的约会、机会、活动也要挡，不然主线撞她约好的事
+  if (careerNodes.some(n => (n.kind === "date" || n.kind === "chance" || n.kind === "event") && (n.status === "pending" || n.status === "invite") && sameDay(n.dueAt))) return true;
   if (mainline.some(n => n.key !== selfKey && n.state === "scheduled" && n.scheduledAt != null && sameDay(n.scheduledAt))) return true;
   return false;
 }

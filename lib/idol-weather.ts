@@ -80,6 +80,30 @@ export function worldWeatherLabel(at = Date.now()): string {
   const t=raw.hourly.temperature_2m[i];
   return `${CODES[Number(raw.hourly.weather_code[i])]??'天气未知'}${t==null?'':` · ${Math.round(Number(t))}℃`}`;
 }
+
+/** 在真实历史天气里找一个强降雨日（暴雨剧情用）：强降雨优先，其次任何雨天；整个区间没有雨返回 null */
+export async function findRainyDayInRange(from: Date, to: Date): Promise<{ at: number } | null> {
+  const RAINY = new Set([51, 53, 55, 56, 57, 61, 63, 65, 66, 67, 80, 81, 82, 95, 96, 99]);
+  const HEAVY = new Set([65, 82, 95, 96, 99]);
+  let anyRain: { at: number } | null = null;
+  const start = new Date(from); start.setHours(0, 0, 0, 0);
+  const end = new Date(to); end.setHours(0, 0, 0, 0);
+  for (let d = new Date(start); d <= end; d = new Date(d.getTime() + 864e5)) {
+    try {
+      const raw = await month(37.5665, 126.978, dateKey(d));
+      const day = dateKey(d);
+      const idxs = raw.hourly.time.map((t, i) => (t.startsWith(day) ? i : -1)).filter(i => i >= 0);
+      if (!idxs.length) continue;
+      const codes = idxs.map(i => Number(raw.hourly.weather_code[i])).filter(n => Number.isFinite(n));
+      const di = raw.daily.time.indexOf(day);
+      const sum = di >= 0 ? (Number(raw.daily.precipitation_sum?.[di]) || 0) : 0;
+      const at = new Date(d); at.setHours(15, 0, 0, 0);
+      if (codes.some(c => HEAVY.has(c)) || sum >= 10) return { at: at.getTime() };
+      if (!anyRain && (codes.some(c => RAINY.has(c)) || sum > 0)) anyRain = { at: at.getTime() };
+    } catch { /* 那天没有可用数据，接着找 */ }
+  }
+  return anyRain;
+}
 /** The first snowfall of the autumn/winter season, established from historical data only. */
 export async function seasonFirstSnow(at = Date.now()): Promise<{season: number; at: number} | null> {
   const d=new Date(at), season=d.getMonth()>=8?d.getFullYear():d.getFullYear()-1;

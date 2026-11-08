@@ -105,11 +105,28 @@ function ctx(): PlotCtx {
   };
 }
 
+/** 找一天不被占的：避开周评/月考/主线/已答应的约会机会活动（她反馈撞车）。向后顺延最多 14 天，实在不行就用原时间 */
+function plotFreeDay(at: number): number {
+  const career = loadCareer();
+  const official = new Set(["weekly", "monthly", "makeup", "selection", "debut", "talk", "date", "chance", "event"]);
+  const blocked = (t: number) => {
+    const d = new Date(t);
+    return career.nodes.some(n => official.has(n.kind) && (n.status === "pending" || n.status === "invite")
+      && (() => { const x = new Date(n.dueAt); return x.getFullYear() === d.getFullYear() && x.getMonth() === d.getMonth() && x.getDate() === d.getDate(); })());
+  };
+  if (!blocked(at)) return at;
+  for (let i = 1; i <= 14; i++) {
+    const t = at + i * DAY;
+    if (!blocked(t)) return t;
+  }
+  return at;
+}
+
 /** 排一个 date 类剧情的日程节点（走现有通知/日历/三结局） */
 function schedulePlotNode(title: string, place: string, premise: string, at: number): CareerNode {
   const career = loadCareer();
   const node: CareerNode = {
-    id: uid("plot"), kind: "event", title, place, premise, dueAt: at, status: "pending",
+    id: uid("plot"), kind: "event", title, place, premise, dueAt: plotFreeDay(at), status: "pending",
     companyId: career.companyId, occasion: "plot",
   };
   saveCareer({ ...career, nodes: [...career.nodes, node].sort((a, b) => a.dueAt - b.dueAt) });
@@ -120,10 +137,11 @@ function schedulePlotNode(title: string, place: string, premise: string, at: num
 /** 排一个「有人约她」的剧情：真发 KKT 问她，她答应了才进日历（她定的） */
 function scheduleInvitePlot(title: string, place: string, premise: string, at: number, from: { id: string; name: string }, ask: string): CareerNode {
   const career = loadCareer();
+  const safe = plotFreeDay(at);
   const node: CareerNode = {
-    id: uid("plot"), kind: "date", title, place, premise, dueAt: at, status: "invite",
+    id: uid("plot"), kind: "date", title, place, premise, dueAt: safe, status: "invite",
     companyId: career.companyId, occasion: "plot", from: from.name, fromId: from.id,
-    replyBy: Math.max(at - 3 * 3600e3, Date.now() + 3600e3),
+    replyBy: Math.max(safe - 3 * 3600e3, Date.now() + 3600e3),
   };
   saveCareer({ ...career, nodes: [...career.nodes, node].sort((a, b) => a.dueAt - b.dueAt) });
   void import("./idol-reminders").then(m => m.queueMessage(from.id, ask, (20 + Math.random() * 60) * 60e3, { node, dedupeKey: `plot_invite_${node.id}` })).catch(() => undefined);
@@ -772,8 +790,32 @@ export const PLOTS: PlotDef[] = [
       const inWindow = (now.getMonth() === 6 && now.getDate() >= 20) || (now.getMonth() === 7 && now.getDate() <= 31);
       return now.getFullYear() === sy && inWindow;
     },
-    fire(c) {
-      return { premise: `首尔突然下起暴雨。接在她现在这一场里，按她此刻的位置、在做什么、同行的人来展开：下课后被雨困住、和同期或朋友找地方避雨、原本的安排受影响、或在路上遇到一段突如其来的雨天故事。不预设情感发展，不为了触发事件强行改变她的位置。` };
+    fire(c, rec) {
+      // 定稿：暴雨发生在真实强降雨那天（历史天气挑的）。没算出来就先异步算着，今天不是雨天就不演
+      const stormAt = (rec.extra?.stormAt as number | undefined);
+      if (stormAt == null) {
+        if (!(rec.extra?.finding as boolean)) {
+          const year = new Date(c.career.signedAt ?? Date.now()).getFullYear();
+          const from = new Date(year, 6, 20);
+          const to = new Date(year, 7, 31);
+          const mark = (patch: Record<string, unknown>) => {
+            const all = load();
+            const cur = all["rainstorm"] ?? rec;
+            all["rainstorm"] = { ...cur, extra: { ...(cur.extra ?? {}), ...patch, finding: false } };
+            save(all);
+          };
+          void import("./idol-weather").then(m => m.findRainyDayInRange(from, to))
+            .then(day => mark({ stormAt: day?.at ?? 0 }))
+            .catch(() => mark({}));
+          mark({ finding: true });
+        }
+        return { premise: "" };
+      }
+      if (!stormAt) return { premise: "" }; // 整个窗口没有真实雨天：这条不演
+      const now = new Date(c.now);
+      const same = (a: Date, b: Date) => a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+      if (!same(new Date(stormAt), now)) return { premise: "" };
+      return { premise: `首尔今天下起暴雨（按真实天气）。接在她现在这一场里，按她此刻的位置、在做什么、同行的人来展开：下课后被雨困住、和同期或朋友找地方避雨、原本的安排受影响、或在路上遇到一段突如其来的雨天故事。不预设情感发展，不为了触发事件强行改变她的位置。` };
     },
   },
   {
@@ -785,14 +827,19 @@ export const PLOTS: PlotDef[] = [
     },
     fire(c) {
       const now = new Date(c.now);
-      const at = new Date(now.getFullYear(), now.getMonth(), Math.min(now.getDate() + 5 + Math.floor(Math.random() * 5), 28), 18, 0, 0);
-      const premise = `首尔某所大学办秋季音乐节，邀请多组已出道爱豆和歌手演出（第一阶段：活动排期）。优先由符合条件的同期通过 KKT 邀请她一起去（邀请者按兴趣、关系和日程挑，不固定）；没人邀请，她也可以从日历知道、自己决定去不去。当天若参加，通过「此刻」演绎现场：舞台、应援、观众互动、练习生视角的演出体验。`;
+      let at = new Date(now.getFullYear(), now.getMonth(), Math.min(now.getDate() + 5 + Math.floor(Math.random() * 5), 28), 18, 0, 0);
+      // 定稿：真实大学校园音乐节，和校园情缘的学校不同校不同场；尽量跟校园庆典错开 14 天
+      const UNIS = ["高丽大学 校园", "延世大学 校园", "成均馆大学 校园", "汉阳大学 校园", "中央大学 校园", "东国大学 校园"];
+      const campusNode = c.career.nodes.find(n => n.title === "校园庆典" && (n.status === "pending" || n.status === "invite"));
+      if (campusNode && Math.abs(campusNode.dueAt - at.getTime()) < 14 * DAY) at = new Date(campusNode.dueAt + 14 * DAY);
+      const place = UNIS[Math.floor(Math.random() * UNIS.length)];
+      const premise = `首尔某所大学（${place}）办秋季音乐节，邀请多组已出道爱豆和歌手演出（第一阶段：活动排期）。优先由符合条件的同期通过 KKT 邀请她一起去（邀请者按兴趣、关系和日程挑，不固定）；没人邀请，她也可以从日历知道、自己决定去不去。当天若参加，通过「此刻」演绎现场：舞台、应援、观众互动、练习生视角的演出体验。`;
       // 有朋友以上的同期就真发 KKT 邀请；实在没有才走日历
       const inviter = c.roster?.npcs.filter(n => n.charId && ["朋友", "好朋友", "暧昧", "恋人"].includes(c.profiles[n.charId]?.relation ?? "")).sort(() => Math.random() - 0.5)[0];
       const inviterChar = inviter?.charId ? c.characters.find(x => x.id === inviter.charId) : undefined;
       const node = inviterChar
-        ? scheduleInvitePlot("大学音乐节", "汉江公园", premise, at.getTime(), { id: inviterChar.id, name: inviterChar.name }, `大学音乐节那几天你想去汉江公园看演出，想叫上她一起。按你的性格在 KakaoTalk 上约她。`)
-        : schedulePlotNode("大学音乐节", "汉江公园", premise, at.getTime());
+        ? scheduleInvitePlot("大学音乐节", place, premise, at.getTime(), { id: inviterChar.id, name: inviterChar.name }, `大学音乐节那几天你想去${place}看演出，想叫上她一起。按你的性格在 KakaoTalk 上约她。`)
+        : schedulePlotNode("大学音乐节", place, premise, at.getTime());
       return { premise: node.premise, node };
     },
   },

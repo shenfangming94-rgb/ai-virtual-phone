@@ -15,6 +15,7 @@ import { examBase, type Trainee } from "./idol-training";
 import { fameEvent } from "./idol-fame";
 import { loadCharacters } from "./character-storage";
 import { loadTraineeCard } from "./trainee-card";
+import { loadProfiles } from "./idol-people";
 
 const KEY = "idol_debut_pipeline_v1";
 
@@ -27,7 +28,7 @@ function save(s: State) { kvSet(KEY, JSON.stringify(s)); }
 
 export function pipelineState(): State { return load(); }
 
-/** 名单算法：玩家必进 + 综合分前 4 的同期，特长多样性保底 */
+/** 名单算法：玩家必进 + 综合分前 4 的同期，特长多样性保底（vocal/rap 至少覆盖一个，玩家特长也算覆盖） */
 export function computeLineup(): string[] {
   const roster = loadRoster();
   if (!roster) return [];
@@ -35,17 +36,21 @@ export function computeLineup(): string[] {
   const scored = all.map(t => ({ t, s: examBase(t) })).sort((a, b) => b.s - a.s);
   const player = roster.player;
   const npcTop = scored.filter(x => x.t.id !== "player").slice(0, 4).map(x => x.t);
-  // 多样性：前 4 里没有 vocal/rap 特长的，换进最高的那个
-  const ensure = (spec: "vocal" | "rap", pool: Trainee[], rest: Trainee[]): Trainee[] => {
-    if (pool.some(t => t.specialty === spec)) return pool;
+  // 多样性：前 4 里没有 vocal/rap 特长的，换进最高的那个；换的时候别把刚保的另一项顶掉
+  const ensure = (spec: "vocal" | "rap", pool: Trainee[], rest: Trainee[], protect?: Set<string>): Trainee[] => {
+    const covered = pool.some(t => t.specialty === spec) || player.specialty === spec;
+    if (covered) return pool;
     const alt = rest.filter(t => t.specialty === spec).sort((a, b) => examBase(b) - examBase(a))[0];
     if (!alt) return pool;
     const out = [...pool];
-    out[out.length - 1] = alt;
+    const idx = out.map((t, i) => ({ t, i })).filter(({ t }) => t.specialty !== spec && !(protect?.has(t.specialty))).pop()?.i;
+    if (idx == null) return pool;
+    out[idx] = alt;
     return out;
   };
   const rest = roster.npcs.filter(n => !npcTop.includes(n));
-  const final = ensure("rap", ensure("vocal", npcTop, rest), rest);
+  const afterVocal = ensure("vocal", npcTop, rest);
+  const final = ensure("rap", afterVocal, rest, new Set(["vocal"]));
   const picks = [player, ...final];
   saveRoster({ ...roster }); // 名单里的人标记在 pipeline 里,roster 不动
   return picks.map(t => t.id);
@@ -72,15 +77,49 @@ export function debutPipelineTick(): void {
     save({ ...s, revealed: true });
     return;
   }
-  // 3. 正式出道完成 → 身份切换 + 出道结算
+  // 3. 正式出道完成 → 建团队资料 + 身份切换 + 出道结算
   const debut = career.nodes.find(n => n.occasion === "mainline" && n.title.includes("正式出道"));
   if (debut && debut.status === "done" && career.stage !== "idol") {
-    saveCareer({ ...career, stage: "idol" as const, facts: [...career.facts, `出道成员：${lineupNames(s.lineup).join("、")}`] });
-    fameEvent("debut", "正式出道", debut.dueAt);
+    finalizeDebut(career, s.lineup, debut.dueAt);
   }
 }
 
 function lineupNames(ids: string[]): string[] {
   const chars = loadCharacters();
-  return ids.map(id => id === "player" ? (loadTraineeCard()?.name ?? "她") : (chars.find(c => c.id === id)?.name ?? "同期"));
+  const roster = loadRoster();
+  return ids.map(id => {
+    if (id === "player") return loadTraineeCard()?.name ?? "她";
+    // 名单里存的是名册编号（Trainee.id），名字要过 charId 去通讯录查（她反馈过显示成「同期」的 bug）
+    const charId = roster?.npcs.find(n => n.id === id)?.charId;
+    return charId ? (chars.find(c => c.id === charId)?.name ?? "同期") : "同期";
+  });
+}
+
+/** 正式出道那一刻：把团队资料落进 career.debut（她反馈：新管道没建 team/members，出道后还显示练习生） */
+function finalizeDebut(career: ReturnType<typeof loadCareer>, lineup: string[], debutAt: number): void {
+  const roster = loadRoster();
+  const chars = loadCharacters();
+  const profiles = loadProfiles();
+  const card = loadTraineeCard();
+  const POS: Record<string, string> = { vocal: "主唱", dance: "主舞", rap: "Rapper", visual: "门面", acting: "演技担当", variety: "综艺担当", compose: "创作", language: "外语担当" };
+  const members = lineup.map(id => {
+    if (id === "player") {
+      const spec = roster?.player.specialty ?? "dance";
+      return { id: "player", name: card?.name ?? "她", ko: "", nation: card?.nationality ?? "韩国", birthday: card?.birthday ?? "", positions: [{ zh: POS[spec] ?? "领唱", ko: "" }] };
+    }
+    const npc = roster?.npcs.find(n => n.id === id);
+    const char = npc?.charId ? chars.find(c => c.id === npc.charId) : undefined;
+    const p = npc?.charId ? profiles[npc.charId] : undefined;
+    return { id: npc?.charId ?? id, name: char?.name ?? npc?.name ?? "同期", ko: "", nation: p?.nationality ?? "韩国", birthday: npc?.birthday ?? "", positions: [{ zh: POS[npc?.specialty ?? ""] ?? "领唱", ko: "" }] };
+  });
+  saveCareer({
+    ...loadCareer(), stage: "idol" as const,
+    facts: [...loadCareer().facts, `出道成员：${members.map(m => m.name).join("、")}`],
+    debut: {
+      targetAt: debutAt, attempt: 1, status: "debuted" as const, codename: "SEOUL:AM", delays: [],
+      members, team: { en: "SEOUL:AM", ko: "", meaning: "", meaningKo: "" }, song: "", debutAt,
+      formedAt: debutAt, steps: [{ kind: "dday" as const, at: debutAt, done: true }],
+    },
+  });
+  fameEvent("debut", "正式出道", debutAt);
 }

@@ -151,7 +151,12 @@ function mainlineTickInner(): void {
     }
     if (n.state === "scheduled" && n.nodeId) {
       const node = loadCareer().nodes.find(x => x.id === n.nodeId);
-      if (node && node.status !== "pending" && node.status !== "invite") { changed = true; return { ...n, state: "done" as const }; }
+      if (node && node.status === "done") { changed = true; return { ...n, state: "done" as const }; }
+      if (node && (node.status === "absent" || node.status === "declined" || node.status === "leave")) {
+        // 她定的：主线必要节点不跳过——缺席/没去不能当走过，重新排一场
+        changed = true;
+        return { ...n, state: "pending" as const, scheduledAt: undefined, nodeId: undefined };
+      }
     }
     return n;
   });

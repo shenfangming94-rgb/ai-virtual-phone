@@ -100,6 +100,8 @@ function concert(year: number, now: number) {
   const career = loadCareer();
   const c = companyOf(career.companyId);
   if (career.stage !== "trainee" || !c || !career.signedAt) return;
+  // 新档：年末演唱会走主线（idol-mainline family_concert），旧年度版停掉，不然会出现两场
+  try { if (kvGet("idol_roster_v1")) return; } catch { /* 旧档没有名册，照旧 */ }
   const k = `concert-${year}`;
   if (loadDone().includes(k)) return;
   const iso = nthWeekday(year, 11, 6, 3);

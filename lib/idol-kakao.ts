@@ -18,7 +18,7 @@ import { createPerson, emptyProfile, fmtDay, getProfile, saveProfile, draftPerso
 import { companyOf, loadCareer, saveCareer, type CareerNode } from "./idol-career";
 import { simpleLLMCall } from "./api-helpers";
 import { loadTraineeCard } from "./trainee-card";
-import { clearCrowd } from "./idol-crowd";
+import { seedCrowdNamed } from "./idol-crowd";
 import { debutNoticeTarget } from "./idol-debut";
 import { idolLanguageHint } from "./idol-language";
 
@@ -356,18 +356,24 @@ let groupBusy = false;
 export async function ensureTraineeGroup(present: Character[], notify?: (msg: string) => void): Promise<void> {
   const s = load();
   if (groupBusy) return;
-  // 名册里的 39 名同期（群成员就是她们 + 她，不要路人）
+  // 名册里的 39 名同期（11-07 她定的：群里当「路人」，说话时按名册认人，不挂进成员列表）
   let rosterIds: string[] = [];
-  try { rosterIds = ((JSON.parse(kvGet("idol_roster_v1") || "null") as { npcs?: { charId?: string }[] } | null)?.npcs ?? []).map(n => n.charId).filter((id): id is string => Boolean(id)); } catch { /* 旧档没有名册 */ }
+  let rosterNames: { name: string; charId: string }[] = [];
+  try {
+    const npcs = ((JSON.parse(kvGet("idol_roster_v1") || "null") as { npcs?: { charId?: string; name?: string }[] } | null)?.npcs ?? []);
+    rosterIds = npcs.map(n => n.charId).filter((id): id is string => Boolean(id));
+    rosterNames = npcs.filter(n => n.charId && n.name).map(n => ({ charId: n.charId!, name: n.name! }));
+  } catch { /* 旧档没有名册 */ }
   if (s.groupId && loadChatSessions().some(x => x.id === s.groupId)) {
-    // 旧档/旧群：把 39 名同期补进群，清掉路人（转正过的保留）
+    // 旧群对齐她定的形式：39 名同期不挂成员、转成路人；室友和转正过的人保留
     const rm = loadCareer().roommates ?? [];
     const sessions = loadChatSessions();
     const g = sessions.find(x => x.id === s.groupId)!;
-    const have = new Set(g.participantIds ?? []);
-    const missing = [...rm, ...rosterIds].filter(id => !have.has(id));
-    if (missing.length) saveChatSessions(sessions.map(x => x.id === g.id ? { ...x, participantIds: [...(x.participantIds ?? []), ...missing] } : x));
-    clearCrowd(s.groupId);
+    const keep = (g.participantIds ?? []).filter(id => !rosterIds.includes(id) || rm.includes(id));
+    const missing = rm.filter(id => !keep.includes(id));
+    const next = [...new Set([...keep, ...missing])];
+    if (next.join() !== (g.participantIds ?? []).join()) saveChatSessions(sessions.map(x => x.id === g.id ? { ...x, participantIds: next } : x));
+    seedCrowdNamed(s.groupId, rosterNames.map(n => ({ name: n.name, role: "同期练习生" })));
     return;
   }
   const career = loadCareer();
@@ -386,8 +392,10 @@ export async function ensureTraineeGroup(present: Character[], notify?: (msg: st
       const unmet = roommates.filter(r => !present.some(p => p.id === r.id)).map(r => r.name);
       await teacherAddsHer(teacher, c.name, name, unmet);
     }
-    const memberIds = [...new Set([teacher.id, ...rosterIds, ...mates.map(m => m.id), ...roommates.map(m => m.id)])];
+    const memberIds = [...new Set([teacher.id, ...mates.map(m => m.id), ...roommates.map(m => m.id)])];
     const session = createGroupSession(name, memberIds);
+    // 39 名同期当路人进群（名字按名册，说话时认回本人）
+    seedCrowdNamed(session.id, rosterNames.map(n => ({ name: n.name, role: "同期练习生" })));
     saveChatSessions(loadChatSessions().map(x => x.id === session.id ? { ...x, groupOwnerId: teacher.id } : x));
     const userName = resolveUserIdentity()?.name || "她";
     pushChatMessage({ sessionId: session.id, role: "system", content: `${teacher.name}邀请${userName}加入了群聊「${name}」`, status: "sent" });

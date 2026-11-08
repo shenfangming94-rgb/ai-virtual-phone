@@ -92,6 +92,20 @@ export function seedCrowd(sessionId: string, count: number, takenNames: string[]
   saveAll(all);
 }
 
+/** 给群塞一批指定名字的路人（练习生群：39 名同期当路人，说话时按名册认人）。幂等：已存在的名字不重复加 */
+export function seedCrowdNamed(sessionId: string, entries: { name: string; role: string }[]): void {
+  const all = loadAll();
+  const existing = all[sessionId] ?? [];
+  const taken = new Set([...Object.values(all).flat().map(m => m.name), ...existing.map(m => m.name)]);
+  const added: CrowdMember[] = [];
+  for (const e of entries) {
+    if (!e.name || taken.has(e.name)) continue;
+    taken.add(e.name);
+    added.push({ id: `${CROWD_PREFIX}${Date.now().toString(36)}${Math.random().toString(36).slice(2, 7)}`, name: e.name, role: e.role || "同期练习生" });
+  }
+  if (added.length) { all[sessionId] = [...existing, ...added]; saveAll(all); }
+}
+
 /** 群聊提示词里加的一段：群里还有很多人，路人偶尔冒一句 */
 export function crowdPromptBlock(sessionId: string): string {
   const list = crowdOf(sessionId).filter(m => !m.promotedTo);

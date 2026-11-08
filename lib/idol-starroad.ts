@@ -7,6 +7,7 @@
  */
 
 import { kvGet, kvSet } from "./kv-db";
+import { apSlotOf } from "./idol-actionpoints";
 import { needFor } from "./idol-training";
 import { loadTraineeCard } from "./trainee-card";
 import { addToCalendar, loadCareer, saveCareer, type CareerNode } from "./idol-career";
@@ -281,7 +282,7 @@ export function practicedToday(now = Date.now()): boolean {
   return loadCareer().nodes.some(n => n.kind === "practice" && dayKey(n.dueAt) === day && n.status !== "declined");
 }
 
-/** 星路点「加练」：进提醒事项「我自己记的」，今晚八点（过了就明晚）打勾写一句就算。占 20:00-22:00 一个行动点 */
+/** 星路点「加练」：进提醒事项「我自己记的」，今晚八点（过了就明晚）打勾写一句就算。占 20:00-22:00 一个行动点（取消退点） */
 export function addPractice(subject: Subject): CareerNode | null {
   const s = ensure();
   if (!s) return null;
@@ -297,6 +298,9 @@ export function addPractice(subject: Subject): CareerNode | null {
   };
   saveCareer({ ...career, nodes: [...career.nodes, node].sort((a, b) => a.dueAt - b.dueAt) });
   addToCalendar(node);
+  // 她定的：点「加练」那一刻扣 1 点（取消退点）
+  const slot = apSlotOf(d.getTime());
+  if (slot != null) void import("./idol-ap-live").then(m => m.consumeAp(d.getTime(), [slot], `加练：${sub.zh}`)).catch(() => undefined);
   return node;
 }
 
@@ -439,7 +443,7 @@ export function starPromptBlock(): string {
 
 // ── 每隔几秒：上过的课记账、旷课、每周作业、三个月换课表 ──
 
-type Stage = { startAt: number; place: string; bg?: string; ended?: boolean };
+type Stage = { startAt: number; place: string; bg?: string; ended?: boolean; class?: { start?: number; settled?: boolean; attended?: boolean } };
 
 function stageScenes(): Stage[] {
   try { return Object.values(JSON.parse(kvGet("idol_stage_scenes_v1") || "{}") as Record<string, Stage>); } catch { return []; }
@@ -460,6 +464,8 @@ function judge(s: State, career: ReturnType<typeof loadCareer>, scenes: Stage[],
   // （她反馈过：在公司的戏里时间跳过去了，下午的课被误判旷课）
   if (newClassMode()) {
     if (classAttendedAt(c.start)) return "attend";
+    // 这场课有课堂戏但迟到超 30 分钟（settled 且 attended=false）→ 按旷课，公司场景兜底不算它
+    if (scenes.some(sc => sc.class?.start === c.start && sc.class?.settled && sc.class?.attended === false)) return "skip";
     if (scenes.some(sc => inCompany(sc) && sc.startAt < c.end && (sc.startAt >= c.start - HOUR || sc.ended === false))) return "attend";
     return "skip";
   }
@@ -521,6 +527,8 @@ export function starroadTick(notify: (msg: string) => void): void {
   if (newClassMode()) {
     for (const m of s.marks) {
       if (m.status !== "skip") continue;
+      // 迟到的课堂戏（attended=false）按旷课，不翻案
+      if (scenes.some(sc => sc.class?.start === m.at && sc.class?.settled && sc.class?.attended === false)) continue;
       if (scenes.some(sc => inCompany(sc) && sc.startAt < m.at + 2 * HOUR && (sc.startAt >= m.at - HOUR || sc.ended === false))) {
         m.status = "attend";
         s.skips = s.skips.filter(k => k.at !== m.at);

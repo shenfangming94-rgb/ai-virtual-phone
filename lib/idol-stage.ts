@@ -477,6 +477,12 @@ export async function settleClassScene(chapterIndex: number): Promise<{ lines: s
   const cls = scene.class;
   const session = worldVnSession();
   const lines: string[] = [];
+  // 她定的：迟到 30 分钟内不算旷课，超过按旷课——不结数值、不记到场（戏让她演完）
+  if (Date.now() - cls.start > 30 * 60e3) {
+    if (Date.now() < cls.end) setWorldTime(cls.end);
+    saveStageScene({ ...scene, class: { ...cls, settled: true, attended: false } });
+    return { lines: ["迟到了三十分钟以上，这节课算旷课了。"], plotPremise: null };
+  }
   // 数值结算：八门课走名册结算；特色课不涨八项，只给一句收尾
   if (cls.subjectKey && CLASS_TEXT_KEYS[cls.subjectKey]) {
     const g = settlePlayerClass(cls.subjectKey as StarSubject);

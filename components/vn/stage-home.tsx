@@ -6,6 +6,7 @@
  */
 
 import { classAt, classHappeningNow } from "@/lib/idol-starroad";
+import { apLeft } from "@/lib/idol-ap-live";
 import { destinyMarks, takeDestinyMark } from "@/lib/idol-destiny";
 import { happeningMarks, takeHappening } from "@/lib/idol-events";
 import { activitiesToday, fillWorldPlaces } from "@/lib/idol-calendar";
@@ -197,6 +198,7 @@ export function StageHome({ onClose, onPlay, onReplay }: Props) {
       <div className="stg-hud">
         {!hideClock && !map.parent ? <span className="stg-pill stg-pill-date">{d.getFullYear()}<b>年</b>{d.getMonth() + 1}<b>月</b>{d.getDate()}<b>日</b><i>星期{WEEK[d.getDay()]}</i></span> : null}
         {map.parent && mapUrl ? null : <span className="stg-pill">{(mapId === "company" && companyOf(loadCareer().companyId)?.name) || map.label}{!hideClock && !map.parent ? <><em>·</em>{clock}</> : null}</span>}
+        {!map.parent ? <span className="stg-pill stg-pill-ap">行动点 {apLeft(now)} / 8</span> : null}
       </div>
       <div className="stg-bar">
         <button type="button" className="stg-ic" onClick={() => (map.parent ? setMapId(map.parent) : onClose())} aria-label="返回">

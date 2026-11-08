@@ -23,3 +23,10 @@ export function apLeft(now = Date.now()): number {
 export function consumeAp(now: number, slots: number[], what: string): void {
   saveAp(apConsume(loadAp(), now, slots, what));
 }
+
+/** 退点：取消加练/约会时把占的格还回来（按 what 精确匹配当天已用的） */
+export function refundAp(now: number, what: string): void {
+  const cur = apResetIfNewDay(loadAp(), now);
+  const next = { ...cur, used: cur.used.filter(u => u.what !== what) };
+  if (next.used.length !== cur.used.length) saveAp(next);
+}

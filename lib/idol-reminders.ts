@@ -30,7 +30,9 @@ import { recordAbsent, recordNodeDone, scoreResultText } from "./idol-ledger";
 import { getProfile, saveProfile } from "./idol-people";
 import { onSelection, revealName } from "./idol-debut";
 import { yearlyStops } from "./idol-yearly";
-import { classesForTeacher, leaveFromMarker, nodeSettledKeys, onNodeDone, pushStarroadMessage, saveNodeSettled } from "./idol-starroad";
+import { classesForTeacher, leaveFromMarker, nodeSettledKeys, onNodeDone, pushStarroadMessage, saveNodeSettled, subjectOf } from "./idol-starroad";
+import { apSlotOf } from "./idol-actionpoints";
+import { apLeft } from "./idol-ap-live";
 import { destinyStops } from "./idol-destiny";
 
 const KEY = "idol_reminders_v1";
@@ -158,6 +160,13 @@ export function acceptInvite(id: string, source: "reminder" | "chat" = "reminder
   if (loadCareer().offers.some(o => o.id === id)) return acceptOffer(id) ?? undefined;
   const before = loadCareer().nodes.find(n => n.id === id);
   if (!before || before.status !== "invite" || (before.replyBy && before.replyBy < Date.now())) return undefined;
+  // 她定的：约会占行动点（至少 1 点）；今天的时间排满了就不接受
+  if (before.kind === "date") {
+    const left = apLeft();
+    if (left <= 0) return undefined;
+    const slot = apSlotOf(before.dueAt);
+    if (slot != null) void import("./idol-ap-live").then(m => m.consumeAp(before.dueAt, [slot], before.title)).catch(() => undefined);
+  }
   const node = patchNode(id, { status: "pending" });
   if (node) addToCalendar(node);
   if (node) {
@@ -176,6 +185,9 @@ export function declineInvite(id: string, source: "reminder" | "chat" = "reminde
   if (loadCareer().offers.some(o => o.id === id)) { declineOffer(id); return; }
   const before = loadCareer().nodes.find(n => n.id === id);
   if (!before || before.status !== "invite") return;
+  // 约会/加练退点：没去就不占今天的时间
+  if (before.kind === "date") void import("./idol-ap-live").then(m => m.refundAp(Date.now(), before.title)).catch(() => undefined);
+  if (before.kind === "practice") void import("./idol-ap-live").then(m => m.refundAp(Date.now(), `加练：${subjectOf(before.subject)?.zh ?? ""}`)).catch(() => undefined);
   const node = patchNode(id, { status: "declined", result: "没去" });
   if (node) {
     if (node.notice?.channel === "mail") {
@@ -199,7 +211,13 @@ export function addMine(title: string, at: number, note: string): CareerNode {
 
 export function deleteNode(id: string): void {
   const career = loadCareer();
+  const node = career.nodes.find(n => n.id === id);
   saveCareer({ ...career, nodes: career.nodes.filter(n => n.id !== id) });
+  // 加练/约会删掉 = 取消，退点
+  if (node && node.status === "pending") {
+    if (node.kind === "practice") void import("./idol-ap-live").then(m => m.refundAp(Date.now(), `加练：${subjectOf(node.subject)?.zh ?? ""}`)).catch(() => undefined);
+    if (node.kind === "date") void import("./idol-ap-live").then(m => m.refundAp(Date.now(), node.title)).catch(() => undefined);
+  }
 }
 
 export function setWish(id: string, wish: string): void { patchNode(id, { wish: wish.trim() || undefined }); }

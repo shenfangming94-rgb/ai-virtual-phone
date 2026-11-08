@@ -13,9 +13,9 @@ export const AP_SLOT_LABELS = ["08:00-10:00", "10:00-12:00", "12:00-14:00", "14:
 export type ApState = { day: string; used: { slot: number; what: string }[] };
 
 const pad = (n: number) => String(n).padStart(2, "0");
-/** 世界日期 YYYY-MM-DD（行动点按世界日期重置） */
+/** 行动点的一天从早上 8 点起算（她定的：睡到明早 8 点刷新满 8 点，不是零点） */
 export function apDayKey(ms: number): string {
-  const d = new Date(ms);
+  const d = new Date(ms - 8 * 3600e3);
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
 

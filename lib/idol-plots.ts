@@ -17,6 +17,7 @@ import { loadTraineeCard } from "./trainee-card";
 import { loadProfiles, RELATIONS } from "./idol-people";
 import { loadCharacters } from "./character-storage";
 import { loadRoster, settlePlayerBonus, formatClassGain } from "./idol-roster-live";
+import type { Subject } from "./idol-training";
 import { fameTotal } from "./idol-fame";
 import { loadGrades, type GradeView } from "./idol-starroad";
 import { findLunar } from "./idol-calendar";
@@ -59,6 +60,8 @@ export type PlotDef = {
   hook: PlotHook;
   /** 最多触发次数；null = 随真实事件不设上限 */
   max: number | null;
+  /** 只在哪些课上触发（她定的：课堂剧情要跟实际课程对得上）；不写 = 哪节课都行 */
+  courses?: string[];
   check(ctx: PlotCtx, rec: PlotRecord): boolean;
   /** 条件满足了干什么：返回要演的开场（class/scene）或要排的日程（date） */
   fire(ctx: PlotCtx, rec: PlotRecord): Promise<PlotFireResult> | PlotFireResult;
@@ -90,7 +93,8 @@ function ctx(): PlotCtx {
   let attended = 0;
   try {
     const s = JSON.parse(kvGet("idol_starroad_v1") || "null");
-    attended = (s?.marks ?? []).filter((m: { status?: string }) => m.status === "attend" || m.status === "official").length;
+    // 她定的：正式行程代课不算「正常上课次数」（议论人气的三节课门槛只数真上过的课）
+    attended = (s?.marks ?? []).filter((m: { status?: string }) => m.status === "attend").length;
   } catch { /* 没有星路状态就不算课数 */ }
   return {
     now: Date.now(),
@@ -210,18 +214,30 @@ export function plotTick(): string[] {
   return became;
 }
 
-/** 上课管线问的：有没有 ready 的 class 类剧情；有就触发它并返回开场 */
-export async function takeClassPlot(): Promise<{ key: string; premise: string; gain?: string } | null> {
+/** 上课管线问的：有没有 ready 的 class 类剧情；有就触发它并返回开场。subject = 这节课的科目（课堂剧情要跟实际课程对得上） */
+let currentClassSubject: string | null = null;
+export async function takeClassPlot(subject?: string | null): Promise<{ key: string; premise: string; gain?: string } | null> {
+  currentClassSubject = subject ?? null;
   const all = plotRecords();
   const mi = all["missed_invite"]?.extra as { mentionAfter?: number; mention?: string } | undefined;
   if (mi?.mention && Date.now() >= (mi.mentionAfter ?? 0)) {
     all["missed_invite"] = { ...all["missed_invite"], extra: {} };
     save(all);
+    currentClassSubject = null;
     return { key: "missed_invite", premise: mi.mention };
   }
   const c = ctx();
   for (const d of PLOTS) {
     if (d.hook !== "class" || d.key === "intro_new_trainee") continue;
+    // 课程绑定：这条剧情只在对应课上触发
+    if (subject && d.courses && !d.courses.includes(subject)) continue;
+    if (d.key === "hidden_talent" && subject) {
+      const talents = loadTraineeCard()?.talents ?? [];
+      if (talents.includes(subject)) continue;
+      const g = c.grades.find(x => x.id === subject);
+      if (!g || g.grade !== "B" || (g.last && g.last.dir !== "up")) continue;
+    }
+    if (d.key === "compete" && subject && usedCompeteSubjects().includes(subject)) continue; // 这门课的竞争已经演过
     const rec = all[d.key];
     if (rec.state !== "ready") continue;
     try {
@@ -231,9 +247,11 @@ export async function takeClassPlot(): Promise<{ key: string; premise: string; g
       const fresh = load()[d.key] ?? rec;
       all[d.key] = { ...fresh, state: "done", firedCount: fresh.firedCount + 1, lastFiredAt: Date.now() };
       save(all);
+      currentClassSubject = null;
       return { key: d.key, premise: r.premise, ...(r.gain ? { gain: r.gain } : {}) };
     } catch { /* 这条触发失败，留给下一节 */ }
   }
+  currentClassSubject = null;
   return null;
 }
 
@@ -317,6 +335,14 @@ export function usedCompeteSubjects(): string[] {
   return (rec?.extra?.subjects as string[]) ?? [];
 }
 
+/** 她的班级历史（月评记录里的真实逐次变化；升降班剧情按这个比，不按快照） */
+function playerClassHistory(): { month: string; klass: string }[] {
+  try {
+    const s = JSON.parse(kvGet("idol_ledger_v1") || "null") as { months?: { month: string; rows?: { id: string; klass?: string }[] }[] };
+    return (s?.months ?? []).map(m => ({ month: m.month, klass: m.rows?.find(r => r.id === "player")?.klass ?? "" })).filter(x => x.klass);
+  } catch { return []; }
+}
+
 // ── 剧情定义 ──
 
 function rivalsOf(c: PlotCtx): { charId: string; name: string }[] {
@@ -355,15 +381,13 @@ export const PLOTS: PlotDef[] = [
   {
     key: "clique", title: "小团体事件", hook: "class", max: 1,
     check(c) {
-      const prof = Object.values(c.profiles);
-      if (!prof.some(p => p.relation === "不喜欢你" || p.relation === "跟你过不去")) return false;
-      const good = prof.filter(p => p.relation === "好朋友").length;
-      return true; // 分支在 fire 里按好朋友数选
+      // 她反馈/审计：发起者必须是名册里真实有朋友圈的女同期，不能拿全通讯录的关系硬凑
+      const hater = c.roster?.npcs.find(n => n.charId && ["不喜欢你", "跟你过不去"].includes(c.profiles[n.charId]?.relation ?? "") && n.friends.length > 0);
+      return Boolean(hater);
     },
     fire(c) {
-      const prof = Object.values(c.profiles);
-      const hater = prof.find(p => p.relation === "不喜欢你" || p.relation === "跟你过不去");
-      const good = prof.filter(p => p.relation === "好朋友").map(p => c.characters.find(x => x.id === p.charId)?.name).filter(Boolean);
+      const hater = c.roster?.npcs.find(n => n.charId && ["不喜欢你", "跟你过不去"].includes(c.profiles[n.charId]?.relation ?? "") && n.friends.length > 0);
+      const good = (c.roster?.npcs ?? []).filter(n => n.charId && c.profiles[n.charId]?.relation === "好朋友").map(n => c.characters.find(x => x.id === n.charId)?.name).filter(Boolean);
       if (!hater) return { premise: "", done: true };
       const haterName = c.characters.find(x => x.id === hater.charId)?.name ?? "一个同期";
       if (good.length < 2) {
@@ -387,7 +411,8 @@ export const PLOTS: PlotDef[] = [
       const rec = plotRecords()["compete"];
       const used = usedCompeteSubjects();
       const pool = (["vocal", "dance", "rap", "compose", "acting", "variety", "language", "visual"] as const).filter(s => !used.includes(s));
-      const subject = pool[Math.floor(Math.random() * pool.length)];
+      // 优先这门课本身的科目（她定的：竞争发生在不同课程、跟当前课对得上）
+      const subject = (currentClassSubject && !used.includes(currentClassSubject)) ? currentClassSubject : pool[Math.floor(Math.random() * pool.length)];
       const subjectLabel: Record<string, string> = { vocal: "声乐", dance: "舞蹈", rap: "Rap", compose: "创作", acting: "演技", variety: "综艺感", language: "语言", visual: "形象管理" };
       const chanceLabels: Record<string, string> = {
         vocal: "公司内部 Demo 的试唱名额", dance: "公司练习生公开视频的中心位置", rap: "前辈歌曲的临时 Rap 导唱机会",
@@ -402,8 +427,8 @@ export const PLOTS: PlotDef[] = [
       let win = false;
       if (her && rival && c.roster) {
         const npc = c.roster.npcs.find(n => n.charId === rival.charId);
-        const herV = her.stats[subject] ?? 45;
-        const npcV = npc?.stats[subject] ?? 45;
+        const herV = her.stats[subject as Subject] ?? 45;
+        const npcV = npc?.stats[subject as Subject] ?? 45;
         const r = Math.random() * 8 - 4;
         win = lostBefore >= 2 ? true : herV + r > npcV;
       } else {
@@ -419,7 +444,7 @@ export const PLOTS: PlotDef[] = [
       let gain: string | undefined;
       if (win) {
         try {
-          const g = settlePlayerBonus(subject, 1.5);
+          const g = settlePlayerBonus(subject as Subject, 1.5);
           if (g) gain = `🏆 拿下了机会 · ${formatClassGain(subjectLabel[subject], g)}`;
         } catch { /* 结算失败不影响剧情 */ }
       }
@@ -446,7 +471,7 @@ export const PLOTS: PlotDef[] = [
     },
   },
   {
-    key: "senior_visit", title: "女团师姐听课", hook: "class", max: 1,
+    key: "senior_visit", title: "女团师姐听课", hook: "class", max: 1, courses: ["vocal", "dance", "rap"],
     check(c) {
       if (c.signedDays < 60) return false;
       // 公司旗下有已出道女团（rosterPrompt 里有团就行；这里放宽：有任意女团档案）
@@ -462,7 +487,7 @@ export const PLOTS: PlotDef[] = [
     },
   },
   {
-    key: "girls_stage", title: "女同期合作舞台", hook: "class", max: 1,
+    key: "girls_stage", title: "女同期合作舞台", hook: "class", max: 1, courses: ["vocal", "dance"],
     check(c) {
       if (c.signedDays < 45) return false;
       const rivals = rivalsOf(c).filter(r => {
@@ -489,18 +514,23 @@ export const PLOTS: PlotDef[] = [
   {
     key: "promote_demote", title: "升降班", hook: "class", max: null,
     check(c, rec) {
-      const last = (rec.extra?.lastKlass as string) ?? "C";
-      return Boolean(c.roster) && c.roster!.player.klass !== last;
+      // 按月评记录逐次比（她反馈/审计：只比快照会把连续变动合并漏掉）
+      const rows = playerClassHistory();
+      const last = rows[rows.length - 1];
+      const prev = rows[rows.length - 2];
+      if (!last || !prev || last.klass === prev.klass) return false;
+      return (rec.extra?.lastMonth as string) !== last.month;
     },
     fire(c, rec) {
-      const klass = c.roster?.player.klass ?? "C";
-      const last = (rec.extra?.lastKlass as string) ?? "C";
-      const up = klass < last; // A<B<C<D
+      const rows = playerClassHistory();
+      const last = rows[rows.length - 1];
+      const prev = rows[rows.length - 2];
+      const up = "ABCD".indexOf(last.klass) < "ABCD".indexOf(prev.klass);
       const all = load();
-      all["promote_demote"] = { ...(all["promote_demote"] ?? rec), extra: { ...(rec.extra ?? {}), lastKlass: klass } };
+      all["promote_demote"] = { ...(all["promote_demote"] ?? rec), extra: { ...(rec.extra ?? {}), lastMonth: last.month } };
       save(all);
       return {
-        premise: `某节课上，老师宣布她${up ? `升到 ${klass} 班` : `降到 ${klass} 班`}（月考后的班级调整结果，代码定的）。宣布方式、在场同期的反应、升班后的新环境或降班后的处境，按真实关系和人设演；老师提她表现时，说她这个月真实的情况（上课、加练、考核），不报分数和档位。`,
+        premise: `某节课上，老师宣布她${up ? `升到 ${last.klass} 班` : `降到 ${last.klass} 班`}（月考后的班级调整结果，代码定的）。宣布方式、在场同期的反应、升班后的新环境或降班后的处境，按真实关系和人设演；老师提她表现时，说她这个月真实的情况（上课、加练、考核），不报分数和档位。`,
       };
     },
   },

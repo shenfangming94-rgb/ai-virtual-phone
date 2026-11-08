@@ -15,6 +15,8 @@
  * - 文本原文保留，不擅自改写、删减或扩充。
  */
 
+
+import { kvGet, kvSet } from "./kv-db";
 export type ClassText = { id: string; title: string; text: string };
 
 export const CLASS_TEXTS: Record<string, ClassText[]> = {
@@ -282,4 +284,17 @@ export function pickClassText(key: string, lastId?: string): ClassText | null {
   const candidates = lastId ? pool.filter(t => t.id !== lastId) : pool;
   const list = candidates.length ? candidates : pool;
   return list[Math.floor(Math.random() * list.length)];
+}
+
+/** 上一节这门课抽到的文本 id（防连续重复用） */
+const LAST_TEXT_KEY = "idol_class_text_last_v1";
+export function lastClassTextId(key: string): string | undefined {
+  try { return (JSON.parse(kvGet(LAST_TEXT_KEY) || "{}") as Record<string, string>)[key]; } catch { return undefined; }
+}
+export function saveClassTextId(key: string, id: string): void {
+  try {
+    const all = JSON.parse(kvGet(LAST_TEXT_KEY) || "{}") as Record<string, string>;
+    all[key] = id;
+    kvSet(LAST_TEXT_KEY, JSON.stringify(all));
+  } catch { /* 记不上不碍事 */ }
 }

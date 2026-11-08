@@ -22,7 +22,7 @@ import { addVnScene, deleteVnScene, loadVnScenes } from "./vn-asset-storage";
 import { getThemeAssetMap } from "./theme-storage";
 import { loadAllCharacters } from "./character-storage";
 import { classHappeningNow, markClassAttended, type Subject as StarSubject } from "./idol-starroad";
-import { CLASS_TEXT_KEYS, CLASS_TEXTS, pickClassText } from "./idol-class-texts";
+import { CLASS_TEXT_KEYS, CLASS_TEXTS, pickClassText, lastClassTextId, saveClassTextId } from "./idol-class-texts";
 import { formatClassGain, settlePlayerClass } from "./idol-roster-live";
 import { takeRomanceSceneBeat as romanceSceneBeat, takeRomanceAfterScene, setDormSceneProbe } from "./idol-romance-live";
 import { apSlotOf } from "./idol-actionpoints";
@@ -449,7 +449,8 @@ export function startClassScene(placeKey: string): { chapterIndex: number; scene
   const ch = startNewChapter(session.id, cls.label, `${fmtWorld(Date.now()).slice(5)} · ${place}`);
   if (!ch) return null;
   const key = classTextKey(cls);
-  const picked = pickClassText(key);
+  const picked = pickClassText(key, lastClassTextId(key));
+  saveClassTextId(key, picked?.id ?? "");
   const intro = takeIntroPremise();
   const scene: StageScene = {
     chapterId: ch.id, bg: placeKey, ids: [WORLD_CHAR_ID],
@@ -510,7 +511,7 @@ export async function settleClassScene(chapterIndex: number): Promise<{ lines: s
       plotTick();
       const scenePlot = takeScenePlot(); // 初雪这种场景剧情优先
       const romanceBeat = scenePlot ? null : (await import("./idol-romance-live")).takeRomanceClassBeat(); // 情缘：练习室指导/公司偶遇/出道危机
-      const plot = scenePlot ?? romanceBeat ?? await takeClassPlot();
+      const plot = scenePlot ?? romanceBeat ?? await takeClassPlot(cls.subjectKey);
       if (plot) plotPremise = plot.premise;
       if (plot && "gain" in plot && plot.gain) lines.push(plot.gain as string);
     }

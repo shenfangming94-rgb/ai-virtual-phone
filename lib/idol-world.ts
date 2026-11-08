@@ -228,6 +228,7 @@ export function worldPromptFor(meta: SceneMeta | null, fallbackPlace: string, pa
 - 写到下一个需要她反应的地方就停。${meta?.premise ? "\n- 「开头」是这一场要发生的事的大方向，不是要一次写完的：一段一段来，每段停在她能反应的地方，别替她把整场走完。" : ""}`,
     `【记号】回复最后另起一行写（她看不到，没有就不写）：
 - 名单里没有、但这次出场并且有名字的人：[新人:名字|一句话身份|已知资料JSON]。已知资料JSON只写本段已明确的gender、age、nationality、birthday、mbti、heightCm、appearance、isIdol、kinship，未明确的字段不填；没有资料可用原来的两字段格式。
+- 同一个人一旦给过名字，后面出场必须用同一个名字，不许换名字再写一遍（换名字会被当成另一个人）。
 - 「可能碰上的人」里有人出场：[出场:名字]
 - 戏里过去了一段时间：[时间:+N分钟]
 - 这一场已经自然收尾：[收尾]
@@ -349,6 +350,14 @@ function addFaces(host: SceneHost, faces: SceneTags["newFaces"], introduction: s
       // 她定的：见过就进通讯录——出场这一刻就算见过了，不用等戏结束
       const ep = getProfile(exist.id);
       if (!ep.met) saveProfile({ ...ep, met: true, metAt: { at: Date.now(), place: meta.place } });
+      continue;
+    }
+    // 她反馈：AI 下一句把同一个人换了名字再写一遍（偷懒），代码当成新人又建一张卡。
+    // 这场戏里已经介绍过身份一样的人 → 复用那张卡，不造第二个
+    const roleKey = (r: string) => r.replace(/[\s，。·、:：]/g, "");
+    const prior = (meta.newFaces ?? []).map(id => ({ id, role: roleKey(getProfile(id).role || "") })).find(x => x.role && roleKey(f.role || "") && (x.role === roleKey(f.role || "") || x.role.includes(roleKey(f.role || "")) || roleKey(f.role || "").includes(x.role)));
+    if (prior) {
+      if (!ids.includes(prior.id)) ids.push(prior.id);
       continue;
     }
     // 番外里新冒出来的人是他们认识的人，不建档、不进她的通讯录，只活在这场戏里

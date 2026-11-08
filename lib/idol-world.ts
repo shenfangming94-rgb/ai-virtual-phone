@@ -342,6 +342,9 @@ function addFaces(host: SceneHost, faces: SceneTags["newFaces"], introduction: s
     const exist = loadCharacters().find(c => (c.name === f.name || c.id === linkedFamily?.charId) && c.id !== WORLD_CHAR_ID);
     if (exist) {
       if (!ids.includes(exist.id)) ids.push(exist.id);
+      // 她定的：见过就进通讯录——出场这一刻就算见过了，不用等戏结束
+      const ep = getProfile(exist.id);
+      if (!ep.met) saveProfile({ ...ep, met: true, metAt: { at: Date.now(), place: meta.place } });
       continue;
     }
     // 番外里新冒出来的人是他们认识的人，不建档、不进她的通讯录，只活在这场戏里
@@ -501,6 +504,11 @@ export async function closeSceneWith(host: SceneHost): Promise<SceneCloseResult>
       // 情缘羁绊：这场戏和线里的男主见了面（连续待一整天也只算这一次）
       try { (await import("./idol-romance-live")).recordMeet(c.id); } catch { /* 情缘系统没接上不影响记账 */ }
       if (item.stay === "leave" || item.stay === "stay") nudgeLeave(c.id, item.stay === "leave" ? 1 : -1, String(item.stayWhy || event || `在${meta.place}`), meta.startAt);
+    }
+    // 兜底：在场的人一律算见过（AI 记账漏了谁都不漏她认识的人）
+    for (const c of present) {
+      const p = getProfile(c.id);
+      if (!p.met) saveProfile({ ...p, met: true, metAt: { at: meta.startAt, place: meta.place } });
     }
   }
   host.saveMeta({ ...meta, ended: true, summary });

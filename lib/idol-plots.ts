@@ -167,12 +167,13 @@ function maybePairRomance(c: PlotCtx, rec: PlotRecord): { charId: string; partne
   }).sort(() => Math.random() - 0.5);
   const pick = pool[0];
   if (!pick?.charId) return [];
-  // 她反馈/审计：恋情必须有真实关系基础——只配 pick 朋友圈里的人，不凭空拉路人
-  const partnerNpc = npcs.find(n => n.charId && n.charId !== pick.charId && c.profiles[n.charId] && pick.friends.some(f => f.charId === n.id) && Math.random() < 0.4);
-  const partner = partnerNpc?.charId
-    ? (c.characters.find(x => x.id === partnerNpc.charId)?.name ?? "另一位练习生")
-    : null;
-  if (!partner) return [];
+  // 她改回来的口径：对象不一定是她认识的——朋友圈同期/公司里的另一个人/公司外认识的人都可能，
+  // 公司外的按这个同期的背景写（中学同学、男朋友都行），戏里带出真人
+  const roll = Math.random();
+  const friendNpc = npcs.find(n => n.charId && n.charId !== pick.charId && c.profiles[n.charId] && pick.friends.some(f => f.charId === n.id));
+  const partner = roll < 0.35 && friendNpc?.charId
+    ? (c.characters.find(x => x.id === friendNpc.charId)?.name ?? "另一位练习生")
+    : roll < 0.6 ? "公司里的另一个人" : "公司外认识的人";
   return [{ charId: pick.charId, partner, since: c.now }];
 }
 

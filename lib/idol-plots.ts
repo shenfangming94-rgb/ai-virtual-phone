@@ -167,10 +167,12 @@ function maybePairRomance(c: PlotCtx, rec: PlotRecord): { charId: string; partne
   }).sort(() => Math.random() - 0.5);
   const pick = pool[0];
   if (!pick?.charId) return [];
-  const partnerNpc = npcs.find(n => n.charId && n.charId !== pick.charId && c.profiles[n.charId] && Math.random() < 0.4);
+  // 她反馈/审计：恋情必须有真实关系基础——只配 pick 朋友圈里的人，不凭空拉路人
+  const partnerNpc = npcs.find(n => n.charId && n.charId !== pick.charId && c.profiles[n.charId] && pick.friends.some(f => f.charId === n.id) && Math.random() < 0.4);
   const partner = partnerNpc?.charId
     ? (c.characters.find(x => x.id === partnerNpc.charId)?.name ?? "另一位练习生")
-    : Math.random() < 0.5 ? "公司里的另一个人" : "公司外认识的人";
+    : null;
+  if (!partner) return [];
   return [{ charId: pick.charId, partner, since: c.now }];
 }
 
@@ -571,7 +573,17 @@ export const PLOTS: PlotDef[] = [
       const h = new Date(c.now).getHours();
       const night = h >= 22 || h <= 2;
       if (!night) return false;
-      const friend = Object.values(c.profiles).some(p => (p.relation === "朋友" || p.relation === "好朋友" || p.relation === "暧昧" || p.relation === "恋人") && /练习生|同期/.test(`${p.role}${p.group}`));
+      // 她反馈/审计：要朋友以上的同期，且过去在宿舍或公司有真实夜间交集
+      const friend = (c.roster?.npcs ?? []).some(n => {
+        if (!n.charId) return false;
+        const p = c.profiles[n.charId];
+        if (!p || !["朋友", "好朋友", "暧昧", "恋人"].includes(p.relation ?? "")) return false;
+        return (p.events ?? []).some(e => {
+          const d = new Date(e.at);
+          const hh = d.getHours();
+          return (hh >= 21 || hh <= 3) && /宿舍|公司/.test(e.place ?? "");
+        });
+      });
       return friend;
     },
     fire(c) {
@@ -625,15 +637,17 @@ export const PLOTS: PlotDef[] = [
       const hit = c.roster?.npcs.filter(n => n.birthday === md && n.charId && ["朋友", "好朋友", "暧昧", "恋人"].includes(c.profiles[n.charId]?.relation ?? ""));
       const birthdayNpc = hit?.[0];
       const name = birthdayNpc?.charId ? c.characters.find(x => x.id === birthdayNpc.charId)?.name ?? "一位同期" : "一位同期";
-      const at = new Date(c.now); at.setHours(18, 0, 0, 0);
+      const BIRTHDAY_PLACES = ["江南 餐厅", "弘大 咖啡店", "明洞 炸鸡店", "汉江公园", "乐天世界", "公司附近 KTV"];
+      const place = BIRTHDAY_PLACES[Math.floor(Math.random() * BIRTHDAY_PLACES.length)];
+      const at = new Date(c.now); at.setHours(17 + Math.floor(Math.random() * 3), 0, 0, 0);
       if (at.getTime() < c.now) at.setTime(c.now + 60 * 60e3);
-      const premise = `${name}生日：她可能主动邀请她参加聚会，也可能由她的其他朋友联系她一起准备惊喜。聚会地点、参与者按她真实的朋朋友圈决定；有没有惊喜按人设和安排来。她可以接受或拒绝；没参加，聚会也照常发生。不同同期的生日可以分别产生事件。`;
+      const premise = `${name}生日：她可能主动邀请她参加聚会，也可能由她的其他朋友联系她一起准备惊喜。聚会地点（${place}）、参与者按她真实的朋朋友圈决定；有没有惊喜按人设和安排来。她可以接受或拒绝；没参加，聚会也照常发生。不同同期的生日可以分别产生事件。`;
       let node: CareerNode;
       const birthdayId = birthdayNpc?.charId;
       if (birthdayId) {
-        node = scheduleInvitePlot(`${name}的生日`, "江南 餐厅", premise, at.getTime(), { id: birthdayId, name }, `你今天生日，晚上在江南的餐厅和朋友们聚一下，想叫上她。按你的性格在 KakaoTalk 上约她。`);
+        node = scheduleInvitePlot(`${name}的生日`, place, premise, at.getTime(), { id: birthdayId, name }, `你今天生日，晚上想和朋友们在${place}聚一下，想叫上她。按你的性格在 KakaoTalk 上约她。`);
       } else {
-        node = schedulePlotNode(`${name}的生日`, "江南 餐厅", premise, at.getTime());
+        node = schedulePlotNode(`${name}的生日`, place, premise, at.getTime());
       }
       const all = load();
       all["mate_birthday"] = { ...(all["mate_birthday"] ?? rec), extra: { ...(rec.extra ?? {}), lastDay: `${now.getFullYear()}-${md}` } };
@@ -730,11 +744,33 @@ export const PLOTS: PlotDef[] = [
     key: "dorm_shuffle", title: "宿舍重新分配", hook: "date", max: 1,
     check(c) { return c.signedDays >= 90; },
     fire(c) {
-      const roommates = (c.career.roommates ?? []).map(id => c.characters.find(x => x.id === id)?.name).filter(Boolean);
+      const cur = c.career.roommates ?? [];
+      const curNames = cur.map(id => c.characters.find(x => x.id === id)?.name).filter(Boolean);
+      const pool = (c.roster?.npcs ?? []).filter(n => n.charId && !cur.includes(n.charId) && c.profiles[n.charId]?.met && c.profiles[n.charId]?.leave?.phase !== "left");
       const roll = Math.random();
-      const result = roll < 0.4 ? "维持原状：她和原室友都不用搬，大家一起看分配名单、聊几句" : roll < 0.8 ? "部分调整：有室友搬走或有新室友搬进来" : "重新分配：她被安排到其他房间";
+      let result: string;
+      if (roll < 0.4) {
+        result = "维持原状：她和原室友都不用搬，大家一起看分配名单、聊几句";
+      } else if (roll < 0.8) {
+        const pick = pool[Math.floor(Math.random() * pool.length)];
+        if (pick?.charId) {
+          const name = c.characters.find(x => x.id === pick.charId)?.name ?? "一位同期";
+          const out = [...cur];
+          out[Math.floor(Math.random() * out.length)] = pick.charId;
+          saveCareer({ ...loadCareer(), roommates: [...new Set(out)] });
+          result = `部分调整：${name}搬进来，有室友搬走`;
+        } else result = "部分调整：有室友搬走";
+      } else {
+        const picks = [...pool].sort(() => Math.random() - 0.5).slice(0, 2).map(n => n.charId!).filter(Boolean);
+        if (picks.length) {
+          saveCareer({ ...loadCareer(), roommates: picks });
+          const names = picks.map(id => c.characters.find(x => x.id === id)?.name).filter(Boolean).join("、");
+          result = `重新分配：她被安排和${names}同住`;
+        } else result = "重新分配：她被安排到其他房间";
+      }
+      const finalNames = (loadCareer().roommates ?? []).map(id => c.characters.find(x => x.id === id)?.name).filter(Boolean);
       const at = new Date(c.now + 2 * DAY); at.setHours(15, 0, 0, 0);
-      const node = schedulePlotNode("宿舍重新分配", "宿舍", `入社满三个月，公司调整宿舍安排。结果（代码定的）：${result}。按这个结果演：看分配名单、整理行李、告别或认识室友。现在跟她同住的：${roommates.join("、") || "还没定"}\n（结果：${result}）`, at.getTime());
+      const node = schedulePlotNode("宿舍重新分配", "宿舍", `入社满三个月，公司调整宿舍安排。结果（代码定的）：${result}。按这个结果演：看分配名单、整理行李、告别或认识室友。现在跟她同住的：${finalNames.join("、") || "还没定"}（结果写进了真实室友名单）`, at.getTime());
       return { premise: node.premise, node };
     },
   },
@@ -760,7 +796,7 @@ export const PLOTS: PlotDef[] = [
       return bd.slice(5) === md;
     },
     fire(c, rec) {
-      const good = Object.values(c.profiles).filter(p => p.relation === "好朋友").map(p => c.characters.find(x => x.id === p.charId)?.name).filter(Boolean);
+      const good = (c.roster?.npcs ?? []).filter(n => n.charId && c.profiles[n.charId]?.relation === "好朋友").map(n => c.characters.find(x => x.id === n.charId)?.name).filter(Boolean);
       const her = loadTraineeCard()?.name ?? "你";
       const branch = good.length >= 3
         ? `几位好朋友（${good.slice(0, 3).join("、")}等）给${her}过生日：可能秘密筹备聚会，也可能提前告诉她。聚会地点、参与的人、有没有惊喜，按各自性格和真实关系演；同一天最多一场主要的同期庆祝。`
@@ -783,8 +819,10 @@ export const PLOTS: PlotDef[] = [
       const y = now.getFullYear();
       const spring = findLunar(y, "正月", "初一", [0, 15], [1, 25]);
       const autumn = findLunar(y, "八月", "十五", [8, 1], [9, 15]);
+      const day1 = (iso: string | null) => { if (!iso) return null; const d = new Date(`${iso}T12:00:00`); d.setDate(d.getDate() - 1); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; };
       const today = `${y}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
-      return today === spring || today === autumn;
+      // 假期从正日前一天开始（她反馈/审计：之前晚了一天）
+      return today === day1(spring) || today === day1(autumn);
     },
     fire(c) {
       const now = new Date(c.now);

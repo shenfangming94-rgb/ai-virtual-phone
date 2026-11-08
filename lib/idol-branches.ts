@@ -73,8 +73,10 @@ export function branchesTick(): void {
   const pickable = candidates.filter(x => {
     const tier = REL_TIER[x.p.relation ?? "陌生"] ?? 1;
     const recent = (x.p.events?.length ?? 0) > 0;
-    const existed = s.branches.some(b => b.charId === x.n.charId);
-    return !existed && tier >= 2 && recent; // 熟人及以上 + 有真实互动
+    // 她反馈/审计：同一个人可以分多次继续（告一段落后过一段时间还能再开，延续优先）
+    const prev = s.branches.find(b => b.charId === x.n.charId);
+    const cooled = !prev || (!prev.active && now - prev.lastAt > 20 * 864e5);
+    return tier >= 2 && recent && cooled;
   });
   if (!pickable.length) return;
   const pick = pickable.sort(() => Math.random() - 0.5)[0];
@@ -152,13 +154,17 @@ export function activeBranchCharIds(): string[] {
   try { return load().branches.filter(b => b.active && b.firedCount === 0 && b.charId).map(b => b.charId!); } catch { return []; }
 }
 
-/** 支线人物这场在场：这条支线告一段落（记历史、腾名额）；以后同一个人可以接着讲（延续优先） */
+/** 支线人物这场在场且戏里真的展开了他的故事（总结里有他）：这条支线告一段落（记历史、腾名额）；
+ *  普通擦肩、打个招呼不算（她反馈/审计：同场不等于结线） */
 export function branchSceneEnded(presentIds: string[], summary: string): void {
   const s = load();
+  const chars = loadCharacters();
   let changed = false;
   for (const b of s.branches) {
     if (!b.active || b.firedCount !== 0 || !b.charId) continue;
     if (!presentIds.includes(b.charId)) continue;
+    const name = chars.find(c => c.id === b.charId)?.name;
+    if (!name || !(summary ?? "").includes(name)) continue;
     b.active = false;
     b.firedCount = 1;
     b.lastAt = Date.now();

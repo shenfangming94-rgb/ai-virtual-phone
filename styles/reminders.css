@@ -136,3 +136,9 @@
 
 /* 课表左滑请假：行滑动跟提醒事项同款手感 */
 .rm-swipe .tt-class{transition:transform .18s ease}
+
+/* Only the left-swiped course reveals its action; keep the card above it. */
+.rm-tt-page .tt-swipe { isolation: isolate; margin-bottom: 16px; }
+.rm-tt-page .tt-swipe > .tt-class { position: relative; z-index: 1; margin-bottom: 0; touch-action: pan-y; }
+.rm-tt-page .tt-swipe > .rm-acts { z-index: 0; visibility: hidden; pointer-events: none; border-radius: 0 15px 15px 0; overflow: hidden; }
+.rm-tt-page .tt-swipe[data-open="true"] > .rm-acts { visibility: visible; pointer-events: auto; }

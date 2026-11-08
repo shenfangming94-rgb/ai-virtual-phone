@@ -494,6 +494,9 @@ function judge(s: State, career: ReturnType<typeof loadCareer>, scenes: Stage[],
     // 这场课有课堂戏但迟到超 30 分钟（settled 且 attended=false）→ 按旷课，公司场景兜底不算它
     if (scenes.some(sc => sc.class?.start === c.start && sc.class?.settled && sc.class?.attended === false)) return "skip";
     if (scenes.some(sc => inCompany(sc) && sc.startAt < c.end && (sc.startAt >= c.start - HOUR || sc.ended === false || (sc.endedAt != null && sc.endedAt >= c.start)))) return "attend";
+    // 进公司第一天：一整天都在公司走流程，那天不算旷课（她的档 7/6 下午两节误判就出自这里；签约是 7/5，进社第一天=签约次日）
+    const joined = career.signedAt ? new Date(career.signedAt + DAY).setHours(0, 0, 0, 0) : 0;
+    if (joined > 0 && c.start >= joined && c.start < joined + DAY) return "attend";
     return "skip";
   }
   return "attend";
@@ -552,8 +555,8 @@ export function starroadTick(notify: (msg: string) => void): void {
   const scenes = stageScenes();
   // 自愈：新上课大改里，上课时段人在公司戏里就算到场——之前误判成旷课的翻回来
   if (newClassMode()) {
-    // 入职当天：一整天都在公司走流程，那天误判的旷课直接翻回（她的档 7/6 下午两节就是这种情况）
-    const firstDay = career.signedAt ? new Date(career.signedAt).setHours(0, 0, 0, 0) : 0;
+    // 进公司第一天：一整天都在公司走流程，那天误判的旷课直接翻回（她的档 7/6 下午两节就是；签约 7/5，进社第一天=签约次日）
+    const firstDay = career.signedAt ? new Date(career.signedAt + DAY).setHours(0, 0, 0, 0) : 0;
     for (const m of s.marks) {
       if (m.status !== "skip") continue;
       // 迟到的课堂戏（attended=false）按旷课，不翻案

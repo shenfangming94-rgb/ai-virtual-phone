@@ -409,7 +409,8 @@ function beatReadyNow(key: string, line: LineState | undefined, s: State, type: 
   const base = key.split("#")[0];
   if (base === "bar_reunion") {
     const d = new Date();
-    return (d.getDay() === 5 || d.getDay() === 6) && d.getHours() >= 19;
+    // SIDE B 驻唱日：她定的周五到周日晚上
+    return (d.getDay() === 5 || d.getDay() === 6 || d.getDay() === 0) && d.getHours() >= 19;
   }
   const w = line?.extra?.visitWindow;
   if (!w) return true; // 没记窗口的旧档放开

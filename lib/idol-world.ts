@@ -41,7 +41,7 @@ import { loadApiConfigs, loadBindingConfig, resolveBinding } from "./settings-st
 export const WORLD_CHAR_ID = HIDDEN_WORLD_CHAR_ID;
 const META_KEY = "idol_scene_meta_v1";
 
-export type SceneMeta = { place: string; premise: string; startAt: number; newFaces: string[]; ended?: boolean; summary?: string; nodeId?: string; /** 谁在交给世界 */ open?: boolean; /** 不想碰见的人（名字） */ avoid?: string[]; /** 番外：她不一定在场，看他们自己的视角；不拨世界时间、新人不进她的通讯录 */ side?: boolean; /** 剧情池给的场景剧情（初雪这种）：开场卡点一下就 AI 直接开场 */ plotAuto?: boolean; /** 排好的节点戏：AI 先写开场。invite=他约她赴约，happen=事情找上她 */ nodeAuto?: "invite" | "happen" };
+export type SceneMeta = { place: string; premise: string; startAt: number; newFaces: string[]; ended?: boolean; /** 这场戏结束的时间（判旷课用：戏跨过上课时段就算人在公司） */ endedAt?: number; summary?: string; nodeId?: string; /** 谁在交给世界 */ open?: boolean; /** 不想碰见的人（名字） */ avoid?: string[]; /** 番外：她不一定在场，看他们自己的视角；不拨世界时间、新人不进她的通讯录 */ side?: boolean; /** 剧情池给的场景剧情（初雪这种）：开场卡点一下就 AI 直接开场 */ plotAuto?: boolean; /** 排好的节点戏：AI 先写开场。invite=他约她赴约，happen=事情找上她 */ nodeAuto?: "invite" | "happen" };
 
 /** 她未成年：新出场、跟她有来往的男生大多跟她差不多大，年龄写进新人资料 */
 function peerAgeHint(): string {
@@ -427,7 +427,7 @@ async function closeSideScene(host: SceneHost, meta: SceneMeta): Promise<SceneCl
       saveProfile(next);
     }
   }
-  host.saveMeta({ ...meta, ended: true, summary });
+  host.saveMeta({ ...meta, ended: true, endedAt: Date.now(), summary });
   return { summary, recorded, firstMeet: [] };
 }
 
@@ -570,7 +570,7 @@ export async function closeSceneWith(host: SceneHost): Promise<SceneCloseResult>
     // 这场戏里接的情缘节点：演完了才记完成（她定的）
     try { (await import("./idol-romance-live")).markPlayedBeatNodes(present.map(c => c.id), true); } catch { /* 没接上不影响 */ }
   }
-  host.saveMeta({ ...meta, ended: true, summary });
+  host.saveMeta({ ...meta, ended: true, endedAt: Date.now(), summary });
   // 她定的：所有新剧情结束都往统一世界 feed 记一条共享事实
   try { addWorldFeed(summary || `在${meta.place}经历了一场戏`, meta.startAt); } catch { /* feed 写不进去不影响 */ }
   const node = meta.nodeId ? nodeById(meta.nodeId) : undefined;

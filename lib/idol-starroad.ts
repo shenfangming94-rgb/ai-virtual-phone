@@ -470,7 +470,7 @@ export function starPromptBlock(): string {
 
 // ── 每隔几秒：上过的课记账、旷课、每周作业、三个月换课表 ──
 
-type Stage = { startAt: number; place: string; bg?: string; ended?: boolean; class?: { start?: number; settled?: boolean; attended?: boolean } };
+type Stage = { startAt: number; endedAt?: number; place: string; bg?: string; ended?: boolean; class?: { start?: number; settled?: boolean; attended?: boolean } };
 
 function stageScenes(): Stage[] {
   try { return Object.values(JSON.parse(kvGet("idol_stage_scenes_v1") || "{}") as Record<string, Stage>); } catch { return []; }
@@ -493,7 +493,7 @@ function judge(s: State, career: ReturnType<typeof loadCareer>, scenes: Stage[],
     if (classAttendedAt(c.start)) return "attend";
     // 这场课有课堂戏但迟到超 30 分钟（settled 且 attended=false）→ 按旷课，公司场景兜底不算它
     if (scenes.some(sc => sc.class?.start === c.start && sc.class?.settled && sc.class?.attended === false)) return "skip";
-    if (scenes.some(sc => inCompany(sc) && sc.startAt < c.end && (sc.startAt >= c.start - HOUR || sc.ended === false))) return "attend";
+    if (scenes.some(sc => inCompany(sc) && sc.startAt < c.end && (sc.startAt >= c.start - HOUR || sc.ended === false || (sc.endedAt != null && sc.endedAt >= c.start)))) return "attend";
     return "skip";
   }
   return "attend";
@@ -552,11 +552,15 @@ export function starroadTick(notify: (msg: string) => void): void {
   const scenes = stageScenes();
   // 自愈：新上课大改里，上课时段人在公司戏里就算到场——之前误判成旷课的翻回来
   if (newClassMode()) {
+    // 入职当天：一整天都在公司走流程，那天误判的旷课直接翻回（她的档 7/6 下午两节就是这种情况）
+    const firstDay = career.signedAt ? new Date(career.signedAt).setHours(0, 0, 0, 0) : 0;
     for (const m of s.marks) {
       if (m.status !== "skip") continue;
       // 迟到的课堂戏（attended=false）按旷课，不翻案
       if (scenes.some(sc => sc.class?.start === m.at && sc.class?.settled && sc.class?.attended === false)) continue;
-      if (scenes.some(sc => inCompany(sc) && sc.startAt < m.at + 2 * HOUR && (sc.startAt >= m.at - HOUR || sc.ended === false))) {
+      const covered = scenes.some(sc => inCompany(sc) && sc.startAt < m.at + 2 * HOUR && (sc.startAt >= m.at - HOUR || sc.ended === false || (sc.endedAt != null && sc.endedAt >= m.at)));
+      const joinedDay = firstDay > 0 && m.at >= firstDay && m.at < firstDay + DAY;
+      if (covered || joinedDay) {
         m.status = "attend";
         s.skips = s.skips.filter(k => k.at !== m.at);
       }

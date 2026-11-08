@@ -521,7 +521,7 @@ export async function settleClassScene(chapterIndex: number): Promise<{ lines: s
   } else {
     lines.push("这节课结束了。");
     pushVnMessage({ sessionId: session.id, role: "assistant", rawContent: lines.join("\n"), chapterIndex });
-    saveStageScene({ ...getStageScene(chId!)!, ended: true });
+    saveStageScene({ ...getStageScene(chId!)!, ended: true, endedAt: Date.now() });
     archiveChapter(session.id, chapterIndex);
   }
   return { lines, plotPremise };
@@ -669,7 +669,8 @@ export async function closeStageScene(chapterIndex: number): Promise<SceneCloseR
   if (!host) throw new Error("找不到这一场");
   const res = await closeSceneWith(host);
   const sc = getStageScene(chId!);
-  if (sc?.side) saveStageScene({ ...sc, sideCounted: true });
+  // 记下结束时间：判旷课要看戏有没有跨过上课时段
+  if (sc) saveStageScene({ ...sc, endedAt: Date.now(), ...(sc.side ? { sideCounted: true } : {}) });
   archiveChapter(worldVnSession().id, chapterIndex);
   // 情缘：这场后面要接一场（失意之夜在宿舍、掉马他视角番外）
   let next: string | null = null;
@@ -711,7 +712,7 @@ export function closeStageSideOnly(chapterIndex: number): void {
   const chId = chapterIdOf(chapterIndex);
   const scene = chId ? getStageScene(chId) : null;
   if (!scene) return;
-  saveStageScene({ ...scene, ended: true, sideCounted: false });
+  saveStageScene({ ...scene, ended: true, endedAt: Date.now(), sideCounted: false });
   archiveChapter(worldVnSession().id, chapterIndex);
 }
 

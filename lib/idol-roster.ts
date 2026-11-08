@@ -9,7 +9,7 @@
 
 import {
   generateRoster, settleWeek, TIMETABLE_CURRENT,
-  GIVEN_POOL, SURNAME_POOL,
+  ATTITUDE_LABEL, GIVEN_POOL, SURNAME_POOL,
   type Specialty, type Stats, type Subject, type Trainee,
 } from "./idol-training";
 
@@ -193,11 +193,11 @@ export function settleNpcWeeks(state: RosterState, weeks: number, rng: () => num
   }
 }
 
-/** 名册给 AI 看的：只写班级和变化，不写数值（档位/数值不进 AI） */
+/** 名册给 AI 看的：只写班级、特长、态度和朋友圈，不写数值（档位/数值不进 AI）。她反馈：出场同期得对得上性格班级，所以态度也要给 */
 export function rosterPromptBlock(state: RosterState): string {
   const lines = state.npcs.slice(0, 40).map(n => {
     const friends = n.friends.filter(f => f.tier === "好朋友" || f.tier === "朋友").map(f => state.npcs.find(x => x.id === f.charId)?.name).filter(Boolean).slice(0, 4);
-    return `- ${n.name}（${n.klass} 班${n.specialty !== "none" ? `，特长${n.specialty}` : ""}${friends.length ? `，走得近的：${friends.join("、")}` : ""}）`;
+    return `- ${n.name}（${n.klass} 班${n.specialty !== "none" ? `，特长${n.specialty}` : ""}，${ATTITUDE_LABEL[n.attitude]}${friends.length ? `，走得近的：${friends.join("、")}` : ""}）`;
   });
   return [`【同期名册】她这一批女练习生 40 人（含她），她开局在 C 班。`, ...lines].join("\n");
 }

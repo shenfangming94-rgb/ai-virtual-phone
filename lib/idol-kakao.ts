@@ -278,13 +278,38 @@ async function makeTeacher(companyName: string): Promise<Character> {
   }
 }
 
-/** 进公司第一天分一到两个室友：在场的同龄女练习生优先，不够就捏 */
+/** 进公司第一天分一到两个室友：新档只从名册里挑（优先她同班），绝不捏新人；旧档走老逻辑 */
 async function ensureRoommates(mates: Character[]): Promise<void> {
   const career = loadCareer();
   if (career.roommates?.length) return;
   const mine = herAge() ?? 17;
-  const picks = mates.filter(m => { const p = getProfile(m.id); return p.gender === "女" && Math.abs((parseInt(p.age, 10) || mine) - mine) <= 3; }).slice(0, 2);
+  let rosterPool: { charId: string; klass: string }[] = [];
+  try {
+    rosterPool = ((JSON.parse(kvGet("idol_roster_v1") || "null") as { npcs?: { charId?: string; klass?: string }[] } | null)?.npcs ?? [])
+      .map(n => ({ charId: n.charId ?? "", klass: n.klass ?? "" })).filter(x => Boolean(x.charId));
+  } catch { /* 旧档没有名册 */ }
   const want = 1 + (Math.random() < 0.5 ? 1 : 0);
+  if (rosterPool.length) {
+    const inRoster = new Set(rosterPool.map(x => x.charId));
+    let playerKlass = "C";
+    try { playerKlass = ((JSON.parse(kvGet("idol_roster_v1") || "null") as { player?: { klass?: string } } | null)?.player?.klass ?? "C") || "C"; } catch { /* 就用 C */ }
+    const sameAge = (p: ReturnType<typeof getProfile>) => Math.abs((parseInt(p.age, 10) || mine) - mine) <= 3;
+    // 在场的人优先，但只认名册里的同期（她反馈：戏里新造的假同期不能当室友）
+    const picks: string[] = mates.map(m => m.id).filter(id => inRoster.has(id) && sameAge(getProfile(id))).slice(0, want);
+    if (picks.length < want) {
+      const rest = rosterPool
+        .filter(x => !picks.includes(x.charId) && sameAge(getProfile(x.charId)))
+        .sort((a, b) => (a.klass === playerKlass ? 0 : 1) - (b.klass === playerKlass ? 0 : 1));
+      for (const r of rest) { if (picks.length >= want) break; picks.push(r.charId); }
+    }
+    for (const id of picks) {
+      const p = getProfile(id);
+      saveProfile({ ...p, met: true, metAt: p.metAt ?? { at: Date.now(), place: "宿舍" }, relation: p.relation && p.relation !== "陌生" ? p.relation : "认识", group: "室友", role: p.role.includes("室友") ? p.role : `${p.role || "同期练习生"} · 室友` });
+    }
+    saveCareer({ ...loadCareer(), roommates: picks });
+    return;
+  }
+  const picks = mates.filter(m => { const p = getProfile(m.id); return p.gender === "女" && Math.abs((parseInt(p.age, 10) || mine) - mine) <= 3; }).slice(0, 2);
   while (picks.length < want) {
     try {
       const d = await draftPerson(`跟她分到同一间宿舍的室友，同公司的女练习生，年龄跟她差不多（她 ${mine} 岁）`, rollFace());

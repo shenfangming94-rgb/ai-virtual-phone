@@ -32,7 +32,8 @@ import { activeBranchCharIds, branchSceneEnded, branchSceneHint } from "./idol-b
 import { fameBand, fameEvent } from "./idol-fame";
 import { loadForum } from "./theqoo-store";
 import { recordPerformance } from "./idol-ledger";
-import { onNodeDone, onScenePractice, practiceDayUsed } from "./idol-starroad";
+import { onNodeDone, onScenePractice, practiceDayUsed, subjectOf } from "./idol-starroad";
+import { apSlotOf } from "./idol-actionpoints";
 import { KAKAO_TAG_RULES, afterNodeScene, applyKakaoTags, extractKakaoTags, genKakaoId, kakaoPromptLine, type KakaoTags } from "./idol-kakao";
 import { takePendingFace } from "./idol-pending-faces";
 import { loadApiConfigs, loadBindingConfig, resolveBinding } from "./settings-storage";
@@ -533,6 +534,15 @@ export async function closeSceneWith(host: SceneHost): Promise<SceneCloseResult>
   const settledFame = node?.kind === "audition" && (fame === "medium" || fame === "big") ? "small" : fame;
   if (settledFame === "small" || settledFame === "medium" || settledFame === "big") fameEvent(settledFame, summary || node?.title || `在${meta.place}`, meta.startAt);
   const milestone = meta.nodeId ? await completeNode(meta.nodeId, perf) : null;
+  // 她 11-08 改的：加练/约会「去了才扣点」——演完这一场扣当天的点
+  if (node && (node.kind === "date" || node.kind === "practice")) {
+    try {
+      const ap = await import("./idol-ap-live");
+      const slot = apSlotOf(node.dueAt);
+      const label = node.kind === "practice" && node.subject ? `加练：${subjectOf(node.subject)?.zh ?? ""}` : node.title;
+      if (slot != null) ap.consumeAp(Date.now(), [slot], label);
+    } catch { /* 扣不了点不挡结算 */ }
+  }
   await afterNodeScene(node, present.map(c => c.id), meta.place).catch(() => undefined);
   void import("./theqoo-triggers").then(m => m.publishSceneForumEvents({ node, meta, transcript, evidence: publicEvidence })).catch(error => {
     console.warn("[TheQoo] scene hook failed:", error);

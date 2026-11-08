@@ -282,7 +282,7 @@ export function practicedToday(now = Date.now()): boolean {
   return loadCareer().nodes.some(n => n.kind === "practice" && dayKey(n.dueAt) === day && n.status !== "declined");
 }
 
-/** 星路点「加练」：进提醒事项「我自己记的」，今晚八点（过了就明晚）打勾写一句就算。占 20:00-22:00 一个行动点（取消退点） */
+/** 星路点「加练」：进提醒事项「我自己记的」，今晚八点（过了就明晚）打勾写一句就算。扣点在她真的练了那天（她 11-08 改的：去了才扣） */
 export function addPractice(subject: Subject): CareerNode | null {
   const s = ensure();
   if (!s) return null;
@@ -298,9 +298,6 @@ export function addPractice(subject: Subject): CareerNode | null {
   };
   saveCareer({ ...career, nodes: [...career.nodes, node].sort((a, b) => a.dueAt - b.dueAt) });
   addToCalendar(node);
-  // 她定的：点「加练」那一刻扣 1 点（取消退点）
-  const slot = apSlotOf(d.getTime());
-  if (slot != null) void import("./idol-ap-live").then(m => m.consumeAp(d.getTime(), [slot], `加练：${sub.zh}`)).catch(() => undefined);
   return node;
 }
 
@@ -317,6 +314,12 @@ export function onNodeDone(node: CareerNode, perf?: string): string[] {
   const now = Date.now();
   const out: string[] = [];
   const sub = node.subject as Subject | undefined;
+  // 她 11-08 改的：加练/约会「去了才扣点」——完成（打勾/演完）的这一刻扣当天的点
+  if (newClassMode() && (node.kind === "practice" || node.kind === "date")) {
+    const slot = apSlotOf(node.dueAt);
+    const what = node.kind === "practice" && sub ? `加练：${subjectOf(sub)?.zh ?? ""}` : node.title;
+    if (slot != null) void import("./idol-ap-live").then(m => m.consumeAp(Date.now(), [slot], what)).catch(() => undefined);
+  }
   if (node.kind === "homework" && sub) {
     if (!newClassMode()) { const m = bump(s, sub, perfPts(perf, 8), now); if (m) out.push(m); }
   }

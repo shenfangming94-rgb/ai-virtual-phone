@@ -64,6 +64,8 @@ type State = {
   homeworkLog: Subject[];
   /** 这天已经加练过（世界日期） */
   practiceDays: string[];
+  /** 每周加练节数（她定的肝度：每周最多 5 节） */
+  practiceWeeks?: { week: string; count: number }[];
   /** 打勾、演完时升了档：下一次 tick 弹横幅 */
   pending?: string[];
 };
@@ -282,6 +284,27 @@ export function practicedToday(now = Date.now()): boolean {
   return loadCareer().nodes.some(n => n.kind === "practice" && dayKey(n.dueAt) === day && n.status !== "declined");
 }
 
+/** 这一周（周一为一周）练了几节（她定的肝度：每周最多 5 节） */
+export function practicedThisWeek(now = Date.now()): number {
+  const s = load();
+  const key = dayKey(mondayOf(now));
+  return s?.practiceWeeks?.find(x => x.week === key)?.count ?? 0;
+}
+
+/** 记一次加练（当天第一次才算节数），返回这周新的节数 */
+function bumpPracticeCount(now = Date.now()): number {
+  const s = ensure();
+  if (!s) return 0;
+  const key = dayKey(mondayOf(now));
+  const list = s.practiceWeeks ?? [];
+  const cur = list.find(x => x.week === key);
+  if (cur) cur.count += 1;
+  else list.push({ week: key, count: 1 });
+  s.practiceWeeks = list.slice(-8);
+  save(s);
+  return list.find(x => x.week === key)?.count ?? 0;
+}
+
 /** 星路点「加练」：进提醒事项「我自己记的」，今晚八点（过了就明晚）打勾写一句就算。扣点在她真的练了那天（她 11-08 改的：去了才扣） */
 export function addPractice(subject: Subject): CareerNode | null {
   const s = ensure();
@@ -290,6 +313,7 @@ export function addPractice(subject: Subject): CareerNode | null {
   const d = new Date(now); d.setHours(20, 0, 0, 0);
   if (d.getTime() < now + 30 * MIN) d.setDate(d.getDate() + 1);
   if (practicedToday(d.getTime())) return null;
+  if (practicedThisWeek() >= 5) return null; // 她定的肝度：每周最多 5 节加练
   const sub = subjectOf(subject)!;
   const career = loadCareer();
   const node: CareerNode = {
@@ -325,7 +349,7 @@ export function onNodeDone(node: CareerNode, perf?: string): string[] {
   }
   if (node.kind === "practice" && sub) {
     const day = dayKey(node.dueAt);
-    if (!s.practiceDays.includes(day)) s.practiceDays = [...s.practiceDays.slice(-60), day];
+    if (!s.practiceDays.includes(day)) { s.practiceDays = [...s.practiceDays.slice(-60), day]; bumpPracticeCount(now); }
     if (!newClassMode()) { const m = bump(s, sub, PRACTICE_PTS + (perf === "good" ? 1 : 0), now); if (m) out.push(m); }
   }
   if (node.kind === "weekly" || node.kind === "monthly") {
@@ -364,6 +388,7 @@ export function onScenePractice(subjects: string[], startAt: number, perf?: stri
   const day = dayKey(startAt);
   if (!valid.length || s.practiceDays.includes(day)) return [];
   s.practiceDays = [...s.practiceDays.slice(-60), day];
+  bumpPracticeCount(startAt);
   const out: string[] = [];
   // 新档：数值走名册（idol-world 那边结算并打数字），老星路的档别动了
   if (!newClassMode()) {

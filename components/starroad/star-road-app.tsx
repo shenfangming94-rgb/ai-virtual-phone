@@ -9,7 +9,7 @@
 import { useEffect, useRef, useState } from "react";
 import { ChevronLeft } from "lucide-react";
 
-import { STARROAD_EVENT, addPractice, loadGrades, practicedToday, starroadReady, type GradeView } from "@/lib/idol-starroad";
+import { STARROAD_EVENT, addPractice, loadGrades, practicedThisWeek, practicedToday, starroadReady, type GradeView } from "@/lib/idol-starroad";
 import { CAREER_EVENT, companyOf, loadCareer } from "@/lib/idol-career";
 import { loadTraineeCard } from "@/lib/trainee-card";
 import { DESTINY_EVENT, destinyAlbum } from "@/lib/idol-destiny";
@@ -110,6 +110,7 @@ export function StarRoadApp({ onClose, onNotice }: { onClose: () => void; onNoti
 
 function GradeSheet({ g, onClose, onNotice }: { g: GradeView; onClose: () => void; onNotice?: Notice }) {
   const done = practicedToday();
+  const weekFull = practicedThisWeek() >= 5;
   const next = g.grade === "A" ? null : ["F", "D", "C", "B", "A"][["F", "D", "C", "B", "A"].indexOf(g.grade) + 1];
   // 一节 = 上完一节课或一次加练（特长 ×1.5 已经算进节数）；她要求把现在的数值打出来
   const line = g.grade === "A" ? "已经是 A 了，保持住"
@@ -123,13 +124,13 @@ function GradeSheet({ g, onClose, onNotice }: { g: GradeView; onClose: () => voi
         <div className="sr-sh-line">{line}</div>
         {g.last ? <div className="sr-sh-last">{ym(g.last.at)} {g.last.from} → {g.last.to}</div> : null}
         <div className="sr-sh-tip">上课一节、加练一次都算一节。</div>
-        <button type="button" className="sr-sh-btn" disabled={done} onClick={() => {
+        <button type="button" className="sr-sh-btn" disabled={done || weekFull} onClick={() => {
           const n = addPractice(g.id);
-          if (!n) { onNotice?.("今天已经加练过了"); return; }
+          if (!n) { onNotice?.(weekFull ? "这周练满 5 节了" : "今天已经加练过了"); return; }
           const d = new Date(n.dueAt);
           onNotice?.(`记进提醒事项了：${d.getDate() === new Date().getDate() ? "今晚" : "明晚"} 21:00 加练${g.zh}`);
           onClose();
-        }}>{done ? "今天加练过了" : "加练"}</button>
+        }}>{done ? "今天加练过了" : weekFull ? "这周练满了" : "加练"}</button>
       </div>
     </div>
   );

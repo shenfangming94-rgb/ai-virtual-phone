@@ -122,7 +122,7 @@ function GradeSheet({ g, onClose, onNotice }: { g: GradeView; onClose: () => voi
         <div className="sr-sh-now">现在 {g.pts} 分</div>
         <div className="sr-sh-line">{line}</div>
         {g.last ? <div className="sr-sh-last">{ym(g.last.at)} {g.last.from} → {g.last.to}</div> : null}
-        <div className="sr-sh-tip">上课一节、加练一次都算一节；作业涨得多。</div>
+        <div className="sr-sh-tip">上课一节、加练一次都算一节。</div>
         <button type="button" className="sr-sh-btn" disabled={done} onClick={() => {
           const n = addPractice(g.id);
           if (!n) { onNotice?.("今天已经加练过了"); return; }

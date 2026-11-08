@@ -533,10 +533,10 @@ export function starroadTick(notify: (msg: string) => void): void {
   }
   s.checkedUntil = now;
   msgs.push(...settle(s, now));
-  // 每周一早上九点：这周的作业
+  // 每周一早上九点：这周的作业（她定的：新档关掉作业，数值平衡里只有上课/加练/大机遇）
   const mon = mondayOf(now);
   const weekKey = dayKey(mon);
-  if (s.homeworkWeek !== weekKey && now >= mon + 9 * HOUR && now < mon + 4 * DAY && now - (career.signedAt ?? 0) > 3 * DAY) {
+  if (!newClassMode() && s.homeworkWeek !== weekKey && now >= mon + 9 * HOUR && now < mon + 4 * DAY && now - (career.signedAt ?? 0) > 3 * DAY) {
     s.homeworkWeek = weekKey;
     const sub = pickHomework(s, career.companyId!);
     s.homeworkLog = [...s.homeworkLog.slice(-11), sub];

@@ -9,7 +9,8 @@
 
 import { kvGet, kvSet } from "./kv-db";
 import { loadChatMessages, loadChatSessions, saveChatSessions } from "./chat-storage";
-import { createPerson, emptyProfile } from "./idol-people";
+import { createPerson, emptyProfile, getProfile, saveProfile } from "./idol-people";
+import { loadCharacters, HIDDEN_WORLD_CHAR_ID } from "./character-storage";
 import { genKakaoId } from "./idol-kakao";
 
 const KEY = "idol_group_crowd_v1";
@@ -127,10 +128,16 @@ export function promoteCrowd(sessionId: string, crowdId: string, groupName: stri
   const m = list.find(x => x.id === crowdId);
   if (!m) return null;
   if (m.promotedTo) return m.promotedTo;
-  const char = createPerson(m.name, {
+  // 她反馈过：名册里的同期就是路人本人——同名同身份的别再造第二张卡，直接认回原角色
+  const existing = loadCharacters().find(c => c.name === m.name && c.id !== HIDDEN_WORLD_CHAR_ID);
+  const char = existing ?? createPerson(m.name, {
     ...emptyProfile(""), layer: "background", role: m.role, group: "同期练习生",
     met: true, metAt: { at: Date.now(), place: `KakaoTalk 群「${groupName}」` },
   }, null, genKakaoId());
+  if (existing) {
+    const p = getProfile(existing.id);
+    if (!p.met) saveProfile({ ...p, met: true, metAt: { at: Date.now(), place: `KakaoTalk 群「${groupName}」` } });
+  }
   all[sessionId] = list.map(x => x.id === crowdId ? { ...x, promotedTo: char.id } : x);
   saveAll(all);
   const sessions = loadChatSessions();

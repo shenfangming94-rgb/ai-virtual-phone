@@ -100,6 +100,37 @@ export function addWorldFeed(text: string, at = Date.now()): void {
   save({ ...s, feed: [...s.feed, { at, text }].slice(-40) });
 }
 
+// ── 新档生病（她定的：砍挫折但保留生病；低频，室友发现） ──
+
+const NEWMODE_SICK_KEY = "idol_newmode_sick_v1";
+
+/** 新存档的低频生病调度：平均约 50 世界日一次，室友 KKT 关心 + 世界 feed 记一笔 */
+export function newModeSickTick(notify?: (m: string) => void): void {
+  try { if (!kvGet("idol_roster_v1")) return; } catch { return; }
+  const career = loadCareer();
+  if (career.stage !== "trainee") return;
+  let st: { lastAt?: number; lastRoll?: string } = {};
+  try { st = JSON.parse(kvGet(NEWMODE_SICK_KEY) || "{}") as typeof st; } catch { /* 当新的 */ }
+  const now = Date.now();
+  const d = new Date(now);
+  const day = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  if ((st.lastAt ?? 0) && now - (st.lastAt ?? 0) < 20 * DAY) return;
+  if (st.lastRoll === day) return;
+  st.lastRoll = day;
+  kvSet(NEWMODE_SICK_KEY, JSON.stringify(st));
+  if (Math.random() >= 0.02) return;
+  kvSet(NEWMODE_SICK_KEY, JSON.stringify({ ...st, lastAt: now }));
+  addWorldFeed("她病了，休息了几天。", now);
+  const roommates = (loadCareer().roommates ?? []).map(id => loadCharacters().find(c => c.id === id)).filter((c): c is Character => Boolean(c));
+  const rm = roommates[Math.floor(Math.random() * roommates.length)];
+  if (rm) {
+    void import("./idol-reminders").then(m => {
+      m.queueMessage(rm.id, `她好像生病了，训练和日常都蔫蔫的。按你的性格和跟她的关系，在 KakaoTalk 上关心她一下，问问她怎么样、需不需要什么，别催她训练、别责备她没照顾好自己。`, 10 * 60e3);
+    }).catch(() => undefined);
+    notify?.(`🤒 你好像有点不舒服，${rm.name} 发消息来关心你。`);
+  }
+}
+
 /** 关注度现在在 idol-fame.ts（人气 + 热度），这几个留着给旧代码用 */
 export function fameNow(): number { return fameTotal(); }
 export function addFame(n: number, text = "完成了一次机会"): void { fameEvent(n >= 5 ? "medium" : "small", text); }

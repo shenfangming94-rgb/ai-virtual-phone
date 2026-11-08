@@ -61,7 +61,9 @@ export function saveRomanceState(s: State): void { save(s); }
 export function routeTypeOf(p: IdolProfile): RouteType | null {
   if (p.gender === "女") return null;
   const text = `${p.role}${p.group}${p.publicText}`;
-  for (const t of ROUTE_TYPES) if (ROUTE_IDENTITY_HINTS[t].test(text)) return t;
+  // 判断顺序单独定（她反馈过进错线）：练习生前辈不能算爱豆线、游戏爱好者不能算电竞线
+  const ORDER: RouteType[] = ["trainee", "underground", "esports", "idol", "heir", "campus"];
+  for (const t of ORDER) if (ROUTE_IDENTITY_HINTS[t].test(text)) return t;
   return null;
 }
 
@@ -136,10 +138,10 @@ function charName(charId: string): string {
 }
 
 /** 给这条线排一个日程节点（三结局那套现成） */
-function scheduleRomanceNode(line: LineState, nodeKey: string, title: string, place: string, premise: string, kind: CareerNode["kind"] = "event", hour = 15): void {
+function scheduleRomanceNode(line: LineState, nodeKey: string, title: string, place: string, premise: string, kind: CareerNode["kind"] = "event", hour = 15, atMs?: number): void {
   const career = loadCareer();
-  const at = new Date(Date.now() + 2 * 864e5);
-  at.setHours(hour, 0, 0, 0);
+  const at = new Date(atMs ?? (Date.now() + 2 * 864e5));
+  if (atMs == null) at.setHours(hour, 0, 0, 0);
   const invite = kind === "date";
   const node: CareerNode = {
     id: uid("rom"), kind, title, place, premise, dueAt: at.getTime(), status: invite ? "invite" : "pending",
@@ -213,16 +215,31 @@ const MERGE_INTO_MAINLINE: Record<string, string> = { busking_meet: "roadshow", 
 function scheduleByTrigger(s: State, type: RouteType, line: LineState, def: NodeDef): void {
   const his = charName(line.charId);
   if (def.trigger === "invite") {
+    if (def.key === "match_invite") {
+      // 职业比赛邀请：得真的有比赛（他来首尔参赛的窗口），约在窗口最后一天
+      const w = ensureVisitWindow(s, type, line, Date.now() + 2 * 864e5, Date.now() + 9 * 864e5);
+      scheduleRomanceNode(line, def.key, def.title, def.place, `${his}约她：${def.premise}（他主动约的，她可以接也可以推掉）`, "date", def.hour, w.to - 2 * 3600e3);
+      return;
+    }
     scheduleRomanceNode(line, def.key, def.title, def.place, `${his}约她：${def.premise}（他主动约的，她可以接也可以推掉）`, "date", def.hour);
     return;
   }
   if (def.key === "bar_reunion" || def.key === "street_glance") {
-    // 不排日程：她自己去了那儿就接上（SIDE B=梨泰院；街角擦肩=随便哪条街）
+    // 不排日程：她自己去了那儿就接上（SIDE B=梨泰院，且要周五六晚上他在驻唱；街角擦肩=他来首尔打比赛的那几天）
     const where = def.key === "bar_reunion" ? "梨泰院" : STREETS;
+    if (def.key === "street_glance") ensureVisitWindow(s, type, line, Date.now() + 3 * 864e5, Date.now() + 10 * 864e5);
     const premise = def.key === "bar_reunion"
       ? `她来到梨泰院，走进了 SIDE B，台上正在驻唱的是${his}。${def.premise}`
-      : `${def.premise}（擦肩的是${his}。）`;
+      : `${def.premise}（擦肩的是${his}。他来首尔参加电竞比赛，这几天在这边。）`;
     s.sceneBeats = [...(s.sceneBeats ?? []), { type, key: def.key, premise, where }];
+    return;
+  }
+  if (def.key === "late_night_call") {
+    // 失意之夜：发生在比赛行程那几天（真实事实），深夜他打电话来
+    const w = ensureVisitWindow(s, type, line, Date.now() + 2 * 864e5, Date.now() + 9 * 864e5);
+    const at = new Date(w.from + Math.random() * Math.max(864e5, w.to - w.from));
+    at.setHours(23, 0, 0, 0);
+    scheduleRomanceNode(line, def.key, def.title, def.place, def.premise, "event", 23, at.getTime());
     return;
   }
   if (def.trigger === "encounter") {
@@ -329,14 +346,21 @@ function revealTick(s: State, type: RouteType, line: LineState, career: ReturnTy
   if (doneA && doneB) { s.lines[type] = advanceNode(line); return true; }
   if (!nodeReady(line)) return false;
   let changed = false;
-  // 第一半：公司练习视频真的上传了 → 她随便哪场戏结束后，接一段他视角的番外
-  if (!has("a") && mainlineState().find(n => n.key === "official_video")?.state === "done") {
+  // 第一半：公司练习视频真的上传了（要真有公开视频，打勾不算）→ 她随便哪场戏结束后，接一段他视角的番外
+  const hasRealVideo = (() => {
+    try {
+      const yt = JSON.parse(kvGet("idol_youtube_v1") || "{}") as { videos?: { at?: number }[] };
+      return Array.isArray(yt.videos) && yt.videos.some(v => v.at && v.at <= Date.now());
+    } catch { return false; }
+  })();
+  if (!has("a") && mainlineState().find(n => n.key === "official_video")?.state === "done" && hasRealVideo) {
     s.afterScene = [...(s.afterScene ?? []), { type, key: "mutual_reveal#a", note: "情缘节点：mutual_reveal#a", title: "双向掉马", side: true, place: "他的房间",
       premise: `番外，${his}的视角，她不在场。深夜他的房间，他刷到了她公司上传的练习生表演视频（自己刷到、队友甩到群里或粉丝转发，和她无关）。他点开、重播、认出视频里的人就是平时和他打游戏的那个她，呆住了。如果他们在街上擦肩过，他也认出了那天街上的人就是她。之后他想怎么做按他的性格，这一段只写到他知道了。` }];
     changed = true;
   }
-  // 第二半：下课后，同期里最沾边的那个拉她看比赛直播
+  // 第二半：下课后，同期里最沾边的那个拉她看比赛直播（要真在他来首尔参赛的那几天）
   if (!has("b")) {
+    ensureVisitWindow(s, type, line, Date.now() + 1 * 864e5, Date.now() + 8 * 864e5);
     s.classBeats = [...(s.classBeats ?? []), { type, key: "mutual_reveal#b",
       premise: `下课后，同期里跟她关系不错、爱好最沾边的一个人（电竞迷、游戏迷、动漫宅或者什么都知道的那种，按同期们的人设挑；实在没人沾边就是拉她看一个超火的视频）拉她一起看一场电竞比赛直播。她听到选手里有一个声音和${his}一模一样，打的还是他天天和她打的那款游戏。如果他们在街上擦肩过，她也认出了那天街上的人。只写到她发现，之后她怎么做由她自己。` }];
     changed = true;
@@ -371,16 +395,42 @@ export function markPlayedBeatNodes(presentIds: string[], requirePresent: boolea
   saveCareer({ ...career, nodes: career.nodes.map(n => played.some(p => p.id === n.id) ? { ...n, status: "done" as const, doneAt: Date.now() } : n) });
 }
 
+/** 电竞线他来首尔打比赛的行程窗口（真实世界事实：擦肩/失意之夜/比赛直播/看比赛邀请都只在这几天接） */
+function ensureVisitWindow(s: State, type: RouteType, line: LineState, from: number, to: number): { from: number; to: number } {
+  const cur = line.extra?.visitWindow;
+  if (cur && cur.to >= Date.now()) return cur;
+  const w = { from, to };
+  s.lines[type] = { ...line, extra: { ...(line.extra ?? {}), visitWindow: w } };
+  return w;
+}
+
+/** beat 此刻能不能接（她定的：encounter 要真实世界事实——驻唱在周末晚上、擦肩在他来首尔那几天） */
+function beatReadyNow(key: string, line: LineState | undefined, s: State, type: RouteType): boolean {
+  const base = key.split("#")[0];
+  if (base === "bar_reunion") {
+    const d = new Date();
+    return (d.getDay() === 5 || d.getDay() === 6) && d.getHours() >= 19;
+  }
+  const w = line?.extra?.visitWindow;
+  if (!w) return true; // 没记窗口的旧档放开
+  const now = Date.now();
+  if (now < w.from) return false;
+  if (now > w.to) { ensureVisitWindow(s, type, line!, now + 2 * 864e5, now + 9 * 864e5); return false; } // 这次比赛错过了：他下次再来
+  return true;
+}
+
 /** 上课管线下课时问的：有没有挂着的情缘节点；有就记成发生了，返回开场 */
 export function takeRomanceClassBeat(): { key: string; premise: string } | null {
   const s = load();
   const beats = s.classBeats ?? [];
   while (beats.length) {
-    const b = beats.shift()!;
+    const b = beats[0];
     const line = s.lines[b.type];
     const baseKey = b.key.split("#")[0];
     const def = line && line.nextNode === baseKey ? ROUTE_NODES[b.type].find(n => n.key === baseKey) : undefined;
-    if (!line || !def) continue;
+    if (!line || !def) { beats.shift(); continue; }
+    if (!beatReadyNow(b.key, line, s, b.type)) { save(s); return null; } // 还没到它的事实窗口：留着下次下课
+    beats.shift();
     s.classBeats = beats;
     save(s);
     const his = charName(line.charId);
@@ -404,10 +454,12 @@ export function takeRomanceSceneBeat(place: string): { key: string; premise: str
   const beats = all.filter(b => !b.where || new RegExp(b.where).test(place));
   const rest = all.filter(b => !beats.includes(b));
   while (beats.length) {
-    const b = beats.shift()!;
+    const b = beats[0];
     const line = s.lines[b.type];
     const def = line && line.nextNode === b.key ? ROUTE_NODES[b.type].find(n => n.key === b.key) : undefined;
-    if (!line || !def) continue;
+    if (!line || !def) { beats.shift(); continue; }
+    if (!beatReadyNow(b.key, line, s, b.type)) { save(s); return null; } // 没到事实窗口（周末驻唱/他在首尔那几天）：留着
+    beats.shift();
     s.sceneBeats = [...rest, ...beats];
     save(s);
     const career = loadCareer();

@@ -168,6 +168,17 @@ function healRosterSave(s: RosterState): void {
     save(s);
   }
   if (requeuePlaceholderProfiles(s)) save(s);
+  // 同期入社时间：老档没有，按 id 哈希补一个稳定的（名册显示个人入社历史用）
+  {
+    let joinedChanged = false;
+    for (const n of s.npcs) {
+      if (n.joinedAt) continue;
+      const h = [...n.id].reduce((a, c) => a + c.charCodeAt(0), 0);
+      n.joinedAt = (loadCareer().signedAt ?? Date.now()) - (2 + (h % 28)) * 30 * 864e5;
+      joinedChanged = true;
+    }
+    if (joinedChanged) save(s);
+  }
   healNamedRoommates(s);
   healBranchNodes();
   queueTmiReroll(s);

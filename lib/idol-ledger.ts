@@ -19,6 +19,7 @@ import { crowdOf } from "./idol-crowd";
 import { drawRankImage, type RankRow } from "./idol-rank-image";
 import { applyMonthlyRank, examScore } from "./idol-training";
 import { loadRoster, saveRoster } from "./idol-roster-live";
+import { addWorldFeed } from "./idol-events";
 
 const KEY = "idol_ledger_v1";
 const HOUR = 3600e3;
@@ -332,6 +333,7 @@ async function publish(node: CareerNode, at: number, notify: (m: string) => void
   const s = load();
   save({ ...s, months: [...s.months, r] });
   try { afterMonthlyRank(r.rows, at); } catch { /* 走人的事出错不影响排名 */ }
+  try { addWorldFeed(`${+r.month.split("-")[1]}月月末评价结果公布`, at); } catch { /* feed 写不进去不影响 */ }
   if (typeof window !== "undefined") window.dispatchEvent(new Event(RANK_EVENT));
   notify(`💬 月末评价结果出来了：第 ${r.rank} 名`);
 }

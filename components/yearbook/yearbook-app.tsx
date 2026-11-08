@@ -340,7 +340,8 @@ function ClassmatePage({ id, data, showPageBar = false }: { id: string; data: Ye
     return row ? [{ month, row }] : [];
   }).sort((a, b) => a.month.month.localeCompare(b.month.month));
   let previousClass = npc?.initialClass;
-  const entryRecord = npc ? [{ key: `entry-${id}`, stamp: data.career.signedAt ? monthLabel(new Date(data.career.signedAt).toISOString().slice(0, 7)) : "JUL", text: `入社 · ${npc.initialClass} 班`, rank: "—" }] : [];
+  const joinedAt = npc?.joinedAt ?? data.career.signedAt ?? Date.now();
+  const entryRecord = npc ? [{ key: `entry-${id}`, stamp: monthLabel(new Date(joinedAt).toISOString().slice(0, 7)), text: `入社 · ${npc.initialClass} 班`, rank: "—" }] : [];
   const examRecords = records.map(({ month, row }) => {
     let text = "月末评价";
     const CLASS_ORDER: Record<string, number> = { A: 0, B: 1, C: 2, D: 3 };
@@ -370,7 +371,7 @@ function ClassmatePage({ id, data, showPageBar = false }: { id: string; data: Ye
           <div className="yb-field-row"><Field label="AGE" value={profile.age} english /><Field label="BIRTH" value={birth(npc?.birthday ?? profile.birthday)} english /></div>
           <div className="yb-field-row"><Field label="FROM" value={profile.nationality} /><Field label="HEIGHT" value={profile.heightCm ? `${profile.heightCm} cm` : ""} english /></div>
           <div className="yb-field-row"><Field label="CLASS" value={npc?.klass} english /><Field label="MAJOR" value={specialtyEn(npc?.specialty)} english /></div>
-          <div className="yb-field-row"><Field label="MBTI" value={profile.mbti} english /><Field label="ENTRY" value={data.career.signedAt ? `${new Date(data.career.signedAt).getFullYear()} . ${String(new Date(data.career.signedAt).getMonth() + 1).padStart(2, "0")}` : ""} english /></div>
+          <div className="yb-field-row"><Field label="MBTI" value={profile.mbti} english /><Field label="ENTRY" value={npc?.joinedAt ? `${new Date(npc.joinedAt).getFullYear()} . ${String(new Date(npc.joinedAt).getMonth() + 1).padStart(2, "0")}` : (data.career.signedAt ? `${new Date(data.career.signedAt).getFullYear()} . ${String(new Date(data.career.signedAt).getMonth() + 1).padStart(2, "0")}` : "")} english /></div>
         </div>
         <div className="yb-motto">Train in Light · Endure the Dark · Remain a Star</div>
       </section>
@@ -410,8 +411,11 @@ function ClassmatePage({ id, data, showPageBar = false }: { id: string; data: Ye
     <Section title="Her Circle" zh="她的朋友">
       {friendIds.length ? <div className="yb-friends">{(["好朋友", "朋友", "熟人"] as const).flatMap(tier => {
         // friends[].charId 指向名册内部的 Trainee.id；人物卡使用 NPC.charId。
+        // 她定的：朋友圈逐渐发现——还没见过的人先不展示（想全量展示跟我说一声就行）
         const names = friendIds.filter(f => f.tier === tier).map(f => {
           const friend = data.roster?.npcs.find(n => n.id === f.charId);
+          const p = friend?.charId ? data.profiles[friend.charId] : undefined;
+          if (!p?.met) return null;
           return friend?.charId ? data.characters.find(c => c.id === friend.charId)?.name ?? friend.name : friend?.name;
         }).filter((name): name is string => Boolean(name));
         return names.length ? [<div key={tier}><span>{TIER_EN[tier]}</span>{names.join(" · ")}</div>] : [];
@@ -516,6 +520,11 @@ function FatePage({ type, data }: { type: RouteType; data: YearbookData }) {
     <Section title="Bond" zh="羁绊">
       {history.length ? <table className="yb-records"><tbody>{history.map((event, i) => <tr key={`${event.at}-${i}`}><td>{shortDay(event.at)}</td><td>{event.type === "meet" ? "见面" : event.type === "call" ? "电话" : "KKT 聊天"}</td><td className="rank">+{event.d}</td></tr>)}</tbody></table> : <EmptyText>还没有羁绊记录。</EmptyText>}
     </Section>
+    <button type="button" className="yb-profile-jump" onClick={() => {
+      // 她定的：情缘卡放 PROFILE 入口，跳通讯录里他的人物页（外貌性格都在那儿）
+      try { sessionStorage.setItem("contacts-open-character", line.charId); } catch { /* 记不上也能开通讯录 */ }
+      window.dispatchEvent(new CustomEvent("open-app", { detail: { appId: "contacts" } }));
+    }}>PROFILE · 通讯录里看他</button>
     <div className="yb-end">— {ROUTE_EN[type]} · Love Record —</div>
   </div>;
 }

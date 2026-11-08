@@ -21,6 +21,8 @@ export type NpcRecord = Trainee & {
   birthday: string; // MM-DD
   dorm: string;     // 宿舍编号，如 301
   friends: NpcFriend[];
+  /** 她入社的时间（大多同期比她早进公司很久；名册入社记录用） */
+  joinedAt?: number;
 };
 
 export type RosterState = {
@@ -150,6 +152,7 @@ export function generateRosterState(talents: string[], rng: () => number, now = 
   assignBirthdays(npcs, rng);
   assignDorms(npcs, rng);
   assignFriends(npcs, rng);
+  assignJoinedDates(npcs, now, rng);
   return {
     createdAt: now,
     player: makePlayer(talents),
@@ -157,6 +160,14 @@ export function generateRosterState(talents: string[], rng: () => number, now = 
     settledUntil: new Date(now).toISOString().slice(0, 10),
     playerDorm: assignPlayerDorm(npcs),
   };
+}
+
+/** 同期入社时间：大多比她早进公司很久（NEED-1「同期大多早已入社」），少数是近几个月的新人 */
+function assignJoinedDates(npcs: NpcRecord[], now: number, rng: () => number): void {
+  for (const n of npcs) {
+    const months = rng() < 0.3 ? 1 + Math.floor(rng() * 5) : 6 + Math.floor(rng() * 24);
+    n.joinedAt = now - months * 30 * 864e5;
+  }
 }
 
 /** 她的宿舍：优先有 C 班同期、原本只住两人的房间（加她正好三人） */

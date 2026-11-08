@@ -19,13 +19,13 @@ export const ROUTE_LABEL: Record<RouteType, string> = {
   idol: "爱豆", underground: "地下音乐圈", esports: "电竞", heir: "富二代", trainee: "男练习生", campus: "校园",
 };
 
-/** 六类身份关键词（通讯录关注按钮只给这些人；按钮不标类型防剧透） */
+/** 六类身份关键词（通讯录关注按钮只给这些人；按钮不标类型防剧透）。判断顺序在 routeTypeOf 里单独定，别按这个表顺序 */
 export const ROUTE_IDENTITY_HINTS: Record<RouteType, RegExp> = {
-  idol: /爱豆|歌手|男团|组合|成员|前辈|偶像/,
-  underground: /地下|乐队|rapper|Rapper|驻唱|摇滚/,
-  esports: /电竞|职业选手|游戏|战队|主播/,
+  trainee: /练习生|同期/,
+  underground: /驻唱|地下|乐队|摇滚|rapper|Rapper|音乐人/,
+  esports: /电竞|职业选手|战队|游戏主播|主播/,
+  idol: /爱豆|偶像|男团|女团|成员|前辈|歌手/,
   heir: /财阀|富二代|集团|继承|社长/,
-  trainee: /练习生/,
   campus: /学生|同学|大学生|高中生/,
 };
 
@@ -94,6 +94,8 @@ export type LineState = {
   nextNode: string;
   /** 电话/KKT 的日上限记账 */
   daily: { day: string; calls: number; kkt: number };
+  /** 世界事实（她定的：encounter 必须有真实事实）：电竞线他来首尔打比赛的行程窗口 */
+  extra?: { visitWindow?: { from: number; to: number } };
   history: BondEvent[];
 };
 

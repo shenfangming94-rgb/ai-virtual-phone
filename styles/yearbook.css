@@ -311,3 +311,7 @@
 .yb-edit-btns { display: flex; gap: 10px; margin-top: 12px; }
 .yb-edit-btns button { flex: 1; padding: 10px 0; border: .7px solid var(--yb-soft, #d8d8d8); border-radius: 999px; background: transparent; color: var(--yb-grey); font: 500 12px/1.5 "Noto Serif SC", serif; letter-spacing: .1em; }
 .yb-edit-btns button.p { border-color: var(--yb-ink); background: var(--yb-ink); color: #fff; }
+
+/* 情缘卡 PROFILE 跳通讯录（她定的入口） */
+.yb-profile-jump { display: block; margin: 0 auto 18px; padding: 10px 22px; border: .7px solid var(--yb-pink, #e39ab6); border-radius: 999px; background: transparent; color: #b05678; font: 500 11px/1.6 "Noto Serif SC", serif; letter-spacing: .18em; }
+.yb-profile-jump:active { background: #f7e3ea; }

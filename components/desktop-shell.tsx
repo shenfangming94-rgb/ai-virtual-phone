@@ -38,7 +38,7 @@ import { careerTick, deliverAuditionResults } from "@/lib/idol-career";
 import { mailAppIcon, mailAppTick, searchTick } from "@/lib/idol-search";
 import { KAKAO_NOTICE, kakaoTick } from "@/lib/idol-kakao";
 import { installIdolChatHooks, reminderTick } from "@/lib/idol-reminders";
-import { eventsTick } from "@/lib/idol-events";
+import { eventsTick, newModeSickTick } from "@/lib/idol-events";
 import { rankTick } from "@/lib/idol-ledger";
 import { debutTick } from "@/lib/idol-debut";
 import { yearlyTick } from "@/lib/idol-yearly";
@@ -1178,6 +1178,7 @@ export function DesktopShell({ initialThemeProfile, initialThemeAssets }: Deskto
       try { reminderTick(idolNotify); } catch { /* 同上 */ }
       try { deliverAuditionResults(idolNotify); } catch { /* 同上 */ }
       try { eventsTick(idolNotify); } catch { /* 同上 */ }
+      try { newModeSickTick(idolNotify); } catch { /* 生病调度出错不挡着用手机 */ }
       try { rankTick(idolNotify); } catch { /* 同上 */ }
       try { starroadTick(idolNotify); } catch { /* 同上 */ }
       try { rosterTick(); } catch { /* 名册结算出错不挡着用手机 */ }

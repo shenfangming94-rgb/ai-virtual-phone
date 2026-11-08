@@ -26,7 +26,7 @@ import { fmtWorld, parseReply, type SceneNewFace } from "./idol-scenes";
 import { createOrGetStorySession, createStoryGroup, loadStoryGroups, loadStoryMessages, updateStoryGroup, updateStorySession, type StorySession } from "./story-storage";
 import { simpleLLMCall } from "./api-helpers";
 import { addCompanyFacts, careerPromptBlock, companyByName, completeNode, loadCareer, nodeById, saveCareer, sendCompanyIntentMail } from "./idol-career";
-import { eventsPromptBlock } from "./idol-events";
+import { eventsPromptBlock, addWorldFeed } from "./idol-events";
 import { rosterPromptBlock, type RosterState } from "./idol-roster";
 import { activeBranchCharIds, branchSceneEnded, branchSceneHint } from "./idol-branches";
 import { fameBand, fameEvent } from "./idol-fame";
@@ -539,6 +539,8 @@ export async function closeSceneWith(host: SceneHost): Promise<SceneCloseResult>
     try { (await import("./idol-romance-live")).markPlayedBeatNodes(present.map(c => c.id), true); } catch { /* 没接上不影响 */ }
   }
   host.saveMeta({ ...meta, ended: true, summary });
+  // 她定的：所有新剧情结束都往统一世界 feed 记一条共享事实
+  try { addWorldFeed(summary || `在${meta.place}经历了一场戏`, meta.startAt); } catch { /* feed 写不进去不影响 */ }
   const node = meta.nodeId ? nodeById(meta.nodeId) : undefined;
   // 关注度看这场戏里外界到底知不知道，不看提醒事项是不是「机会」
   // 她反馈过：一场试镜通过就热度 +20 太离谱——试镜外界基本看不见，最多算小事

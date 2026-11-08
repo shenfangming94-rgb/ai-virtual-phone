@@ -439,7 +439,7 @@ export function starPromptBlock(): string {
 
 // ── 每隔几秒：上过的课记账、旷课、每周作业、三个月换课表 ──
 
-type Stage = { startAt: number; place: string; bg?: string };
+type Stage = { startAt: number; place: string; bg?: string; ended?: boolean };
 
 function stageScenes(): Stage[] {
   try { return Object.values(JSON.parse(kvGet("idol_stage_scenes_v1") || "{}") as Record<string, Stage>); } catch { return []; }
@@ -456,9 +456,13 @@ function judge(s: State, career: ReturnType<typeof loadCareer>, scenes: Stage[],
   if (career.nodes.some(n => OFFICIAL.has(n.kind) && overlap(n.dueAt) && n.status !== "declined" && n.status !== "invite")) return "official";
   if (career.nodes.some(n => n.kind === "date" && n.status === "done" && overlap(n.dueAt))) return "skip";
   if (scenes.some(sc => overlap(sc.startAt) && !inCompany(sc))) return "skip";
-  // 新上课大改（名册存在 = 新存档）：必须她主动进公司上课，到点人没到场就是旷课。
-  // 迟到 30 分钟内的场次在 classHappeningNow 里就接得住，这里只认「下课结算时记下的到场」。
-  if (newClassMode()) return classAttendedAt(c.start) ? "attend" : "skip";
+  // 新上课大改（名册存在 = 新存档）：必须她人在公司才算到场——下课打卡，或上课时段人在公司里的任何一场戏都算
+  // （她反馈过：在公司的戏里时间跳过去了，下午的课被误判旷课）
+  if (newClassMode()) {
+    if (classAttendedAt(c.start)) return "attend";
+    if (scenes.some(sc => inCompany(sc) && sc.startAt < c.end && (sc.startAt >= c.start - HOUR || sc.ended === false))) return "attend";
+    return "skip";
+  }
   return "attend";
 }
 
@@ -513,6 +517,16 @@ export function starroadTick(notify: (msg: string) => void): void {
   }
   // 上完的课：从上次算到的地方往后，最多补 21 天
   const scenes = stageScenes();
+  // 自愈：新上课大改里，上课时段人在公司戏里就算到场——之前误判成旷课的翻回来
+  if (newClassMode()) {
+    for (const m of s.marks) {
+      if (m.status !== "skip") continue;
+      if (scenes.some(sc => inCompany(sc) && sc.startAt < m.at + 2 * HOUR && (sc.startAt >= m.at - HOUR || sc.ended === false))) {
+        m.status = "attend";
+        s.skips = s.skips.filter(k => k.at !== m.at);
+      }
+    }
+  }
   let day = new Date(Math.max(s.checkedUntil, now - 21 * DAY)); day.setHours(0, 0, 0, 0);
   const firstSkips: string[] = [];
   for (let t = day.getTime(); t <= now; t += DAY) {

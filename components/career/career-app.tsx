@@ -487,8 +487,9 @@ function TimetablePage({ onBack }: { onBack: () => void }) {
   const start = new Date(mon), end = new Date(mon + 6 * DAY);
   const colors = ["#9c94c6", "#85a89e", "#d5a37e", "#8da7c7"];
   const statusOf = (c: NonNullable<typeof selected>["classes"][number]) => {
+    // 她定的：请假在课表上完全看不出来，跟正常课一模一样；只有左滑才看得到「请假/取消请假」
+    if (c.status === "leave") return null;
     if (c.status) return MARK[c.status];
-    if (c.leave) return "已请假";
     const now = Date.now(), date = selected?.day ?? mon;
     const at = (value: string) => { const [h,m] = value.split(":").map(Number); const d = new Date(date); d.setHours(h,m,0,0); return d.getTime(); };
     return now < at(c.start) ? "待上课" : now < at(c.end) ? "上课时段" : "待记录";
@@ -517,7 +518,7 @@ function TimetablePage({ onBack }: { onBack: () => void }) {
       <div className="tt-timeline">{selected?.classes.map((c,i) => {
         const key = `${selected.day}-${c.start}-${c.label}`;
         const canAct = Boolean(c.leave || !c.status);
-        const row = <div className="tt-class" style={{ ["--accent" as string]: colors[i % colors.length], background: "#f6f6f9", ...(swipedKey === key ? { transform: "translateX(-75px)" } : {}) }} onPointerDown={canAct ? (e => { swipeStart.current = { x: e.clientX, y: e.clientY }; }) : undefined} onPointerUp={canAct ? (e => { const s = swipeStart.current; swipeStart.current = null; if (!s) return; const dx = e.clientX - s.x; if (Math.abs(dx) > 30 && Math.abs(dx) > Math.abs(e.clientY - s.y)) setSwipedKey(dx < 0 ? key : null); }) : undefined}><div className="tt-time">{c.start}<small>{c.end}</small></div><div className="tt-course"><span className="tt-course-tag">{c.extra ? "加强课程" : "公司课程"}</span><b>{c.label}</b><div><span>{company?.name || "公司"} · 练习生课程</span><em className={c.status ? `st-${c.status}` : c.leave ? "st-leave" : ""}>{statusOf(c)}</em></div></div></div>;
+        const row = <div className="tt-class" style={{ ["--accent" as string]: colors[i % colors.length], background: "#f6f6f9", ...(swipedKey === key ? { transform: "translateX(-75px)" } : {}) }} onPointerDown={canAct ? (e => { swipeStart.current = { x: e.clientX, y: e.clientY }; }) : undefined} onPointerUp={canAct ? (e => { const s = swipeStart.current; swipeStart.current = null; if (!s) return; const dx = e.clientX - s.x; if (Math.abs(dx) > 30 && Math.abs(dx) > Math.abs(e.clientY - s.y)) setSwipedKey(dx < 0 ? key : null); }) : undefined}><div className="tt-time">{c.start}<small>{c.end}</small></div><div className="tt-course"><span className="tt-course-tag">{c.extra ? "加强课程" : "公司课程"}</span><b>{c.label}</b><div><span>{company?.name || "公司"} · 练习生课程</span>{(() => { const text = statusOf(c); return text ? <em className={c.status ? `st-${c.status}` : ""}>{text}</em> : null; })()}</div></div></div>;
         return canAct ? <div className="rm-swipe" key={key}><div className="rm-acts">{c.leave ? <button type="button" className="a-leave" onClick={() => { leaveClass(selected!.day, c.subject, false); setSwipedKey(null); }}><RotateCcw size={20} />取消请假</button> : <button type="button" className="a-leave" onClick={() => { leaveClass(selected!.day, c.subject, true); setSwipedKey(null); }}><FileText size={20} />请假</button>}</div>{row}</div> : <div key={key}>{row}</div>;
       })}</div>
       {!selected?.classes.length ? <p className="rm-empty">{week.some(d => d.classes.length) ? "今天没有安排课程" : "这一周暂无课程安排"}</p> : null}

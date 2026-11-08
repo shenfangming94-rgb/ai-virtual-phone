@@ -33,7 +33,7 @@ import { fameBand, fameEvent } from "./idol-fame";
 import { loadForum } from "./theqoo-store";
 import { recordPerformance } from "./idol-ledger";
 import { onNodeDone, onScenePractice, practiceDayUsed, subjectOf } from "./idol-starroad";
-import { apSlotOf } from "./idol-actionpoints";
+import { apDateSlots, apSlotOf } from "./idol-actionpoints";
 import { KAKAO_TAG_RULES, afterNodeScene, applyKakaoTags, extractKakaoTags, genKakaoId, kakaoPromptLine, type KakaoTags } from "./idol-kakao";
 import { takePendingFace } from "./idol-pending-faces";
 import { loadApiConfigs, loadBindingConfig, resolveBinding } from "./settings-storage";
@@ -550,6 +550,23 @@ export async function closeSceneWith(host: SceneHost): Promise<SceneCloseResult>
     }
     // 支线人物这场在场：这条支线告一段落（记历史、腾名额）
     try { branchSceneEnded(present.map(c => c.id), summary || ""); } catch { /* 支线没接上不影响 */ }
+    // NPC 朋友圈跟着经历长（她反馈/审计：不能永远不变）：同场的两个同期偶尔记一笔「熟人」
+    try {
+      const m = await import("./idol-roster-live");
+      const roster = m.loadRoster();
+      const ids = present.map(c => c.id);
+      const npcsHere = (roster?.npcs ?? []).filter(n => n.charId && ids.includes(n.charId) && n.friends.length < 6);
+      if (npcsHere.length >= 2 && Math.random() < 0.25) {
+        const a = npcsHere[Math.floor(Math.random() * npcsHere.length)];
+        const others = npcsHere.filter(n => n.id !== a.id && !n.friends.some(f => f.charId === a.id));
+        const b = others[Math.floor(Math.random() * others.length)];
+        if (b && !a.friends.some(f => f.charId === b.id)) {
+          a.friends.push({ charId: b.id, tier: "熟人" as const });
+          b.friends.push({ charId: a.id, tier: "熟人" as const });
+          m.saveRoster(roster!);
+        }
+      }
+    } catch { /* 不挡结算 */ }
     // 这场戏里接的情缘节点：演完了才记完成（她定的）
     try { (await import("./idol-romance-live")).markPlayedBeatNodes(present.map(c => c.id), true); } catch { /* 没接上不影响 */ }
   }
@@ -566,9 +583,16 @@ export async function closeSceneWith(host: SceneHost): Promise<SceneCloseResult>
   if (node && (node.kind === "date" || node.kind === "practice")) {
     try {
       const ap = await import("./idol-ap-live");
-      const slot = apSlotOf(node.dueAt);
-      const label = node.kind === "practice" && node.subject ? `加练：${subjectOf(node.subject)?.zh ?? ""}` : node.title;
-      if (slot != null) ap.consumeAp(Date.now(), [slot], label);
+      if (node.kind === "date") {
+        // 她定的：约会每满 2 小时再扣 1 点（按这场戏实际待了多久）
+        const hours = Math.max(0, (Date.now() - meta.startAt) / 3600e3);
+        const slots = apDateSlots(meta.startAt, hours);
+        if (slots.length) ap.consumeAp(Date.now(), slots, node.title);
+      } else {
+        const slot = apSlotOf(node.dueAt);
+        const label = node.subject ? `加练：${subjectOf(node.subject)?.zh ?? ""}` : node.title;
+        if (slot != null) ap.consumeAp(Date.now(), [slot], label);
+      }
     } catch { /* 扣不了点不挡结算 */ }
   }
   await afterNodeScene(node, present.map(c => c.id), meta.place).catch(() => undefined);

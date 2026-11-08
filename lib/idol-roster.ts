@@ -10,7 +10,7 @@
 import {
   generateRoster, settleWeek, TIMETABLE_CURRENT,
   ATTITUDE_LABEL, GIVEN_POOL, SURNAME_POOL,
-  type Specialty, type Stats, type Subject, type Trainee,
+  type Specialty, type Stats, type Subject, type Timetable, type Trainee,
 } from "./idol-training";
 
 export type NpcFriend = { charId: string; tier: "好朋友" | "朋友" | "熟人" };
@@ -212,10 +212,11 @@ export function dedupeRosterNames(npcs: NpcRecord[]): { npcId: string; from: str
   return renames;
 }
 
-/** 给 NPC 补算 weeks 周的训练（玩家不在这里涨：她的数值走真实上课/加练结算）。原地改。 */
-export function settleNpcWeeks(state: RosterState, weeks: number, rng: () => number): void {
+/** 给 NPC 补算 weeks 周的训练（玩家不在这里涨：她的数值走真实上课/加练结算）。原地改。
+ *  tt 不传就用默认课表；新档传入公司实际课表（她反馈/审计：NPC 要按真实课表练，不同公司不一样） */
+export function settleNpcWeeks(state: RosterState, weeks: number, rng: () => number, tt: Timetable = TIMETABLE_CURRENT): void {
   for (let w = 0; w < weeks; w++) {
-    for (const n of state.npcs) settleWeek(n, TIMETABLE_CURRENT, rng);
+    for (const n of state.npcs) settleWeek(n, tt, rng);
   }
 }
 

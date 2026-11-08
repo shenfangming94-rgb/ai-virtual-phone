@@ -17,6 +17,7 @@ import { getProfile, loadProfiles, relationOf, saveProfile, type IdolProfile, ty
 import { loadCareer, saveCareer, type CareerNode } from "./idol-career";
 import { loadChatSessions, saveChatSessions, pushChatMessage, loadChatContacts } from "./chat-storage";
 import { crowdOf, removeCrowd, promoteCrowd } from "./idol-crowd";
+import { loadRoster } from "./idol-roster-live";
 import { fleshOut } from "./idol-kakao";
 import { addWorldFeed } from "./idol-events";
 import { queueMessage } from "./idol-reminders";
@@ -62,26 +63,37 @@ export function nudgeLeave(charId: string, d: number, why: string, at = Date.now
 export function afterMonthlyRank(rows: { id: string; name: string; rank: number; change: string }[], at: number): void {
   const total = rows.length;
   if (!total) return;
-  const others = rows.filter(r => r.id !== "__me__");
+  // 新档：名单 rows 里存的是名册编号（Trainee.id），真实档案要过 charId 查（她反馈/审计过 ID 对不上）
+  const roster = loadRoster();
+  const resolveId = (id: string): string | null => {
+    if (id === "player" || id === "__me__") return null;
+    if (id.startsWith("crowd_")) return id;
+    return roster?.npcs.find(n => n.id === id)?.charId ?? id;
+  };
+  const others = rows.filter(r => r.id !== "__me__" && r.id !== "player");
   const bottom = others.slice(-Math.max(2, Math.round(others.length * 0.08)));
   for (const r of others) {
     if (r.id.startsWith("crowd_")) continue;
-    const p = getProfile(r.id);
+    const realId = resolveId(r.id);
+    if (!realId) continue;
+    const p = getProfile(realId);
     if (!canLeave(p)) continue;
     const pct = r.rank / total;
     const drop = /^↓(\d+)/.exec(r.change)?.[1];
-    if (pct > 0.75) nudgeLeave(r.id, 1.5, `月末评价排到第 ${r.rank} 名（一共 ${total} 人）`, at);
-    else if (pct <= 0.25) nudgeLeave(r.id, -1, `月末评价第 ${r.rank} 名，排在前面`, at);
-    if (drop && +drop >= 4) nudgeLeave(r.id, 0.5, `月末评价一下掉了 ${drop} 名`, at);
-    if (r.change.startsWith("↑") && pct <= 0.75) nudgeLeave(r.id, -0.5, `月末评价进步了`, at);
+    if (pct > 0.75) nudgeLeave(realId, 1.5, `月末评价排到第 ${r.rank} 名（一共 ${total} 人）`, at);
+    else if (pct <= 0.25) nudgeLeave(realId, -1, `月末评价第 ${r.rank} 名，排在前面`, at);
+    if (drop && +drop >= 4) nudgeLeave(realId, 0.5, `月末评价一下掉了 ${drop} 名`, at);
+    if (r.change.startsWith("↑") && pct <= 0.75) nudgeLeave(realId, -0.5, `月末评价进步了`, at);
   }
   // 公司淘汰：只看排在最后的，这个月考得怎么样当场定
   for (const r of bottom) {
     if (r.id.startsWith("crowd_")) continue;
-    const p = getProfile(r.id);
+    const realId = resolveId(r.id);
+    if (!realId) continue;
+    const p = getProfile(realId);
     if (!canLeave(p) || p.leave?.phase === "decided") continue;
     const chance = (p.leave?.score ?? 2) >= STAY ? 0.4 : 0.15;
-    if (Math.random() < chance) void decide(r.id, "淘汰", at).catch(() => undefined);
+    if (Math.random() < chance) void decide(realId, "淘汰", at).catch(() => undefined);
   }
   // 群里的路人：排在最后的有的被淘汰，另外有人自己放弃，一个月一两个
   const gid = kakao().groupId;
@@ -181,6 +193,12 @@ function leaveNow(charId: string, notifyGroup = true): void {
   const career = loadCareer();
   if (career.roommates?.includes(charId)) {
     saveCareer({ ...career, roommates: career.roommates.filter(id => id !== charId) });
+    // 记下她当过室友（室友退社剧情要查得到，之前先删再查导致永远触发不了）
+    try {
+      const FK = "idol_former_roommates_v1";
+      const list = JSON.parse(kvGet(FK) || "[]") as string[];
+      kvSet(FK, JSON.stringify([...list.filter(x => x !== charId), charId].slice(-20)));
+    } catch { /* 记不上不碍事 */ }
     // 床位空出来：两到四周后公司安排人搬进来，提前几天老师说一声
     const at = now + rnd(14, 28) * DAY;
     kvSet(ROOM_KEY, JSON.stringify([...loadRefills(), { at, noticeAt: at - rnd(3, 6) * DAY, noticed: false, leftName: c.name }]));

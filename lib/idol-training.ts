@@ -26,11 +26,11 @@ export const ATTITUDES: Record<Attitude, { completion: number; weeklyPractice: n
   lazy: { completion: 0.75, weeklyPractice: 0, practiceChance: 0 },
 };
 
-/** 分段升级：当前能力值 → 升 1 分需要的训练进度 */
+/** 分段升级：当前能力值 → 升 1 分需要的训练进度（0~59 需 5、60~79 需 10、80~89 需 15、90~99 需 20） */
 export const UPGRADE_NEED: Array<{ upto: number; need: number }> = [
-  { upto: 59, need: 5 },
-  { upto: 79, need: 10 },
-  { upto: 89, need: 15 },
+  { upto: 60, need: 5 },
+  { upto: 80, need: 10 },
+  { upto: 90, need: 15 },
   { upto: 100, need: 20 },
 ];
 export function needFor(value: number): number {

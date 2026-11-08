@@ -61,6 +61,8 @@ async function teacherSays(instruction: string, fallback: string): Promise<void>
 
 // ── 她的生日：未签约也可触发，具体安排交给生日模块 ──
 function birthday(year: number, now: number) {
+  // 新档：生日走剧情池（my_birthday/mate_birthday），旧生日祝福系统停掉，不然两套并行
+  try { if (kvGet("idol_roster_v1")) return; } catch { /* 旧档照旧 */ }
   const card=loadTraineeCard(), key=`bday-${year}`;
   if(!card?.birthday||!/^\d{4}-\d{2}-\d{2}$/.test(card.birthday)||loadDone().includes(key))return;
   const date=`${year}-${card.birthday.slice(5)}`;

@@ -80,22 +80,23 @@ export function branchesTick(): void {
   });
   if (!pickable.length) return;
   const pick = pickable.sort(() => Math.random() - 0.5)[0];
-  const type = branchTypeFor(pick.p, pick.n.name, chars.find(c => c.id === pick.n.charId));
+  // 五类支线分别判资格（她定的）：兴趣=熟人+近期互动；家庭=朋友；过去=朋友+多次互动；
+  // 友情/烦恼=有近期真实互动
+  const tier = REL_TIER[pick.p.relation ?? "陌生"] ?? 1;
+  const eventCount = pick.p.events?.length ?? 0;
+  const lastEventAt = eventCount ? (pick.p.events?.[eventCount - 1]?.at ?? 0) : 0;
+  const recent = eventCount > 0 && now - lastEventAt < 14 * 864e5;
+  const kinds: BranchType[] = [];
+  if (tier >= 3 && recent) kinds.push("interest");
+  if (tier >= 4) kinds.push("family");
+  if (tier >= 4 && eventCount >= 2) kinds.push("past");
+  if (recent) kinds.push("friendship");
+  if (tier >= 4 || recent) kinds.push("worry");
+  if (!kinds.length) return; // 不够资格就别硬开
+  const type = kinds[Math.floor(Math.random() * kinds.length)];
   const rec: BranchRecord = { charId: pick.n.charId!, type, active: true, startedAt: now, lastAt: now, firedCount: 0, history: [] };
   save({ branches: [...s.branches, rec] });
   fireBranchOpening(rec, type, chars.find(c => c.id === pick.n.charId));
-}
-
-/** 按她的真实背景挑类型（MBTI 只作参考不决定剧情——她的规矩） */
-function branchTypeFor(p: IdolProfile, name: string, char?: Character): BranchType {
-  void char;
-  const text = `${p.privateLines.join(" ")}${p.publicText}${p.role}${p.group}${p.note}`;
-  if (/兴趣|喜欢|爱好|摄影|动漫|唱片|画画|跳舞|音乐/.test(text)) return "interest";
-  if (/家|父母|妈妈|爸爸|弟弟|妹妹|姐姐|哥哥|家乡|奶奶|爷爷/.test(text)) return "family";
-  if (/以前|过去|学校|小时候|转学|从/.test(text)) return "past";
-  if (/烦恼|犹豫|担心|压力|选择|退社|家里/.test(text)) return "worry";
-  const kinds: BranchType[] = ["interest", "family", "past", "worry", "friendship"];
-  return kinds[Math.floor(Math.random() * kinds.length)];
 }
 
 const OPENING: Record<BranchType, (name: string, history: string) => { title: string; place: string; premise: string }> = {

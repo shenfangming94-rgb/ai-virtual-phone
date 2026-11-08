@@ -16,6 +16,7 @@ import { ATTITUDE_LABEL, coursePoints, settleProgress, type ClassLetter, type Sp
 import { generateRosterState, dedupeRosterNames, settleNpcWeeks, type RosterState } from "./idol-roster";
 import { loadCharacters, saveCharacters } from "./character-storage";
 import { loadChatContacts } from "./chat-storage";
+import { weeklyCounts as companyWeeklyCounts } from "./idol-starroad";
 import { simpleLLMCall } from "./api-helpers";
 import { loadApiConfigs, loadBindingConfig, resolveBinding } from "./settings-storage";
 
@@ -501,7 +502,10 @@ export function rosterTick(): void {
   const weeks = weeksBetween(s.settledUntil, today);
   if (weeks > 0) {
     const seed = 1e9 + s.npcs.length * 7 + (s.settledUntil || "").split("-").reduce((a, b) => a + Number(b), 0);
-    settleNpcWeeks(s, Math.min(weeks, 52), mulberry32(seed % 4294967296));
+    // 她反馈/审计：NPC 按公司的真实课表训练（不同公司课程侧重不一样）
+    const counts = companyWeeklyCounts(loadCareer().companyId ?? "");
+    const tt = { weekly: { vocal: counts.vocal, dance: counts.dance, rap: counts.rap, variety: 0, acting: 0, visual: 0, compose: 0, language: 0 }, daysPerWeek: 5 };
+    settleNpcWeeks(s, Math.min(weeks, 52), mulberry32(seed % 4294967296), tt);
   }
   s.settledUntil = today;
   save(s);

@@ -17,7 +17,7 @@ import {
   type CareerNode,
 } from "@/lib/idol-career";
 import {
-  pendingNoticeFailures, retryNotice, acceptInvite, addMine, checkNode, declineInvite, deleteNode, isNightNow, leaveNode, setNote, setWish, teacherOf, uncheckNode,
+  pendingNoticeFailures, retryNotice, acceptInvite, addMine, checkNode, dateBlockedNow, declineInvite, deleteNode, isNightNow, leaveNode, setNote, setWish, teacherOf, uncheckNode,
 } from "@/lib/idol-reminders";
 import { loadMonths, overrideMyRank, RANK_EVENT } from "@/lib/idol-ledger";
 import { STARROAD_EVENT, classAt, leaveClass, weekTimetable } from "@/lib/idol-starroad";
@@ -219,7 +219,7 @@ export function CareerApp({ onClose, onNotice }: { onClose: () => void; onNotice
 
   let body: React.ReactNode;
   if (detail) {
-    body = <Detail item={detail} onAccept={() => { const n = acceptInvite(detail.id); setDetailId(null); if (n) onNotice?.(`${n.title}：${whenText(n.dueAt)}，写进日历了`); }} onDecline={() => { declineInvite(detail.id); setDetailId(null); onNotice?.(detail.offerId ? `婉拒了 ${detail.from}` : "回了不去"); }} onBack={() => setDetailId(null)} onGo={() => go(detail)} onCheck={() => onCheck(detail)} onLeave={() => setLeaveId(detail.id)} onDelete={() => { deleteNode(detail.id); setDetailId(null); }} />;
+    body = <Detail item={detail} onAccept={() => { if (detail.kind === "date" && dateBlockedNow(detail.dueAt)) { setDetailId(null); onNotice?.("今天的时间排满了：只能发消息、打电话、睡觉，明早 8 点刷新。"); return; } const n = acceptInvite(detail.id); setDetailId(null); if (n) onNotice?.(`${n.title}：${whenText(n.dueAt)}，写进日历了`); }} onDecline={() => { declineInvite(detail.id); setDetailId(null); onNotice?.(detail.offerId ? `婉拒了 ${detail.from}` : "回了不去"); }} onBack={() => setDetailId(null)} onGo={() => go(detail)} onCheck={() => onCheck(detail)} onLeave={() => setLeaveId(detail.id)} onDelete={() => { deleteNode(detail.id); setDetailId(null); }} />;
   } else if (page.p === "list") {
     const rows = pick(items, page.key);
     const secs = sections(rows, page.key);

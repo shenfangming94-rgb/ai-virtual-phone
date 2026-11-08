@@ -346,6 +346,19 @@ function playerClassHistory(): { month: string; klass: string }[] {
   } catch { return []; }
 }
 
+/** 某个同期的班级历史（被调离剧情按这个逐次比） */
+function npcClassHistory(id: string): { month: string; klass: string }[] {
+  try {
+    const s = JSON.parse(kvGet("idol_ledger_v1") || "null") as { months?: { month: string; rows?: { id: string; klass?: string }[] }[] };
+    return (s?.months ?? []).map(m => ({ month: m.month, klass: m.rows?.find(r => r.id === id)?.klass ?? "" })).filter(x => x.klass);
+  } catch { return []; }
+}
+
+/** 前室友名单（退社时从 roommates 删掉的人会记在这里，室友退社剧情靠它找） */
+function formerRoommateIds(): string[] {
+  try { return JSON.parse(kvGet("idol_former_roommates_v1") || "[]") as string[]; } catch { return []; }
+}
+
 // ── 剧情定义 ──
 
 function rivalsOf(c: PlotCtx): { charId: string; name: string }[] {
@@ -540,30 +553,31 @@ export const PLOTS: PlotDef[] = [
   {
     key: "moved_out", title: "被调离的同期", hook: "class", max: null,
     check(c, rec) {
-      if (!c.roster) return false;
-      const cur: Record<string, string> = {};
-      for (const n of c.roster.npcs) if (n.charId) cur[n.charId] = n.klass;
-      const snap = rec.extra?.klasses as Record<string, string> | undefined;
-      if (!snap) {
-        const all = load();
-        all["moved_out"] = { ...(all["moved_out"] ?? rec), extra: { ...(rec.extra ?? {}), klasses: cur } };
-        save(all);
-        return false;
-      }
-      return Object.entries(cur).some(([id, k]) => snap[id] && snap[id] < k); // 降班才算
+      const handled = rec.extra?.handled as string[] | undefined;
+      // 按月评记录逐次比（她反馈/审计：只比快照会把连续变动合并漏掉）
+      return Boolean(c.roster?.npcs.find(n => {
+        if (!n.charId || (handled ?? []).includes(n.id)) return false;
+        const hist = npcClassHistory(n.id);
+        const last = hist[hist.length - 1], prev = hist[hist.length - 2];
+        return Boolean(last && prev && last.klass > prev.klass); // 降班（A<B<C<D）
+      }));
     },
     fire(c, rec) {
-      const cur: Record<string, string> = {};
-      for (const n of c.roster?.npcs ?? []) if (n.charId) cur[n.charId] = n.klass;
-      const snap = (rec.extra?.klasses as Record<string, string>) ?? {};
-      const moved = c.roster?.npcs.find(n => n.charId && snap[n.charId] && snap[n.charId] < n.klass);
-      const name = moved?.charId ? c.characters.find(x => x.id === moved.charId)?.name : undefined;
+      const handled = rec.extra?.handled as string[] | undefined;
+      const moved = c.roster?.npcs.find(n => {
+        if (!n.charId || (handled ?? []).includes(n.id)) return false;
+        const hist = npcClassHistory(n.id);
+        const last = hist[hist.length - 1], prev = hist[hist.length - 2];
+        return Boolean(last && prev && last.klass > prev.klass);
+      });
       const all = load();
-      all["moved_out"] = { ...(all["moved_out"] ?? rec), extra: { ...(rec.extra ?? {}), klasses: cur } };
+      all["moved_out"] = { ...(all["moved_out"] ?? rec), extra: { ...(rec.extra ?? {}), handled: [...(handled ?? []), ...(moved ? [moved.id] : [])] } };
       save(all);
-      if (!name) return { premise: "", done: true };
+      if (!moved) return { premise: "", done: true };
+      const hist = npcClassHistory(moved.id);
+      const name = moved.charId ? c.characters.find(x => x.id === moved.charId)?.name : "一位同期";
       return {
-        premise: `某节课上，老师宣布同期${name}即将离开当前班级（${snap[moved!.charId!]} 班 → ${moved!.klass} 班，月考后的调整，代码定的）。她可能是她的好朋友、竞争对手、关系不好的同期，也可能只是陌生人；她本人怎么反应、其他人怎么评价，按真实人设和关系演。调班不等于退社，她还在公司。`,
+        premise: `某节课上，老师宣布同期${name}即将离开当前班级（${hist[hist.length - 2].klass} 班 → ${hist[hist.length - 1].klass} 班，月考后的调整，代码定的）。她可能是她的好朋友、竞争对手、关系不好的同期，也可能只是陌生人；她本人怎么反应、其他人怎么评价，按真实人设和关系演。调班不等于退社，她还在公司。`,
       };
     },
   },
@@ -693,16 +707,19 @@ export const PLOTS: PlotDef[] = [
   },
   {
     key: "roommate_left", title: "室友突然退社", hook: "class", max: null,
-    check(c) {
-      const roommates = c.career.roommates ?? [];
-      return roommates.some(id => c.profiles[id]?.leave?.phase === "left");
+    check(c, rec) {
+      // 她反馈/审计：退社时人已从 roommates 里删掉，要连前室友名单一起查；处理过的别再触发
+      const handled = rec.extra?.handled as string[] | undefined;
+      const roommates = [...new Set([...(c.career.roommates ?? []), ...formerRoommateIds()])];
+      return roommates.some(id => c.profiles[id]?.leave?.phase === "left" && !(handled ?? []).includes(id));
     },
     fire(c, rec) {
-      const roommates = c.career.roommates ?? [];
-      const left = roommates.find(id => c.profiles[id]?.leave?.phase === "left");
+      const handled = rec.extra?.handled as string[] | undefined;
+      const roommates = [...new Set([...(c.career.roommates ?? []), ...formerRoommateIds()])];
+      const left = roommates.find(id => c.profiles[id]?.leave?.phase === "left" && !(handled ?? []).includes(id));
       const name = left ? c.characters.find(x => x.id === left)?.name : "一位室友";
       const all = load();
-      all["roommate_left"] = { ...(all["roommate_left"] ?? rec), extra: { ...(rec.extra ?? {}), handled: (rec.extra?.handled as string[] ?? []).concat(left ? [left] : []) } };
+      all["roommate_left"] = { ...(all["roommate_left"] ?? rec), extra: { ...(rec.extra ?? {}), handled: [...(handled ?? []), ...(left ? [left] : [])] } };
       save(all);
       if (!left) return { premise: "", done: true };
       return {
@@ -718,22 +735,29 @@ export const PLOTS: PlotDef[] = [
       const last = rec.extra?.lastDay as string | undefined;
       const today = `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
       if (last === today) return false;
-      const good = Object.values(c.profiles).filter(p => p.relation === "好朋友" && /练习生|同期/.test(`${p.role}${p.group}`));
+      const good = (c.roster?.npcs ?? []).filter(n => n.charId && c.profiles[n.charId]?.relation === "好朋友");
       if (!good.length) return false;
-      return !(c.career.nodes ?? []).some(n => (n.status === "pending" || n.status === "invite") && ["weekly", "monthly", "makeup", "selection", "debut", "talk", "event"].includes(n.kind) && new Date(n.dueAt).getDate() === d.getDate());
+      // 撞车检查按完整日期比（她反馈/审计：只比几号会把别的月的同一天也挡掉）
+      const sameDay = (t: number) => { const x = new Date(t); return x.getFullYear() === d.getFullYear() && x.getMonth() === d.getMonth() && x.getDate() === d.getDate(); };
+      return !(c.career.nodes ?? []).some(n => (n.status === "pending" || n.status === "invite") && ["weekly", "monthly", "makeup", "selection", "debut", "talk", "event"].includes(n.kind) && sameDay(n.dueAt));
     },
     fire(c, rec) {
-      const good = Object.values(c.profiles).filter(p => p.relation === "好朋友" && /练习生|同期/.test(`${p.role}${p.group}`)).map(p => c.characters.find(x => x.id === p.charId)).filter((x): x is NonNullable<typeof x> => Boolean(x));
+      const good = (c.roster?.npcs ?? []).filter(n => n.charId && c.profiles[n.charId]?.relation === "好朋友").map(n => c.characters.find(x => x.id === n.charId)).filter((x): x is NonNullable<typeof x> => Boolean(x));
       const inviter = good[Math.floor(Math.random() * good.length)];
       const who = inviter?.name ?? "一位好朋友";
-      const kinds = ["逛街", "吃饭", "看电影", "去汉江", "逛唱片店"];
-      const kind = kinds[Math.floor(Math.random() * kinds.length)];
+      // 她反馈/审计：地点时间不再写死——按活动类型配对地点、时间 11~18 点随机
+      const KINDS: { kind: string; place: string }[] = [
+        { kind: "逛街", place: "弘大" }, { kind: "吃饭", place: "江南 餐厅" }, { kind: "看电影", place: "江南 电影院" },
+        { kind: "去汉江散步", place: "汉江公园" }, { kind: "逛唱片店", place: "弘大 唱片店" }, { kind: "喝咖啡", place: "明洞 咖啡店" },
+        { kind: "看展", place: "首尔 美术馆" }, { kind: "练歌房", place: "江南 KTV" },
+      ];
+      const pickKind = KINDS[Math.floor(Math.random() * KINDS.length)];
       const d = new Date(c.now);
-      const at = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 14, 0, 0);
-      const premise = `${who}约她休息日一起出去（${kind}）。活动按邀请者的人设和兴趣来；她可以接受、拒绝或提出别的安排；已接受的活动进日历，当天通过「此刻」展开。可以自然重复，不规定整个存档只出现一次。`;
+      const at = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 11 + Math.floor(Math.random() * 8), 0, 0);
+      const premise = `${who}约她休息日一起出去（${pickKind.kind}）。活动按邀请者的人设和兴趣来；她可以接受、拒绝或提出别的安排；已接受的活动进日历，当天通过「此刻」展开。可以自然重复，不规定整个存档只出现一次。`;
       const node = inviter
-        ? scheduleInvitePlot(`和${who}出去`, "弘大", premise, at.getTime(), { id: inviter.id, name: who }, `你休息日想约她一起出去${kind}。按你的性格在 KakaoTalk 上约她，问问她想去哪儿。`)
-        : schedulePlotNode(`和${who}出去`, "弘大", premise, at.getTime());
+        ? scheduleInvitePlot(`和${who}出去`, pickKind.place, premise, at.getTime(), { id: inviter.id, name: who }, `你休息日想约她一起出去${pickKind.kind}（${pickKind.place}一带）。按你的性格在 KakaoTalk 上约她，问问她想去哪儿。`)
+        : schedulePlotNode(`和${who}出去`, pickKind.place, premise, at.getTime());
       const all = load();
       all["dayoff_invite"] = { ...(all["dayoff_invite"] ?? rec), extra: { ...(rec.extra ?? {}), lastDay: `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}` } };
       save(all);

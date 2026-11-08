@@ -103,9 +103,8 @@ function ensure(): State | null {
 
 // ── 课表 ──
 
-/** 每周几节（两周一次 = 0.5）；公司各有侧重 */
-function weeklyCounts(companyId: string): Record<Subject, number> {
-  const c: Record<Subject, number> = { vocal: 3, dance: 3, rap: 2, language: 2, acting: 1, compose: 1, variety: 0.5, visual: 0.5 };
+/** 每周几节（两周一次 = 0.5）；公司各有侧重。NPC 训练也按这份真实课表结算 */
+export function weeklyCounts(companyId: string): Record<Subject, number> {  const c: Record<Subject, number> = { vocal: 3, dance: 3, rap: 2, language: 2, acting: 1, compose: 1, variety: 0.5, visual: 0.5 };
   if (companyId === "hybe" || companyId === "cube") c.compose = 2;
   if (companyId === "yg") c.rap = 3;
   if (companyId === "sm") { c.language = 3; c.visual = 1; }

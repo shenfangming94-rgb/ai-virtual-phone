@@ -28,14 +28,17 @@ function save(s: State) { kvSet(KEY, JSON.stringify(s)); }
 
 export function pipelineState(): State { return load(); }
 
-/** 名单算法：玩家必进 + 综合分前 4 的同期，特长多样性保底（vocal/rap 至少覆盖一个，玩家特长也算覆盖） */
+/** 名单算法：玩家必进 + 综合分前 4 的同期（已退社的排除），特长多样性保底（vocal/rap 至少覆盖一个，玩家特长也算覆盖） */
 export function computeLineup(): string[] {
   const roster = loadRoster();
   if (!roster) return [];
+  const profiles = loadProfiles();
   const all: Trainee[] = [roster.player, ...roster.npcs];
   const scored = all.map(t => ({ t, s: examBase(t) })).sort((a, b) => b.s - a.s);
   const player = roster.player;
-  const npcTop = scored.filter(x => x.t.id !== "player").slice(0, 4).map(x => x.t);
+  // 她反馈/审计：已退社的同期不能入选
+  const npcPool = roster.npcs.filter(n => !(n.charId && profiles[n.charId]?.leave?.phase === "left"));
+  const npcTop = scored.filter(x => x.t.id !== "player" && npcPool.some(n => n.id === x.t.id)).slice(0, 4).map(x => x.t);
   // 多样性：前 4 里没有 vocal/rap 特长的，换进最高的那个；换的时候别把刚保的另一项顶掉
   const ensure = (spec: "vocal" | "rap", pool: Trainee[], rest: Trainee[], protect?: Set<string>): Trainee[] => {
     const covered = pool.some(t => t.specialty === spec) || player.specialty === spec;
@@ -48,7 +51,7 @@ export function computeLineup(): string[] {
     out[idx] = alt;
     return out;
   };
-  const rest = roster.npcs.filter(n => !npcTop.includes(n));
+  const rest = npcPool.filter(n => !npcTop.some(t => t.id === n.id));
   const afterVocal = ensure("vocal", npcTop, rest);
   const final = ensure("rap", afterVocal, rest, new Set(["vocal"]));
   const picks = [player, ...final];

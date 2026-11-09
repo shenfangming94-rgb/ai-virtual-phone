@@ -747,8 +747,6 @@ export async function healSceneEventGaps(): Promise<number> {
     const all = loadScenes();
     if (!Object.keys(all).length) return 0;
     const profiles = loadProfiles();
-    const dayKey = (ms: number) => { const d = new Date(ms); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; };
-    const today = dayKey(Date.now());
     let n = 0;
     for (const ch of session.chapters) {
       const sc = all[ch.id];
@@ -756,9 +754,9 @@ export async function healSceneEventGaps(): Promise<number> {
       const others = [...new Set([...sc.ids, ...(sc.newFaces ?? [])])].filter(id => id !== WORLD_CHAR_ID);
       if (!others.length) continue;
       const text = (sc.summary ?? "").trim();
-      // 今天的私下见面没被记账 → 把见面补进情缘线
-      if (dayKey(sc.startAt) === today && others.length <= 3 && !/演唱|场馆|舞台|路演|签售|直播|观众/.test(sc.place)) {
-        void import("./idol-romance-live").then(({ recordMeet }) => { for (const id of others) recordMeet(id); }).catch(() => undefined);
+      // 最近两周的私下见面没被记账（知情账覆盖掉线、名字没对上这些）：把见面补进情缘线
+      if (others.length <= 3 && !/演唱|场馆|舞台|路演|签售|直播|观众/.test(sc.place) && Date.now() - sc.startAt < 14 * 864e5) {
+        void import("./idol-romance-live").then(({ recordMeetAt }) => { for (const id of others) recordMeetAt(id, sc.startAt); }).catch(() => undefined);
       }
       if (!text) continue;
       for (const id of others) {

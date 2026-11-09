@@ -111,6 +111,18 @@ export function recordMeet(charId: string): void {
   save(s);
 }
 
+/** 补账用：把某一天某场戏的见面补进线里（按那场戏的日期去重，跟 recordMeet 同一套账）。知情账覆盖掉线之后用来恢复羁绊 */
+export function recordMeetAt(charId: string, at: number): void {
+  try { if (!kvGet("idol_roster_v1")) return; } catch { return; }
+  const hit = lineOfChar(charId);
+  if (!hit) return;
+  const lastMeet = hit.line.history.filter(h => h.type === "meet").pop();
+  if (lastMeet && bondDayKey(lastMeet.at) === bondDayKey(at)) return;
+  const s = load();
+  s.lines[hit.type] = addMeet(hit.line, at);
+  save(s);
+}
+
 /** KKT 有来有回：他回了她消息 → 羁绊 +1（日上限 2） */
 export function recordKkt(charId: string): void {
   try { if (!kvGet("idol_roster_v1")) return; } catch { return; }

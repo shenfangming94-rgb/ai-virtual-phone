@@ -1,7 +1,9 @@
 /** 恋情知情账：只保存有明确来源的事实，不把私下知情写成公开动态。 */
 import { kvGet, kvSet } from "./kv-db";
 
-const KEY = "idol_romance_v1";
+// 之前知情账和情缘线（idol-romance-live）共用 idol_romance_v1 互相覆盖（11-10 修）：知情账搬到自己的 key
+const KEY = "idol_romance_knowledge_v1";
+const OLD_KEY = "idol_romance_v1";
 export type RomanceKnowledge = {
   id: string; observerId: string; observerName: string; partnerId?: string; partnerName?: string;
   level: "intimacy" | "confirmed" | "report";
@@ -14,8 +16,20 @@ export type RomanceKnowledge = {
 type Exposure = { id: string; text: string; at: number };
 type State = { knowledge: RomanceKnowledge[]; exposures: Exposure[] };
 export function loadRomance(): State {
-  try { const s = JSON.parse(kvGet(KEY) || "null"); if (s) return { knowledge: s.knowledge || [], exposures: s.exposures || [] }; } catch { /* 旧存档无此字段 */ }
-  return { knowledge: [], exposures: [] };
+  const parse = (raw: string | null): State | null => {
+    if (!raw) return null;
+    try {
+      const s = JSON.parse(raw) as Partial<State>;
+      if (Array.isArray(s.knowledge)) return { knowledge: s.knowledge, exposures: s.exposures || [] };
+    } catch { /* 坏数据当没有 */ }
+    return null;
+  };
+  const cur = parse(kvGet(KEY));
+  if (cur) return cur;
+  // 老存档：知情账还在旧 key 里（可能被情缘线盖过就没办法了），捡回来存到新 key
+  const old = parse(kvGet(OLD_KEY));
+  if (old) kvSet(KEY, JSON.stringify(old));
+  return old ?? { knowledge: [], exposures: [] };
 }
 function save(s: State): void { kvSet(KEY, JSON.stringify(s)); }
 export const ROMANCE_PRIVACY_RULE = "恋情知情严格按下列记录和本场实际发生的事区分：人物关系档案、旁白背景、其他人的私密记忆不等于这个人物知情。无明确来源就不知道；普通同行、吃饭、约会不构成发现。未记录的怀疑不作事实，不安排调查或传播。不在场、已经离场的人不能凭空目击。私下知情不等于公司全体知情；公司知情不等于粉丝媒体知情。传播、确认或处理必须在剧情中实际发生，不补写场外传播。";

@@ -465,8 +465,7 @@ function CardView({ data, id, onBack, onEdit, onNotice }: { data: Data; id: stri
   const [busy, setBusy] = useState(false);
   const [peek, setPeek] = useState(false);
   const [romVer, setRomVer] = useState(0);
-  const [roleBusy, setRoleBusy] = useState(false);
-  const [roleNow, setRoleNow] = useState(p.role);
+  const [roleNow] = useState(p.role);
   if (!char) return <div className="ct-page"><p className="ct-empty">这个人不在了</p></div>;
   const added = data.kakao.has(id);
   const idKnown = idVisible(p, added);
@@ -487,16 +486,14 @@ function CardView({ data, id, onBack, onEdit, onNotice }: { data: Data; id: stri
   };
 
   const roleFill = async () => {
-    setRoleBusy(true);
+    setBusy(true);
     try {
       const { fillRole } = await import("@/lib/idol-people");
-      const role = await fillRole(id, char.name);
-      setRoleNow(role);
-      onNotice?.(`身份补好了：${role}`);
+      await fillRole(id, char.name);
     } catch (e) {
       onNotice?.(e instanceof Error ? e.message : "没补成");
     } finally {
-      setRoleBusy(false);
+      setBusy(false);
     }
   };
 
@@ -541,13 +538,6 @@ function CardView({ data, id, onBack, onEdit, onNotice }: { data: Data; id: stri
           <h1>{char.name}</h1>
           <p>{[roleNow, p.nationality, p.age ? `${p.age} 岁` : "", p.mbti].filter(Boolean).join(" · ") || "还没写身份"}</p>
         </div>
-        {!roleNow ? (
-          <div className="ct-actions" style={{ marginTop: 12 }}>
-            <button type="button" className="ct-glass-dark" disabled={roleBusy} onClick={() => void roleFill()}>
-              <Sparkles size={18} /><span>{roleBusy ? "在看戏…" : "让 AI 看戏补身份"}</span>
-            </button>
-          </div>
-        ) : null}
         <div className="ct-actions">
           <button type="button" className="ct-glass-dark" onClick={() => openChat()}><MessageCircle size={22} /><span>Kakao</span></button>
           <button type="button" className="ct-glass-dark" onClick={() => openChat("voice")}><Phone size={22} /><span>电话</span></button>
@@ -751,7 +741,12 @@ function EditView({ data, id, onDone, onDeleted, onNotice }: { data: Data; id: s
       <div className="ct-form">
         <Field label="名字"><input value={name} onChange={e => setName(e.target.value)} /></Field>
         <Field label="KakaoTalk ID"><input value={wid} onChange={e => setWid(e.target.value)} /></Field>
-        <Field label="身份"><input value={p.role} onChange={e => set("role", e.target.value)} placeholder="比如：VANTA 主唱 · 同公司前辈" /></Field>
+        <Field label="身份">
+          <div className="ct-field-flex">
+            <input value={p.role} onChange={e => set("role", e.target.value)} placeholder="比如：VANTA 主唱 · 同公司前辈" />
+            <button type="button" className="ct-mini-ai" disabled={roleBusy} onClick={() => void roleFill()}>{roleBusy ? "在看戏…" : "AI 看戏补"}</button>
+          </div>
+        </Field>
         <Field label="性别">
           <div className="ct-seg">
             <button type="button" className={p.gender === "男" ? "on" : ""} onClick={() => set("gender", "男")}>男</button>

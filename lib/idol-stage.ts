@@ -736,10 +736,14 @@ export function deleteStageScene(chapterIndex: number): void {
 
 /** 读档自愈：演完归档的戏，在场的人档案里没有这场的事就补一笔（戏里只用网名/游戏ID时记账会对不上，比如电竞线的网友局）。
  *  补的是这场的大总结；开场前后两小时内已有事件的不动。
- *  另外：今天的私下见面如果没被记账（名字没对上），把见面补进情缘线（recordMeet 自己按天去重）。 */
-export function healSceneEventGaps(): number {
+ *  另外：今天的私下见面如果没被记账（名字没对上），把见面补进情缘线（recordMeet 自己按天去重）。
+ *  注意：VN 存档是异步加载的，先确保加载完再读，不然会读到空戏单。 */
+export async function healSceneEventGaps(): Promise<number> {
   try {
-    const session = worldVnSession();
+    const { hydrateVnStorage, loadVnSessions } = await import("./vn-storage");
+    await hydrateVnStorage();
+    const session = loadVnSessions().find(s => s.characterId === WORLD_CHAR_ID);
+    if (!session) return 0;
     const all = loadScenes();
     if (!Object.keys(all).length) return 0;
     const profiles = loadProfiles();
@@ -748,11 +752,12 @@ export function healSceneEventGaps(): number {
     let n = 0;
     for (const ch of session.chapters) {
       const sc = all[ch.id];
-      if (!sc || (!sc.ended && !ch.archived) || sc.side || !sc.ids.length) continue;
+      if (!sc || sc.side) continue;
+      const others = [...new Set([...sc.ids, ...(sc.newFaces ?? [])])].filter(id => id !== WORLD_CHAR_ID);
+      if (!others.length) continue;
       const text = (sc.summary ?? "").trim();
-      const others = sc.ids.filter(id => id !== WORLD_CHAR_ID);
       // 今天的私下见面没被记账 → 把见面补进情缘线
-      if (text && dayKey(sc.startAt) === today && others.length <= 3 && !/演唱|场馆|舞台|路演|签售|直播|观众/.test(sc.place)) {
+      if (dayKey(sc.startAt) === today && others.length <= 3 && !/演唱|场馆|舞台|路演|签售|直播|观众/.test(sc.place)) {
         void import("./idol-romance-live").then(({ recordMeet }) => { for (const id of others) recordMeet(id); }).catch(() => undefined);
       }
       if (!text) continue;

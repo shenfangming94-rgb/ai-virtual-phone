@@ -1182,7 +1182,7 @@ export function DesktopShell({ initialThemeProfile, initialThemeAssets }: Deskto
       try { rankTick(idolNotify); } catch { /* 同上 */ }
       try { starroadTick(idolNotify); } catch { /* 同上 */ }
       try { rosterTick(); } catch { /* 名册结算出错不挡着用手机 */ }
-      try { healSceneEventGaps(); } catch { /* 补档案出错不挡着用手机 */ }
+      void healSceneEventGaps().catch(() => undefined);
       try { mainlineTick(); } catch { /* 主线排期出错不挡着用手机 */ }
       try { plotTick(); } catch { /* 剧情池出错不挡着用手机 */ }
       try { plotDateTick(); } catch { /* 同上 */ }

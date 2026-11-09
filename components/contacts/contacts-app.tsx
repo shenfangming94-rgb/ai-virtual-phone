@@ -485,18 +485,6 @@ function CardView({ data, id, onBack, onEdit, onNotice }: { data: Data; id: stri
     }
   };
 
-  const roleFill = async () => {
-    setBusy(true);
-    try {
-      const { fillRole } = await import("@/lib/idol-people");
-      await fillRole(id, char.name);
-    } catch (e) {
-      onNotice?.(e instanceof Error ? e.message : "没补成");
-    } finally {
-      setBusy(false);
-    }
-  };
-
   const revise = async () => {
     if (!direction.trim()) return;
     setBusy(true);
@@ -692,9 +680,22 @@ function EditView({ data, id, onDone, onDeleted, onNotice }: { data: Data; id: s
   const [confirmDel, setConfirmDel] = useState(false);
   const [heartAuto, setHeartAuto] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [roleBusy, setRoleBusy] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
   if (!char) return null;
   const set = <K extends keyof IdolProfile>(k: K, v: IdolProfile[K]) => setP(prev => ({ ...prev, [k]: v }));
+  const roleFill = async () => {
+    setRoleBusy(true);
+    try {
+      const { fillRole } = await import("@/lib/idol-people");
+      const role = await fillRole(char.id, name.trim() || char.name);
+      set("role", role);
+    } catch (e) {
+      onNotice?.(e instanceof Error ? e.message : "没补成");
+    } finally {
+      setRoleBusy(false);
+    }
+  };
   const lines = (s: string) => s.split("\n").map(x => x.trim()).filter(Boolean);
   const save = async () => {
     if (saving) return;

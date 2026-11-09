@@ -65,6 +65,8 @@ type State = {
   health?: { what: string; until: number };
   fame: number;
   planning?: number;
+  /** 新档现场：今天滚过骰子没有（世界日） */
+  sceneRollDay?: string;
 };
 
 const SETBACK_KINDS = ["人际矛盾", "被嫉妒", "被孤立", "被关系户抢位置或抢 part、抢机会", "被说靠家境进来、没实力", "被说过气、被拿来跟小时候比", "被黑粉骂", "被私生跟着"];
@@ -504,6 +506,80 @@ export function plannedStops(): { at: number; title: string }[] {
 
 /** 已经过去的计划时间（跳时间落地时，下一次排会把跳过的日子一起补上） */
 export function eventsPlannedUntil(): number { return load().plannedUntil; }
+
+// ── 新档现场（她 11-10 定的：旧发动机只把「现场」搬回新档，其余照旧停用）──
+
+let scenePlanning = false;
+
+/** 新档的现场调度：每天滚一次骰子（35% 左右冒一件）；上次现场四天内不排；避开命运红感叹号的地点 */
+export function newModeHappeningsTick(): void {
+  try { if (!kvGet("idol_roster_v1")) return; } catch { return; }
+  const career = loadCareer();
+  if (career.stage !== "trainee") return;
+  const now = Date.now();
+  const s = load();
+  const d = new Date(now);
+  const day = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  if (s.sceneRollDay === day) return;
+  s.sceneRollDay = day;
+  const upcoming = s.happenings.some(h => h.at > now - 2 * HOUR && !h.opened);
+  const last = s.happenings.length ? Math.max(...s.happenings.map(h => h.at)) : 0;
+  if (upcoming || now - last < 4 * DAY || Math.random() > 0.35) { save(s); return; }
+  save(s);
+  void planScene().catch(err => console.warn("[idol-events] 新档现场排期出错：", err));
+}
+
+/** 排一个现场：AI 只出 scene 一个对象，代码校验地点/时间/命运避让后挂到地图上 */
+async function planScene(): Promise<void> {
+  if (scenePlanning) return;
+  scenePlanning = true;
+  try {
+    const now = Date.now();
+    const card = loadTraineeCard();
+    const s = load();
+    const isoDay = (ms: number) => fmt(ms).slice(0, 10);
+    const activities = almanacBetween(isoDay(now), isoDay(now + 4 * DAY)).filter(i => i.kind === "world")
+      .map(i => { const pl = activityPlace(i); return `- ${i.date} ${i.title}${i.note ? `：${i.note}` : ""}${pl ? `（在${pl}）` : ""}`; });
+    const fatePlaces = new Set((await import("./idol-destiny").then(m => m.destinyMarks(now))).map(m => m.place));
+    const places = allScenePlaces().filter(x => !placeLocked(x) && !fatePlaces.has(x.key));
+    const user = [
+      `时间段：${fmt(now)} 到 ${fmt(now + 3 * DAY)}`,
+      `【她是谁】\n${card ? describeTrainee(card) : "一个想当爱豆的女生"}`,
+      careerPromptBlock(),
+      worldWeatherHint() ? `【此刻的天气，仅代表现在，不代表未来】${worldWeatherHint()}` : "",
+      `【地点名单】${places.map(x => x.key).join("、")}`,
+      activities.length ? `【日历上的圈内活动】\n${activities.join("\n")}` : "",
+      `【最近正在发生的事】\n${s.feed.slice(-5).map(f => `- ${f.text}`).join("\n") || "（还没有）"}`,
+    ].filter(Boolean).join("\n\n");
+    const res = await simpleLLMCall(chatConfig(), [
+      { role: "system", content: `给一出韩国娱乐圈练习生的戏排一个「现场」：世界上真的有在发生、可以产生后果推动剧情的事，她走到那儿就能撞上。只输出 JSON，不要别的字。
+规矩：
+- 写别人身上的事：圈内的人、别的团、staff、粉丝、路人、认识的人都行，多是公开场合、几个人在场，不一定是坏事，偶尔可以是私生这种她会被卷进去的麻烦。
+- 她不是当事人：不写她做了什么，不替她定表现、心情和结果。
+- 初雪由其他系统处理，不要排初雪；恋爱传闻由知情账管，不排成现场。
+- 可以从【日历上的圈内活动】长出来（活动前、当天、之后都行，地点不一定在活动现场），也可以跟日历无关。
+- place 照【地点名单】原样写一个，真实的地方名单里没有就挑它所在的区域，seed 里写真实的地方。
+- 时间写成 YYYY-MM-DD HH:mm，必须在给定的时间段里，挑她可能在的时间。
+- JSON：{"at":"","place":"","about":"世界视角一句话","seed":"她走进去时这件事正在发生的样子：谁、出了什么事、现在到哪一步，两三句，不写她怎么做，不定结局","from":"它从哪件日历活动长出来，没有就写空"}` },
+      { role: "user", content: user },
+    ], { temperature: 0.9, label: "新档现场调度" });
+    if (!res.content) throw new Error(res.error || "AI 没回");
+    const j = JSON.parse(res.content.match(/\{[\s\S]*\}/)?.[0] ?? "{}") as { at?: string; place?: string; about?: string; seed?: string; from?: string };
+    const at = parseAt(j.at);
+    const place = String(j.place ?? "").trim();
+    if (at == null || !j.seed || at < now + HOUR || at > now + 3 * DAY) return;
+    if (!allScenePlaces().some(x => x.key === place && !placeLocked(x))) return;
+    const { destinyMarks } = await import("./idol-destiny");
+    if (destinyMarks(at).some(m => m.place === place)) return;
+    const end = new Date(at); end.setHours(23, 59, 59, 999);
+    const fresh = load();
+    save({ ...fresh, happenings: [...fresh.happenings.filter(h => now - h.at < 60 * DAY), { id: uid("hap"), at, until: end.getTime(), place, about: String(j.about ?? ""), seed: String(j.seed), ...(j.from ? { from: String(j.from) } : {}) }] });
+  } catch (error) {
+    console.warn("[idol-events] 新档现场没排出来：", error);
+  } finally {
+    scenePlanning = false;
+  }
+}
 
 // ── 此刻地图上的淡粉「!」 ──
 

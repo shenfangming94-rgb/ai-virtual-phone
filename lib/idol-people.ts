@@ -670,6 +670,25 @@ export async function completeCard(p: IdolProfile, name: string, secretKind: Sec
   return { ...(await addPersonalDetails(lockedDraft, p)), secretKind };
 }
 
+/** 只有名字的人：让 AI 照戏里他的原文判断身份，只补身份这一栏（她 11-09 定的：不知道他啥情况，让 AI 看戏填） */
+export async function fillRole(charId: string, name: string): Promise<string> {
+  const p = getProfile(charId);
+  const { personSceneText } = await import("./idol-stage");
+  const sceneText = personSceneText(charId, name);
+  const known = [
+    sceneText ? `${name}在戏里的原文（他的台词、写他的旁白）：\n${sceneText}` : "",
+    p.events.length ? `和她之间的事：${p.events.map(e => e.text).join("；")}` : "",
+  ].filter(Boolean).join("\n");
+  const res = await simpleLLMCall(chatConfig(), [
+    { role: "system", content: "你是韩国娱乐圈模拟游戏的记录员。根据戏里已经发生的内容，判断这个人的身份，只输出一句身份（比如「同公司练习生」「弘大驻唱」「游戏里认识的网友」）。戏里没写清的就不编细节：不编战队名、不编具体职业，按最稳妥的说法写。不输出别的字。" },
+    { role: "user", content: `名字：${name}\n${known || "戏里还没他出场，写「认识的人」"}` },
+  ], { temperature: 0.5, label: "补身份" });
+  if (!res.content) throw new Error(res.error || "AI 没回");
+  const role = res.content.trim().split("\n")[0].slice(0, 40);
+  saveProfile({ ...getProfile(charId), role });
+  return role;
+}
+
 /** AI 捏好的卡 → 档案字段（秘密按骰子） */
 export function draftFields(d: CardDraft & { secretKind?: SecretKind }, prev?: Secret): Partial<IdolProfile> {
   const kind = d.secretKind ?? prev?.kind ?? "none";

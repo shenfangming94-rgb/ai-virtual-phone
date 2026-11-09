@@ -465,6 +465,8 @@ function CardView({ data, id, onBack, onEdit, onNotice }: { data: Data; id: stri
   const [busy, setBusy] = useState(false);
   const [peek, setPeek] = useState(false);
   const [romVer, setRomVer] = useState(0);
+  const [roleBusy, setRoleBusy] = useState(false);
+  const [roleNow, setRoleNow] = useState(p.role);
   if (!char) return <div className="ct-page"><p className="ct-empty">这个人不在了</p></div>;
   const added = data.kakao.has(id);
   const idKnown = idVisible(p, added);
@@ -481,6 +483,20 @@ function CardView({ data, id, onBack, onEdit, onNotice }: { data: Data; id: stri
     window.dispatchEvent(new CustomEvent("open-app", { detail: { appId: "chat", sessionId: session.id } }));
     if (call) {
       window.setTimeout(() => window.dispatchEvent(new CustomEvent("ai-call-trigger", { detail: { sessionId: session.id, type: call } })), 600);
+    }
+  };
+
+  const roleFill = async () => {
+    setRoleBusy(true);
+    try {
+      const { fillRole } = await import("@/lib/idol-people");
+      const role = await fillRole(id, char.name);
+      setRoleNow(role);
+      onNotice?.(`身份补好了：${role}`);
+    } catch (e) {
+      onNotice?.(e instanceof Error ? e.message : "没补成");
+    } finally {
+      setRoleBusy(false);
     }
   };
 
@@ -523,8 +539,15 @@ function CardView({ data, id, onBack, onEdit, onNotice }: { data: Data; id: stri
         <div className="ct-hero">
           <Avatar name={char.name} src={char.avatar} size={168} className="ct-hero-avatar" />
           <h1>{char.name}</h1>
-          <p>{[p.role, p.nationality, p.age ? `${p.age} 岁` : "", p.mbti].filter(Boolean).join(" · ") || "还没写身份"}</p>
+          <p>{[roleNow, p.nationality, p.age ? `${p.age} 岁` : "", p.mbti].filter(Boolean).join(" · ") || "还没写身份"}</p>
         </div>
+        {!roleNow ? (
+          <div className="ct-actions" style={{ marginTop: 12 }}>
+            <button type="button" className="ct-glass-dark" disabled={roleBusy} onClick={() => void roleFill()}>
+              <Sparkles size={18} /><span>{roleBusy ? "在看戏…" : "让 AI 看戏补身份"}</span>
+            </button>
+          </div>
+        ) : null}
         <div className="ct-actions">
           <button type="button" className="ct-glass-dark" onClick={() => openChat()}><MessageCircle size={22} /><span>Kakao</span></button>
           <button type="button" className="ct-glass-dark" onClick={() => openChat("voice")}><Phone size={22} /><span>电话</span></button>

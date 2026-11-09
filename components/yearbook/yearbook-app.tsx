@@ -520,11 +520,6 @@ function FatePage({ type, data }: { type: RouteType; data: YearbookData }) {
     <Section title="Bond" zh="羁绊">
       {history.length ? <table className="yb-records"><tbody>{history.map((event, i) => <tr key={`${event.at}-${i}`}><td>{shortDay(event.at)}</td><td>{event.type === "meet" ? "见面" : event.type === "call" ? "电话" : "KKT 聊天"}</td><td className="rank">+{event.d}</td></tr>)}</tbody></table> : <EmptyText>还没有羁绊记录。</EmptyText>}
     </Section>
-    <button type="button" className="yb-profile-jump" onClick={() => {
-      // 她定的：情缘卡放 PROFILE 入口，跳通讯录里他的人物页（外貌性格都在那儿）
-      try { sessionStorage.setItem("contacts-open-character", line.charId); } catch { /* 记不上也能开通讯录 */ }
-      window.dispatchEvent(new CustomEvent("open-app", { detail: { appId: "contacts" } }));
-    }}>PROFILE · 通讯录里看他</button>
     <div className="yb-end">— {ROUTE_EN[type]} · Love Record —</div>
   </div>;
 }

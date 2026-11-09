@@ -735,21 +735,28 @@ export function deleteStageScene(chapterIndex: number): void {
 }
 
 /** 读档自愈：演完归档的戏，在场的人档案里没有这场的事就补一笔（戏里只用网名/游戏ID时记账会对不上，比如电竞线的网友局）。
- *  补的是这场的大总结；开场前后两小时内已有事件的不动。 */
+ *  补的是这场的大总结；开场前后两小时内已有事件的不动。
+ *  另外：今天的私下见面如果没被记账（名字没对上），把见面补进情缘线（recordMeet 自己按天去重）。 */
 export function healSceneEventGaps(): number {
   try {
     const session = worldVnSession();
     const all = loadScenes();
     if (!Object.keys(all).length) return 0;
     const profiles = loadProfiles();
+    const dayKey = (ms: number) => { const d = new Date(ms); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; };
+    const today = dayKey(Date.now());
     let n = 0;
     for (const ch of session.chapters) {
       const sc = all[ch.id];
       if (!sc || (!sc.ended && !ch.archived) || sc.side || !sc.ids.length) continue;
       const text = (sc.summary ?? "").trim();
+      const others = sc.ids.filter(id => id !== WORLD_CHAR_ID);
+      // 今天的私下见面没被记账 → 把见面补进情缘线
+      if (text && dayKey(sc.startAt) === today && others.length <= 3 && !/演唱|场馆|舞台|路演|签售|直播|观众/.test(sc.place)) {
+        void import("./idol-romance-live").then(({ recordMeet }) => { for (const id of others) recordMeet(id); }).catch(() => undefined);
+      }
       if (!text) continue;
-      for (const id of sc.ids) {
-        if (id === WORLD_CHAR_ID) continue;
+      for (const id of others) {
         const p = profiles[id];
         if (!p?.met) continue;
         if (p.events.some(e => Math.abs(e.at - sc.startAt) < 2 * 60 * 60e3)) continue;

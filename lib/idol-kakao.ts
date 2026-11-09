@@ -408,7 +408,9 @@ export async function ensureTraineeGroup(present: Character[], notify?: (msg: st
 
 /** 公司新排的日程（主线大事等）：室长在练习生群里自然说一句（AI 写），不发「安排通知」盒子 */
 export function queueTeacherScheduleNotice(nodes: CareerNode[]): void {
-  if (!nodes.length) return;
+  // 她 11-06 定：室长删日常群通知（周评、补考、约谈这类例行日程不进群），只留月考、大事这种值得在群里说的
+  const keep = nodes.filter(n => !["weekly", "makeup", "talk", "homework", "first_day"].includes(n.kind));
+  if (!keep.length) return;
   void (async () => {
     try {
       const s = load();
@@ -416,7 +418,7 @@ export function queueTeacherScheduleNotice(nodes: CareerNode[]): void {
       const group = s.groupId ? loadChatSessions().find(x => x.id === s.groupId && x.isGroup) : undefined;
       if (!teacher || !group) return;
       const when = (ms: number) => new Date(ms).toLocaleString("zh-CN", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit", hour12: false });
-      const lines = nodes.map(n => `「${n.title}」：${when(n.dueAt)}，${n.place || "公司"}`).join("；");
+      const lines = keep.map(n => `「${n.title}」：${when(n.dueAt)}，${n.place || "公司"}`).join("；");
       const res = await simpleLLMCall(chatConfig(), [
         { role: "system", content: `你是${teacher.name}。${teacher.persona}${idolLanguageHint([{ id: teacher.id, name: teacher.name }])}\n\n公司的练习生日程里新安排了这些：${lines}。你在练习生 KakaoTalk 群里自然地说一句，像平时通知日程那样，不用逐条念，一两句带过，写清楚时间地点。日期照抄，不要说今天、明天、后天。${KAKAO_BILINGUAL_RULE}` },
         { role: "user", content: "发消息。" },

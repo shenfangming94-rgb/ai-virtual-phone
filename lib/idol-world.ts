@@ -374,7 +374,7 @@ function addFaces(host: SceneHost, faces: SceneTags["newFaces"], introduction: s
       ...(pending?.age && !f.facts?.age ? { age: pending.age } : {}),
     };
     let role = f.role || pending?.role || "";
-    if (rosterNames && !rosterNames.has(f.name) && /同期/.test(role)) role = "公司里的人";
+    if (rosterNames && !rosterNames.has(f.name) && /同期|练习生/.test(role)) role = "公司里的人";
     const char = createPerson(f.name, { ...emptyProfile(""), layer: "background", role, ...facts, sceneFacts: facts, introducedIn: introduction.slice(0, 12000), met: true, metAt: { at: Date.now(), place: meta.place } }, null, genKakaoId());
     ids.push(char.id);
     meta.newFaces.push(char.id);

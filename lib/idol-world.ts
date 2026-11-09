@@ -207,6 +207,7 @@ export function worldPromptFor(meta: SceneMeta | null, fallbackPlace: string, pa
     `【她是谁】\n${whoIsShe()}\n${kakaoPromptLine()}`,
     careerPromptBlock(),
     rosterPromptForScenes(),
+    `【新面孔的方向】世界里会有这六类人出现在她的故事里：男练习生、地下音乐圈的人（驻唱/rapper/乐队）、电竞选手、爱豆、富二代、学生。介绍新面孔时不用都往这上面靠，普通路人占多数；但时机、地点、场合自然对得上的时候，可以让新面孔是其中一类，别总是普通人。`,
     branchSceneHint(),
     publicKnowledgeBlock(),
     eventsPromptBlock(),

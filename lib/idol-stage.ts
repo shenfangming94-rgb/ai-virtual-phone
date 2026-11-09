@@ -21,6 +21,7 @@ import { resolveUserIdentity } from "./settings-storage";
 import { addVnScene, deleteVnScene, loadVnScenes } from "./vn-asset-storage";
 import { getThemeAssetMap } from "./theme-storage";
 import { loadAllCharacters } from "./character-storage";
+import { loadProfiles, saveProfile } from "./idol-people";
 import { classHappeningNow, markClassAttended, type Subject as StarSubject } from "./idol-starroad";
 import { CLASS_TEXT_KEYS, CLASS_TEXTS, pickClassText, lastClassTextId, saveClassTextId } from "./idol-class-texts";
 import { formatClassGain, settlePlayerClass } from "./idol-roster-live";
@@ -391,7 +392,14 @@ export function startStageScene(opts: { placeKey: string; placeName?: string; me
     else if (!opts.nodeId) {
       // 情缘：出道危机「在哪儿碰见他」，她下一次随便去哪都接进来
       const beat = romanceSceneBeat(place);
-      if (beat) { premise = premise ? `${premise}\n${beat.premise}` : beat.premise; plotAuto = true; if (!ids.includes(beat.charId)) ids.push(beat.charId); }
+      if (beat) {
+        premise = premise ? `${premise}\n${beat.premise}` : beat.premise;
+        plotAuto = true;
+        if (!ids.includes(beat.charId)) ids.push(beat.charId);
+        // 戏里可能只用网名/游戏ID互相叫：出场记号必须写他的真名，不许把他写成[新人]另造一张卡
+        const his = loadAllCharacters().find(c => c.id === beat.charId)?.name;
+        if (his) premise = `${premise}\n【情缘出场】这一场他会出场，他叫${his}。戏里你们可以只用网名、游戏ID互相称呼，但出场记号必须写[出场:${his}]，不许把他写成[新人]。`;
+      }
     }
   } catch { /* 剧情池出错不影响开场景 */ }
   const scene: StageScene = {
@@ -669,8 +677,8 @@ export async function closeStageScene(chapterIndex: number): Promise<SceneCloseR
   if (!host) throw new Error("找不到这一场");
   const res = await closeSceneWith(host);
   const sc = getStageScene(chId!);
-  // 记下结束时间：判旷课要看戏有没有跨过上课时段
-  if (sc) saveStageScene({ ...sc, endedAt: Date.now(), ...(sc.side ? { sideCounted: true } : {}) });
+  // 记下结束时间和大总结：判旷课要看戏有没有跨过上课时段，档案补事件要用总结
+  if (sc) saveStageScene({ ...sc, ended: true, endedAt: Date.now(), summary: res.summary, ...(sc.side ? { sideCounted: true } : {}) });
   archiveChapter(worldVnSession().id, chapterIndex);
   // 情缘：这场后面要接一场（失意之夜在宿舍、掉马他视角番外）
   let next: string | null = null;
@@ -724,6 +732,33 @@ export function deleteStageScene(chapterIndex: number): void {
   const all = loadScenes();
   delete all[chId];
   kvSet(SCENES_KEY, JSON.stringify(all));
+}
+
+/** 读档自愈：演完归档的戏，在场的人档案里没有这场的事就补一笔（戏里只用网名/游戏ID时记账会对不上，比如电竞线的网友局）。
+ *  补的是这场的大总结；开场前后两小时内已有事件的不动。 */
+export function healSceneEventGaps(): number {
+  try {
+    const session = worldVnSession();
+    const all = loadScenes();
+    if (!Object.keys(all).length) return 0;
+    const profiles = loadProfiles();
+    let n = 0;
+    for (const ch of session.chapters) {
+      const sc = all[ch.id];
+      if (!sc || (!sc.ended && !ch.archived) || sc.side || !sc.ids.length) continue;
+      const text = (sc.summary ?? "").trim();
+      if (!text) continue;
+      for (const id of sc.ids) {
+        if (id === WORLD_CHAR_ID) continue;
+        const p = profiles[id];
+        if (!p?.met) continue;
+        if (p.events.some(e => Math.abs(e.at - sc.startAt) < 2 * 60 * 60e3)) continue;
+        saveProfile({ ...p, events: [...p.events, { id: `heal_${ch.id}`, at: sc.startAt, place: sc.place, text }].slice(-30) });
+        n++;
+      }
+    }
+    return n;
+  } catch { return 0; }
 }
 
 /** 还没结束的那几场（最近的在前） */

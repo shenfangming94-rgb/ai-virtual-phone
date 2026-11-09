@@ -45,7 +45,7 @@ import { yearlyTick } from "@/lib/idol-yearly";
 import { syncIdolWorldBook } from "@/lib/idol-worldbook";
 import { ensureSingleIdentity } from "@/lib/trainee-card";
 import { APP_LOOK, markNoteSeen, noteFromNotice, type LockNote } from "@/lib/idol-notes";
-import { requestStageForNode } from "@/lib/idol-stage";
+import { requestStageForNode, healSceneEventGaps } from "@/lib/idol-stage";
 import { isChatStorageHydrated } from "@/lib/chat-storage";
 import { LockScreen } from "./lock-screen";
 import { TIME_JUMP_EVENT } from "@/lib/idol-time-jump";
@@ -1182,6 +1182,7 @@ export function DesktopShell({ initialThemeProfile, initialThemeAssets }: Deskto
       try { rankTick(idolNotify); } catch { /* 同上 */ }
       try { starroadTick(idolNotify); } catch { /* 同上 */ }
       try { rosterTick(); } catch { /* 名册结算出错不挡着用手机 */ }
+      try { healSceneEventGaps(); } catch { /* 补档案出错不挡着用手机 */ }
       try { mainlineTick(); } catch { /* 主线排期出错不挡着用手机 */ }
       try { plotTick(); } catch { /* 剧情池出错不挡着用手机 */ }
       try { plotDateTick(); } catch { /* 同上 */ }

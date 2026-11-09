@@ -228,6 +228,7 @@ export function worldPromptFor(meta: SceneMeta | null, fallbackPlace: string, pa
 - 结果跟着她写的走，她认真做了的事不能硬说她没做好；挫折要有剧情里的具体原因。
 - 新出场的人第一次见面就是第一次见面：不许编「之前见过」「昨天」这类没发生过的旧事。
 - 「最近正在发生的事」和「和她之间的事」是谁的记在谁头上，不许张冠李戴。
+- 在场的人跟她以前的事只按他的【和她之间的事】写；这场戏前面已经写错的地方，让他当场纠正，不许继续编。
 - 写到下一个需要她反应的地方就停。${meta?.premise ? "\n- 「开头」是这一场要发生的事的大方向，不是要一次写完的：一段一段来，每段停在她能反应的地方，别替她把整场走完。" : ""}`,
     `【记号】回复最后另起一行写（她看不到，没有就不写）：
 - 名单里没有、但这次出场并且有名字的人：[新人:名字|一句话身份|已知资料JSON]。已知资料JSON只写本段已明确的gender、age、nationality、birthday、mbti、heightCm、appearance、isIdol、kinship，未明确的字段不填；没有资料可用原来的两字段格式。
@@ -270,7 +271,7 @@ function mightMeetBlock(presentIds: string[], place: string, avoid: string[] = [
   return [
     "【可能碰上的人】这里有谁交给你定：按现在几点、这是什么地方、她的日程，以及每个人的身份和习惯，判断这会儿谁合理会在这里。可以是下面的人，也可以是没名字的路人或新面孔，也可以没人。不要为了凑人硬塞。",
     detail.length ? detail.join("\n") : "（她还谁都不认识）",
-    rest.length ? `她还认识：${rest.join("、")}` : "",
+    rest.length ? `她还认识：${rest.join("、")}。这些只有名字的人，出场只演当场发生的事，跟她的旧事一句都不许提。` : "",
   ].filter(Boolean).join("\n");
 }
 

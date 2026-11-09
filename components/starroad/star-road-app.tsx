@@ -109,6 +109,7 @@ export function StarRoadApp({ onClose, onNotice }: { onClose: () => void; onNoti
 }
 
 function GradeSheet({ g, onClose, onNotice }: { g: GradeView; onClose: () => void; onNotice?: Notice }) {
+  const [picking, setPicking] = useState(false);
   const done = practicedToday();
   const weekFull = practicedThisWeek() >= 5;
   const next = g.grade === "A" ? null : ["F", "D", "C", "B", "A"][["F", "D", "C", "B", "A"].indexOf(g.grade) + 1];
@@ -116,6 +117,13 @@ function GradeSheet({ g, onClose, onNotice }: { g: GradeView; onClose: () => voi
   const line = g.grade === "A" ? "已经是 A 了，保持住"
     : g.left > 0 ? `离 ${next} 还差 ${g.left} 节`
     : g.waitDays > 0 ? `攒够了，再过 ${g.waitDays} 天升 ${next}` : `马上升 ${next}`;
+  if (picking) return (
+    <div className="sr-mask" onClick={onClose}>
+      <div className="sr-sheet" onClick={e => e.stopPropagation()}>
+        <PracticePick g={g} onBack={() => setPicking(false)} onDone={() => onClose()} onNotice={onNotice} />
+      </div>
+    </div>
+  );
   return (
     <div className="sr-mask" onClick={onClose}>
       <div className="sr-sheet" onClick={e => e.stopPropagation()}>
@@ -124,14 +132,51 @@ function GradeSheet({ g, onClose, onNotice }: { g: GradeView; onClose: () => voi
         <div className="sr-sh-line">{line}</div>
         {g.last ? <div className="sr-sh-last">{ym(g.last.at)} {g.last.from} → {g.last.to}</div> : null}
         <div className="sr-sh-tip">上课一节、加练一次都算一节。</div>
-        <button type="button" className="sr-sh-btn" disabled={done || weekFull} onClick={() => {
-          const n = addPractice(g.id);
-          if (!n) { onNotice?.(weekFull ? "这周练满 5 节了" : "今天已经加练过了"); return; }
-          const d = new Date(n.dueAt);
-          onNotice?.(`记进提醒事项了：${d.getDate() === new Date().getDate() ? "今晚" : "明晚"} 21:00 加练${g.zh}`);
-          onClose();
-        }}>{done ? "今天加练过了" : weekFull ? "这周练满了" : "加练"}</button>
+        <button type="button" className="sr-sh-btn" disabled={weekFull} onClick={() => setPicking(true)}>{weekFull ? "这周练满了" : "加练"}</button>
       </div>
+    </div>
+  );
+}
+
+/** 加练时间她自己挑：今晚/明晚 8 点快捷项 + 自定义日期时间 */
+function PracticePick({ g, onBack, onDone, onNotice }: { g: GradeView; onBack: () => void; onDone: () => void; onNotice?: Notice }) {
+  const now = new Date();
+  const at8 = (day: Date) => { const t = new Date(day); t.setHours(20, 0, 0, 0); return t; };
+  const tonight = at8(now);
+  const tom = at8(new Date(now.getTime() + DAY));
+  const tonightOk = tonight.getTime() > now.getTime() + 30 * 60e3;
+  const [date, setDate] = useState(() => {
+    const d = tonightOk ? now : new Date(now.getTime() + DAY);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  });
+  const [time, setTime] = useState("20:00");
+  const fmt = (t: number) => `${new Date(t).getMonth() + 1}月${new Date(t).getDate()}日 ${String(new Date(t).getHours()).padStart(2, "0")}:${String(new Date(t).getMinutes()).padStart(2, "0")}`;
+  const pick = (t: number) => {
+    const n = addPractice(g.id, t);
+    if (!n) { onNotice?.(practicedThisWeek() >= 5 ? "这周练满 5 节了" : "那天已经加练过了"); return; }
+    onNotice?.(`记进提醒事项了：${fmt(n.dueAt)} 加练${g.zh}`);
+    onDone();
+  };
+  const custom = () => {
+    const t = new Date(`${date}T${time}`);
+    if (Number.isNaN(t.getTime())) { onNotice?.("时间没选对"); return; }
+    pick(t.getTime());
+  };
+  return (
+    <div>
+      <div className="sr-sh-head"><span className="sr-sh-en">PRACTICE</span><span className="sr-sh-zh">{g.zh}加练</span><span className="sr-sh-g">时间</span></div>
+      <div className="sr-sh-now">练完去练习室打勾，去了才算</div>
+      <div className="sr-sh-quick">
+        <button type="button" className="sr-sh-chip" disabled={!tonightOk || practicedToday(tonight.getTime())} onClick={() => pick(tonight.getTime())}>今晚 {fmt(tonight.getTime()).slice(-5)}</button>
+        <button type="button" className="sr-sh-chip" disabled={practicedToday(tom.getTime())} onClick={() => pick(tom.getTime())}>明晚 {fmt(tom.getTime()).slice(-5)}</button>
+      </div>
+      <div className="sr-sh-tip">或者自己挑时间：</div>
+      <div className="sr-sh-quick">
+        <input type="date" className="sr-sh-input" value={date} onChange={e => setDate(e.target.value)} />
+        <input type="time" className="sr-sh-input" value={time} onChange={e => setTime(e.target.value)} />
+      </div>
+      <button type="button" className="sr-sh-btn" onClick={custom}>就这个时间</button>
+      <button type="button" className="sr-sh-back" onClick={onBack}>返回</button>
     </div>
   );
 }

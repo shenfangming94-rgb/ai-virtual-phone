@@ -128,7 +128,7 @@ function fireBranchOpening(rec: BranchRecord, type: BranchType, char?: Character
   const history = rec.history.slice(-3).map(h => h.text).join("；");
   const o = OPENING[type](name, history);
   void import("./idol-reminders").then(m => {
-    m.queueMessage(rec.charId, `关于${name}的「${BRANCH_LABEL[type]}」支线。按你的性格和跟她的关系，在 KakaoTalk 上自然地聊起或约她：${o.premise} 别念设定、别硬塞话题；她回应了你再往下接。如果约了具体时间地点，按正常邀约发，她没答应就当没约成。`, 5 * 60e3);
+    m.queueMessage(rec.charId, `关于${name}的「${BRANCH_LABEL[type]}」支线。按你的性格和跟她的关系，在 KakaoTalk 上自然地聊起或约她：${o.premise} 别念设定、别硬塞话题；她回应了你再往下接。如果约了具体时间地点，按正常邀约发，她没答应就当没约成。`, 5 * 60e3, { requireFriend: true });
   }).catch(() => undefined);
 }
 

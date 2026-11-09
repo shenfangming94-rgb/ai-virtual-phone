@@ -55,7 +55,7 @@ export function romanceTick(): void {
       from: char.name, fromId: char.id, inviterIds: [char.id], participantIds: [char.id], companyId: career.companyId,
       premise: `${char.name}根据自己已知的信息，想私下了解情况。只沿用恋情知情账中的事实、性格和公司规则，不默认其他人知情，不预设处罚。`,
     } : undefined;
-    queueMessage(char.id, `你新知道了一点情况，但只限你自己的知情记录。${romanceActorHint(char.id)}\n你决定${action === "ask" ? "私下询问了解" : action === "remind" ? "私下提醒" : "邀请她私下谈谈"}：${plan.intent.trim().slice(0, 600)}。理由：${result}。按你的性格自然说，不把未确认的事说成确定恋情，不假定她答应或已经谈过，不新增处罚或传播。${node ? "" : "本轮只是私下沟通，不创建面谈事项或另写新增邀约标记。"}`, 0, { strictPersona: true, node, romanceId: known.id, dedupeKey: `romance:${known.id}` });
+    queueMessage(char.id, `你新知道了一点情况，但只限你自己的知情记录。${romanceActorHint(char.id)}\n你决定${action === "ask" ? "私下询问了解" : action === "remind" ? "私下提醒" : "邀请她私下谈谈"}：${plan.intent.trim().slice(0, 600)}。理由：${result}。按你的性格自然说，不把未确认的事说成确定恋情，不假定她答应或已经谈过，不新增处罚或传播。${node ? "" : "本轮只是私下沟通，不创建面谈事项或另写新增邀约标记。"}`, 0, { strictPersona: true, requireFriend: true, node, romanceId: known.id, dedupeKey: `romance:${known.id}` });
     setRomanceReaction(known.id, { action, result: `${result}；准备私下沟通${node ? `，邀请${new Date(at).toLocaleString("sv-SE")}在${node.place}谈谈` : ""}`, status: "queued", at: Date.now() });
   }).catch(() => {
     if (loadRomance().knowledge.some(k => k.id === known.id && k.quote === known.quote && !k.reaction)) romancePlanFailed(known.id);

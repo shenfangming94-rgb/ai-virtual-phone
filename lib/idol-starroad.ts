@@ -304,13 +304,16 @@ function bumpPracticeCount(now = Date.now()): number {
   return list.find(x => x.week === key)?.count ?? 0;
 }
 
-/** 星路点「加练」：进提醒事项「我自己记的」，今晚八点（过了就明晚）打勾写一句就算。扣点在她真的练了那天（她 11-08 改的：去了才扣） */
-export function addPractice(subject: Subject): CareerNode | null {
+/** 星路点「加练」：进提醒事项「我自己记的」，到时候去打勾写一句就算。她定的：时间自己挑（at 不传就今晚八点，过了就明晚），扣点在她真的练了那天（去了才扣） */
+export function addPractice(subject: Subject, at?: number): CareerNode | null {
   const s = ensure();
   if (!s) return null;
   const now = Date.now();
-  const d = new Date(now); d.setHours(20, 0, 0, 0);
-  if (d.getTime() < now + 30 * MIN) d.setDate(d.getDate() + 1);
+  const d = at && at > now + 30 * MIN ? new Date(at) : (() => {
+    const t = new Date(now); t.setHours(20, 0, 0, 0);
+    if (t.getTime() < now + 30 * MIN) t.setDate(t.getDate() + 1);
+    return t;
+  })();
   if (practicedToday(d.getTime())) return null;
   if (practicedThisWeek() >= 5) return null; // 她定的肝度：每周最多 5 节加练
   const sub = subjectOf(subject)!;

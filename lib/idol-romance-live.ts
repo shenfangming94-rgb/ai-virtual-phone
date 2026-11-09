@@ -152,7 +152,7 @@ function scheduleRomanceNode(line: LineState, nodeKey: string, title: string, pl
   saveCareer({ ...career, nodes: [...career.nodes, node].sort((a, b) => a.dueAt - b.dueAt) });
   if (invite) {
     // 他发 KakaoTalk 约她（不说破这一场会发生什么，只按他的性格约）；她接了才进日历
-    void import("./idol-reminders").then(m => m.queueMessage(line.charId, `你想约她出来：${premise}。按你的性格自然地约，只说要去哪、做什么的由头，不剧透这一场会发生什么。`, (10 + Math.random() * 50) * 60e3, { node, dedupeKey: `romance_invite_${node.id}` })).catch(() => undefined);
+    void import("./idol-reminders").then(m => m.queueMessage(line.charId, `你想约她出来：${premise}。按你的性格自然地约，只说要去哪、做什么的由头，不剧透这一场会发生什么。`, (10 + Math.random() * 50) * 60e3, { node, reachAny: true, dedupeKey: `romance_invite_${node.id}` })).catch(() => undefined);
   } else {
     addToCalendar(node);
   }

@@ -42,7 +42,7 @@ const DAY = 24 * HOUR;
 /** 过了开始时间多久还没动就算缺席 */
 export const ABSENT_AFTER = 2 * HOUR;
 
-type Outbox = { romanceId?: string; id: string; charId: string; instruction: string; at: number; node?: CareerNode; strictPersona?: boolean; important?: boolean; birthdayDate?: string; requireFriend?: boolean; attempts?: number; paused?: boolean; dedupeKey?: string; delivered?: { sessionId: string; messageId: string } };
+type Outbox = { romanceId?: string; id: string; charId: string; instruction: string; at: number; node?: CareerNode; strictPersona?: boolean; important?: boolean; birthdayDate?: string; requireFriend?: boolean; /** 情缘线这种：故事里他已经拿到她的号码，不用先加好友 */ reachAny?: boolean; attempts?: number; paused?: boolean; dedupeKey?: string; delivered?: { sessionId: string; messageId: string } };
 type State = { outbox: Outbox[]; absences: number; sentKeys?: string[] };
 
 function load(): State {
@@ -239,7 +239,7 @@ function chatConfig() {
   return config;
 }
 
-export function queueMessage(charId: string, instruction: string, delay: number, options: Pick<Outbox, "node" | "strictPersona" | "important" | "birthdayDate" | "requireFriend" | "dedupeKey" | "romanceId"> = {}) {
+export function queueMessage(charId: string, instruction: string, delay: number, options: Pick<Outbox, "node" | "strictPersona" | "important" | "birthdayDate" | "requireFriend" | "reachAny" | "dedupeKey" | "romanceId"> = {}) {
   const s = load();
   if (options.dedupeKey && (s.sentKeys?.includes(options.dedupeKey) || s.outbox.some(o => o.dedupeKey === options.dedupeKey))) return;
   save({ ...s, outbox: [...s.outbox, { id: uid("out"), charId, instruction, at: Date.now() + delay, ...options }] });
@@ -252,13 +252,17 @@ export function retryNotice(id: string): void {
   const s = load(); save({ ...s, outbox: s.outbox.map(o => o.id === id ? { ...o, paused: false, attempts: 0, at: Date.now() } : o) });
 }
 
-/** 让某人在 KakaoTalk 私聊给她发消息（没加过就先加上，比如老师）。
+/** 让某人在 KakaoTalk 私聊给她发消息。她定的：不是 KKT 好友就不能私聊她（老师、家人、戏里当面加过的除外；情缘线故事里他已拿到她的号码算 reachAny）。
  *  走正常的 KakaoTalk 聊天引擎（她的预设、世界书、正则、聊天记录都在），为什么来找她放进 buildIdolChatHint 悄悄告诉他；
  *  聊天引擎失败就退回简单调用 */
-async function sendAs(charId: string, instruction: string, strictPersona = false): Promise<ChatMessage | null> {
+async function sendAs(charId: string, instruction: string, strictPersona = false, reachAny = false): Promise<ChatMessage | null> {
   const char = loadCharacters().find(c => c.id === charId);
   if (!char) return null;
-  if (!loadChatContacts().some(c => c.characterId === charId)) addChatContact(charId);
+  const isFriend = loadChatContacts().some(c => c.characterId === charId);
+  const family = Boolean(getProfile(charId)?.familyMemberId);
+  const teacher = teacherOf()?.id === charId;
+  if (!isFriend && !reachAny && !teacher && !family) return null;
+  if (!isFriend) addChatContact(charId);
   const session = createOrGetSession(charId);
   const before = loadChatMessages(session.id).length;
   try {
@@ -353,7 +357,15 @@ export function reminderTick(notify: (msg: string) => void): void {
   for (const n of absent) { notify(`❗ ${n.title} 没去，算缺席了`); onAbsent(n); }
 
   const s = load();
-  const queued = s.outbox.find(o => !o.paused && o.at <= now && (!o.requireFriend || loadChatContacts().some(c => c.characterId === o.charId)));
+  // 她定的：不是 KKT 好友（或老师/家人/情缘线拿到号码的）不能私聊她；一直够不着的消息过两天自动作废
+  const canReach = (o: Outbox): boolean => {
+    if (o.reachAny) return true;
+    if (loadChatContacts().some(c => c.characterId === o.charId)) return true;
+    return teacherOf()?.id === o.charId || Boolean(getProfile(o.charId)?.familyMemberId);
+  };
+  const stale = s.outbox.filter(o => !o.paused && o.at < now - 48 * HOUR && !canReach(o));
+  if (stale.length) { s.outbox = s.outbox.filter(o => !stale.includes(o)); save(s); }
+  const queued = s.outbox.find(o => !o.paused && o.at <= now && canReach(o));
   if (!queued) return;
   const due = { ...queued };
   if (due.romanceId && loadRomance().knowledge.find(k => k.id === due.romanceId)?.supersededBy && !due.delivered) {
@@ -372,7 +384,7 @@ export function reminderTick(notify: (msg: string) => void): void {
   const existing = due.node ? loadCareer().nodes.find(n => n.id === due.node!.id) : undefined;
   const instruction = `${due.instruction}${due.node ? `\n本轮对应事项编号${due.node.id}，标题「${due.node.title}」，${noticeTime(due.node.dueAt)}，地点${due.node.place}。${existing && existing.status !== "invite" ? `她已处理此邀请，当前状态${existing.status}，不要重复询问。` : "自然说出邀请的具体时间地点并问她愿不愿意，不替她答应。"}这条邀请由系统随消息发布，不另写创建邀约标记。` : ""}`;
   const delivered = due.delivered ? loadChatMessages(due.delivered.sessionId).find(m => m.id === due.delivered!.messageId) : undefined;
-  const sending = delivered ? Promise.resolve(delivered) : sendAs(due.charId, instruction, Boolean(due.strictPersona));
+  const sending = delivered ? Promise.resolve(delivered) : sendAs(due.charId, instruction, Boolean(due.strictPersona), Boolean(due.reachAny));
   void sending
     .then(first => {
       if (!first) throw new Error("消息未送达");

@@ -148,7 +148,7 @@ function scheduleInvitePlot(title: string, place: string, premise: string, at: n
     replyBy: Math.max(safe - 3 * 3600e3, Date.now() + 3600e3),
   };
   saveCareer({ ...career, nodes: [...career.nodes, node].sort((a, b) => a.dueAt - b.dueAt) });
-  void import("./idol-reminders").then(m => m.queueMessage(from.id, ask, (20 + Math.random() * 60) * 60e3, { node, dedupeKey: `plot_invite_${node.id}` })).catch(() => undefined);
+  void import("./idol-reminders").then(m => m.queueMessage(from.id, ask, (20 + Math.random() * 60) * 60e3, { node, requireFriend: true, dedupeKey: `plot_invite_${node.id}` })).catch(() => undefined);
   return node;
 }
 
@@ -627,7 +627,7 @@ export const PLOTS: PlotDef[] = [
         const career = loadCareer();
         const node: CareerNode = { id: uid("plot"), kind: "date", title: "同期私下聚会", place: "江南 咖啡店", premise, dueAt: at.getTime(), status: "invite", companyId: career.companyId, from: host.name, fromId: host.charId, occasion: "plot", replyBy: at.getTime() - 3 * 3600e3 };
         saveCareer({ ...career, nodes: [...career.nodes, node].sort((a, b) => a.dueAt - b.dueAt) });
-        void import("./idol-reminders").then(m => m.queueMessage(host.charId!, `你们几个关系好的同期（${circle}）后天晚上七点在江南的咖啡店私下聚一下，你想叫上她。按你的性格在 KakaoTalk 上约她。`, (20 + Math.random() * 60) * 60e3, { node, dedupeKey: `plot_gather_${node.id}` })).catch(() => undefined);
+        void import("./idol-reminders").then(m => m.queueMessage(host.charId!, `你们几个关系好的同期（${circle}）后天晚上七点在江南的咖啡店私下聚一下，你想叫上她。按你的性格在 KakaoTalk 上约她。`, (20 + Math.random() * 60) * 60e3, { node, requireFriend: true, dedupeKey: `plot_gather_${node.id}` })).catch(() => undefined);
         return { premise, node };
       }
       const all = load();

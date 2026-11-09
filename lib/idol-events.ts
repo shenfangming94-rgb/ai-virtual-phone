@@ -122,7 +122,9 @@ export function newModeSickTick(notify?: (m: string) => void): void {
   kvSet(NEWMODE_SICK_KEY, JSON.stringify({ ...st, lastAt: now }));
   addWorldFeed("她病了，休息了几天。", now);
   const roommates = (loadCareer().roommates ?? []).map(id => loadCharacters().find(c => c.id === id)).filter((c): c is Character => Boolean(c));
-  const rm = roommates[Math.floor(Math.random() * roommates.length)];
+  // 她定的：不是 KKT 好友不能私聊她——室友没加好友就只在世界记录里记一笔
+  const friends = new Set(loadChatContacts().map(c => c.characterId));
+  const rm = roommates.filter(r => friends.has(r.id))[Math.floor(Math.random() * roommates.filter(r => friends.has(r.id)).length)];
   if (rm) {
     void import("./idol-reminders").then(m => {
       m.queueMessage(rm.id, `她好像生病了，训练和日常都蔫蔫的。按你的性格和跟她的关系，在 KakaoTalk 上关心她一下，问问她怎么样、需不需要什么，别催她训练、别责备她没照顾好自己。`, 10 * 60e3);

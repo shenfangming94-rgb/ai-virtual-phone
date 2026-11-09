@@ -59,6 +59,11 @@
 .sr-sh-tip { margin-top: 10px; font: 400 11px "Source Han Serif CN VF", "Noto Serif SC", serif; color: #999; line-height: 1.6; }
 .sr-sh-btn { margin-top: 16px; width: 100%; height: 42px; border-radius: 21px !important; background: #1c1c1e !important; color: #f7f7f6 !important; font: 600 14px "Source Han Serif CN VF", "Noto Serif SC", serif !important; letter-spacing: .2em; }
 .sr-sh-btn:disabled { background: #d6d6d4 !important; color: #888 !important; }
+.sr-sh-quick { margin-top: 12px; display: flex; gap: 8px; }
+.sr-sh-chip { flex: 1; height: 38px; border-radius: 19px !important; background: #fff !important; border: 1px solid var(--sr-ink) !important; color: var(--sr-ink) !important; font: 500 13px "Source Han Serif CN VF", "Noto Serif SC", serif !important; letter-spacing: .06em; }
+.sr-sh-chip:disabled { border-color: #ccc !important; color: #aaa !important; background: #f4f4f2 !important; }
+.sr-sh-input { flex: 1; height: 38px; padding: 0 10px; border: 1px solid var(--sr-ink); border-radius: 19px; background: #fff; font: 500 13px "Source Han Serif CN VF", "Noto Serif SC", serif; letter-spacing: .06em; color: var(--sr-ink); }
+.sr-sh-back { margin-top: 10px; width: 100%; height: 34px; background: none !important; color: #999 !important; font: 400 12px "Source Han Serif CN VF", "Noto Serif SC", serif !important; letter-spacing: .2em; }
 
 /* 命运图鉴 */
 .sr-destiny { left: 40px; right: 14px; top: 24px; }

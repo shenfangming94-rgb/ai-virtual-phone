@@ -220,6 +220,7 @@ export function worldPromptFor(meta: SceneMeta | null, fallbackPlace: string, pa
     sceneTimeBoundaryHint(meta?.nodeId),
     `【时间和地点】\n现在：${fmtWorld(Date.now())}\n地点：${meta?.place || fallbackPlace || "某个地方"}${placeLore(meta?.place || fallbackPlace) ? `\n这一带：${placeLore(meta?.place || fallbackPlace)}` : ""}${meta?.premise ? `\n开头：${meta.premise}` : ""}`,
     `【在场的人】${people.length ? people.map(c => c.name).join("、") : "暂时只有她"}${peopleBlock ? `\n\n${peopleBlock}` : ""}`,
+    (meta?.newFaces ?? []).length ? `【这一场已经出场的新人】${(meta!.newFaces ?? []).map(id => { const c = chars.find(x => x.id === id); const pp = c ? getProfile(c.id) : undefined; return c ? `${c.name}${pp?.role ? `（${pp.role}）` : ""}` : ""; }).filter(Boolean).join("、")}。这些人已经给过名字了：之后他们出场必须用这些名字，不许再写[新人]换名字。` : "",
     meta?.open ? mightMeetBlock(participantIds, meta.place, meta.avoid) : "",
     `【说话语言】${IDOL_LANGUAGE_RULE}`,
     `【规矩】

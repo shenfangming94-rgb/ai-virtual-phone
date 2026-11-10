@@ -1,4 +1,5 @@
 "use client";
+import { kvGet, kvSet } from "@/lib/kv-db";
 import { syncStageChat } from "@/lib/idol-stage-chat";
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
@@ -336,13 +337,20 @@ export function VnPlayer({ characterId, chapterIndex, onClose, onChapterEnd, vnT
       let displayIdx = frames.length - 1;
       while (displayIdx > 0 && !frames[displayIdx].text) displayIdx--;
 
+      // 固定课堂开场已预先落库，不能当作已经读完的聊天历史。
+      if (stageScene?.class && !stageScene.class.preScene && !stageScene.class.settled && messages.length === 1) {
+        const saved = kvGet(`idol_class_cursor:${session.id}:${chapterIndex}`);
+        const cursor = saved === null || saved === undefined ? 0 : Number(saved);
+        displayIdx = Number.isInteger(cursor) && cursor >= 0 && cursor < frames.length ? cursor : 0;
+        while (displayIdx < frames.length - 1 && !frames[displayIdx].text) displayIdx++;
+      }
       setFrameIdx(displayIdx);
       setDisplayedText(frames[displayIdx].text);
 
       // Scan backwards for latest bg/sprite
       let bg = "";
       let sprite = "";
-      for (let i = frames.length - 1; i >= 0; i--) {
+      for (let i = displayIdx; i >= 0; i--) {
         if (!bg && frames[i].bg) bg = frames[i].bg!;
         if (!sprite && frames[i].sprite) sprite = frames[i].sprite!;
         if (bg && sprite) break;
@@ -466,6 +474,7 @@ export function VnPlayer({ characterId, chapterIndex, onClose, onChapterEnd, vnT
       setCurrentSprite(next.sprite);
     }
     setFrameIdx(idx);
+    if (stageScene?.class) kvSet(`idol_class_cursor:${session.id}:${chapterIndex}`, String(idx));
     // Skip empty frames (shouldn't normally appear)
     if (!next.text) {
       if (idx + 1 < allFrames.length) {
@@ -477,7 +486,7 @@ export function VnPlayer({ characterId, chapterIndex, onClose, onChapterEnd, vnT
       return;
     }
     startTyping(getTypingSourceText(next));
-  }, [allFrames, currentScene, currentSprite, startTyping, isArchived, getTypingSourceText]);
+  }, [allFrames, currentScene, currentSprite, startTyping, isArchived, getTypingSourceText, stageScene, session.id, chapterIndex]);
 
   const advance = useCallback(() => {
     if (showArchiveConfirm || waitingForInput) return;

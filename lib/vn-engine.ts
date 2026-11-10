@@ -1,3 +1,4 @@
+import { extractStageChat, type StageChat } from "./idol-stage-chat";
 import { loadAllCharacters as loadCharacters } from "./character-storage";
 import {
   loadBindingConfig,
@@ -32,6 +33,7 @@ import { WORLD_CHAR_ID, applySceneTagsTo, extractSceneTags } from "./idol-world"
 import { allScenePlaces, buildStagePrompt, chapterIdOf, markLeft, normalizeStageRaw, stageHost } from "./idol-stage";
 
 export type VnGenerationResult = {
+  stageChat?: { turnKey: string; messages: StageChat[]; userInput: string };
   rawText: string;
   frames: VnFrame[];
   options: VnOptions | null;
@@ -134,7 +136,12 @@ export async function generateVnCompletion(
 
   let idol: VnGenerationResult["idol"];
   let summary: string | undefined;
+  let stageChat: VnGenerationResult["stageChat"];
   if (isWorld && sceneChapter !== undefined) {
+    const chat = extractStageChat(rawOutput);
+    rawOutput = chat.text;
+    const user = [...ctx].reverse().find(m => m.role === "user");
+    stageChat = { turnKey: `${sceneChapter}:${user?.id || ctx.at(-1)?.id || "opening"}`, messages: chat.messages, userInput: user?.rawContent || "" };
     const left = [...rawOutput.matchAll(/\[离场[:：]\s*([^\]]+)\]/g)].map(m => m[1].trim());
     rawOutput = rawOutput.replace(/\[离场[:：][^\]]*\]/g, "");
     const sm = rawOutput.match(/<summary>([\s\S]*?)<\/summary>/i);
@@ -159,6 +166,7 @@ export async function generateVnCompletion(
   const parsed = parseVnResponse(rawOutput);
   return {
     idol,
+    stageChat,
     summary,
     rawText: parsed.rawText,
     frames: parsed.frames,

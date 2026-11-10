@@ -1,3 +1,4 @@
+import { stageChatPrompt } from "./idol-stage-chat";
 /**
  * 爱豆小手机：场景 app（原「漫卷」改的）。一场戏 = 「世界」漫卷会话里的一章。
  *
@@ -621,6 +622,7 @@ export function buildStagePrompt(chapterIndex: number): string {
     base,
     scene.avoid?.length ? `【这一场不出场的人】${scene.avoid.join("、")}：这一场绝对不让他们出现，也不要有人提到他们正在附近。` : "",
     stageWritingRules(scene, places),
+    stageChatPrompt(),
   ].filter(Boolean).join("\n\n");
 }
 

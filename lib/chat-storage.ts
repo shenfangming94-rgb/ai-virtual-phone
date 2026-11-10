@@ -109,6 +109,7 @@ export type NativeToolCallRecord = { id: string; name: string; args: Record<stri
 export type NativeToolResultRecord = { toolCallId: string; name: string; content: string };
 
 export type ChatMessage = {
+    stageChatKey?: string;
     /** 邀请卡或本地回复记录关联的事项；不作为模型台词显示。 */
     idolScheduleId?: string;
     id: string;

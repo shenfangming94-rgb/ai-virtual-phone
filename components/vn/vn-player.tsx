@@ -1,4 +1,5 @@
 "use client";
+import { syncStageChat } from "@/lib/idol-stage-chat";
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
@@ -692,6 +693,7 @@ export function VnPlayer({ characterId, chapterIndex, onClose, onChapterEnd, vnT
       updateChapterStartMessageId(session.id, chapterIndex, aiMsg.id);
 
       // Add AI frames
+      if (result.stageChat) syncStageChat(result.stageChat.turnKey, result.stageChat.messages, result.stageChat.userInput);
       const aiFrames = tagFramesWithMessage(result.frames, aiMsg);
       const updatedFrames = [...newFrames, ...aiFrames];
       setAllFrames(updatedFrames);
@@ -817,6 +819,7 @@ export function VnPlayer({ characterId, chapterIndex, onClose, onChapterEnd, vnT
       const aiMsg = pushVnMessage({ sessionId: session.id, role: "assistant", rawContent: result.rawText, chapterIndex, ...(result.summary ? { summary: result.summary } : {}), ...(result.idol?.danmaku?.length ? { streamDanmaku: result.idol.danmaku } : {}) });
       updateChapterStartMessageId(session.id, chapterIndex, userMsg.id);
 
+      if (result.stageChat) syncStageChat(result.stageChat.turnKey, result.stageChat.messages, result.stageChat.userInput);
       const aiFrames = tagFramesWithMessage(result.frames, aiMsg);
       const updatedFrames = [...newFrames, ...aiFrames];
       setAllFrames(updatedFrames);
@@ -948,6 +951,7 @@ export function VnPlayer({ characterId, chapterIndex, onClose, onChapterEnd, vnT
       const { frames } = buildFramesFromMessages(newMsgs);
       setAllFrames(frames);
       setCurrentOptions(result.options);
+      if (result.stageChat) syncStageChat(result.stageChat.turnKey, result.stageChat.messages, result.stageChat.userInput);
       const aiFrames = tagFramesWithMessage(result.frames, aiMsg);
       if (aiFrames.length > 0) {
         const startIdx = frames.length - aiFrames.length;

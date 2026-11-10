@@ -1,0 +1,17 @@
+const fs=require('fs'),vm=require('vm'),ts=require('typescript'),assert=require('node:assert/strict');
+let sent=[];
+const session={id:'s',contactId:'friend'};
+const exportsForTest={};
+const chat={loadChatContacts:()=>[{characterId:'friend'}],loadChatSessions:()=>[session],loadChatMessages:()=>sent,createOrGetSession:()=>session,pushChatMessage:m=>{sent.push(m);return m}};
+vm.runInNewContext(ts.transpileModule(fs.readFileSync('lib/idol-stage-chat.ts','utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2020}}).outputText,{exports:exportsForTest,require:n=>n==='./chat-storage'?chat:{loadCharacters:()=>[]},Set,JSON});
+const {extractStageChat,syncStageChat}=exportsForTest;
+const input='我在KKT给他发：你到了吗';
+const actions=[{characterId:'friend',direction:'sent',text:'你到了吗',evidence:input},{characterId:'friend',direction:'received',text:'到了，在门口。'}];
+const parsed=extractStageChat('剧情'+actions.map(x=>'<kkt>'+JSON.stringify(x)+'</kkt>').join(''));
+assert.equal(parsed.text,'剧情');assert.equal(parsed.messages.length,2);
+syncStageChat('turn',parsed.messages,input);assert.equal(sent.length,2);assert.equal(sent[0].role,'user');assert.equal(sent[1].role,'assistant');
+syncStageChat('turn',parsed.messages,input);assert.equal(sent.length,2);
+syncStageChat('other',[{...actions[0],text:'随便编造'},{...actions[1],characterId:'stranger'}],input);assert.equal(sent.length,2);
+session.isBlacklisted=true;syncStageChat('blocked',[actions[1]],input);assert.equal(sent.length,2);
+assert.equal(extractStageChat('<kkt>invalid</kkt>').messages.length,0);
+console.log('PASS: sent/received, tag stripping, duplicate suppression, user text evidence, friend/block checks, invalid JSON');

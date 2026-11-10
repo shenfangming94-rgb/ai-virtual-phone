@@ -1,3 +1,4 @@
+import { realNow } from "./world-clock";
 import { familyMemberFor } from "./idol-family-data";
 /**
  * Background follow-up service.
@@ -296,6 +297,7 @@ async function generateBackgroundCompletionRounds(
     messages: Parameters<typeof generateChatCompletion>[1],
     options: Parameters<typeof generateChatCompletion>[2],
 ): Promise<BackgroundCompletionRound[]> {
+    const startedWorld = Date.now(), startedReal = realNow();
     const rounds: BackgroundCompletionRound[] = [];
     // 每轮 LLM 调用的思维链：onReasoning 先于该轮 onTextPart 触发，挂到该轮文本上
     let pendingReasoning: string | undefined;
@@ -313,6 +315,7 @@ async function generateBackgroundCompletionRounds(
             });
         },
     });
+    if (Math.abs((Date.now() - startedWorld) - (realNow() - startedReal)) > 60000) throw new Error("世界时间已变化，本次旧时点回复不发送，请按当前时间重试");
     if (rounds.length === 0) {
         const fallback = flattenCompletionResult(result);
         if (fallback.trim()) rounds.push({ text: fallback, rawResponseText: fallback, reasoningText: pendingReasoning });

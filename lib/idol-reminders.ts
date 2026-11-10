@@ -42,7 +42,7 @@ const DAY = 24 * HOUR;
 /** 过了开始时间多久还没动就算缺席 */
 export const ABSENT_AFTER = 2 * HOUR;
 
-type Outbox = { romanceId?: string; id: string; charId: string; instruction: string; at: number; node?: CareerNode; strictPersona?: boolean; important?: boolean; birthdayDate?: string; requireFriend?: boolean; /** 情缘线这种：故事里他已经拿到她的号码，不用先加好友 */ reachAny?: boolean; attempts?: number; paused?: boolean; dedupeKey?: string; delivered?: { sessionId: string; messageId: string } };
+type Outbox = { contextAt?: number; romanceId?: string; id: string; charId: string; instruction: string; at: number; node?: CareerNode; strictPersona?: boolean; important?: boolean; birthdayDate?: string; requireFriend?: boolean; /** 情缘线这种：故事里他已经拿到她的号码，不用先加好友 */ reachAny?: boolean; attempts?: number; paused?: boolean; dedupeKey?: string; delivered?: { sessionId: string; messageId: string } };
 type State = { outbox: Outbox[]; absences: number; sentKeys?: string[] };
 
 function load(): State {
@@ -242,7 +242,7 @@ function chatConfig() {
 export function queueMessage(charId: string, instruction: string, delay: number, options: Pick<Outbox, "node" | "strictPersona" | "important" | "birthdayDate" | "requireFriend" | "reachAny" | "dedupeKey" | "romanceId"> = {}) {
   const s = load();
   if (options.dedupeKey && (s.sentKeys?.includes(options.dedupeKey) || s.outbox.some(o => o.dedupeKey === options.dedupeKey))) return;
-  save({ ...s, outbox: [...s.outbox, { id: uid("out"), charId, instruction, at: Date.now() + delay, ...options }] });
+  save({ ...s, outbox: [...s.outbox, { id: uid("out"), charId, instruction, contextAt: Date.now(), at: Date.now() + delay, ...options }] });
 }
 
 export function pendingNoticeFailures(): { id: string; title: string }[] {
@@ -278,10 +278,12 @@ async function sendAs(charId: string, instruction: string, strictPersona = false
   if (alreadySent) return alreadySent;
   if (strictPersona) return null;
   const me = resolveUserIdentity(charId, "chat")?.name || "她";
+  const generationWorld = Date.now(), generationReal = realNow();
   const res = await simpleLLMCall(chatConfig(), [
-    { role: "system", content: `你是${char.name}。${char.persona}${idolLanguageHint([{ id: char.id, name: char.name }])}\n\n你在 KakaoTalk 上给${me}发私聊消息。只输出要发的消息本身，一到三条，每条一行，口语，不要旁白、不要引号。每句先用角色应说的语言写原文（韩国日常对话默认韩语），再写「 | 」和对应的简体中文翻译；不能只写中文，也不要把两种语言混在原文里。` },
+    { role: "system", content: `${buildIdolChatHint(charId, false)}\n你是${char.name}。${char.persona}${idolLanguageHint([{ id: char.id, name: char.name }])}\n\n你在 KakaoTalk 上给${me}发私聊消息。只输出要发的消息本身，一到三条，每条一行，口语，不要旁白、不要引号。每句先用角色应说的语言写原文（韩国日常对话默认韩语），再写「 | 」和对应的简体中文翻译；不能只写中文，也不要把两种语言混在原文里。` },
     { role: "user", content: instruction },
   ], { temperature: 0.85, label: "有人来找你" });
+  if (Math.abs((Date.now() - generationWorld) - (realNow() - generationReal)) > 60000) return null;
   const lines = (res.content || "").split("\n").map(l => l.trim().replace(/^["「]|["」]$/g, "")).filter(Boolean).slice(0, 3);
   if (!lines.length) return null;
   const sent = lines.map(l => pushChatMessage({ sessionId: session.id, role: "assistant", content: l, status: "sent" }));
@@ -407,7 +409,7 @@ export function reminderTick(notify: (msg: string) => void): void {
   }
   busy = true;
   const existing = due.node ? loadCareer().nodes.find(n => n.id === due.node!.id) : undefined;
-  const instruction = `${due.instruction}${due.node ? `\n本轮对应事项编号${due.node.id}，标题「${due.node.title}」，${noticeTime(due.node.dueAt)}，地点${due.node.place}。${existing && existing.status !== "invite" ? `她已处理此邀请，当前状态${existing.status}，不要重复询问。` : "自然说出邀请的具体时间地点并问她愿不愿意，不替她答应。"}这条邀请由系统随消息发布，不另写创建邀约标记。` : ""}`;
+  const instruction = `原始消息意图形成于${new Date(due.contextAt ?? due.at).toLocaleString("zh-CN")}；现在是${new Date(now).toLocaleString("zh-CN", { weekday: "long", year: "numeric", month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" })}。下面旧意图里的今天、明天、待会均指原始日期，必须换算到现在；已经过去的事情只能作为过去聊，不能再催准备或说尚未发生。\n${due.instruction}${due.node ? `\n本轮对应事项编号${due.node.id}，标题「${due.node.title}」，${noticeTime(due.node.dueAt)}，地点${due.node.place}。${existing && existing.status !== "invite" ? `她已处理此邀请，当前状态${existing.status}，不要重复询问。` : "自然说出邀请的具体时间地点并问她愿不愿意，不替她答应。"}这条邀请由系统随消息发布，不另写创建邀约标记。` : ""}`;
   const delivered = due.delivered ? loadChatMessages(due.delivered.sessionId).find(m => m.id === due.delivered!.messageId) : undefined;
   const sending = delivered ? Promise.resolve(delivered) : sendAs(due.charId, instruction, Boolean(due.strictPersona), Boolean(due.reachAny));
   void sending
@@ -440,7 +442,10 @@ const proactive = new Map<string, string>();
 
 export function buildIdolChatHint(characterId: string, isGroup: boolean): string {
   if (isGroup || typeof window === "undefined") return "";
-  const out: string[] = [romanceActorHint(characterId)];
+  const current = new Date();
+  const datedEvents = loadCareer().nodes.filter(n => n.kind === "weekly" && Math.abs(n.dueAt - current.getTime()) < 7 * DAY).map(n => `${n.title}：${new Date(n.dueAt).toLocaleString("zh-CN")}，状态${n.status}`);
+  const out: string[] = [romanceActorHint(characterId), `【当前世界时间，以此为准】${current.toLocaleString("zh-CN", { weekday: "long", year: "numeric", month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" })}。历史聊天、记忆和旧主动消息意图中的今天/明天属于当时，不能当作现在。过去的日程不能说成今天要发生，也不能把没有记录的结果当成已知事实。`, datedEvents.length ? `周评日期核对（只用于校正时间，不代表你知道她的结果）：${datedEvents.join("；")}` : ""];
+
   const intent = proactive.get(characterId);
   if (intent) {
     out.push("### 这一条是你主动发的", "她没有给你发消息，是你自己想找她：", intent, "主动 KakaoTalk 消息的双语格式：每句先用角色应说的语言写原文（韩国日常对话默认韩语），再写「 | 」和对应的简体中文翻译；不能只写中文，也不要把两种语言混在原文里。");

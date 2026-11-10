@@ -88,6 +88,8 @@ export type LineState = {
   /** 关注那一刻（羁绊从这里起算） */
   followedAt: number;
   bond: number;
+  /** 永久的见面日账，不随展示历史截断。 */
+  meetDays?: string[];
   /** 已完成/已触发的节点 key（按顺序） */
   doneNodes: string[];
   /** 当前待触发的节点 key */
@@ -122,7 +124,12 @@ export function newLine(type: RouteType, charId: string, now = Date.now()): Line
 
 /** 一次见面（连续待一整天只算一次，别重复记） */
 export function addMeet(l: LineState, now = Date.now()): LineState {
-  return addBond(l, "meet", 5, now);
+  if (!Number.isFinite(now) || now < l.followedAt || now > Date.now()) return l;
+  const days = new Set([...(l.meetDays || []), ...l.history.filter(h => h.type === "meet").map(h => bondDayKey(h.at))]);
+  const day = bondDayKey(now);
+  if (days.has(day)) return { ...l, meetDays: [...days] };
+  days.add(day);
+  return { ...addBond(l, "meet", 5, now), meetDays: [...days] };
 }
 
 /** 一次电话/视频（每世界日最多计一次） */

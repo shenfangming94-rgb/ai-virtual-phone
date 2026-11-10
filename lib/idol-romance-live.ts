@@ -30,6 +30,7 @@ const KEY = "idol_romance_v1";
 const uid = (p: string) => `${p}_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
 
 type State = {
+  confirmedBondRepair?: { at: number; before: Partial<Record<RouteType, LineState>> };
   lines: Partial<Record<RouteType, LineState>>;
   /** 等她下一节课上完再发生的节点（练习室指导、公司偶遇、出道危机） */
   classBeats?: { type: RouteType; key: string; premise?: string }[];
@@ -52,9 +53,41 @@ const CLASS_BEAT = new Set(["practice_guide", "company_contrast"]);
 function load(): State {
   try { return { lines: {}, ...(JSON.parse(kvGet(KEY) || "null") as Partial<State> | null) }; } catch { return { lines: {} }; }
 }
-function save(s: State) { kvSet(KEY, JSON.stringify(s)); }
+function save(s: State) {
+  // 修复后的第一次写入前保留旧账，便于核对异常分数，绝不猜测扣分。
+  const backup = "idol_romance_before_meet_ledger_v1";
+  if (!kvGet(backup)) { const raw = kvGet(KEY); if (raw) kvSet(backup, raw); }
+  kvSet(KEY, JSON.stringify(s));
+}
 
 export function romanceState(): State { return load(); }
+/** 用户明确提供的这份旧档校正；仅由按钮触发一次。 */
+export function canRepairConfirmedBonds(): boolean {
+  const s = load();
+  if (s.confirmedBondRepair) return false;
+  const chars = loadCharacters();
+  return ["权知韩", "裴夏民", "宋元赫"].every(name => {
+    const matches = Object.values(s.lines).filter(l => l && chars.find(c => c.id === l.charId)?.name === name);
+    return matches.length === 1;
+  });
+}
+export function repairConfirmedBonds(): boolean {
+  if (!canRepairConfirmedBonds()) return false;
+  const s = load(), chars = loadCharacters();
+  const before = JSON.parse(JSON.stringify(s.lines)) as State["lines"];
+  const targets: Record<string, number> = { "权知韩": 12, "裴夏民": 5 };
+  for (const l of Object.values(s.lines)) {
+    if (!l) continue;
+    const name = chars.find(c => c.id === l.charId)?.name || "";
+    if (targets[name] === undefined) continue;
+    l.bond = targets[name];
+    l.meetDays = [...new Set([...(l.meetDays || []), ...l.history.filter(h => h.type === "meet").map(h => bondDayKey(h.at))])];
+  }
+  s.confirmedBondRepair = { at: Date.now(), before };
+  save(s);
+  return true;
+}
+
 export function saveRomanceState(s: State): void { save(s); }
 
 /** 一个人的身份沾不沾六类（关注按钮只给这些人；六线男主是男的，女的不给） */
@@ -103,9 +136,7 @@ export function recordMeet(charId: string): void {
   try { if (!kvGet("idol_roster_v1")) return; } catch { return; }
   const hit = lineOfChar(charId);
   if (!hit) return;
-  // 连续待一整天只算一次：同一个世界日见过就不再计
-  const lastMeet = hit.line.history.filter(h => h.type === "meet").pop();
-  if (lastMeet && bondDayKey(lastMeet.at) === bondDayKey(Date.now())) return;
+  // 去重交给永久日账，不能只对照最后一次见面。
   const s = load();
   s.lines[hit.type] = addMeet(hit.line);
   save(s);
@@ -116,8 +147,7 @@ export function recordMeetAt(charId: string, at: number): void {
   try { if (!kvGet("idol_roster_v1")) return; } catch { return; }
   const hit = lineOfChar(charId);
   if (!hit) return;
-  const lastMeet = hit.line.history.filter(h => h.type === "meet").pop();
-  if (lastMeet && bondDayKey(lastMeet.at) === bondDayKey(at)) return;
+
   const s = load();
   s.lines[hit.type] = addMeet(hit.line, at);
   save(s);

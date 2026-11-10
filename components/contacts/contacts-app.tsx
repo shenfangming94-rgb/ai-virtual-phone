@@ -52,7 +52,7 @@ import { SavesPanel } from "@/components/settings/saves-settings";
 import { TraineeIdMini } from "@/components/opening/trainee-id-mini";
 import { FameCardBlock } from "./fame-card";
 import { loadUserIdentities, resolveUserIdentity, saveUserIdentities, USER_IDENTITIES_UPDATED_EVENT } from "@/lib/settings-storage";
-import { canFollow, followRoute, romanceState } from "@/lib/idol-romance-live";
+import { canFollow, followRoute, romanceState, canRepairConfirmedBonds, repairConfirmedBonds } from "@/lib/idol-romance-live";
 import { ROUTE_NODES } from "@/lib/idol-romance-lines";
 import { ContactYearbookPage } from "@/components/yearbook/yearbook-app";
 
@@ -543,6 +543,9 @@ function CardView({ data, id, onBack, onEdit, onNotice }: { data: Data; id: stri
         ) : followed ? (
           <div className="ct-block">
             <div className="ct-k">情缘</div>
+            {["权知韩", "裴夏民"].includes(char.name) && canRepairConfirmedBonds() && <button type="button" className="ct-glass-dark" onClick={() => {
+              if (repairConfirmedBonds()) { setRomVer(v => v + 1); onNotice?.("已备份并修正：权知韩 12、裴夏民 5；宋元赫保持原值"); }
+            }}>修正旧档羁绊：权知韩 12 · 裴夏民 5</button>}
             <div className="ct-v">已关注 · 羁绊 {followed[1].bond} · 下一步：{ROUTE_NODES[followed[1].type].find(n => n.key === followed[1].nextNode)?.title ?? "都走完了"}</div>
           </div>
         ) : null}

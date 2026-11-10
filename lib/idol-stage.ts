@@ -738,7 +738,7 @@ export function deleteStageScene(chapterIndex: number): void {
 
 /** 读档自愈：演完归档的戏，在场的人档案里没有这场的事就补一笔（戏里只用网名/游戏ID时记账会对不上，比如电竞线的网友局）。
  *  补的是这场的大总结；开场前后两小时内已有事件的不动。
- *  另外：今天的私下见面如果没被记账（名字没对上），把见面补进情缘线（recordMeet 自己按天去重）。
+ *  不在后台补羁绊分数：旧历史会截断，无法据此判断哪些奖励从未发过。
  *  注意：VN 存档是异步加载的，先确保加载完再读，不然会读到空戏单。 */
 export async function healSceneEventGaps(): Promise<number> {
   try {
@@ -756,10 +756,7 @@ export async function healSceneEventGaps(): Promise<number> {
       const others = [...new Set([...sc.ids, ...(sc.newFaces ?? [])])].filter(id => id !== WORLD_CHAR_ID);
       if (!others.length) continue;
       const text = (sc.summary ?? "").trim();
-      // 最近两周的私下见面没被记账（知情账覆盖掉线、名字没对上这些）：把见面补进情缘线
-      if (others.length <= 3 && !/演唱|场馆|舞台|路演|签售|直播|观众/.test(sc.place) && Date.now() - sc.startAt < 14 * 864e5) {
-        void import("./idol-romance-live").then(({ recordMeetAt }) => { for (const id of others) recordMeetAt(id, sc.startAt); }).catch(() => undefined);
-      }
+      // 后台自愈只补事件文本，不重放羁绊奖励；见面分由正常场景结算发放。
       if (!text) continue;
       for (const id of others) {
         const p = profiles[id];

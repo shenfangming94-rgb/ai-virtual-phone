@@ -28,15 +28,17 @@ let l = R.newLine('idol', 'char_x', t0);
 check('关注时羁绊 0', l.bond === 0);
 check('第一节点 = 演唱会邀请', l.nextNode === 'concert_invite');
 
-// 见面 +5
+// 见面 +5（她定的：同一世界日只见一次算一次）
 l = R.addMeet(l, t0);
-l = R.addMeet(l, t0 + 60e3); // 同一天两次见面(不同场景)各 +5
-check('两次见面 +10', l.bond === 10, String(l.bond));
+l = R.addMeet(l, t0 + 60e3); // 同一天第二次见面：只算一次
+check('同一天两次见面只算一次(+5)', l.bond === 5, String(l.bond));
+const nextDay = new Date(2026, 6, 2, 9, 0, 0).getTime();
+l = R.addMeet(l, nextDay); // 第二天再见：再 +5
+check('第二天见面再计一次(+5)', l.bond === 10, String(l.bond));
 
 // 电话日上限
 l = R.addCall(l, t0); l = R.addCall(l, t0 + 60e3); l = R.addCall(l, t0 + 120e3);
 check('电话每天只计一次(+3)', l.bond === 13, String(l.bond));
-const nextDay = new Date(2026, 6, 2, 9, 0, 0).getTime();
 l = R.addCall(l, nextDay);
 check('第二天电话再计一次(+3)', l.bond === 16, String(l.bond));
 

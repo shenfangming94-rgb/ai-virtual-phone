@@ -22,7 +22,7 @@ import {
     getLastSummarizedTimestamp,
     getLastCoreSummarizedTimestamp,
 } from "@/lib/memory-storage";
-import { hydrateChatStorage } from "@/lib/chat-storage";
+import { loadChatContacts, hydrateChatStorage } from "@/lib/chat-storage";
 import { loadNativeTimeline, type NativeTimelineEntry } from "@/lib/short-term-assembler";
 import { exportMemoryBackup, importMemoryPack, parseMemoryBackup, type CharacterMemoryPack } from "@/lib/memory-backup";
 import { addManualShortTerm, deleteShortTermEntries, deleteShortTermEntry, editShortTermEntry, restoreShortTermEntry, splitShortTermLine } from "@/lib/short-term-edits";
@@ -269,9 +269,10 @@ export function MemoryBankPage({
     const loadCharacterList = useCallback(async (isCancelled?: () => boolean) => {
         const allChars = loadCharacters();
         // 爱豆小手机：背景人物不进备忘录（她定的：备忘录里是主要人物；背景人物只在通讯录）
+        const friends = new Set(loadChatContacts().map(c => c.characterId));
         const hiddenBackground = (c: typeof allChars[number]) => {
             const p = getProfile(c.id);
-            return Boolean(p && p.layer === "background");
+            return !friends.has(c.id) || p?.layer === "background";
         };
 
         let charIdsWithMem: string[] = [];

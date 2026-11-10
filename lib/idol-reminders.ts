@@ -10,7 +10,7 @@ import { loadRomance, romanceActorHint, romanceMessageDelivered, romanceMessageE
 import { kvGet, kvSet } from "./kv-db";
 import { loadCharacters } from "./character-storage";
 import type { Character } from "./character-types";
-import { loadChatMessages, loadChatSessions, addChatContact, createOrGetSession, loadChatContacts, pushChatMessage, type ChatMessage } from "./chat-storage";
+import { deleteChatMessage, loadChatMessages, loadChatSessions, addChatContact, createOrGetSession, loadChatContacts, pushChatMessage, type ChatMessage } from "./chat-storage";
 import { applyInvitationActions, extractInvitationActions, type InvitationAction } from "./idol-invitation-chat";
 import { chatNotice, noticeTime, recordScheduleReply } from "./idol-schedule-notices";
 import { loadMails, updateMail, recordMailReply, MAIL_EVENT } from "./idol-mail";
@@ -20,7 +20,7 @@ import { idolLanguageHint } from "./idol-language";
 import { getChatPluginHookBus } from "./chat-plugin-hooks";
 import {
   acceptOffer, addToCalendar, companyOf, completeNode, declineOffer, loadCareer, saveCareer,
-  type CareerNode,
+  CAREER_EVENT, type CareerNode,
 } from "./idol-career";
 import { afterNodeScene } from "./idol-kakao";
 import { loadWorldClock, realNow, setWorldClockReal, setWorldTime } from "./world-clock";
@@ -336,8 +336,33 @@ function hasOpenSceneFor(nodeId: string): boolean {
 }
 
 /** 每 5 秒在桌面跑：到时间的缺席、过期的待回复、排队的消息 */
+/** 只修复有送达凭据、尚未处理且未过期的旧模板邀请；原文先备份。 */
+function repairLegacyInvitations(): void {
+  const career = loadCareer();
+  for (const n of career.nodes) {
+    if (n.status !== "invite" || !n.fromId || n.dueAt <= Date.now() || (n.replyBy && n.replyBy <= Date.now())) continue;
+    const receipt = n.notice;
+    const message = receipt?.sessionId ? loadChatMessages(receipt.sessionId).find(m => m.id === receipt.refId) : undefined;
+    const legacy = message?.role === "assistant" && /^(安排|变更)通知\n/.test(message.content) && message.content.includes(`「${n.title}」`) && message.content.includes("请回复是否参加");
+    if (receipt && !legacy) continue;
+    const state = load();
+    if (!state.outbox.some(o => o.node?.id === n.id)) {
+      queueMessage(n.fromId, "自然地和她聊天，约她参加这次活动。按你的性格说清时间地点并问她愿不愿意，不要说安排通知、是否参加等系统文案。", 0, { node: { ...n, notice: undefined }, dedupeKey: `natural-invite:${n.id}` });
+    }
+    if (legacy && message) {
+      kvSet(`idol_legacy_invite_backup:${message.id}`, JSON.stringify({ node: n, message }));
+      deleteChatMessage(message.id);
+      // 直接清除旧凭据，避免 saveCareer 继承它；消息真正送达后才补回。
+      const latest = loadCareer();
+      kvSet("idol_career_v1", JSON.stringify({ ...latest, nodes: latest.nodes.map(x => x.id === n.id ? { ...x, notice: undefined } : x) }));
+      window.dispatchEvent(new Event(CAREER_EVENT));
+    }
+  }
+}
+
 export function reminderTick(notify: (msg: string) => void): void {
   if (busy) return;
+  repairLegacyInvitations();
   const now = Date.now();
   const career = loadCareer();
   const absent: CareerNode[] = [];
@@ -392,8 +417,7 @@ export function reminderTick(notify: (msg: string) => void): void {
       if (due.node) {
         const career = loadCareer();
         const old = career.nodes.find(n => n.id === due.node!.id);
-        const card = loadChatMessages(first.sessionId).find(m => m.idolScheduleId === due.node!.id && m.role === "system") || pushChatMessage({ sessionId: first.sessionId, role: "system", idolScheduleId: due.node.id, content: `邀请信息：「${due.node.title}」 · ${noticeTime(due.node.dueAt)} · ${due.node.place}${old && old.status !== "invite" ? ` · ${old.status === "pending" ? "已接受" : "已处理"}` : " · 待回复"}`, status: "sent" });
-        const node = { ...(old || due.node), notice: chatNotice(first.sessionId, card.id, due.charId) };
+        const node = { ...(old || due.node), notice: chatNotice(first.sessionId, first.id, due.charId) };
         saveCareer({ ...career, nodes: old ? career.nodes.map(n => n.id === node.id ? node : n) : [...career.nodes, node].sort((a,b) => a.dueAt-b.dueAt) });
       }
       const latest = load(); save({ ...latest, outbox: latest.outbox.filter(o => o.id !== due.id), sentKeys: due.dedupeKey ? [...(latest.sentKeys || []), due.dedupeKey].slice(-300) : latest.sentKeys });

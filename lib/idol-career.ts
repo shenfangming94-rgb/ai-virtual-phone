@@ -16,7 +16,7 @@ import { loadTraineeCard, saveTraineeCard, describeTrainee } from "./trainee-car
 import { upsertCalendarScheduleItem } from "./calendar-storage";
 import { getWeekStartIso } from "./calendar-utils";
 import { deleteCalendarScheduleItem } from "./calendar-storage";
-import { announceSchedule, type ScheduleNotice } from "./idol-schedule-notices";
+import { type ScheduleNotice } from "./idol-schedule-notices";
 import { addMail, recordMailReply, type Mail } from "./idol-mail";
 import { debutPromptBlock, onSelection, revealName, type Debut } from "./idol-debut";
 import { starPromptBlock } from "./idol-starroad";
@@ -143,7 +143,11 @@ export function saveCareer(c: Career): void {
       void import("./idol-kakao").then(m => m.queueTeacherScheduleNotice?.(companyBatches)).catch(() => undefined);
     }
   }
-  for (const n of changes) n.notice = announceSchedule([n], n.status === "leave" || n.status === "declined" ? "取消" : "变更");
+  for (const n of changes) {
+    if (n.fromId) {
+      void import("./idol-reminders").then(m => m.queueMessage(n.fromId!, `用你平常聊天的语气告诉她「${n.title}」的${n.status === "leave" || n.status === "declined" ? "取消" : "变更"}。不要发系统通知、安排通知或表格。`, 0, { node: n, dedupeKey: `schedule-change:${n.id}:${n.dueAt}:${n.place}:${n.status}` }));
+    } else void import("./idol-kakao").then(m => m.queueTeacherScheduleNotice([n]));
+  }
   kvSet(KEY, JSON.stringify({ ...c, nodes }));
   for (const old of previous.nodes) {
     const next = nodes.find(n => n.id === old.id);

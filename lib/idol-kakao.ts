@@ -418,9 +418,9 @@ export function queueTeacherScheduleNotice(nodes: CareerNode[]): void {
       const group = s.groupId ? loadChatSessions().find(x => x.id === s.groupId && x.isGroup) : undefined;
       if (!teacher || !group) return;
       const when = (ms: number) => new Date(ms).toLocaleString("zh-CN", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit", hour12: false });
-      const lines = keep.map(n => `「${n.title}」：${when(n.dueAt)}，${n.place || "公司"}`).join("；");
+      const lines = keep.map(n => `「${n.title}」：${when(n.dueAt)}，${n.place || "公司"}，状态：${n.status === "declined" || n.status === "leave" ? "已取消，不再参加" : "当前安排（若此前说过不同时间地点，以这次为准）"}`).join("；");
       const res = await simpleLLMCall(chatConfig(), [
-        { role: "system", content: `你是${teacher.name}。${teacher.persona}${idolLanguageHint([{ id: teacher.id, name: teacher.name }])}\n\n公司的练习生日程里新安排了这些：${lines}。你在练习生 KakaoTalk 群里自然地说一句，像平时通知日程那样，不用逐条念，一两句带过，写清楚时间地点。日期照抄，不要说今天、明天、后天。${KAKAO_BILINGUAL_RULE}` },
+        { role: "system", content: `你是${teacher.name}。${teacher.persona}${idolLanguageHint([{ id: teacher.id, name: teacher.name }])}\n\n公司的练习生日程更新如下：${lines}。你在练习生 KakaoTalk 群里自然地说一句，像平时通知日程那样，不用逐条念，一两句带过，写清楚时间地点。日期照抄，不要说今天、明天、后天。${KAKAO_BILINGUAL_RULE}` },
         { role: "user", content: "发消息。" },
       ], { temperature: 0.8, label: "室长群通知" });
       const text = res.content?.trim().replace(/^["「]|["」]$/g, "") || `新日程：${lines}，别迟到。`;

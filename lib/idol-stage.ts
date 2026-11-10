@@ -901,7 +901,9 @@ export function loadStageProjectionEntries(characterId: string, options?: { afte
     const span = sc.spans?.[characterId] ?? { from: 0 };
     msgs.forEach((m, i) => {
       if (i < span.from || (span.to !== undefined && i > span.to)) return;
-      if (m.summary?.trim()) push(`stage_projection_${m.id}`, m.createdAt, m.summary.trim());
+      // 小总结可能漏生成；仍保留该角色在场时实际发生的原文，不能整段失忆。
+      const content = m.summary?.trim() || frameText(m.rawContent, m.role).trim();
+      if (content) push(`stage_projection_${m.id}`, m.createdAt, content);
     });
   }
   return out.sort((a, b) => a.timestamp.localeCompare(b.timestamp));

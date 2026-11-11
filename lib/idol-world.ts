@@ -233,7 +233,7 @@ export function worldPromptFor(meta: SceneMeta | null, fallbackPlace: string, pa
 - 在场的人跟她以前的事只按他的【和她之间的事】写；这场戏前面已经写错的地方，让他当场纠正，不许继续编。
 - 写到下一个需要她反应的地方就停。${meta?.premise ? "\n- 「开头」是这一场要发生的事的大方向，不是要一次写完的：一段一段来，每段停在她能反应的地方，别替她把整场走完。" : ""}`,
     `【记号】回复最后另起一行写（她看不到，没有就不写）：
-- 名单里没有、但这次出场并且有名字的人：[新人:名字|一句话身份|已知资料JSON]。一句话身份必须写：像通讯录里显示他是什么人一样（哪里的学生、哪里的练习生、做什么的），不许空着。已知资料JSON只写本段已明确的gender、age、nationality、birthday、mbti、heightCm、appearance、isIdol、kinship，未明确的字段不填；没有资料可用原来的两字段格式。
+- 名单里没有、但这次出场并且有名字的人：[新人:名字|一句话身份|已知资料JSON]。一句话身份必须写具体：他真实在做什么、属于哪里，像通讯录里显示他是什么人一样；名册外的年轻人不许笼统写成练习生或同期。已知资料JSON只写本段已明确的gender、age、nationality、birthday、mbti、heightCm、appearance、isIdol、kinship，未明确的字段不填；没有资料可用原来的两字段格式。
 - 同一个人一旦给过名字，后面出场必须用同一个名字，不许换名字再写一遍（换名字会被当成另一个人）。
 - 「可能碰上的人」里有人出场：[出场:名字]
 - 戏里过去了一段时间：[时间:+N分钟]
@@ -340,13 +340,6 @@ function addFaces(host: SceneHost, faces: SceneTags["newFaces"], introduction: s
   const meta = host.meta() ?? { place: host.fallbackPlace, premise: "", startAt: Date.now(), newFaces: [] };
   const ids = [...host.ids()];
   const added: string[] = [];
-  // 名册里的人不许被新造出来当同期：名册外自称「同期」的新面孔，降成普通公司里的人
-  const rosterNames = (() => {
-    try {
-      const state = JSON.parse(kvGet("idol_roster_v1") || "null") as { npcs?: { name: string }[] } | null;
-      return state?.npcs?.length ? new Set(state.npcs.map(n => n.name)) : null;
-    } catch { return null; }
-  })();
   for (const f of faces) {
     if (!f.name || f.name.length > 12) continue;
     const linkedFamily = namedFamilyMember(f.name);
@@ -376,7 +369,7 @@ function addFaces(host: SceneHost, faces: SceneTags["newFaces"], introduction: s
       ...(pending?.age && !f.facts?.age ? { age: pending.age } : {}),
     };
     let role = f.role || pending?.role || "";
-    if (rosterNames && !rosterNames.has(f.name) && /同期|练习生/.test(role)) role = "公司里的人";
+    // 她 11-11 定的：他是什么就写什么——AI 给的身份原样显示，代码不盖章不改写
     const char = createPerson(f.name, { ...emptyProfile(""), layer: "background", role, ...facts, sceneFacts: facts, introducedIn: introduction.slice(0, 12000), met: true, metAt: { at: Date.now(), place: meta.place } }, null, genKakaoId());
     ids.push(char.id);
     meta.newFaces.push(char.id);

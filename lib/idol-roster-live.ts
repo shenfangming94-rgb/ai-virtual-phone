@@ -155,12 +155,6 @@ function healRosterSave(s: RosterState): void {
       const p = profiles[n.charId];
       if (p && p.group === "同期练习生" && p.layer === "main") saveProfile({ ...p, layer: "background" });
     }
-    // 她反馈：第一天戏里 AI 新造了假同期。名册外、自称「同期」的背景人物，降成普通公司里的人
-    const rosterIds = new Set(s.npcs.map(n => n.charId).filter((x): x is string => Boolean(x)));
-    for (const [id, p] of Object.entries(profiles)) {
-      if (rosterIds.has(id) || p.familyMemberId || p.layer !== "background" || !/同期/.test(p.role ?? "")) continue;
-      saveProfile({ ...p, role: "公司里的人", group: p.group || "围观" });
-    }
   }
   const renames = dedupeRosterNames(s.npcs);
   if (renames.length) {

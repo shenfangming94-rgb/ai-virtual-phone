@@ -145,7 +145,7 @@ export function StageHome({ onClose, onPlay, onReplay }: Props) {
     // 选了看活动就不碰淡粉「!」，它还挂着
     const lifeId = fate || goWith.current === "activity" ? undefined : happeningMarks(t).find(m => m.place === place.key)?.id;
     const life = lifeId ? takeHappening(place.key) : null;
-    const show = !fate && !life && act ? `今天这里在办：${act.title}${act.note ? `（${act.note}）` : ""}。照活动现场本身写` : null;
+    const show = !fate && !life && act ? `今天这里在办：${act.title}${act.note ? `（${act.note}）` : ""}。照活动现场本身写${act.people?.length ? `。这一场优先安排这件事里的人出场：${act.people.map(p => `${p.name}（${p.role}）`).join("、")}` : ""}` : null;
     const premise = [fate, life, show, extraPremise].filter(Boolean).join("；") || undefined;
     // 记下用掉的「!」：开场切成番外时还回去
     const taken = { ...(fate && fateId ? { fate: fateId } : {}), ...(life && lifeId ? { life: lifeId } : {}), ...(extraPremise ? { extra: extraPremise } : {}), ...(premise ? { premise } : {}) };

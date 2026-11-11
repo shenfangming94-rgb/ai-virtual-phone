@@ -23,8 +23,8 @@ import { parseScheduleLines } from "./calendar-engine";
 import { allScenePlaces } from "./idol-stage";
 
 export type AlmanacKind = "fixed" | "career" | "world" | "mine" | "birthday";
-export type AlmanacItem = { id: string; date: string; title: string; note?: string; kind: AlmanacKind; /** 圈内大事是哪家公司的 */ company?: string; /** 圈内大事在此刻地图上哪儿办（只是新闻的没有） */ place?: string };
-type State = { mine: AlmanacItem[]; world: Record<string, AlmanacItem[]>; /** 哪几个月的旧大事已经补过地点 */ placed?: string[] };
+export type AlmanacItem = { id: string; date: string; title: string; note?: string; kind: AlmanacKind; /** 圈内大事是哪家公司的 */ company?: string; /** 圈内大事在此刻地图上哪儿办（只是新闻的没有） */ place?: string; /** 这件事里出场的人（谁在演/出席），此刻联动用 */ people?: { name: string; role: string }[] };
+type State = { mine: AlmanacItem[]; world: Record<string, AlmanacItem[]>; /** 哪几个月的旧大事已经补过地点 */ placed?: string[]; /** 哪几个月的人物已经补过 */ peopleFilled?: string[] };
 
 const KEY = "idol_almanac_v1";
 export const ALMANAC_EVENT = "idol-almanac-changed";
@@ -137,6 +137,14 @@ export function almanacByDate(fromIso: string, toIso: string): Map<string, Alman
   return map;
 }
 
+/** 「名字（身份）；名字（身份）」拆成人物表 */
+function parsePeople(v: unknown): { name: string; role: string }[] {
+  return (Array.isArray(v) ? v.map(String) : []).map(s => {
+    const m = s.match(/^(.+?)[（(](.+?)[）)]$/);
+    return m ? { name: m[1].trim(), role: m[2].trim() } : { name: s.trim(), role: "" };
+  }).filter(p => p.name && p.name.length <= 12).slice(0, 6);
+}
+
 // ── 此刻地图上的活动 ──
 
 /** 圈内大事能办在哪儿：练习生进不去的后台、舞台不算 */
@@ -152,29 +160,40 @@ export function activityPlace(i: AlmanacItem): string | undefined {
 }
 
 let placeBusy = false;
-/** 加地点之前生成的那批圈内大事：只补地点，标题内容不动，每个月补一次 */
+/** 加地点之前生成的那批圈内大事：补地点、补人物（谁在演/出席），标题内容不动，每个月补一次 */
 export async function fillWorldPlaces(ym: string): Promise<boolean> {
   const s = load();
   const items = s.world[ym] ?? [];
-  if (placeBusy || (s.placed ?? []).includes(ym) || !items.some(i => !i.place)) return false;
+  if (!items.length) return false;
+  const needPlace = items.some(i => !i.place);
+  const needPeople = items.some(i => !i.people);
+  if (placeBusy || (!needPlace && !needPeople)) return false;
   placeBusy = true;
   try {
     const places = activityPlaces();
     const res = await simpleLLMCall(config(), [
-      { role: "system", content: `给下面这些韩国娱乐圈大事配地点。只输出 JSON：{"places":{"编号":"地点"}}
-有现场、人能去的（演唱会、签售、见面会、公开录制、校庆演出、外景拍摄、颁奖礼）从这些地点里挑最合适的，照原样写：${places.join("、")}。签售、外景这种名单里没有的，挑它所在的那片区域（比如明洞、弘大）。只是播出、官宣、公开这类没有现场的写空。` },
+      { role: "system", content: `给下面这些韩国娱乐圈大事补地点和人物。只输出 JSON：{"places":{"编号":"地点"},"people":{"编号":"名字（身份）；名字（身份）"}}
+有现场、人能去的（演唱会、签售、见面会、公开录制、校庆演出、外景拍摄、颁奖礼）从这些地点里挑最合适的，照原样写：${places.join("、")}。签售、外景这种名单里没有的，挑它所在的那片区域（比如明洞、弘大）。只是播出、官宣、公开这类没有现场的写空。
+people：有现场的这件事里出场的人——表演者、出席的艺人，一人一条「名字（身份）」；标题里带的团或人名要写进去，没有别的信息就给那位艺人配一两个同行/队友的名字；没现场的写空。` },
       { role: "user", content: items.map((i, n) => `${n + 1}. ${i.date} ${i.title}${i.note ? `：${i.note}` : ""}`).join("\n") },
-    ], { temperature: 0.3, label: "圈内大事补地点" });
-    const j = JSON.parse(res.content?.match(/\{[\s\S]*\}/)?.[0] ?? "{}") as { places?: Record<string, string> };
-    if (!j.places) throw new Error(res.error || "AI 没回");
+    ], { temperature: 0.4, label: "圈内大事补地点人物" });
+    const j = JSON.parse(res.content?.match(/\{[\s\S]*\}/)?.[0] ?? "{}") as { places?: Record<string, string>; people?: Record<string, string> };
+    if (!j.places && !j.people) throw new Error(res.error || "AI 没回");
     const fresh = load();
     const world = (fresh.world[ym] ?? []).map(i => {
-      if (i.place) return i;
       const n = items.findIndex(x => x.id === i.id) + 1;
       const pl = String(j.places?.[String(n)] ?? "").trim();
-      return places.includes(pl) ? { ...i, place: pl } : i;
+      const withPlace = !i.place && places.includes(pl) ? { ...i, place: pl } : i;
+      const peopleRaw = String(j.people?.[String(n)] ?? "").trim();
+      return withPlace.people ? withPlace : { ...withPlace, people: parsePeople(peopleRaw.split(/[；;]/)) };
     });
-    save({ ...fresh, world: { ...fresh.world, [ym]: world }, placed: [...(fresh.placed ?? []), ym] });
+    const done = world.every(i => i.place);
+    const peopleDone = world.every(i => i.people);
+    save({
+      ...fresh, world: { ...fresh.world, [ym]: world },
+      placed: done ? [...new Set([...(fresh.placed ?? []), ym])] : fresh.placed,
+      peopleFilled: peopleDone ? [...new Set([...(fresh.peopleFilled ?? []), ym])] : fresh.peopleFilled,
+    });
     return true;
   } catch {
     return false;
@@ -184,11 +203,11 @@ export async function fillWorldPlaces(ym: string): Promise<boolean> {
 }
 
 /** 今天在此刻地图上办着的活动 */
-export function activitiesToday(now = Date.now()): { place: string; title: string; note?: string }[] {
+export function activitiesToday(now = Date.now()): { place: string; title: string; note?: string; people?: { name: string; role: string }[] }[] {
   const today = isoOf(new Date(now));
   return almanacBetween(today, today).flatMap(i => {
     const place = activityPlace(i);
-    return place ? [{ place, title: i.title, ...(i.note ? { note: i.note } : {}) }] : [];
+    return place ? [{ place, title: i.title, ...(i.note ? { note: i.note } : {}), ...(i.people?.length ? { people: i.people } : {}) }] : [];
   });
 }
 
@@ -240,19 +259,24 @@ export async function generateWorldMonth(ym: string, force = false): Promise<num
     const res = await simpleLLMCall(config(), [
       {
         role: "system",
-        content: `你在给一出韩国娱乐圈的戏写某个月的「圈内大事记」，放进她的日历。只输出 JSON：{"items":[{"day":数字,"company":"公司名或空","group":"这件事是哪个团或艺人的，没有就空","title":"十五字以内，带团名或人名","note":"一句话","place":"在哪儿办"}]}
+        content: `你在给一出韩国娱乐圈的戏写某个月的「圈内大事记」，放进她的日历。只输出 JSON：{"items":[{"day":数字,"company":"公司名或空","group":"这件事是哪个团或艺人的，没有就空","title":"十五字以内，带团名或人名","note":"一句话","place":"在哪儿办","people":["名字（身份）","名字（身份）"]}]}
 写四到七件：前辈团回归、演唱会和巡演、粉丝见面会、综艺播出、同公司前辈的活动、新团出道、颁奖礼。团和人全部虚构，不写真实艺人；下面「已经有的团」必须照着用（公司、出道年份、成员都不能改），也可以写新团；新编的团多数是近四年出道的，老团少写；有新团出道的事就写「新团出道」，团名写进 group。跟某个团或艺人有关的才写 company（从这六家里挑：${names}），跟团无关的（颁奖礼、节目本身这类）company 写空。她所在的公司多写一两件。照这个年份当时的样子写。
+people：这件事里出场的人——表演者、出席的艺人，一人一条「名字（身份）」。名册里有这个团的，用名册里的成员名字和定位；名册里还没成员的团或新团，给一两位成员的名字+定位（写进 people，成员会进名册）。没有具体人物的（节目播出、官宣这类）写空数组。
 place：有现场、人能去的（演唱会、签售、见面会、公开录制、校庆演出、外景拍摄）从这些地点里挑最合适的，照原样写：${places.join("、")}。签售、外景这种名单里没有的，挑它所在的那片区域（比如明洞、弘大）。只是播出、官宣、公开这类没有现场的，place 写空。`,
       },
       { role: "user", content: `${y}年${m}月（共${days}天）\n\n${careerPromptBlock()}\n\n${rosterPrompt() || "还没有写过任何团"}\n\n已有的爱豆：${idols.join("、") || "还没有"}\n以前出现过的团：${seen.join("、") || "还没有"}` },
     ], { temperature: 0.9, label: "圈内大事" });
-    const j = JSON.parse(res.content?.match(/\{[\s\S]*\}/)?.[0] ?? "{}") as { items?: { day?: number; company?: string; group?: string; title?: string; note?: string; place?: string }[] };
-    // 大事记里第一次出现的团记进名册（公司定下来；成员等官网写的时候补）
-    upsertGroups((j.items ?? []).filter(i => i.group && String(i.group).trim()).map(i => ({ name: String(i.group).trim(), companyId: companyIdByName(i.company) })), "almanac");
+    const j = JSON.parse(res.content?.match(/\{[\s\S]*\}/)?.[0] ?? "{}") as { items?: { day?: number; company?: string; group?: string; title?: string; note?: string; place?: string; people?: unknown }[] };
+    // 大事记里第一次出现的团记进名册（公司定下来；成员在这里一起补上，之后的事件接着用）
+    upsertGroups((j.items ?? []).filter(i => i.group && String(i.group).trim()).map(i => {
+      const people = parsePeople(i.people);
+      return { name: String(i.group).trim(), companyId: companyIdByName(i.company), ...(people.length ? { members: people.map(p => ({ name: p.name, position: p.role })) } : {}) };
+    }), "almanac");
     const items = (j.items ?? []).filter(i => i.title && i.day && i.day >= 1 && i.day <= days).map(i => ({
       id: uid("world"), date: `${y}-${pad(m)}-${pad(Number(i.day))}`, title: String(i.title), note: i.note ? String(i.note) : undefined, kind: "world" as const,
       company: i.company && i.company.trim() && i.company !== "圈内" ? String(i.company).trim() : undefined,
       ...(i.place && places.includes(String(i.place).trim()) ? { place: String(i.place).trim() } : {}),
+      people: parsePeople(i.people),
     }));
     if (!items.length) throw new Error(res.error || "AI 没写出来");
     const s = load();

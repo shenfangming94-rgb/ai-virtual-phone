@@ -338,13 +338,18 @@ async function fire(c: Destiny, s: State, notify: (m: string) => void): Promise<
   if (c.meet) {
     const due = new Date(now + c.meet.days * DAY); due.setHours(c.meet.hour, 0, 0, 0);
     const career = loadCareer();
+    // 她 11-12 反馈撞车：别跟已有的事挤在同一时段的同一晚（白天课表不算）
+    const clash = (t: number) => career.nodes.some(n => (n.status === "pending" || n.status === "invite")
+      && !["weekly", "monthly", "makeup", "talk", "homework", "practice", "first_day"].includes(n.kind)
+      && Math.abs(n.dueAt - t) < 3 * 3600e3);
+    for (let k = 0; k < 14 && clash(due.getTime()); k++) due.setDate(due.getDate() + 1);
     const node: CareerNode = {
       id: uid("node"), kind: "chance", title: c.meet.title, place: c.meet.place || "", premise: `${c.seed}（她命运里的一件事）`,
       dueAt: due.getTime(), status: "invite", replyBy: now + 2 * DAY, from: who.name, fromId: who.id, note: c.seed,
     };
     invitation = node;
   }
-  const ask = c.meet ? `，顺便约她${c.meet.days}天后${c.meet.hour}点去${c.meet.place || "见面"}（${c.meet.title}），问她来不来` : "";
+  const ask = c.meet && invitation ? `，顺便约她${new Date(invitation.dueAt).getMonth() + 1}月${new Date(invitation.dueAt).getDate()}日${c.meet.hour}点去${c.meet.place || "见面"}（${c.meet.title}），问她来不来` : "";
   const { queueMessage } = await import("./idol-reminders");
   queueMessage(who.id, `你有件事想跟她说：${c.seed}。按你们的关系和你的性格，自然地在 KakaoTalk 上说${ask}。一到三条。`, (3 + Math.random() * 20) * MIN, { node: invitation, requireFriend: c.via === "new", dedupeKey: `destiny:${c.id}` });
   if (c.via === "new") {

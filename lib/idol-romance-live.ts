@@ -183,7 +183,14 @@ function charName(charId: string): string {
 function scheduleRomanceNode(line: LineState, nodeKey: string, title: string, place: string, premise: string, kind: CareerNode["kind"] = "event", hour = 15, atMs?: number): void {
   const career = loadCareer();
   const at = new Date(atMs ?? (Date.now() + 2 * 864e5));
-  if (atMs == null) at.setHours(hour, 0, 0, 0);
+  if (atMs == null) {
+    at.setHours(hour, 0, 0, 0);
+    // 她 11-12 反馈撞车：别跟已有的事挤在同一时段的同一晚（白天的课表不算，晚上才是约人的时间）
+    const clash = (t: number) => career.nodes.some(n => (n.status === "pending" || n.status === "invite")
+      && !["weekly", "monthly", "makeup", "talk", "homework", "practice", "first_day"].includes(n.kind)
+      && Math.abs(n.dueAt - t) < 3 * 3600e3);
+    for (let k = 0; k < 14 && clash(at.getTime()); k++) at.setDate(at.getDate() + 1);
+  }
   const invite = kind === "date";
   const node: CareerNode = {
     id: uid("rom"), kind, title, place, premise, dueAt: at.getTime(), status: invite ? "invite" : "pending",
@@ -217,6 +224,7 @@ export function romanceTick(notify?: (m: string) => void): void {
   try { if (!kvGet("idol_roster_v1")) return; } catch { return; }
   const career = loadCareer();
   if (career.stage !== "trainee") return;
+  healRomanceCollision();
   const s = load();
   let changed = false;
   for (const type of ROUTE_TYPES) {
@@ -250,6 +258,31 @@ export function romanceTick(notify?: (m: string) => void): void {
 }
 
 type NodeDef = { key: string; title: string; trigger: string; premise: string; place: string; hour: number };
+
+/** 自愈：她答应/待回复的情缘节点跟别的安排撞在同一时段（命运、机会这些后插进来的）→ 挪到下一个空晚上，他重新发消息改期（她 11-12 定的：先去命运，他得马上改约） */
+function healRomanceCollision(): void {
+  try {
+    const career = loadCareer();
+    const romance = career.nodes.find(n => n.occasion === "romance" && ["pending", "invite", "leave"].includes(n.status) && n.dueAt > Date.now());
+    if (!romance) return;
+    const clash = (a: number, b: number) => new Date(a).getFullYear() === new Date(b).getFullYear() && new Date(a).getMonth() === new Date(b).getMonth() && new Date(a).getDate() === new Date(b).getDate() && Math.abs(a - b) < 3 * 3600e3;
+    const hit = career.nodes.some(n => n.id !== romance.id && (n.status === "pending" || n.status === "invite")
+      && !["weekly", "monthly", "makeup", "talk", "homework", "practice", "first_day"].includes(n.kind)
+      && clash(n.dueAt, romance.dueAt));
+    if (!hit) return;
+    const d = new Date(romance.dueAt); d.setDate(d.getDate() + 1);
+    for (let k = 0; k < 7; k++) {
+      const busy = career.nodes.some(n => n.id !== romance.id && (n.status === "pending" || n.status === "invite") && clash(n.dueAt, d.getTime()));
+      if (!busy) break;
+      d.setDate(d.getDate() + 1);
+    }
+    const next = { ...romance, dueAt: d.getTime(), status: "invite" as const, replyBy: d.getTime() - 3 * 3600e3 };
+    saveCareer({ ...loadCareer(), nodes: loadCareer().nodes.map(n => n.id === romance.id ? next : n) });
+    if (romance.fromId) {
+      void import("./idol-reminders").then(m => m.queueMessage(romance.fromId!, `你之前约她的事跟她别的事撞了，时间改到事项里写的那个时间。自然跟她说改期，按你的性格道歉或调侃都行，重新问她来不来，不替她答应。`, 0, { node: next, reachAny: true, dedupeKey: `romance_resched_${romance.id}` })).catch(() => undefined);
+    }
+  } catch { /* 撞车没救成不挡着 */ }
+}
 
 /** 这些节点要接在主线对应的那场里：主线那场还没开就直接并进去，已经办过了才另排一场 */
 const MERGE_INTO_MAINLINE: Record<string, string> = { busking_meet: "roadshow", collab_stage: "collab_stage" };

@@ -281,6 +281,7 @@ export const PhoneChatApp = memo(function PhoneChatApp({ onClose, initialSession
                         onCloseApp={onClose}
                         onSelectSession={handleSelectContact}
                         onSelectMascot={handleSelectMascot}
+                        onOpenProfile={() => setActiveTab("me")}
                         pendingAddContactId={pendingAddContactId}
                         onPendingAddContactConsumed={() => setPendingAddContactId(null)}
                         onPendingAddContactBack={() => {
@@ -299,35 +300,10 @@ export const PhoneChatApp = memo(function PhoneChatApp({ onClose, initialSession
             </div>
 
             {/* Bottom Navigation Bar — hide when inside a chat room */}
-            <nav className="chat-tab-bar chat-bottom-glass-bar" data-ui="nav" style={{ display: activeSession || activeMascot || hideTabBar ? "none" : undefined }}>
-                <button
-                    className={`chat-tab ${activeTab === "messages" ? "chat-tab-active" : ""}`}
-                    onClick={() => setActiveTab("messages")}
-                >
-                    <MessageCircleIcon active={activeTab === "messages"} />
-                    <span style={{ fontSize: "calc(10px*var(--app-text-scale,1))", color: activeTab === "messages" ? undefined : "var(--c-text)" }}>消息</span>
-                </button>
-                <button
-                    className={`chat-tab ${activeTab === "contacts" ? "chat-tab-active" : ""}`}
-                    onClick={() => setActiveTab("contacts")}
-                >
-                    <UsersIcon active={activeTab === "contacts"} />
-                    <span style={{ fontSize: "calc(10px*var(--app-text-scale,1))", color: activeTab === "contacts" ? undefined : "var(--c-text)" }}>联系人</span>
-                </button>
-                <button
-                    className={`chat-tab ${activeTab === "feeds" ? "chat-tab-active" : ""}`}
-                    onClick={() => setActiveTab("feeds")}
-                >
-                    <CompassIcon active={activeTab === "feeds"} />
-                    <span style={{ fontSize: "calc(10px*var(--app-text-scale,1))", color: activeTab === "feeds" ? undefined : "var(--c-text)" }}>动态</span>
-                </button>
-                <button
-                    className={`chat-tab ${activeTab === "me" ? "chat-tab-active" : ""}`}
-                    onClick={() => setActiveTab("me")}
-                >
-                    <MeIcon active={activeTab === "me"} />
-                    <span style={{ fontSize: "calc(10px*var(--app-text-scale,1))", color: activeTab === "me" ? undefined : "var(--c-text)" }}>主页</span>
-                </button>
+            <nav className="chat-tab-bar chat-bottom-glass-bar" data-ui="nav" aria-label="KakaoTalk 导航" style={{ display: activeSession || activeMascot || hideTabBar ? "none" : undefined }}>
+                {(["contacts", "messages", "feeds", "me"] as const).map(tab => <button key={tab} type="button" className={`chat-tab ${activeTab === tab ? "chat-tab-active" : ""}`} onClick={() => setActiveTab(tab)} aria-label={{contacts:"联系人",messages:"消息",feeds:"动态",me:"主页"}[tab]} aria-current={activeTab === tab ? "page" : undefined}>
+                  {tab === "contacts" ? <UsersIcon active={activeTab === tab}/> : tab === "messages" ? <MessageCircleIcon active={activeTab === tab}/> : tab === "feeds" ? <svg width="28" height="28" viewBox="0 0 24 24" fill={activeTab === tab ? "currentColor" : "none"} stroke="currentColor" strokeWidth="1.6"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1.1-1.1a5.5 5.5 0 0 0-7.8 7.8L12 21l8.8-8.6a5.5 5.5 0 0 0 0-7.8Z"/></svg> : <svg width="28" height="28" viewBox="0 0 24 24" fill="currentColor"><circle cx="4" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="20" cy="12" r="2"/></svg>}
+                </button>)}
             </nav>
 
             {/* Chat Rooms — all visited sessions stay mounted, only active one is visible */}

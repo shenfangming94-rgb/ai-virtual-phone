@@ -1,9 +1,9 @@
 "use client";
 
 import React, { useState, useEffect, useCallback, useRef, useMemo, useDeferredValue, useSyncExternalStore } from "react";
-import { loadChatContacts, ChatContact, createOrGetSession, ChatSession, addChatContact, pushChatMessage, loadChatMessages } from "@/lib/chat-storage";
+import { loadChatSessions, loadChatContacts, ChatContact, createOrGetSession, ChatSession, addChatContact, pushChatMessage, loadChatMessages } from "@/lib/chat-storage";
 import { resolveUserIdentity } from "@/lib/settings-storage";
-import { createIdentityMatcher, USER_IDENTITY_SWITCHED_EVENT } from "@/lib/identity-scope";
+import { createIdentityMatcher, sessionMatchesIdentity, USER_IDENTITY_SWITCHED_EVENT } from "@/lib/identity-scope";
 import { PENDING_REPLY_PREFIX } from "@/lib/friend-request-engine";
 import { loadCharacters } from "@/lib/character-storage";
 import { Character } from "@/lib/character-types";
@@ -36,6 +36,7 @@ type ChatContactsListProps = {
     onCloseApp: () => void;
     onSelectSession: (session: ChatSession | null) => void;
     onSelectMascot: () => void;
+    onOpenProfile?: () => void;
     /** 名片点击「加好友」：切到本 tab 后待打开添加页的角色 id */
     pendingAddContactId?: string | null;
     onPendingAddContactConsumed?: () => void;
@@ -43,7 +44,7 @@ type ChatContactsListProps = {
     onPendingAddContactBack?: () => void;
 };
 
-export function ChatContactsList({ onCloseApp, onSelectSession, onSelectMascot, pendingAddContactId, onPendingAddContactConsumed, onPendingAddContactBack }: ChatContactsListProps) {
+export function ChatContactsList({ onCloseApp, onSelectSession, onSelectMascot, onOpenProfile, pendingAddContactId, onPendingAddContactConsumed, onPendingAddContactBack }: ChatContactsListProps) {
     const [contacts, setContacts] = useState<(ChatContact & { char?: Character })[]>([]);
     const [contactFilter, setContactFilter] = useState("");
     const [latestPost, setLatestPost] = useState<Record<string, string>>({});
@@ -195,8 +196,8 @@ export function ChatContactsList({ onCloseApp, onSelectSession, onSelectMascot, 
     return (
         <div className="relative flex-1 h-full">
             <PageShell
-                title="Contacts"
-                onBack={onCloseApp}
+                className="kkt-list-page kkt-contacts-page"
+                leftAction={<button type="button" className="kkt-list-title kkt-title-exit" onClick={onCloseApp} aria-label="退出 KKT">Friends</button>}
                 bodyRef={bodyRef}
                 rightAction={
                     <button
@@ -215,12 +216,10 @@ export function ChatContactsList({ onCloseApp, onSelectSession, onSelectMascot, 
                     </button>
                 }
             >
-            <div className="px-5">
+            <div className="kkt-list-content">
                 {/* Search bar */}
                 <div className="pt-5 pb-1">
-                    <div className="flex items-center justify-between mb-4 mt-2">
-                        <span className="ts-28 font-bold text-[var(--c-text-title)]">Contacts</span>
-                    </div>
+
                     <div className="chat-search-bar">
                         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--c-icon)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
                         <input
@@ -232,6 +231,21 @@ export function ChatContactsList({ onCloseApp, onSelectSession, onSelectMascot, 
                     </div>
                 </div>
 
+                <div className="kkt-own-profile">
+                    <div className="kkt-own-avatar">{identity?.avatarUrl ? <img src={identity.avatarUrl} alt="我的头像"/> : <span>{identity?.name?.[0] || "我"}</span>}</div>
+                    <div className="kkt-own-text"><strong>{identity?.name || "我"}</strong><span>KakaoTalk</span></div>
+                    <button type="button" className="kkt-profile-link" onClick={onOpenProfile}>Profile＋</button>
+                </div>
+                {contacts.some(c => getProfile(c.characterId).status?.text) && <section className="kkt-list-section">
+                  <div className="kkt-section-heading">更新的个人资料</div>
+                  <div className="kkt-updates-list">{contacts.filter(c => getProfile(c.characterId).status?.text).map(c => {
+                    const person = chars.find(x => x.id === c.characterId);
+                    return person ? <button type="button" className="kkt-update-preview" key={c.id} onClick={() => onSelectSession(createOrGetSession(person.id))}><span className="kkt-update-avatar">{person.avatar ? <img src={person.avatar} alt=""/> : <ChatFallbackAvatar/>}</span><span>{person.name}</span></button> : null;
+                  })}</div>
+                </section>}
+                <div className="kkt-section-heading">群聊</div>
+                <div className="kkt-groups-list">{loadChatSessions().filter(s => s.isGroup && sessionMatchesIdentity(s, createIdentityMatcher())).map(s => <button type="button" className="kkt-group-contact" key={s.id} onClick={() => onSelectSession(s)}><span className="kkt-group-avatar">群</span><span className="kkt-group-text"><strong>{s.groupName || "群聊"}</strong><small>{s.participantIds?.length || 0} 位成员</small></span></button>)}</div>
+                <div className="kkt-section-heading">新的朋友</div>
                 {/* New Friends entry */}
                 <div className="mb-3 mt-3">
                     <div
@@ -270,6 +284,7 @@ export function ChatContactsList({ onCloseApp, onSelectSession, onSelectMascot, 
                     </div>
                 )}
 
+                <div className="kkt-section-heading">好友 {contacts.length}</div>
                 {/* Contacts list grouped by pinyin initial */}
                 {contacts.length === 0 ? (
                     <div className="ui-empty">

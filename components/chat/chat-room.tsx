@@ -6305,7 +6305,7 @@ export function ChatRoom({ session, onBack, onDeleted }: ChatRoomProps) {
                                                             ? groupCharMap.get(msg.senderCharacterId) || character
                                                             : character;
                                                         if (targetChar) sendRichMessage("poke", { pokeTarget: targetChar.name });
-                                                    }} className="w-[40px] h-[40px] rounded-[20px] bg-[var(--c-input)] overflow-hidden cursor-pointer">
+                                                    }} className="kkt-message-avatar w-[40px] h-[40px] rounded-[20px] bg-[var(--c-input)] overflow-hidden cursor-pointer">
                                                         {senderChar?.avatar ? (
                                                             <img src={senderChar.avatar} className="w-full h-full object-cover" alt="" />
                                                         ) : (

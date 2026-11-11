@@ -193,8 +193,29 @@ export function ChatMessageList({ onCloseApp, activeSession, onSelectSession, on
     return (
         <div className="relative flex-1 h-full">
             <PageShell
-                className="kkt-list-page kkt-chats-page"
-                leftAction={<button type="button" className="kkt-list-title kkt-title-exit" onClick={onCloseApp} aria-label="退出 KKT">Chats</button>}
+                leftAction={
+                    <div className="flex items-center min-w-max">
+                        <button className="page-back-btn shrink-0 mr-2" type="button" onClick={onCloseApp} aria-label="返回">
+                            <ChevronLeft size={24} strokeWidth={1.5} />
+                        </button>
+                        <div className="flex items-center gap-[10px]">
+                            <div className="w-[36px] h-[36px] rounded-full overflow-hidden bg-[var(--c-input)] flex items-center justify-center shrink-0">
+                                {identity?.avatarUrl ? (
+                                    <img src={identity.avatarUrl} alt="Avatar" className="w-full h-full object-cover" />
+                                ) : (
+                                    <ChatFallbackAvatar />
+                                )}
+                            </div>
+                            <div className="flex flex-col whitespace-nowrap">
+                                <span className="ts-16 font-bold text-[var(--c-text-title)] leading-tight">{identity?.name || "用户"}</span>
+                                <div className="flex items-center gap-1 mt-1">
+                                    <span className="w-[8px] h-[8px] rounded-full bg-[#2dd36f]"></span>
+                                    <span className="ts-10 text-[var(--c-icon)] font-medium">在线</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                }
                 rightAction={
                     <span className="relative" ref={plusMenuRef}>
                         <button
@@ -242,7 +263,10 @@ export function ChatMessageList({ onCloseApp, activeSession, onSelectSession, on
                     </span>
                 }
             >
-                <div className="kkt-search-wrap">
+                <div className="px-5 pt-5 pb-3">
+                    <div className="flex items-center justify-between mb-4 mt-2">
+                        <span className="ts-28 font-bold text-[var(--c-text-title)]">Chats</span>
+                    </div>
                     <div className="chat-search-bar">
                         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--c-icon)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
                         <input
@@ -253,7 +277,7 @@ export function ChatMessageList({ onCloseApp, activeSession, onSelectSession, on
                         />
                     </div>
                 </div>
-                <div className="chat-list-tabs kkt-chat-filters">
+                <div className="chat-list-tabs" style={{ paddingLeft: 20, paddingRight: 20 }}>
                     {(["all", "private", "group"] as const).map(tab => (
                         <button
                             key={tab}
@@ -265,7 +289,7 @@ export function ChatMessageList({ onCloseApp, activeSession, onSelectSession, on
                         </button>
                     ))}
                 </div>
-                <div className="kkt-session-list">
+                <div className="px-5 pt-2 flex flex-col">
                     {(() => {
                             const contactIds = new Set(loadChatContacts().map(c => c.characterId));
                             const allChars = loadCharacters();

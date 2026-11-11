@@ -107,6 +107,7 @@ export function ensureRoster(): RosterState | null {
     if (mates.length) saveCareer({ ...loadCareer(), roommates: mates });
   }
   save(s);
+  try { kvSet("idol_specialty_base60_v1", "1"); } catch { /* 新档已经按 60 开局，别让自愈再补一次 */ }
   queueRosterProfileGeneration(s);
   queueRosterNameBackfill(s);
   return s;
@@ -135,6 +136,15 @@ function healRosterSave(s: RosterState): void {
       s.player.stats[firstSoft as Subject] = Math.max(s.player.stats[firstSoft as Subject], 55);
       changed = true;
     }
+    // 她 11-11 定：开局特长基准 55 → 60（跟 C 班同期中位持平）。老档补差额 +5，已经练出来的保留。
+    try {
+      if (!kvGet("idol_specialty_base60_v1")) {
+        const sp = s.player.specialty;
+        if (sp !== "none") s.player.stats[sp] += 5;
+        kvSet("idol_specialty_base60_v1", "1");
+        changed = true;
+      }
+    } catch { /* 补不上不挡读档 */ }
     if (changed) save(s);
   }
   {

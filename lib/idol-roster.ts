@@ -41,15 +41,16 @@ export type RosterState = {
   tmiRerollAt?: number;
 };
 
-/** 玩家基准：三项 45 起，特长 +10，C 班。视觉 50、软实力 45（模拟器同款基准）。
+/** 玩家基准：三项 45 起，C 班。视觉 50、软实力 45（模拟器同款基准）。
  *  开局的任何特长都要兑现：硬三门优先当特长，没选硬三门就按她选的排；
- *  选了颜值特长的直接 A（85，她定的：颜值没有课能练，不让她在 D 里熬）。 */
+ *  选了颜值特长的直接 A（85，她定的：颜值没有课能练，不让她在 D 里熬）。
+ *  特长基准 60（她 11-11 定：跟 C 班同期中位持平，之前 55 开局欠着账）。 */
 export function makePlayer(talents: string[]): Trainee {
   const SUBJECT_IDS: Subject[] = ["vocal", "dance", "rap", "visual", "acting", "variety", "compose", "language"];
   const first = talents.find(t => t === "vocal" || t === "dance" || t === "rap") ?? talents.find(t => SUBJECT_IDS.includes(t as Subject));
   const specialty: Specialty = (first as Subject | undefined) ?? "dance";
   const stats: Stats = { vocal: 45, dance: 45, rap: 45, variety: 45, acting: 45, visual: 50, compose: 45, language: 45 };
-  stats[specialty] += 10;
+  stats[specialty] = 60;
   if (talents.includes("visual")) stats.visual = 85;
   return {
     id: "player", name: "玩家", specialty, stats,

@@ -26,7 +26,7 @@ check('39 名同期', state.npcs.length === 39, `实际 ${state.npcs.length}`);
 const dist = ['A', 'B', 'C', 'D'].map(k => state.npcs.filter(n => n.klass === k).length);
 check('班级分布 A10 B10 C9 D10', dist.join(',') === '10,10,9,10', dist.join(','));
 check('玩家开局 C 班', state.player.klass === 'C');
-check('玩家特长 dance、数值 55', state.player.specialty === 'dance' && state.player.stats.dance === 55, JSON.stringify(state.player.stats));
+check('玩家特长 dance、数值 60（11-11 定：跟 C 班同期中位持平）', state.player.specialty === 'dance' && state.player.stats.dance === 60, JSON.stringify(state.player.stats));
 const spDist = ['vocal', 'dance', 'rap', 'none'].map(s => state.npcs.filter(n => n.specialty === s).length);
 check('特长池 vocal10/dance10/rap9/none10', spDist.join(',') === '10,10,9,10', spDist.join(','));
 check('生日全是合法 MM-DD 且不重复', state.npcs.every(n => /^\d{2}-\d{2}$/.test(n.birthday)) && new Set(state.npcs.map(n => n.birthday)).size === 39);

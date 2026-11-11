@@ -1,3 +1,4 @@
+import { buildStageParticipantMemories } from "./idol-stage-memory";
 import { extractStageChat, type StageChat } from "./idol-stage-chat";
 import { loadAllCharacters as loadCharacters } from "./character-storage";
 import {
@@ -30,7 +31,7 @@ import type { ChatMessage } from "./chat-storage";
 import type { VnFrame, VnOptions } from "./vn-types";
 import { simpleLLMCall } from "./api-helpers";
 import { WORLD_CHAR_ID, applySceneTagsTo, extractSceneTags } from "./idol-world";
-import { allScenePlaces, buildStagePrompt, chapterIdOf, markLeft, normalizeStageRaw, stageHost } from "./idol-stage";
+import { allScenePlaces, buildStagePrompt, chapterIdOf, getStageScene, markLeft, normalizeStageRaw, stageHost } from "./idol-stage";
 
 export type VnGenerationResult = {
   stageChat?: { turnKey: string; messages: StageChat[]; userInput: string };
@@ -235,7 +236,15 @@ async function buildVnPromptMessages(
       return { vnBeats: beatsList, vnCurrentBeat: currentBeat };
     })(),
   });
-  if (isStage) messages.push({ role: "system", content: buildStagePrompt(stageChapter) });
+  if (isStage) {
+    messages.push({ role: "system", content: buildStagePrompt(stageChapter) });
+    const sceneId = chapterIdOf(stageChapter);
+    const scene = sceneId ? getStageScene(sceneId) : null;
+    if (scene) {
+      const participantMemory = await buildStageParticipantMemories(scene.ids.filter(id => id !== WORLD_CHAR_ID), history.slice(-3).map(m => m.rawContent).join("\n"));
+      if (participantMemory) messages.push({ role: "system", content: participantMemory });
+    }
+  }
   return messages;
 }
 

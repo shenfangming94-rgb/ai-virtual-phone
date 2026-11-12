@@ -96,6 +96,21 @@ function migrate(): Record<string, Group> {
 
 const blank = (v: unknown) => v == null || v === "" || (Array.isArray(v) && !v.length);
 
+/** 一次性：AXIOM 的成员李贤瑞 → 权道贤（她 11-12 定的：AI 造的新人和团名册对不上，改名册里的名字，别的都不动） */
+export function healAxiomMemberName(): void {
+  try {
+    const all = loadGroups();
+    const key = Object.keys(all).find(k => all[k]?.name === "AXIOM" && all[k]?.companyId === "sm");
+    const g = key ? all[key] : undefined;
+    if (!g?.members?.length) return;
+    const hit = g.members.findIndex(m => m.name === "李贤瑞" || (m.name === "权道贤" && m.ko === "이현서"));
+    if (hit >= 0) {
+      g.members = g.members.map((m, i) => i === hit ? { ...m, name: "权道贤", ko: "권도현" } : m);
+      save(all);
+    }
+  } catch { /* 没换成不挡着 */ }
+}
+
 /** 写进名册：已有的只补空的、更新「最近」、加新歌；公司对不上就不动 */
 export function upsertGroups(list: Partial<Group>[], from: Group["from"], companyId?: string): void {
   const all = loadGroups();

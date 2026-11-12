@@ -174,10 +174,14 @@ function peopleBlock(ids: string[]): string {
 
 export type SceneNewFace = { name: string; role: string; facts?: ScenePersonFacts };
 
-export type StoryReply = { text: string; newFaces: SceneNewFace[]; minutes: number; closing: boolean; facts: string[] };
+/** 戏里认真约定的邀约（她 11-12 定的：此刻邀约进提醒事项） */
+export type SceneInvite = { who: string; at: string; place: string; what: string };
+
+export type StoryReply = { text: string; newFaces: SceneNewFace[]; invites: SceneInvite[]; minutes: number; closing: boolean; facts: string[] };
 
 export function parseReply(raw: string): StoryReply {
   const newFaces: SceneNewFace[] = [];
+  const invites: SceneInvite[] = [];
   let minutes = 0;
   let closing = false;
   const facts: string[] = [];
@@ -198,12 +202,21 @@ export function parseReply(raw: string): StoryReply {
         } catch { /* 旧版两字段标记仍可建立背景人物，原文另存供补全参考。 */ }
       }
       newFaces.push({ name: n.trim(), role, facts }); return ""; })
+    .replace(/\[约[:：]\s*([^\]]+)\]/g, (_, j: string) => {
+      try {
+        const v = JSON.parse(j);
+        if (typeof v.who === "string" && typeof v.at === "string" && typeof v.place === "string") {
+          invites.push({ who: v.who.trim(), at: v.at.trim(), place: v.place.trim(), what: String(v.what ?? "").trim() });
+        }
+      } catch { /* 对不上的邀约不进提醒事项 */ }
+      return "";
+    })
     .replace(/\[出场[:：]\s*([^\]|｜]+)[^\]]*\]/g, (_, n: string) => { newFaces.push({ name: n.trim(), role: "" }); return ""; })
     .replace(/\[时间[:：]\s*\+?\s*(\d+)\s*(分钟|小时)?\]/g, (_, n: string, u: string) => { minutes += Number(n) * (u === "小时" ? 60 : 1); return ""; })
     .replace(/\[收尾\]/g, () => { closing = true; return ""; })
     .replace(/\n{3,}/g, "\n\n")
     .trim();
-  return { text, newFaces, minutes, closing, facts };
+  return { text, newFaces, invites, minutes, closing, facts };
 }
 
 export async function continueScene(scene: Scene): Promise<StoryReply> {

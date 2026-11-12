@@ -46,6 +46,7 @@ import { syncIdolWorldBook } from "@/lib/idol-worldbook";
 import { ensureSingleIdentity } from "@/lib/trainee-card";
 import { APP_LOOK, markNoteSeen, noteFromNotice, type LockNote } from "@/lib/idol-notes";
 import { requestStageForNode, healSceneEventGaps } from "@/lib/idol-stage";
+import { healAxiomMemberName } from "@/lib/idol-groups";
 import { isChatStorageHydrated } from "@/lib/chat-storage";
 import { LockScreen } from "./lock-screen";
 import { TIME_JUMP_EVENT } from "@/lib/idol-time-jump";
@@ -1184,6 +1185,7 @@ export function DesktopShell({ initialThemeProfile, initialThemeAssets }: Deskto
       try { starroadTick(idolNotify); } catch { /* 同上 */ }
       try { rosterTick(); } catch { /* 名册结算出错不挡着用手机 */ }
       void healSceneEventGaps().catch(() => undefined);
+      try { healAxiomMemberName(); } catch { /* 换成员名出错不挡着用手机 */ }
       try { mainlineTick(); } catch { /* 主线排期出错不挡着用手机 */ }
       try { plotTick(); } catch { /* 剧情池出错不挡着用手机 */ }
       try { plotDateTick(); } catch { /* 同上 */ }

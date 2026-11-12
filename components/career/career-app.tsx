@@ -62,7 +62,7 @@ function allItems(career: Career): Item[] {
       premise: "", dueAt: o.at, status: "invite", from: c.name, note: o.message, notice: o.notice,
     };
   });
-  return [...offers, ...career.nodes.filter(n => n.status !== "invite" || !n.fromId || Boolean(n.notice))];
+  return [...offers, ...career.nodes.filter(n => n.status !== "invite" || !n.fromId || Boolean(n.notice) || String(n.note ?? "").startsWith("scene_invite"))];
 }
 
 type ListKey = "today" | "plan" | "invite" | "all" | "off" | "done" | "company" | "chance" | "date" | "mine";

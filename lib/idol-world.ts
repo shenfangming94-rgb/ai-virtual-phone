@@ -25,7 +25,7 @@ import { jumpWorld, sceneTimeBoundaryHint } from "./idol-reminders";
 import { fmtWorld, parseReply, type SceneNewFace } from "./idol-scenes";
 import { createOrGetStorySession, createStoryGroup, loadStoryGroups, loadStoryMessages, updateStoryGroup, updateStorySession, type StorySession } from "./story-storage";
 import { simpleLLMCall } from "./api-helpers";
-import { addCompanyFacts, careerPromptBlock, companyByName, completeNode, loadCareer, nodeById, saveCareer, sendCompanyIntentMail } from "./idol-career";
+import { addCompanyFacts, addToCalendar, careerPromptBlock, companyByName, completeNode, loadCareer, nodeById, saveCareer, sendCompanyIntentMail, type CareerNode } from "./idol-career";
 import { eventsPromptBlock, addWorldFeed } from "./idol-events";
 import { rosterPromptBlock, type RosterState } from "./idol-roster";
 import { activeBranchCharIds, branchSceneEnded, branchSceneHint } from "./idol-branches";
@@ -237,6 +237,7 @@ export function worldPromptFor(meta: SceneMeta | null, fallbackPlace: string, pa
 - 名单里没有、但这次出场并且有名字的人：[新人:名字|一句话身份|已知资料JSON]。一句话身份必须具体到能印在名片上：哪个团、哪个学校、哪家店、做什么的，不许写「刚出道的男团成员」「练习生」这种没名字没来历的糊弄说法。已知资料JSON只写本段已明确的gender、age、nationality、birthday、mbti、heightCm、appearance、isIdol、kinship，未明确的字段不填；没有资料可用原来的两字段格式。
 - 同一个人一旦给过名字，后面出场必须用同一个名字，不许换名字再写一遍（换名字会被当成另一个人）。
 - 「可能碰上的人」里有人出场：[出场:名字]
+- 有人认真约了她一件事、说清了具体日期时间和地点，她也答应或对方正式提出：[约:{"who":"约的人的名字","at":"YYYY-MM-DD HH:mm","place":"地点","what":"一句话去干嘛"}]。随口提、开玩笑、没定死时间地点的不写；同一场对同一件事最多写一次。at 按当前世界时间往后写死。
 - 戏里过去了一段时间：[时间:+N分钟]
 - 这一场已经自然收尾：[收尾]
 - 戏里第一次说清楚、以后要照着来的公司细节（楼层、作息、规矩、老师）：[公司:一句话]
@@ -278,7 +279,7 @@ function mightMeetBlock(presentIds: string[], place: string, avoid: string[] = [
   ].filter(Boolean).join("\n");
 }
 
-export type SceneTags = { newFaces: SceneNewFace[]; minutes: number; closing: boolean; facts: string[]; kakao: KakaoTags; danmaku: { ko: string; zh: string }[] };
+export type SceneTags = { newFaces: SceneNewFace[]; invites: import("./idol-scenes").SceneInvite[]; minutes: number; closing: boolean; facts: string[]; kakao: KakaoTags; danmaku: { ko: string; zh: string }[] };
 
 function extractStreamDanmaku(text: string): { text: string; danmaku: { ko: string; zh: string }[] } {
   const tags = [...text.matchAll(/\[弹幕[:：]([\s\S]*?)\]/g)];
@@ -296,7 +297,7 @@ export function extractSceneTags(text: string): { text: string; tags: SceneTags 
   const k = extractKakaoTags(text);
   const d = extractStreamDanmaku(k.text);
   const r = parseReply(d.text);
-  return { text: r.text, tags: { newFaces: r.newFaces, minutes: r.minutes, closing: r.closing, facts: r.facts, kakao: k.tags, danmaku: d.danmaku } };
+  return { text: r.text, tags: { newFaces: r.newFaces, invites: r.invites, minutes: r.minutes, closing: r.closing, facts: r.facts, kakao: k.tags, danmaku: d.danmaku } };
 }
 
 /** 处理记号：新面孔建成背景人物并拉进这场，时间往前拨，交换 KakaoTalk。返回新加的人名和要给她看的提示 */
@@ -319,6 +320,36 @@ export function applySceneTagsTo(host: SceneHost, tags: SceneTags, introduction 
   const stopped = tags.minutes > 0 ? jumpWorld(Date.now() + tags.minutes * 60e3, { activeNodeId: host.meta()?.nodeId }) : "";
   if (tags.facts.length) addCompanyFacts(tags.facts);
   const added = addFaces(host, tags.newFaces, introduction);
+  // 戏里认真约的：进提醒事项（她 11-12 定的）
+  try {
+    const sceneKey = host.key;
+    const prior = loadCareer().nodes.filter(n => n.note === `scene_invite:${sceneKey}`);
+    for (const inv of tags.invites ?? []) {
+      if (prior.length >= 2) break;
+      const m = String(inv.at).match(/^(\d{4})-(\d{1,2})-(\d{1,2})[ T](\d{1,2}):(\d{2})$/);
+      if (!m) continue;
+      const at = new Date(+m[1], +m[2] - 1, +m[3], +m[4], +m[5]).getTime();
+      if (!Number.isFinite(at) || at < Date.now() + 30 * 60e3 || at > Date.now() + 60 * 864e5) continue;
+      const who = loadCharacters().find(c => c.name === inv.who && host.ids().includes(c.id));
+      if (!who) continue;
+      if (prior.some(n => n.fromId === who.id && Math.abs(n.dueAt - at) < 3600e3)) continue;
+      // 不跟已有安排挤：顺延到下一个空时段
+      const clash = (t: number) => loadCareer().nodes.some(n => (n.status === "pending" || n.status === "invite")
+        && !["weekly", "monthly", "makeup", "talk", "homework", "practice", "first_day"].includes(n.kind)
+        && Math.abs(n.dueAt - t) < 3 * 3600e3);
+      const d = new Date(at);
+      for (let k = 0; k < 7 && clash(d.getTime()); k++) d.setDate(d.getDate() + 1);
+      const node: CareerNode = {
+        id: uid("sceneInv"), kind: "date", title: inv.what.slice(0, 40) || `和${who.name}的约定`, place: inv.place.slice(0, 40),
+        premise: `${who.name}在戏里约了她：${inv.what.slice(0, 200) || "见面"}（这一场就是这次约）`,
+        dueAt: d.getTime(), status: "invite", from: who.name, fromId: who.id,
+        replyBy: d.getTime() - Math.min(6 * 3600e3, (d.getTime() - Date.now()) / 2), note: `scene_invite:${sceneKey}`,
+      };
+      saveCareer({ ...loadCareer(), nodes: [...loadCareer().nodes, node].sort((a, b) => a.dueAt - b.dueAt) });
+      addToCalendar(node);
+      prior.push(node);
+    }
+  } catch { /* 邀约没建上不挡戏 */ }
   // 新面孔先建好，再处理给号 / 加你（名字对得上）
   const place = host.meta()?.place || host.fallbackPlace;
   const notes = [...(stopped ? [stopped] : []), ...applyKakaoTags(tags.kakao, place)];

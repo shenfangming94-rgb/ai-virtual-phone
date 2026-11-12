@@ -27,7 +27,7 @@ export const FIXED_GROUPS: FixedGroupSeed[] = [
     style: "R&B / Dance Pop / Funk；华丽、叛逆、戏剧化的青春美学，精致舞台、高难度编舞、强声乐与复杂和声",
     members: [
       { name: "姜贤宇", ko: "강현우", position: "队长、主唱" },
-      { name: "李贤瑞", ko: "이현서", position: "主舞、领 Rapper" },
+      { name: "权道贤", ko: "권도현", position: "主舞、领 Rapper" },
       { name: "车叙俊", ko: "차서준", position: "主唱、门面" },
       { name: "尹道谦", ko: "윤도겸", position: "主 Rapper" },
       { name: "金志焕", ko: "김지환", position: "领唱、领舞" },

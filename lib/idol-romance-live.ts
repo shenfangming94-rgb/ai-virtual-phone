@@ -8,7 +8,8 @@
  * 只在新存档（有名册）下跑。
  */
 
-import { kvGet, kvSet } from "./kv-db";
+import { kvGet } from "./kv-db";
+import { readRomanceRoutes, writeRomanceRoutes } from "./idol-romance-storage";
 import { loadCareer, saveCareer, addToCalendar, type CareerNode } from "./idol-career";
 import { loadProfiles, type IdolProfile } from "./idol-people";
 import { loadCharacters } from "./character-storage";
@@ -26,7 +27,6 @@ import {
 } from "./idol-romance-lines";
 import type { Subject } from "./idol-training";
 
-const KEY = "idol_romance_v1";
 const uid = (p: string) => `${p}_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
 
 type State = {
@@ -51,13 +51,10 @@ const isNight = () => { const h = new Date().getHours(); return h >= 21 || h < 3
 const CLASS_BEAT = new Set(["practice_guide", "company_contrast"]);
 
 function load(): State {
-  try { return { lines: {}, ...(JSON.parse(kvGet(KEY) || "null") as Partial<State> | null) }; } catch { return { lines: {} }; }
+  return readRomanceRoutes() as State;
 }
 function save(s: State) {
-  // 修复后的第一次写入前保留旧账，便于核对异常分数，绝不猜测扣分。
-  const backup = "idol_romance_before_meet_ledger_v1";
-  if (!kvGet(backup)) { const raw = kvGet(KEY); if (raw) kvSet(backup, raw); }
-  kvSet(KEY, JSON.stringify(s));
+  writeRomanceRoutes(s);
 }
 
 export function romanceState(): State { return load(); }

@@ -54,6 +54,8 @@ export type CareerNode = {
   fromId?: string;
   /** 待回复的截止时间 */
   replyBy?: number;
+  /** 避让已有安排后的明确改期说明，卡片与提醒事项共同显示。 */
+  inviteAdjustment?: string;
   /** 打勾写的那句、请假理由 */
   result?: string;
   /** 她想要的结果（考前定） */

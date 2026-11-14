@@ -454,6 +454,7 @@ function Detail({ item, onBack, onGo, onCheck, onLeave, onDelete, onAccept, onDe
       ) : null}
       {item.status === "invite" ? <>
         <div className="rm-sec-s">通知全文</div>
+        {item.inviteAdjustment ? <div className="rm-group rm-pad">{item.inviteAdjustment}</div> : null}
         <div className="rm-group rm-pad"><div className="rm-invitation-text">{item.note || item.premise || "暂无补充说明"}</div>{item.note && item.premise && item.note !== item.premise ? <div className="rm-invitation-text">{item.premise}</div> : null}</div>
       </> : <>
         <div className="rm-sec-s">备注</div>

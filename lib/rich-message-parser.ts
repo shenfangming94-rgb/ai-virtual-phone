@@ -779,6 +779,8 @@ export function parseAIResponse(rawText: string, previousState: StateValue[]): P
                 meetingInviteRaw: meetingInvite.raw,
                 meetingInviteCharacterName: meetingInvite.fields["邀请人"],
                 meetingInviteTitle: meetingInvite.fields["标题"],
+                meetingInviteAt: meetingInvite.fields["时间"] || meetingInvite.fields["日期时间"],
+                meetingInvitePlace: meetingInvite.fields["地点"],
                 meetingInviteDescription: meetingInvite.fields["说明"],
                 meetingInviteAcceptResponse: meetingInvite.fields["同意反应"],
                 meetingInviteDeclineResponse: meetingInvite.fields["拒绝反应"],

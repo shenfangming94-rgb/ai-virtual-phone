@@ -246,6 +246,11 @@ export type ChatMessage = {
         meetingInviteDeclineResponse?: string;
         meetingInviteResolvedAt?: string;
         meetingInviteStorySessionId?: string;
+        meetingInviteOriginalRaw?: string;
+        meetingInviteOriginalDescription?: string;
+        meetingInviteNodeId?: string;
+        meetingInviteAt?: string;
+        meetingInvitePlace?: string;
         fileType?: "audio" | "image" | "video" | "file";
         fileName?: string;
         fileDuration?: number;

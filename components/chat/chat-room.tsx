@@ -94,13 +94,6 @@ import { extractTextToolDirectiveText } from "@/lib/text-tool-protocol";
 import { emitChatPluginEvent, getChatPluginHookBus, runChatPluginTransform } from "@/lib/chat-plugin-hooks";
 import { CHAT_PLUGIN_TOAST_EVENT, getChatPluginRuntime } from "@/lib/chat-plugin-runtime";
 import { ChatPluginSlot } from "@/components/chat/chat-plugin-slot";
-import {
-    createOrGetStorySession,
-    hydrateStoryStorage,
-    loadStorySessionsForOwner,
-    saveStoryLaunchTarget,
-    updateStorySession,
-} from "@/lib/story-storage";
 
 // ── Call system message detection ──────────────────────────
 // Call messages are stored with user/assistant role for correct prompt alternation,
@@ -4167,66 +4160,32 @@ export function ChatRoom({ session, onBack, onDeleted }: ChatRoomProps) {
     };
 
     const handleMeetingInviteAction = async (invite: ChatMessage, action: "accept" | "decline") => {
-        if (invite.mediaData?.meetingInviteStatus && invite.mediaData.meetingInviteStatus !== "pending") return;
-        const resolvedAt = new Date().toISOString();
-        if (action === "decline") {
-            const nextMediaData: ChatMessage["mediaData"] = {
-                ...invite.mediaData,
-                meetingInviteStatus: "declined",
-                meetingInviteResolvedAt: resolvedAt,
-            };
-            updateMessageMediaData(invite.id, nextMediaData);
-            setMessages((current) => current.map((item) => item.id === invite.id ? { ...item, mediaData: nextMediaData } : item));
-            // 按普通用户消息落库并立即触发回复，让角色真实收到拒绝而不是只改卡片外观。
-            handleSendText("不同意", { autoReply: true });
-            return;
-        }
-
         try {
-            await hydrateStoryStorage();
-            const characterId = invite.mediaData?.meetingInviteCharacterId || session.contactId;
-            const characterName = invite.mediaData?.meetingInviteCharacterName || character?.name || "角色";
-            const mainSession = loadStorySessionsForOwner("single", characterId)
-                .find((item) => (item.branchId || "main") === "main")
-                || createOrGetStorySession(characterId, { ownerType: "single", ownerId: characterId, branchId: "main" });
-            const now = new Date();
-            const branchName = `${now.getFullYear()}年${now.getMonth() + 1}月${now.getDate()}日 ${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
-            const storySession = createOrGetStorySession(characterId, {
-                ownerType: "single",
-                ownerId: characterId,
-                participantIds: [characterId],
-                branchId: `invite_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
-                branchName,
-                inheritRecentMemory: true,
-                independentStory: false,
-                baseSession: mainSession,
-            });
-            const acceptedReaction = invite.mediaData?.meetingInviteAcceptResponse?.trim();
-            const meetingDescription = invite.mediaData?.meetingInviteDescription?.trim();
-            const launchPrompt = `${characterName}在线上邀请${userIdentity?.name || "用户"}线下见面，用户已经同意。${meetingDescription ? `邀请说明：${meetingDescription}。` : ""}${acceptedReaction ? `${characterName}对此的反应是：${acceptedReaction}。` : ""}请由${characterName}根据刚才的私聊语境自然开启这次见面剧情。`;
-            updateStorySession(storySession.id, {
-                autoStartPrompt: launchPrompt,
-                autoStartRequestedAt: resolvedAt,
-            });
-            const nextStorySession = {
-                ...storySession,
-                autoStartPrompt: launchPrompt,
-                autoStartRequestedAt: resolvedAt,
-            };
-            saveStoryLaunchTarget(nextStorySession);
-
-            const nextMediaData: ChatMessage["mediaData"] = {
-                ...invite.mediaData,
-                meetingInviteStatus: "accepted",
-                meetingInviteResolvedAt: resolvedAt,
-                meetingInviteStorySessionId: storySession.id,
-            };
-            updateMessageMediaData(invite.id, nextMediaData);
-            setMessages((current) => current.map((item) => item.id === invite.id ? { ...item, mediaData: nextMediaData } : item));
-            // 不再抢跳剧情 app：见面排进提醒事项后，她点「演」会在此刻开戏。
-            showChatToast("已同意");
+            const { restoreMeetingCard, linkedMeetingNode, syncMeetingCard } = await import("@/lib/idol-meeting-invites");
+            const { acceptInvite, declineInvite } = await import("@/lib/idol-reminders");
+            const current = loadChatMessages(session.id).find(m => m.id === invite.id) || invite;
+            const node = linkedMeetingNode(current) || restoreMeetingCard(current);
+            if (!node) {
+                if (action === "decline") {
+                    updateMessageMediaData(current.id, { ...current.mediaData, meetingInviteStatus: "declined", meetingInviteResolvedAt: new Date().toISOString() });
+                    setMessages(loadChatMessages(session.id));
+                    handleSendText("不同意", { autoReply: true });
+                    return;
+                }
+                showChatToast("这份邀请还没有可用的时间地点，或已经过期，请先和他确认新的约定");
+                return;
+            }
+            if (node.status !== "invite") { syncMeetingCard(current, node); setMessages(loadChatMessages(session.id)); return; }
+            if (action === "accept") {
+                const accepted = acceptInvite(node.id);
+                showChatToast(accepted ? "已同意，已加入提醒事项和日历" : "暂未接受，请查看提醒事项中的时间或改期提示");
+            } else {
+                declineInvite(node.id);
+                showChatToast("已拒绝，提醒事项已同步");
+            }
+            setMessages(loadChatMessages(session.id));
         } catch (error) {
-            showChatToast(error instanceof Error ? error.message : "创建见面剧情失败，请稍后再试");
+            showChatToast(error instanceof Error ? error.message : "邀约同步失败，请稍后重试");
         }
     };
 

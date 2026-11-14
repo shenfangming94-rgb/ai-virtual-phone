@@ -1,3 +1,4 @@
+import { ensureMeetingCard, freeInviteTime, INVITE_NOTICE, inviteNotice, repairMeetingCards, restoreMeetingCard, syncMeetingCards } from "./idol-meeting-invites";
 import { loadRomance, romanceActorHint, romanceMessageDelivered, romanceMessageExpired } from "./idol-romance";
 /**
  * 爱豆小手机：提醒事项的规矩。
@@ -162,6 +163,15 @@ export function acceptInvite(id: string, source: "reminder" | "chat" = "reminder
   if (!before || before.status !== "invite" || (before.replyBy && before.replyBy < Date.now())) return undefined;
   // 她定的：约会今天进行且今天点数用完了 → 不接受（「今天的时间排满了」）；扣点在她真去了的时候
   if (before.kind === "date" && dateBlockedNow(before.dueAt)) return undefined;
+  if (before.kind === "date") {
+    const free = freeInviteTime(before.dueAt, loadCareer().nodes, before.id);
+    if (free === null) { inviteNotice("近期没有不冲突的时段，请先商量新的时间"); return undefined; }
+    if (free !== before.dueAt) {
+      patchNode(id, { dueAt: free, replyBy: free, inviteAdjustment: "原时间与已有安排冲突，已顺延，请重新确认新时间" });
+      inviteNotice(`${before.title}：已避开冲突顺延到${noticeTime(free)}，请重新确认`);
+      return undefined;
+    }
+  }
   const node = patchNode(id, { status: "pending" });
   if (node) addToCalendar(node);
   if (node) {
@@ -362,9 +372,12 @@ function repairLegacyInvitations(): void {
   }
 }
 
+let lastCardRepair = -Infinity;
 export function reminderTick(notify: (msg: string) => void): void {
   if (busy) return;
   repairLegacyInvitations();
+  // 真实时间节流；切档后的下一轮仍会检查新档，恢复函数本身幂等。
+  if (performance.now() - lastCardRepair > 30000) { lastCardRepair = performance.now(); repairMeetingCards(); }
   const now = Date.now();
   const career = loadCareer();
   const absent: CareerNode[] = [];
@@ -407,6 +420,14 @@ export function reminderTick(notify: (msg: string) => void): void {
     if (due.romanceId) romanceMessageExpired(due.romanceId);
     save({ ...s, outbox: s.outbox.filter(o => o.id !== due.id) }); return;
   }
+  if (due.node?.kind === "date" && !due.delivered && !loadCareer().nodes.some(n => n.id === due.node!.id)) {
+    const free = freeInviteTime(due.node.dueAt);
+    if (free === null) {
+      save({ ...s, outbox: s.outbox.map(o => o.id === due.id ? { ...o, at: now + HOUR } : o) });
+      return;
+    }
+    if (free !== due.node.dueAt) due.node = { ...due.node, dueAt: free, replyBy: free, inviteAdjustment: "已避开已有安排顺延，请确认时间" };
+  }
   busy = true;
   const existing = due.node ? loadCareer().nodes.find(n => n.id === due.node!.id) : undefined;
   const instruction = `原始消息意图形成于${new Date(due.contextAt ?? due.at).toLocaleString("zh-CN")}；现在是${new Date(now).toLocaleString("zh-CN", { weekday: "long", year: "numeric", month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" })}。下面旧意图里的今天、明天、待会均指原始日期，必须换算到现在；已经过去的事情只能作为过去聊，不能再催准备或说尚未发生。\n${due.instruction}${due.node ? `\n本轮对应事项编号${due.node.id}，标题「${due.node.title}」，${noticeTime(due.node.dueAt)}，地点${due.node.place}。${existing && existing.status !== "invite" ? `她已处理此邀请，当前状态${existing.status}，不要重复询问。` : "自然说出邀请的具体时间地点并问她愿不愿意，不替她答应。"}这条邀请由系统随消息发布，不另写创建邀约标记。` : ""}`;
@@ -421,8 +442,14 @@ export function reminderTick(notify: (msg: string) => void): void {
         const old = career.nodes.find(n => n.id === due.node!.id);
         const node = { ...(old || due.node), notice: chatNotice(first.sessionId, first.id, due.charId) };
         saveCareer({ ...career, nodes: old ? career.nodes.map(n => n.id === node.id ? node : n) : [...career.nodes, node].sort((a,b) => a.dueAt-b.dueAt) });
+        ensureMeetingCard(node, first);
       }
       const latest = load(); save({ ...latest, outbox: latest.outbox.filter(o => o.id !== due.id), sentKeys: due.dedupeKey ? [...(latest.sentKeys || []), due.dedupeKey].slice(-300) : latest.sentKeys });
+      if (!due.node) {
+        for (const card of loadChatMessages(first.sessionId)) {
+          if (card.mediaType === "meeting_invite" && card.createdAt >= first.createdAt && (!first.responseBatchId || card.responseBatchId === first.responseBatchId)) restoreMeetingCard(card, false);
+        }
+      }
       if (due.romanceId) romanceMessageDelivered(due.romanceId, first);
       notify(`💬 ${loadCharacters().find(c => c.id === due.charId)?.name}：${first.content}`);
     })
@@ -468,7 +495,9 @@ export function buildIdolChatHint(characterId: string, isGroup: boolean): string
     `你约过她：${asked.slice(-12).map(n => `编号${n.id}「${n.title}」${noticeTime(n.dueAt)} ${n.place}：${n.status === "invite" ? "待回复，尚未决定" : n.status === "pending" ? "已接受" : n.status === "declined" ? n.result || "已拒绝" : n.status}`).join("；")}`,
     "【规则】只依据她这一轮的明确答复更新对应邀请，不能把闲聊、假设、引用、模糊意向或历史答复当成接受。确定答应写 [邀请回复:事项编号|accept|她本轮明确答复原文]；确定拒绝写 [邀请回复:事项编号|decline|她本轮明确答复原文]。多件事分不清时先问清楚，不写标记；待回复不等于拒绝，不催打卡。",
   );
-  out.push("### 邀约记录\n本轮主动提出具体时间地点的生活邀约时，末尾写 [新增邀约:{\"title\":\"简短事项名\",\"at\":\"YYYY-MM-DD HH:mm\",\"place\":\"具体地点\",\"replyBy\":\"YYYY-MM-DD HH:mm\"}]。尚未商定的模糊提议不建事项，不替她接受。改变你发起的邀约时间地点写 [改期邀约:{\"id\":\"原事项编号\",\"at\":\"YYYY-MM-DD HH:mm\",\"place\":\"地点\"}]，更改后需重新确认；你取消自己发起的邀约写 [取消邀约:事项编号]。只改你本人相关的事项，不处理别人的邀请。");
+  const occupied = loadCareer().nodes.filter(n => (n.status === "pending" || n.status === "invite") && n.dueAt > now).sort((a, b) => a.dueAt - b.dueAt).slice(0, 40);
+  if (occupied.length) out.push("### 邀约避让：以下时间已有安排，见面至少错开三小时，不挪动旧安排\n" + occupied.map(n => `${noticeTime(n.dueAt)}「${n.title}」`).join("；"));
+  out.push("### 邀约记录\n本轮主动提出具体时间地点的生活邀约，优先发带时间、地点字段的邀请见面卡片；若不用卡片则末尾写 [新增邀约:{\"title\":\"简短事项名\",\"at\":\"YYYY-MM-DD HH:mm\",\"place\":\"具体地点\",\"replyBy\":\"YYYY-MM-DD HH:mm\"}]。尚未商定的模糊提议不建事项，不替她接受。改变你发起的邀约时间地点写 [改期邀约:{\"id\":\"原事项编号\",\"at\":\"YYYY-MM-DD HH:mm\",\"place\":\"地点\"}]，更改后需重新确认；你取消自己发起的邀约写 [取消邀约:事项编号]。只改你本人相关的事项，不处理别人的邀请。");
   return out.length ? ["", "", ...out, ""].join("\n") : "";
 }
 
@@ -494,6 +523,8 @@ export function syncMailInvitations(): void {
 export function installIdolChatHooks(notify: (msg: string) => void): void {
   if (hooked || typeof window === "undefined") return;
   hooked = true;
+  window.addEventListener(INVITE_NOTICE, (event: Event) => notify((event as CustomEvent<string>).detail));
+  window.addEventListener(CAREER_EVENT, syncMeetingCards);
   window.addEventListener(MAIL_EVENT, syncMailInvitations);
   // 情缘羁绊：电话/视频打满一分钟算一通（一天只算一次，规则在 idol-bond）
   window.addEventListener("active-call-ended", (e: Event) => {
@@ -533,8 +564,9 @@ export function installIdolChatHooks(notify: (msg: string) => void): void {
     if (msg.role === "assistant" && actor && !session?.isGroup) {
       try { void import("./idol-romance-live").then(m => m.recordKkt(actor)); } catch { /* 不影响聊天 */ }
     }
+    if (msg.mediaType === "meeting_invite" && actor && !proactive.has(actor)) restoreMeetingCard(msg);
     if (!parsed || !actor || proactive.has(actor)) return;
-    applyInvitationActions(msg, parsed, { accept: id => { acceptInvite(id, "chat"); }, decline: id => { declineInvite(id, "chat"); }, notify });
+    applyInvitationActions(msg, parsed, { accept: id => Boolean(acceptInvite(id, "chat")), decline: id => { declineInvite(id, "chat"); }, notify });
   });
 }
 

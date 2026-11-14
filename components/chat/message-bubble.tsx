@@ -1,5 +1,9 @@
 "use client";
 
+import { INVITE_CARDS_EVENT } from "@/lib/idol-meeting-invites";
+import { CAREER_EVENT, loadCareer } from "@/lib/idol-career";
+import { noticeTime } from "@/lib/idol-schedule-notices";
+import { loadChatMessages } from "@/lib/chat-storage";
 import { MeituanChatCard } from "@/components/meituan/meituan-chat-card";
 import type { MeituanCardData } from "@/lib/meituan-chat";
 import { useState, useEffect, useCallback, useRef, useMemo, memo } from "react";
@@ -162,6 +166,7 @@ export const MessageBubble = memo(function MessageBubble({ msg, onUpdate, charNa
         if (prev.msg.mediaData?.imageGenerationPrompt !== next.msg.mediaData?.imageGenerationPrompt) return false;
         if (prev.msg.mediaData?.imageGenerationStatus !== next.msg.mediaData?.imageGenerationStatus) return false;
         if (prev.msg.mediaData?.imageGenerationError !== next.msg.mediaData?.imageGenerationError) return false;
+        if (prev.msg.mediaType === "meeting_invite" && prev.msg.mediaData !== next.msg.mediaData) return false;
         if (prev.msg.mediaData?.meetingInviteStatus !== next.msg.mediaData?.meetingInviteStatus) return false;
         if (prev.msg.mediaUrl !== next.msg.mediaUrl) return false;
     }
@@ -183,12 +188,23 @@ function MeetingInviteBubble({
     charName?: string;
     onAction?: (msg: ChatMessage, action: "accept" | "decline") => void;
 }) {
-    const status = msg.mediaData?.meetingInviteStatus || "pending";
+    const [latest, setLatest] = useState(msg);
+    useEffect(() => {
+        const refresh = () => setLatest(loadChatMessages(msg.sessionId).find(m => m.id === msg.id) || msg);
+        refresh();
+        window.addEventListener(CAREER_EVENT, refresh);
+        window.addEventListener(INVITE_CARDS_EVENT, refresh);
+        return () => { window.removeEventListener(CAREER_EVENT, refresh); window.removeEventListener(INVITE_CARDS_EVENT, refresh); };
+    }, [msg]);
+    msg = latest;
+    const nodeId = msg.mediaData?.meetingInviteNodeId || msg.idolScheduleId;
+    const node = nodeId ? loadCareer().nodes.find(n => n.id === nodeId) : undefined;
+    const status = node ? (node.status === "invite" ? "pending" : ["declined", "leave"].includes(node.status) ? "declined" : "accepted") : msg.mediaData?.meetingInviteStatus || "pending";
     const config = resolveMeetingInviteCardConfig(loadChatAppSettings());
     const inviter = msg.mediaData?.meetingInviteCharacterName || charName || "他";
     const title = msg.mediaData?.meetingInviteTitle || `${inviter}想邀请你见面，是否同意？`;
-    const description = msg.mediaData?.meetingInviteDescription || "同意后会自动建立新的剧情分线，并从这次见面开始。";
-    const acceptResponse = msg.mediaData?.meetingInviteAcceptResponse || "已同意，正在进入见面剧情";
+    const description = node ? `${noticeTime(node.dueAt)} · ${node.place}${node.inviteAdjustment ? `。${node.inviteAdjustment}` : ""}` : msg.mediaData?.meetingInviteDescription || "请先确认见面的时间和地点。";
+    const acceptResponse = node ? "已同意，已加入提醒事项和日历" : msg.mediaData?.meetingInviteAcceptResponse || "已同意";
     const declineResponse = msg.mediaData?.meetingInviteDeclineResponse || "已选择不见面";
     const resolvedLabel = status === "accepted" ? acceptResponse : declineResponse;
     const storedRaw = msg.mediaData?.meetingInviteRaw?.trim();

@@ -1,3 +1,4 @@
+import { ensureMeetingCard, freeInviteTime } from "./idol-meeting-invites";
 /** 使用原聊天回复里的结构化标记同步邀请，不另发语义识别请求。 */
 import { loadCharacters } from "./character-storage";
 import { loadCareer, saveCareer, type CareerNode } from "./idol-career";
@@ -24,7 +25,7 @@ export function explicitInvitationAnswer(text: string): "accept" | "decline" | n
 }
 const parseAt = (v: unknown) => typeof v === "string" && /^\d{4}-\d\d-\d\d[ T]\d\d:\d\d/.test(v) ? new Date(v.replace(" ", "T")).getTime() : NaN;
 
-export function applyInvitationActions(message: ChatMessage, actions: InvitationAction[], callbacks: { accept: (id: string) => void; decline: (id: string) => void; notify: (text: string) => void }): void {
+export function applyInvitationActions(message: ChatMessage, actions: InvitationAction[], callbacks: { accept: (id: string) => boolean | void; decline: (id: string) => void; notify: (text: string) => void }): void {
   if (message.role !== "assistant" || message.status === "rejected" || message.status === "failed") return;
   const session = loadChatSessions().find(s => s.id === message.sessionId);
   if (!session || session.isBlacklisted) return;
@@ -47,7 +48,7 @@ export function applyInvitationActions(message: ChatMessage, actions: Invitation
       const referenced = pending.filter(n => user.content.includes(n.title) || (n.place && user.content.includes(n.place)));
       const lastCard = [...history].reverse().find(m => m.createdAt <= user.createdAt && m.idolScheduleId);
       if (pending.length > 1 && !(referenced.length === 1 && referenced[0].id === node.id) && lastCard?.idolScheduleId !== node.id) continue;
-      if (action.answer === "accept") callbacks.accept(node.id); else callbacks.decline(node.id);
+      if (action.answer === "accept") { if (callbacks.accept(node.id) === false) continue; } else callbacks.decline(node.id);
       callbacks.notify(`${node.title}：${action.answer === "accept" ? "已接受，写进日程" : "已拒绝"}`);
     } else if (action.kind === "cancel") {
       const node = mine.find(n => n.id === action.id && (n.status === "invite" || n.status === "pending"));
@@ -60,15 +61,27 @@ export function applyInvitationActions(message: ChatMessage, actions: Invitation
       if (action.kind === "reschedule") {
         const node = mine.find(n => n.id === v.id && (n.status === "invite" || n.status === "pending"));
         if (!node) continue;
-        saveCareer({ ...career, nodes: career.nodes.map(n => n.id === node.id ? { ...n, dueAt: at, place, status: "invite", replyBy: Math.max(Date.now() + 60e3, at - 30 * 60e3), notice: chatNotice(message.sessionId, message.id, actor) } : n) });
+        const free = freeInviteTime(at, career.nodes, node.id);
+        if (free === null) { callbacks.notify("📅 近期没有不冲突的时段，请重新商量邀约时间"); continue; }
+        const changed: CareerNode = { ...node, dueAt: free, place, status: "invite", replyBy: free,
+          inviteAdjustment: free !== at ? "原时间与已有安排冲突，已顺延，请确认新时间" : undefined,
+          notice: chatNotice(message.sessionId, message.id, actor) };
+        saveCareer({ ...career, nodes: career.nodes.map(n => n.id === node.id ? changed : n) });
+        ensureMeetingCard(changed, message);
         callbacks.notify(`${node.title}：时间地点已更新，待你确认`);
       } else {
         const title = typeof v.title === "string" ? v.title.trim().slice(0, 60) : "";
         if (!title || mine.some(n => n.title === title && n.dueAt === at && n.status !== "declined")) continue;
+        // 同一批回复若已有卡片创建日程，只补关联，不再新建。
+        const sameBatch = mine.find(n => n.notice?.sessionId === message.sessionId && message.responseBatchId && loadChatMessages(message.sessionId).some(m => m.id === n.notice?.refId && m.responseBatchId === message.responseBatchId));
+        if (sameBatch) { ensureMeetingCard(sameBatch, message); continue; }
+        const free = freeInviteTime(at, career.nodes);
+        if (free === null) { callbacks.notify("📅 近期没有不冲突的时段，请重新商量邀约时间"); continue; }
         const reply = parseAt(v.replyBy);
-        const node: CareerNode = { id: `invite_${message.id}`, kind: "date", title, place, premise: message.content, dueAt: at, status: "invite", fromId: actor, inviterIds: [actor], participantIds: [actor], from: message.senderName || loadCharacters().find(c => c.id === actor)?.name, replyBy: Number.isFinite(reply) && reply > Date.now() && reply < at ? reply : Math.max(Date.now() + 60e3, at - 30 * 60e3), notice: chatNotice(message.sessionId, message.id, actor) };
+        const node: CareerNode = { id: `invite_${message.id}`, kind: "date", title, place, premise: message.content, dueAt: free, status: "invite", inviteAdjustment: free !== at ? "原时间与已有安排冲突，已顺延，请确认新时间" : undefined, fromId: actor, inviterIds: [actor], participantIds: [actor], from: message.senderName || loadCharacters().find(c => c.id === actor)?.name, replyBy: free !== at ? free : Number.isFinite(reply) && reply > Date.now() && reply < at ? reply : Math.max(Date.now() + 60e3, at - 30 * 60e3), notice: chatNotice(message.sessionId, message.id, actor) };
         saveCareer({ ...career, nodes: [...career.nodes, node] });
-        callbacks.notify(`待回复：${title}`);
+        ensureMeetingCard(node, message);
+        callbacks.notify(`📅 待回复：${title}${free !== at ? "（已避开冲突顺延，请确认卡片时间）" : ""}`);
       }
     }
   }

@@ -1,24 +1,35 @@
 const fs = require('fs'), ts = require('typescript'), vm = require('vm'), a = require('assert/strict');
 const now = Date.now();
-let romance, career, calendar = 0;
-const mocks = {
-  './kv-db': { kvGet: () => '1', kvSet: () => {} },
-  './idol-romance-storage': { readRomanceRoutes: () => romance, writeRomanceRoutes: s => { romance = s; } },
+const store = new Map([['idol_roster_v1', '1']]);
+let career, calendar = 0;
+const kvdb = {
+  kvGet: k => (store.has(k) ? store.get(k) : null),
+  kvSet: (k, v) => { store.set(k, v); },
+  isKvHydrated: () => true,
+};
+function moduleFrom(file, name, extraMocks = {}) {
+  const exports = {};
+  vm.runInNewContext(ts.transpileModule(fs.readFileSync(file, 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 } }).outputText,
+    { exports, require: n => (extraMocks[n] ?? {}), Date, Set, JSON, Math, console, Map, Object, String, Number, Array, Error }, { filename: file });
+  return exports;
+}
+const storage = moduleFrom('lib/idol-romance-storage.ts', 'storage', {
+  './kv-db': kvdb,
+  './idol-romance-recovery': { recoverConfirmedRomanceIncident: () => null },
+});
+const lines = moduleFrom('lib/idol-romance-lines.ts', 'lines', {});
+const live = moduleFrom('lib/idol-romance-live.ts', 'live', {
+  './kv-db': kvdb,
+  './idol-romance-storage': storage,
+  './idol-romance-lines': lines,
   './idol-career': { loadCareer: () => career, saveCareer: c => { career = c; }, addToCalendar: () => { calendar++; } },
   './idol-people': { loadProfiles: () => ({}) },
   './character-storage': { loadCharacters: () => [{ id: 'a', name: '他' }] },
   './idol-roster-live': { settlePlayerExp: () => {} },
   './idol-mainline': { mainlineState: () => [] },
   './idol-kakao': { isKakaoFriend: () => false },
-};
-function moduleFrom(file, name) {
-  const exports = {};
-  vm.runInNewContext(ts.transpileModule(fs.readFileSync(file, 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 } }).outputText,
-    { exports, require: n => n === './idol-romance-lines' ? lines : (mocks[n] || {}), Date, Set, JSON, Math, console }, { filename: file });
-  return exports;
-}
-const lines = moduleFrom('lib/idol-romance-lines.ts', 'lines');
-const live = moduleFrom('lib/idol-romance-live.ts', 'live');
+});
+function setRoutes(linesState) { kvdb.kvSet('idol_romance_routes_v2', JSON.stringify({ lines: linesState })); }
 function rline(extra = {}) {
   return { type: 'underground', charId: 'a', followedAt: now - 9 * 864e5, bond: 90,
     meetDays: [], doneNodes: ['bar_reunion', 'band_mates', 'song_for_her'], nextNode: 'scandal_talk',
@@ -50,28 +61,34 @@ test('scene end completes only nodes whose character was present', () => {
   live.markPlayedBeatNodes(['a'], true);
   a.equal(career.nodes[0].status, 'done');
 });
-test('revert pops the wrongly stamped chapter, deletes the fake record, reopens nextNode', () => {
-  romance = { lines: { underground: rline({ doneNodes: ['bar_reunion', 'band_mates', 'song_for_her', 'scandal_talk'], nextNode: '' }) } };
+test('revert goes through the rollback writer, pops the fake chapter, deletes its record', () => {
+  setRoutes({ underground: rline({ doneNodes: ['bar_reunion', 'band_mates', 'song_for_her', 'scandal_talk'], nextNode: '' }) });
   career = { stage: 'trainee', nodes: [node({ status: 'done', doneAt: now - 864e5, dueAt: now + 864e5 }), node({ id: 'other', note: '情缘节点：band_mates', status: 'done', doneAt: now + 864e5, dueAt: now - 864e5 })] };
   a.equal(live.revertLastRomanceNode('underground'), '绯闻曝光与公司谈话');
-  a.deepEqual(romance.lines.underground.doneNodes, ['bar_reunion', 'band_mates', 'song_for_her']);
-  a.equal(romance.lines.underground.nextNode, 'scandal_talk');
+  const s = storage.readRomanceRoutes();
+  a.deepEqual(s.lines.underground.doneNodes, ['bar_reunion', 'band_mates', 'song_for_her']);
+  a.equal(s.lines.underground.nextNode, 'scandal_talk');
   a.equal(career.nodes.length, 1);
   a.equal(career.nodes[0].id, 'other');
 });
+test('ordinary route writes still refuse any rollback', () => {
+  setRoutes({ underground: rline({ doneNodes: ['bar_reunion', 'band_mates', 'song_for_her', 'scandal_talk'], nextNode: '' }) });
+  const popped = rline({ doneNodes: ['bar_reunion', 'band_mates', 'song_for_her'], nextNode: 'scandal_talk' });
+  a.throws(() => storage.writeRomanceRoutes({ lines: { underground: popped } }), /回退/);
+});
 test('revert refuses genuinely played chapters (doneAt not before dueAt) and empty lines', () => {
-  romance = { lines: { underground: rline({ doneNodes: ['bar_reunion', 'band_mates', 'song_for_her', 'scandal_talk'], nextNode: '' }) } };
+  setRoutes({ underground: rline({ doneNodes: ['bar_reunion', 'band_mates', 'song_for_her', 'scandal_talk'], nextNode: '' }) });
   career = { stage: 'trainee', nodes: [node({ status: 'done', doneAt: now + 2 * 864e5, dueAt: now - 864e5 })] };
   a.equal(live.revertLastRomanceNode('underground'), null);
   a.equal(live.revertLastRomanceNode('heir'), null);
-  a.equal(romance.lines.underground.doneNodes.length, 4);
+  a.equal(storage.readRomanceRoutes().lines.underground.doneNodes.length, 4);
 });
 test('scandal waits for a real meeting before scheduling, regardless of bond', () => {
-  romance = { lines: { underground: rline() } };
+  setRoutes({ underground: rline() });
   career = { stage: 'trainee', nodes: [] };
   live.romanceTick();
   a.equal(career.nodes.length, 0);
-  romance.lines.underground.meetDays = ['2026-11-10'];
+  setRoutes({ underground: rline({ meetDays: ['2026-11-10'] }) });
   live.romanceTick();
   a.equal(career.nodes.length, 1);
   a.equal(career.nodes[0].note, '情缘节点：scandal_talk');

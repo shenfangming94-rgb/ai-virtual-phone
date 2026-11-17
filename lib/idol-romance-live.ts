@@ -9,7 +9,7 @@
  */
 
 import { kvGet } from "./kv-db";
-import { readRomanceRoutes, writeRomanceRoutes } from "./idol-romance-storage";
+import { readRomanceRoutes, writeRomanceRoutes, writeRomanceRollback } from "./idol-romance-storage";
 import { loadCareer, saveCareer, addToCalendar, type CareerNode } from "./idol-career";
 import { loadProfiles, type IdolProfile } from "./idol-people";
 import { loadCharacters } from "./character-storage";
@@ -484,7 +484,8 @@ export function revertLastRomanceNode(type: RouteType): string | null {
   const fake = career.nodes.filter(n => n.occasion === "romance" && n.note === tag && n.status === "done" && n.doneAt != null && n.doneAt < n.dueAt);
   if (!fake.length) return null;
   s.lines[type] = { ...line, doneNodes: line.doneNodes.slice(0, -1), nextNode: key };
-  save(s);
+  // 修正按钮专用写入：退回是它该干的事，不能撞普通写入的防回退守卫
+  writeRomanceRollback(s);
   saveCareer({ ...career, nodes: career.nodes.filter(n => !fake.some(x => x.id === n.id)) });
   return ROUTE_NODES[type].find(n => n.key === key)?.title ?? key;
 }

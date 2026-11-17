@@ -60,6 +60,23 @@ export function writeRomanceRoutes(state: Record<string, unknown>): void {
       }
     }
   }
+  commitRoutes(raw, previousRaw, previous);
+}
+
+/** 名册「修正：撤销误完成的章节」专用：允许把误盖章的一章退回待触发（其余校验、备份、历史照旧） */
+export function writeRomanceRollback(state: Record<string, unknown>): void {
+  if (!isKvHydrated()) throw new Error("存档尚未读取完成，暂不能写入情缘记录");
+  const raw = JSON.stringify(state);
+  if (!routeState(raw)) throw new Error("情缘记录格式错误，已阻止覆盖");
+  const primaryRaw = kvGet(ROMANCE_ROUTE_KEY);
+  const backupRaw = kvGet(ROMANCE_ROUTE_BACKUP_KEY);
+  const previousRaw = routeState(primaryRaw) ? primaryRaw : backupRaw;
+  const previous = routeState(previousRaw);
+  if ((primaryRaw || backupRaw) && !previous) throw new Error("情缘存档暂时无法读取，已阻止覆盖");
+  commitRoutes(raw, previousRaw, previous);
+}
+
+function commitRoutes(raw: string, previousRaw: string | null, previous: Record<string, unknown> | null): void {
   if (previous && previousRaw !== raw) {
     let history: string[] = [];
     try {

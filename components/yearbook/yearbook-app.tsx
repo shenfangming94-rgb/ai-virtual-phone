@@ -474,6 +474,7 @@ function FatesPage({ data, onOpen }: { data: YearbookData; onOpen: (type: RouteT
 
 function FatePage({ type, data }: { type: RouteType; data: YearbookData }) {
   const line = data.lines[type];
+  const [fixNote, setFixNote] = useState<string | null>(null);
   if (!line) return <div className="yb-fates"><EmptyText>这条故事还没有开始。</EmptyText></div>;
   const char = data.characters.find(c => c.id === line.charId);
   const profile = data.profiles[line.charId] ?? getProfile(line.charId);
@@ -516,8 +517,15 @@ function FatePage({ type, data }: { type: RouteType; data: YearbookData }) {
         const fakeDone = lastKey ? data.career.nodes.some(n => n.occasion === "romance" && n.note === `情缘节点：${lastKey}` && n.status === "done" && n.doneAt != null && n.doneAt < n.dueAt) : false;
         if (!fakeDone || !lastKey || !lastDef) return null;
         return <div className="yb-fix">
-          <button type="button" className="yb-fix-btn" onClick={() => { revertLastRomanceNode(type); }}>修正：撤销误完成的章节</button>
-          <span>「{lastDef.title}」没演过却被记了完成，点上面退回待触发</span>
+          <button type="button" className="yb-fix-btn" onClick={() => {
+            try {
+              const title = revertLastRomanceNode(type);
+              setFixNote(title ? `已退回「${title}」，见面后会重新安排` : "没有可退回的误完成记录");
+            } catch (e) {
+              setFixNote(e instanceof Error ? e.message : "退回失败，请重试");
+            }
+          }}>修正：撤销误完成的章节</button>
+          <span>{fixNote ?? `「${lastDef.title}」没演过却被记了完成，点上面退回待触发`}</span>
         </div>;
       })()}
     </Section>

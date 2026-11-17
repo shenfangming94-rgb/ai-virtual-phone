@@ -8,7 +8,7 @@ import { loadRoster, ensureRoster, queueProfileRegenerate, ROSTER_UPDATED_EVENT 
 import type { NpcRecord, RosterState } from "@/lib/idol-roster";
 import { loadMonths, RANK_EVENT, type MonthRank } from "@/lib/idol-ledger";
 import { branchesState, type BranchRecord } from "@/lib/idol-branches";
-import { romanceState } from "@/lib/idol-romance-live";
+import { romanceState, revertLastRomanceNode } from "@/lib/idol-romance-live";
 import { ROUTE_NODES, ROUTE_TYPES, type LineState, type RouteType } from "@/lib/idol-romance-lines";
 import type { Character } from "@/lib/character-types";
 import type { Subject } from "@/lib/idol-training";
@@ -509,6 +509,17 @@ function FatePage({ type, data }: { type: RouteType; data: YearbookData }) {
         const done = line.doneNodes.includes(node.key);
         return <div className={`yb-chapter ${done ? "" : "locked"}`} key={node.key}><span>{roman(index + 1)}</span><b>{done ? node.title : "? ? ?"}</b><time>{done ? shortDay(nodeDate(node.key)) : ""}</time></div>;
       })}</div>
+      {(() => {
+        // 误盖章检测（11-17）：最后一章的完成时间早于开演时间＝没演过却被下课结算记了完成，给一个安静的修正入口
+        const lastKey = line.doneNodes[line.doneNodes.length - 1];
+        const lastDef = lastKey ? ROUTE_NODES[type].find(n => n.key === lastKey) : undefined;
+        const fakeDone = lastKey ? data.career.nodes.some(n => n.occasion === "romance" && n.note === `情缘节点：${lastKey}` && n.status === "done" && n.doneAt != null && n.doneAt < n.dueAt) : false;
+        if (!fakeDone || !lastKey || !lastDef) return null;
+        return <div className="yb-fix">
+          <button type="button" className="yb-fix-btn" onClick={() => { revertLastRomanceNode(type); }}>修正：撤销误完成的章节</button>
+          <span>「{lastDef.title}」没演过却被记了完成，点上面退回待触发</span>
+        </div>;
+      })()}
     </Section>
 
     <Section title="Between Us" zh="我们">

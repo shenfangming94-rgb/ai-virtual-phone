@@ -248,6 +248,8 @@ export function romanceTick(notify?: (m: string) => void): void {
     if ([...(s.classBeats ?? []), ...(s.sceneBeats ?? []), ...(s.afterScene ?? [])].some(b => b.type === type && b.key === line.nextNode)) continue;
     const def = ROUTE_NODES[line.type].find(n => n.key === line.nextNode);
     if (!def) continue;
+    // 她 11-17 定的：绯闻曝光必须真的见过面才触发——羁绊 72 到了、还没见过面，就等见了面再排
+    if (line.nextNode === "scandal_talk" && !(line.meetDays?.length)) continue;
     scheduleByTrigger(s, type, line, def);
     changed = true;
   }
@@ -455,16 +457,36 @@ export function takeRomanceAfterScene(place: string, wasSide: boolean): string |
   return pendingNodeNow(line.charId, b.note, b.title, b.place, b.premise, b.side);
 }
 
-/** 戏真的演完了：把这场戏里接的情缘节点标成完成（她定的：演完才推进，不是排出来就推进） */
+/** 戏真的演完了：把这场戏里接的情缘节点标成完成（她定的：演完才推进，不是排出来就推进）。
+ *  下课结算只记当堂接的 classBeat；还没开演（dueAt 在未来）的一律不碰（她 11-17：9.6 上课把 9.8 的绯闻曝光误盖章了）。 */
 export function markPlayedBeatNodes(presentIds: string[], requirePresent: boolean): void {
   try { if (!kvGet("idol_roster_v1")) return; } catch { return; }
   const career = loadCareer();
+  const now = Date.now();
   const played = career.nodes.filter(n => n.occasion === "romance" && n.kind === "event"
     && String(n.note ?? "").startsWith("情缘节点：") && n.status === "pending"
-    && Date.now() - n.dueAt < 8 * 3600e3
-    && (!requirePresent || (n.fromId && presentIds.includes(n.fromId))));
+    && n.dueAt <= now && now - n.dueAt < 8 * 3600e3
+    && (requirePresent ? Boolean(n.fromId && presentIds.includes(n.fromId)) : n.classBeat === true));
   if (!played.length) return;
-  saveCareer({ ...career, nodes: career.nodes.map(n => played.some(p => p.id === n.id) ? { ...n, status: "done" as const, doneAt: Date.now() } : n) });
+  saveCareer({ ...career, nodes: career.nodes.map(n => played.some(p => p.id === n.id) ? { ...n, status: "done" as const, doneAt: now } : n) });
+}
+
+/** 修正：把最后误完成的一章退回待触发（11-17 下课结算 bug 盖的章：完成时间早于开演时间）。
+ *  真的演过的（doneAt 不早于 dueAt）不给退。退回后那条假日程删掉，见面后再重新触发。 */
+export function revertLastRomanceNode(type: RouteType): string | null {
+  try { if (!kvGet("idol_roster_v1")) return null; } catch { return null; }
+  const s = load();
+  const line = s.lines[type];
+  if (!line || !line.doneNodes.length) return null;
+  const key = line.doneNodes[line.doneNodes.length - 1];
+  const tag = `情缘节点：${key}`;
+  const career = loadCareer();
+  const fake = career.nodes.filter(n => n.occasion === "romance" && n.note === tag && n.status === "done" && n.doneAt != null && n.doneAt < n.dueAt);
+  if (!fake.length) return null;
+  s.lines[type] = { ...line, doneNodes: line.doneNodes.slice(0, -1), nextNode: key };
+  save(s);
+  saveCareer({ ...career, nodes: career.nodes.filter(n => !fake.some(x => x.id === n.id)) });
+  return ROUTE_NODES[type].find(n => n.key === key)?.title ?? key;
 }
 
 /** 电竞线他来首尔打比赛的行程窗口（真实世界事实：擦肩/失意之夜/比赛直播/看比赛邀请都只在这几天接） */
@@ -510,7 +532,7 @@ export function takeRomanceClassBeat(): { key: string; premise: string } | null 
     const career = loadCareer();
     const node: CareerNode = {
       id: uid("rom"), kind: "event", title: def.title, place: def.place, premise: def.premise, dueAt: Date.now(), status: "pending",
-      companyId: career.companyId, from: his, fromId: line.charId, occasion: "romance", note: `情缘节点：${b.key}`,
+      companyId: career.companyId, from: his, fromId: line.charId, occasion: "romance", note: `情缘节点：${b.key}`, classBeat: true,
     };
     saveCareer({ ...career, nodes: [...career.nodes, node].sort((a, c) => a.dueAt - c.dueAt) });
     return { key: b.key, premise: b.premise ?? `${def.premise}（跟${his}有关。这一段接在她刚上完的这节课之后发生，他要出场就写他出现了。）` };

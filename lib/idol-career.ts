@@ -71,6 +71,8 @@ export type CareerNode = {
   practice?: string[];
   /** 番外：从他的视角，她不在场（掉马他刷到视频那一段） */
   side?: boolean;
+  /** 下课接的情缘节点（下课时才记演完；只有这类会被下课结算记完成，别误伤排期在别处的剧情） */
+  classBeat?: boolean;
   doneAt?: number;
   /** 出道那几件事：name 队名公布 / record 录音 / mv / showcase */
   step?: string;

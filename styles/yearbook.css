@@ -270,6 +270,10 @@
 .yb-chapter > time { flex: none; color: var(--yb-grey2); font: 400 10px "Old Standard TT", serif; letter-spacing: .1em; }
 .yb-chapter.locked > b { color: #dcc3cd; font: 400 12px "Old Standard TT", serif; letter-spacing: .3em; }
 .yb-chapter.locked > time { color: transparent; }
+.yb-fix { display: flex; flex-direction: column; align-items: center; gap: 7px; margin: 14px 0 2px; }
+.yb-fix-btn { border: .7px solid var(--yb-pink); background: transparent; color: var(--yb-deep); font: 400 11px "Noto Serif SC", serif; letter-spacing: .06em; padding: 6px 16px; border-radius: 999px; }
+.yb-fix-btn:active { opacity: .6; }
+.yb-fix > span { color: var(--yb-grey2); font: 400 10px "Noto Serif SC", serif; text-align: center; }
 .yb-scale.romance::before { border-color: var(--yb-soft2); }
 .yb-scale.romance > i { border-color: var(--yb-pink); }
 .yb-scale.romance > i.on { border-color: var(--yb-deep); background: var(--yb-deep); }

@@ -1,0 +1,83 @@
+const fs = require('fs'), ts = require('typescript'), vm = require('vm'), a = require('assert/strict');
+const now = Date.now();
+let romance, career, calendar = 0;
+const mocks = {
+  './kv-db': { kvGet: () => '1', kvSet: () => {} },
+  './idol-romance-storage': { readRomanceRoutes: () => romance, writeRomanceRoutes: s => { romance = s; } },
+  './idol-career': { loadCareer: () => career, saveCareer: c => { career = c; }, addToCalendar: () => { calendar++; } },
+  './idol-people': { loadProfiles: () => ({}) },
+  './character-storage': { loadCharacters: () => [{ id: 'a', name: '他' }] },
+  './idol-roster-live': { settlePlayerExp: () => {} },
+  './idol-mainline': { mainlineState: () => [] },
+  './idol-kakao': { isKakaoFriend: () => false },
+};
+function moduleFrom(file, name) {
+  const exports = {};
+  vm.runInNewContext(ts.transpileModule(fs.readFileSync(file, 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 } }).outputText,
+    { exports, require: n => n === './idol-romance-lines' ? lines : (mocks[n] || {}), Date, Set, JSON, Math, console }, { filename: file });
+  return exports;
+}
+const lines = moduleFrom('lib/idol-romance-lines.ts', 'lines');
+const live = moduleFrom('lib/idol-romance-live.ts', 'live');
+function rline(extra = {}) {
+  return { type: 'underground', charId: 'a', followedAt: now - 9 * 864e5, bond: 90,
+    meetDays: [], doneNodes: ['bar_reunion', 'band_mates', 'song_for_her'], nextNode: 'scandal_talk',
+    daily: { day: 'x', calls: 0, kkt: 0 }, history: [], ...extra };
+}
+function node(extra = {}) {
+  return { id: 'n', kind: 'event', title: '绯闻曝光与公司谈话', place: '公司 会议室', premise: 'p', dueAt: now - 3600e3, status: 'pending',
+    from: '他', fromId: 'a', occasion: 'romance', note: '情缘节点：scandal_talk', ...extra };
+}
+let tests = 0;
+function test(name, fn) { try { fn(); tests++; console.log('PASS', name); } catch (e) { console.log('FAIL', name, e.message); process.exitCode = 1; } }
+
+test('future-scheduled romance node is never completed by class settle or scene end', () => {
+  career = { stage: 'trainee', nodes: [node({ dueAt: now + 2 * 864e5 })] };
+  live.markPlayedBeatNodes([], false);
+  live.markPlayedBeatNodes(['a'], true);
+  a.equal(career.nodes[0].status, 'pending');
+});
+test('class settle completes only classBeat nodes due within 8h, never others', () => {
+  career = { stage: 'trainee', nodes: [node({ id: 'cb', classBeat: true }), node({ id: 'ev' })] };
+  live.markPlayedBeatNodes([], false);
+  a.equal(career.nodes.find(n => n.id === 'cb').status, 'done');
+  a.equal(career.nodes.find(n => n.id === 'ev').status, 'pending');
+});
+test('scene end completes only nodes whose character was present', () => {
+  career = { stage: 'trainee', nodes: [node({ id: 'p' })] };
+  live.markPlayedBeatNodes(['b'], true);
+  a.equal(career.nodes[0].status, 'pending');
+  live.markPlayedBeatNodes(['a'], true);
+  a.equal(career.nodes[0].status, 'done');
+});
+test('revert pops the wrongly stamped chapter, deletes the fake record, reopens nextNode', () => {
+  romance = { lines: { underground: rline({ doneNodes: ['bar_reunion', 'band_mates', 'song_for_her', 'scandal_talk'], nextNode: '' }) } };
+  career = { stage: 'trainee', nodes: [node({ status: 'done', doneAt: now - 864e5, dueAt: now + 864e5 }), node({ id: 'other', note: '情缘节点：band_mates', status: 'done', doneAt: now + 864e5, dueAt: now - 864e5 })] };
+  a.equal(live.revertLastRomanceNode('underground'), '绯闻曝光与公司谈话');
+  a.deepEqual(romance.lines.underground.doneNodes, ['bar_reunion', 'band_mates', 'song_for_her']);
+  a.equal(romance.lines.underground.nextNode, 'scandal_talk');
+  a.equal(career.nodes.length, 1);
+  a.equal(career.nodes[0].id, 'other');
+});
+test('revert refuses genuinely played chapters (doneAt not before dueAt) and empty lines', () => {
+  romance = { lines: { underground: rline({ doneNodes: ['bar_reunion', 'band_mates', 'song_for_her', 'scandal_talk'], nextNode: '' }) } };
+  career = { stage: 'trainee', nodes: [node({ status: 'done', doneAt: now + 2 * 864e5, dueAt: now - 864e5 })] };
+  a.equal(live.revertLastRomanceNode('underground'), null);
+  a.equal(live.revertLastRomanceNode('heir'), null);
+  a.equal(romance.lines.underground.doneNodes.length, 4);
+});
+test('scandal waits for a real meeting before scheduling, regardless of bond', () => {
+  romance = { lines: { underground: rline() } };
+  career = { stage: 'trainee', nodes: [] };
+  live.romanceTick();
+  a.equal(career.nodes.length, 0);
+  romance.lines.underground.meetDays = ['2026-11-10'];
+  live.romanceTick();
+  a.equal(career.nodes.length, 1);
+  a.equal(career.nodes[0].note, '情缘节点：scandal_talk');
+  a.equal(career.nodes[0].status, 'pending');
+  a.ok(career.nodes[0].dueAt > now);
+  live.romanceTick(); // 已排过不再重复排
+  a.equal(career.nodes.length, 1);
+});
+console.log(`${tests} romance fix checks passed`);

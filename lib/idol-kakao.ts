@@ -74,7 +74,7 @@ export function setMyKakaoId(id: string): void {
 }
 
 /** Underground-rumour story hook: deliver the already-scheduled company meeting through the real KKT chat. */
-export function sendCompanyScandalNotice(eventId: string): Promise<boolean> {
+export function sendCompanyScandalNotice(eventId: string, dueAt?: number): Promise<boolean> {
   return (async () => {
     if (!eventId) return false;
     const state = load();
@@ -90,12 +90,12 @@ export function sendCompanyScandalNotice(eventId: string): Promise<boolean> {
     }
     if (!isKakaoFriend(teacher.id)) addChatContact(teacher.id);
     const session = createOrGetSession(teacher.id);
-    const when = new Date().toLocaleString("ko-KR", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit", hour12: false });
-    const content = `회사에서 온라인에 퍼진 소문의 경위를 확인하고 싶어 합니다. 오늘 ${when} 회사에서 담당자와 이야기해 주세요. | 公司想了解网上正在流传的传闻，请你今天 ${when} 到公司和负责人谈一谈。`;
+    const when = new Date(dueAt ?? Date.now()).toLocaleString("ko-KR", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit", hour12: false });
+    const content = `회사에서 온라인에 퍼진 소문의 경위를 확인하고 싶어 합니다. ${when} 회사에서 담당자와 이야기해 주세요. | 公司想了解网上正在流传的传闻，请你 ${when} 到公司和负责人谈一谈。`;
     pushChatMessage({ sessionId: session.id, role: "assistant", content, senderCharacterId: teacher.id, senderName: teacher.name, status: "sent" });
     const latest = load();
     save({ ...latest, scandalNotices: [...new Set([...(latest.scandalNotices ?? []), eventId])] });
-    if (typeof window !== "undefined") window.dispatchEvent(new CustomEvent(KAKAO_NOTICE, { detail: { from: teacher.name, text: `公司想了解网上正在流传的传闻，请你今天 ${when} 到公司和负责人谈一谈。` } }));
+    if (typeof window !== "undefined") window.dispatchEvent(new CustomEvent(KAKAO_NOTICE, { detail: { from: teacher.name, text: `公司想了解网上正在流传的传闻，请你 ${when} 到公司和负责人谈一谈。` } }));
     return true;
   })();
 }

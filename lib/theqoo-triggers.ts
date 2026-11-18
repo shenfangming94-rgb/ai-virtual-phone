@@ -74,28 +74,42 @@ function playerPublicHistoryFacts(): string[] {
     .slice(-12);
 }
 
-/** Called before the fixed underground-scandal scene starts, so the public thread precedes KKT and the meeting. */
-export async function startUndergroundScandalScene(nodeId: string, meta: SceneMeta): Promise<void> {
-  const node = loadCareer().nodes.find(item => item.id === nodeId);
-  if (!node || node.occasion !== 'romance' || romanceRoute(node) !== 'underground' || romanceNodeKey(node) !== 'scandal_talk') return;
+/** 绯闻曝光必须有真帖子：排期时、开演前、演完自愈都走这里；帖子已存在就跳过。
+ *  谈话场还没开：帖子先发出来，室长 KKT 按节点真实时间约她；已经演完的只补帖子，不再发「请你来公司」。 */
+export async function ensureUndergroundScandalPublic(node: CareerNode): Promise<void> {
+  if (!node || node.occasion !== 'romance' || romanceNodeKey(node) !== 'scandal_talk' || romanceRoute(node) !== 'underground') return;
   const eventId = 'romance:underground:scandal_talk';
+  if (loadForum('world').posts.some(p => p.id === eventId)) return;
+  const played = node.status === 'done';
+  const publicAt = played ? (node.doneAt ?? node.dueAt ?? Date.now()) : Date.now();
+  if (publicAt > Date.now()) return;
   const priorPublicFacts = playerPublicHistoryFacts();
   const facts = [
     '韩国论坛出现了关于玩家与一名地下音乐圈男生的恋爱传闻；两人没有确认交往。',
     ...priorPublicFacts.map(fact => `此前公开讨论过的玩家经历：${fact}`),
   ];
+  const sourceInfo = source(eventId, 'romance', 'romance_scandal', '练习生与地下音乐人恋爱传闻', facts, publicAt, 'entertainment');
   try {
-    await requestForumDiscussion(source(eventId, 'romance', 'romance_scandal', '练习生与地下音乐人恋爱传闻', facts, meta.startAt, 'entertainment'), `${eventId}:public`, generateForumWithAI, 'always');
+    await requestForumDiscussion(sourceInfo, `${eventId}:public`, generateForumWithAI, 'always');
   } catch (error) {
-    queueFailedForumDiscussion(source(eventId, 'romance', 'romance_scandal', '练习生与地下音乐人恋爱传闻', facts, meta.startAt, 'entertainment'), `${eventId}:public`);
+    queueFailedForumDiscussion(sourceInfo, `${eventId}:public`);
     console.warn('[TheQoo] underground-rumour thread was not generated:', error);
   }
-  try {
-    const kakao = await import('./idol-kakao');
-    kakao.sendCompanyScandalNotice(eventId);
-  } catch (error) {
-    console.warn('[TheQoo] company KakaoTalk notice failed:', error);
+  if (!played) {
+    try {
+      const kakao = await import('./idol-kakao');
+      await kakao.sendCompanyScandalNotice(eventId, node.dueAt);
+    } catch (error) {
+      console.warn('[TheQoo] company KakaoTalk notice failed:', error);
+    }
   }
+}
+
+/** Called before the fixed underground-scandal scene starts, so the public thread precedes KKT and the meeting. */
+export async function startUndergroundScandalScene(nodeId: string): Promise<void> {
+  const node = loadCareer().nodes.find(item => item.id === nodeId);
+  if (!node) return;
+  await ensureUndergroundScandalPublic(node);
 }
 
 function publishPlayerMilestone(

@@ -177,7 +177,7 @@ function charName(charId: string): string {
 }
 
 /** 给这条线排一个日程节点（三结局那套现成） */
-function scheduleRomanceNode(line: LineState, nodeKey: string, title: string, place: string, premise: string, kind: CareerNode["kind"] = "event", hour = 15, atMs?: number): void {
+function scheduleRomanceNode(line: LineState, nodeKey: string, title: string, place: string, premise: string, kind: CareerNode["kind"] = "event", hour = 15, atMs?: number): CareerNode {
   const career = loadCareer();
   const at = new Date(atMs ?? (Date.now() + 2 * 864e5));
   if (atMs == null) {
@@ -202,6 +202,7 @@ function scheduleRomanceNode(line: LineState, nodeKey: string, title: string, pl
   } else {
     addToCalendar(node);
   }
+  return node;
 }
 
 /** 主线的某个事件排了/完成了没有（encounter 节点查世界事实用） */
@@ -215,6 +216,8 @@ let notifyFn: ((m: string) => void) | undefined;
 const sasaengBusy = new Set<string>();
 /** 私生私信上次试的时间：没生成出来别每 5 秒都去调 API，隔十分钟再试 */
 const sasaengTried = new Map<string, number>();
+/** 绯闻曝光帖子补发上次试的时间（10 分钟节流，跟论坛重试队列一致） */
+let scandalEnsureTried = -Infinity;
 
 export function romanceTick(notify?: (m: string) => void): void {
   if (notify) notifyFn = notify;
@@ -252,6 +255,15 @@ export function romanceTick(notify?: (m: string) => void): void {
     if (line.nextNode === "scandal_talk" && !(line.meetDays?.length)) continue;
     scheduleByTrigger(s, type, line, def);
     changed = true;
+  }
+  // 她 11-18 自愈：绯闻曝光已经排了/演了但论坛没帖子 → 补发（帖子存在就跳过；还没演的发室长 KKT）
+  // 生成失败也按 10 分钟节流，跟论坛自己的重试队列一致，别每 5 秒烧一次 API
+  if (Date.now() - scandalEnsureTried > 10 * 60e3) {
+    const needEnsure = loadCareer().nodes.find(n => n.occasion === "romance" && n.note === "情缘节点：scandal_talk" && (n.status === "pending" || n.status === "invite" || n.status === "done"));
+    if (needEnsure) {
+      scandalEnsureTried = Date.now();
+      void import("./theqoo-triggers").then(m => m.ensureUndergroundScandalPublic(needEnsure)).catch(() => undefined);
+    }
   }
   if (changed) save(s);
 }
@@ -395,7 +407,11 @@ function scheduleByTrigger(s: State, type: RouteType, line: LineState, def: Node
     return;
   }
   // event：事情砸过来
-  scheduleRomanceNode(line, def.key, def.title, def.place, def.premise, "event", def.hour);
+  const created = scheduleRomanceNode(line, def.key, def.title, def.place, def.premise, "event", def.hour);
+  // 她 11-18：绯闻曝光的论坛帖和公司 KKT 必须在排期时真实发出，不能让戏里台词假装有
+  if (def.key === "scandal_talk") {
+    void import("./theqoo-triggers").then(m => m.ensureUndergroundScandalPublic(created)).catch(() => undefined);
+  }
 }
 
 /** 马上发生的一场（不提前进日历）：返回节点 id */

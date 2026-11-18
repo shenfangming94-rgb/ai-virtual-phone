@@ -139,7 +139,7 @@ export async function createWorldScene(place: string, premise: string, peopleIds
   const sceneMeta: SceneMeta = { place: name, premise: premise.trim(), startAt: Date.now(), newFaces: [], ...(nodeId ? { nodeId } : {}), ...(open ? { open } : {}) };
   saveSceneMeta(group.id, sceneMeta);
   if (nodeId && nodeById(nodeId)?.note === "情缘节点：scandal_talk") {
-    await import("./theqoo-triggers").then(m => m.startUndergroundScandalScene(nodeId, sceneMeta)).catch(() => undefined);
+    await import("./theqoo-triggers").then(m => m.startUndergroundScandalScene(nodeId)).catch(() => undefined);
   }
   const session = createOrGetStorySession(WORLD_CHAR_ID, { ownerType: "group", ownerId: group.id, participantIds: ids, branchId: "main" });
   const opening = premise.trim()

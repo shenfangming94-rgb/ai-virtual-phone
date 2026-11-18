@@ -487,6 +487,16 @@ export function markPlayedBeatNodes(presentIds: string[], requirePresent: boolea
   saveCareer({ ...career, nodes: career.nodes.map(n => played.some(p => p.id === n.id) ? { ...n, status: "done" as const, doneAt: now } : n) });
 }
 
+/** 仅隐藏这一章的修正提示，保留章节和日程原状。 */
+export function dismissRomanceFix(type: RouteType, key: string): void {
+  const s = load();
+  const line = s.lines[type];
+  if (!line || !line.doneNodes.includes(key)) return;
+  if (line.fixDismissed?.includes(key)) return;
+  s.lines[type] = { ...line, fixDismissed: [...(line.fixDismissed ?? []), key] };
+  save(s);
+}
+
 /** 修正：把最后误完成的一章退回待触发（11-17 下课结算 bug 盖的章：完成时间早于开演时间）。
  *  真的演过的（doneAt 不早于 dueAt）不给退。退回后那条假日程删掉，见面后再重新触发。 */
 export function revertLastRomanceNode(type: RouteType): string | null {

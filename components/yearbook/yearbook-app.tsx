@@ -8,7 +8,7 @@ import { loadRoster, ensureRoster, queueProfileRegenerate, ROSTER_UPDATED_EVENT 
 import type { NpcRecord, RosterState } from "@/lib/idol-roster";
 import { loadMonths, RANK_EVENT, type MonthRank } from "@/lib/idol-ledger";
 import { branchesState, type BranchRecord } from "@/lib/idol-branches";
-import { romanceState, revertLastRomanceNode } from "@/lib/idol-romance-live";
+import { romanceState, revertLastRomanceNode, dismissRomanceFix } from "@/lib/idol-romance-live";
 import { ROUTE_NODES, ROUTE_TYPES, type LineState, type RouteType } from "@/lib/idol-romance-lines";
 import type { Character } from "@/lib/character-types";
 import type { Subject } from "@/lib/idol-training";
@@ -475,6 +475,7 @@ function FatesPage({ data, onOpen }: { data: YearbookData; onOpen: (type: RouteT
 function FatePage({ type, data }: { type: RouteType; data: YearbookData }) {
   const line = data.lines[type];
   const [fixNote, setFixNote] = useState<string | null>(null);
+  const [dismissedFix, setDismissedFix] = useState<string | null>(null);
   if (!line) return <div className="yb-fates"><EmptyText>这条故事还没有开始。</EmptyText></div>;
   const char = data.characters.find(c => c.id === line.charId);
   const profile = data.profiles[line.charId] ?? getProfile(line.charId);
@@ -515,8 +516,16 @@ function FatePage({ type, data }: { type: RouteType; data: YearbookData }) {
         const lastKey = line.doneNodes[line.doneNodes.length - 1];
         const lastDef = lastKey ? ROUTE_NODES[type].find(n => n.key === lastKey) : undefined;
         const fakeDone = lastKey ? data.career.nodes.some(n => n.occasion === "romance" && n.note === `情缘节点：${lastKey}` && n.status === "done" && n.doneAt != null && n.doneAt < n.dueAt) : false;
-        if (!fakeDone || !lastKey || !lastDef) return null;
+        if (!fakeDone || !lastKey || !lastDef || dismissedFix === `${type}:${lastKey}` || line.fixDismissed?.includes(lastKey)) return null;
         return <div className="yb-fix">
+          <button type="button" className="yb-fix-dismiss" aria-label="不再提示这一章的修正" title="不再提示" onClick={() => {
+            try {
+              dismissRomanceFix(type, lastKey);
+              setDismissedFix(`${type}:${lastKey}`);
+            } catch (e) {
+              setFixNote(e instanceof Error ? e.message : "关闭失败，请重试");
+            }
+          }}>×</button>
           <button type="button" className="yb-fix-btn" onClick={() => {
             try {
               const title = revertLastRomanceNode(type);

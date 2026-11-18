@@ -270,7 +270,7 @@
 .yb-chapter > time { flex: none; color: var(--yb-grey2); font: 400 10px "Old Standard TT", serif; letter-spacing: .1em; }
 .yb-chapter.locked > b { color: #dcc3cd; font: 400 12px "Old Standard TT", serif; letter-spacing: .3em; }
 .yb-chapter.locked > time { color: transparent; }
-.yb-fix { display: flex; flex-direction: column; align-items: center; gap: 7px; margin: 14px 0 2px; }
+.yb-fix { position: relative; padding: 0 28px; display: flex; flex-direction: column; align-items: center; gap: 7px; margin: 14px 0 2px; }
 .yb-fix-btn { border: .7px solid var(--yb-pink); background: transparent; color: var(--yb-deep); font: 400 11px "Noto Serif SC", serif; letter-spacing: .06em; padding: 6px 16px; border-radius: 999px; }
 .yb-fix-btn:active { opacity: .6; }
 .yb-fix > span { color: var(--yb-grey2); font: 400 10px "Noto Serif SC", serif; text-align: center; }
@@ -319,3 +319,5 @@
 /* 情缘卡 PROFILE 跳通讯录（她定的入口） */
 .yb-profile-jump { display: block; margin: 0 auto 18px; padding: 10px 22px; border: .7px solid var(--yb-pink, #e39ab6); border-radius: 999px; background: transparent; color: #b05678; font: 500 11px/1.6 "Noto Serif SC", serif; letter-spacing: .18em; }
 .yb-profile-jump:active { background: #f7e3ea; }
+
+.yb-fix-dismiss { position: absolute; right: 0; top: 0; width: 28px; height: 28px; border: 0; background: transparent; color: var(--yb-grey2); font-size: 18px; cursor: pointer; }

@@ -99,6 +99,8 @@ export type LineState = {
   /** 世界事实（她定的：encounter 必须有真实事实）：电竞线他来首尔打比赛的行程窗口 */
   extra?: { visitWindow?: { from: number; to: number } };
   history: BondEvent[];
+  /** 名册「修正」提示被点掉的章节 key（她不想修就不再来烦她） */
+  fixDismissed?: string[];
 };
 
 export const LINE_THRESHOLDS: Record<RouteType, number[]> = {
